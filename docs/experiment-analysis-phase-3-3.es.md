@@ -54,11 +54,11 @@ validación estadística amplia.
 
 - [x] Confirmar que el panel solo ofrece motores Maia y conserva el ELO seleccionado.
 - [x] Ejecutar lotes con colores alternados y comprobar que el benchmark usa solo partidas
-  completadas.
+      completadas.
 - [x] Verificar que W/D/L predicho y observado se muestran desde la perspectiva de blancas.
 - [x] Confirmar que una ejecución posterior recupera `empirical-wdl-v1.json` sin repetirla.
 - [x] Repetir con otros ELO y observar que la predicción puede cambiar; no exigir que el cambio sea monotónico
-  en una sola posición.
+      en una sola posición.
 
 La validación cubre el alcance exploratorio de la fase. La calibración estadística con muestras
 mayores y más posiciones queda como trabajo posterior.

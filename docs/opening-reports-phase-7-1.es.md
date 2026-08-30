@@ -98,22 +98,22 @@ mantiene 24 bytes y añade el ordinal del índice: permite leer metadatos de cad
 directamente del mmap, en lotes de 4.096. Solo se reproduce la selección de teoría; las referencias
 leen metadatos SQL bajo demanda. Los PGN completos se solicitan únicamente al abrir o exportar.
 
-| Recurso | Límite |
-| --- | --- |
-| Partidas de teoría | 5.000 por defecto; configurable de 1 a 10.000 |
-| Profundidad posterior | 12 medias jugadas por defecto; de 1 a 16 |
-| Recorrido anterior al FEN | Hasta 512 medias jugadas por partida seleccionada |
-| Árbol de teoría | Como máximo `1 + partidas × profundidad`: 160.001 nodos |
-| Filas visibles y exportadas de teoría | Hasta 64 |
-| Órdenes de llegada visibles | Hasta 12 |
-| Grupos de transposición / rutas por grupo | Hasta 20 / 4 |
-| Agregación de informe | Comprueba un plazo de 180 s; no incluye espera de turno ni carga de índice |
-| Informes simultáneos | Uno; comparte los dos permisos de consultas de 7.0 |
-| Caché de informes | Una versión de opciones por snapshot; hasta 32 snapshots |
-| Jugadores distintos agregables | Hasta 2.000.000; superar el límite falla explícitamente |
-| Tablas de jugadores | 20 frecuentes y 20 más fuertes; selección en montículos de tamaño fijo |
-| Orden global de Games | Uno por snapshot; 4 bytes por coincidencia, incluido en la caché de 512 MiB |
-| Exportación de referencias | 20 partidas distintas; 8 MiB UTF-8 totales, incluidos separadores |
+| Recurso                                   | Límite                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| Partidas de teoría                        | 5.000 por defecto; configurable de 1 a 10.000                               |
+| Profundidad posterior                     | 12 medias jugadas por defecto; de 1 a 16                                    |
+| Recorrido anterior al FEN                 | Hasta 512 medias jugadas por partida seleccionada                           |
+| Árbol de teoría                           | Como máximo `1 + partidas × profundidad`: 160.001 nodos                     |
+| Filas visibles y exportadas de teoría     | Hasta 64                                                                    |
+| Órdenes de llegada visibles               | Hasta 12                                                                    |
+| Grupos de transposición / rutas por grupo | Hasta 20 / 4                                                                |
+| Agregación de informe                     | Comprueba un plazo de 180 s; no incluye espera de turno ni carga de índice  |
+| Informes simultáneos                      | Uno; comparte los dos permisos de consultas de 7.0                          |
+| Caché de informes                         | Una versión de opciones por snapshot; hasta 32 snapshots                    |
+| Jugadores distintos agregables            | Hasta 2.000.000; superar el límite falla explícitamente                     |
+| Tablas de jugadores                       | 20 frecuentes y 20 más fuertes; selección en montículos de tamaño fijo      |
+| Orden global de Games                     | Uno por snapshot; 4 bytes por coincidencia, incluido en la caché de 512 MiB |
+| Exportación de referencias                | 20 partidas distintas; 8 MiB UTF-8 totales, incluidos separadores           |
 
 El PGN de referencias limita también el tamaño de entrada y el presupuesto de complejidad del
 parser. Un exceso se rechaza, no se exporta una partida truncada. Conserva comentarios y variantes
@@ -151,14 +151,14 @@ fría completa. El coste inicial documentado en 7.0 sigue existiendo.
 
 Segunda ejecución, sin otras compilaciones/pruebas simultáneas durante la medición:
 
-| Medida | Resultado |
-| --- | ---: |
-| Agregación, P50 / P95 (5 ejecuciones) | 3.221,929 / 4.281,380 ms |
-| Duraciones ordenadas | 2.605,774; 2.867,456; 3.221,929; 4.015,282; 4.281,380 ms |
-| Cancelación comprobada desde 100 ms, duración total | 104,497 ms |
-| Respuesta JSON de esa ejecución | 64.599 bytes |
-| Máximo residente observado en 351 muestras | 1.808.498.688 bytes (~1,68 GiB) |
-| Máximo privado observado en esas muestras | 15.794.176 bytes (~15,06 MiB) |
+| Medida                                              |                                                Resultado |
+| --------------------------------------------------- | -------------------------------------------------------: |
+| Agregación, P50 / P95 (5 ejecuciones)               |                                 3.221,929 / 4.281,380 ms |
+| Duraciones ordenadas                                | 2.605,774; 2.867,456; 3.221,929; 4.015,282; 4.281,380 ms |
+| Cancelación comprobada desde 100 ms, duración total |                                               104,497 ms |
+| Respuesta JSON de esa ejecución                     |                                             64.599 bytes |
+| Máximo residente observado en 351 muestras          |                          1.808.498.688 bytes (~1,68 GiB) |
+| Máximo privado observado en esas muestras           |                            15.794.176 bytes (~15,06 MiB) |
 
 Las cinco agregaciones reconstruyen el informe sobre el mismo snapshot e índice abierto; no usan
 la caché del informe terminado. P95 con solo cinco observaciones coincide con el máximo y no es
@@ -172,16 +172,16 @@ percentiles de IPC, renderizado, búsquedas frías ni rendimiento release en dis
 
 Ampliación con jugadores, franjas ELO y ordenación global, sobre la misma posición y máquina:
 
-| Medida debug | Resultado |
-| --- | ---: |
-| Jugadores distintos agregados | 236.282 |
-| Agregación ampliada, P50 / P95 (5 ejecuciones) | 4.205,042 / 5.861,901 ms |
-| Duraciones ordenadas | 3.695,710; 3.970,009; 4.205,042; 4.273,141; 5.861,901 ms |
-| Cancelación desde 100 ms, duración total | 107,734 ms |
-| Respuesta JSON ampliada | 73.915 bytes |
-| Ordenar 933.494 coincidencias por fecha descendente | 2.281,650 ms |
-| Ordenar 933.494 coincidencias por ELO medio descendente | 1.720,365 ms |
-| Vector persistido para un orden | 3.733.976 bytes |
+| Medida debug                                            |                                                Resultado |
+| ------------------------------------------------------- | -------------------------------------------------------: |
+| Jugadores distintos agregados                           |                                                  236.282 |
+| Agregación ampliada, P50 / P95 (5 ejecuciones)          |                                 4.205,042 / 5.861,901 ms |
+| Duraciones ordenadas                                    | 3.695,710; 3.970,009; 4.205,042; 4.273,141; 5.861,901 ms |
+| Cancelación desde 100 ms, duración total                |                                               107,734 ms |
+| Respuesta JSON ampliada                                 |                                             73.915 bytes |
+| Ordenar 933.494 coincidencias por fecha descendente     |                                             2.281,650 ms |
+| Ordenar 933.494 coincidencias por ELO medio descendente |                                             1.720,365 ms |
+| Vector persistido para un orden                         |                                          3.733.976 bytes |
 
 El P50 del informe aumentó aproximadamente un 30,5 % frente a la segunda medición del núcleo, a
 cambio de agregar exactamente los jugadores y ratings de todas las coincidencias. La selección de

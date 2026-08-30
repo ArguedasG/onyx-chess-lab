@@ -43,16 +43,16 @@ corrección, rendimiento y uso, además de compilar.
 
 ## Estado de lo anterior
 
-| Área | Evidencia y conclusión |
-| --- | --- |
-| Fases 0–3 | Integración UCI, perfiles, manifiestos, lotes, registro y análisis existen. Sus regresiones relevantes pasan. La validación con motores reales consta en los documentos previos; no se repitió aquí. Calibración profunda y hashes de binarios siguen diferidos. |
-| Fase 4 | Catálogo de quince perfiles, repertorios y liga reducida presentes. Cerrada como beta, sin equivalencia con fuerza o estilos calibrados ni torneos jugables. |
-| Fase 5 | Diferida expresamente hasta después de 7.0–7.1; no es un prerrequisito numérico pendiente antes de 7.0. README, identidad y metadatos de distribución todavía pertenecen a En Croissant. |
-| Fase 6, entrenamiento | Las tres áreas, importación, progreso y gestores están implementados. Persisten validación manual consolidada, revisión de migraciones y preparación de objetivos incluidos de Finales. |
-| 6.6 | Cancelación por solicitud, LRU y observabilidad implementadas; sus pruebas pasan. No está cerrada la prioridad/cancelación del trabajo de cobertura ni la comprobación nativa y empaquetada con la base grande. |
-| 6.7 | Shell centrado en tablero y regresiones de pestañas presentes. Pendientes las últimas pruebas nativas, teclado, escalado, ventana estrecha y uso con una persona nueva. |
-| 6.8 | Incorporación a repertorios, biblioteca modelo, Guardar como/Exportar, avance táctico y ES/EN implementados y cubiertos automáticamente. Sigue pendiente la matriz manual de `training-phase-6-8.es.md`. |
-| Fase 7 | No hay implementación específica de Opening Reports. El explorador y Games son infraestructura previa reutilizable. |
+| Área                  | Evidencia y conclusión                                                                                                                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fases 0–3             | Integración UCI, perfiles, manifiestos, lotes, registro y análisis existen. Sus regresiones relevantes pasan. La validación con motores reales consta en los documentos previos; no se repitió aquí. Calibración profunda y hashes de binarios siguen diferidos. |
+| Fase 4                | Catálogo de quince perfiles, repertorios y liga reducida presentes. Cerrada como beta, sin equivalencia con fuerza o estilos calibrados ni torneos jugables.                                                                                                     |
+| Fase 5                | Diferida expresamente hasta después de 7.0–7.1; no es un prerrequisito numérico pendiente antes de 7.0. README, identidad y metadatos de distribución todavía pertenecen a En Croissant.                                                                         |
+| Fase 6, entrenamiento | Las tres áreas, importación, progreso y gestores están implementados. Persisten validación manual consolidada, revisión de migraciones y preparación de objetivos incluidos de Finales.                                                                          |
+| 6.6                   | Cancelación por solicitud, LRU y observabilidad implementadas; sus pruebas pasan. No está cerrada la prioridad/cancelación del trabajo de cobertura ni la comprobación nativa y empaquetada con la base grande.                                                  |
+| 6.7                   | Shell centrado en tablero y regresiones de pestañas presentes. Pendientes las últimas pruebas nativas, teclado, escalado, ventana estrecha y uso con una persona nueva.                                                                                          |
+| 6.8                   | Incorporación a repertorios, biblioteca modelo, Guardar como/Exportar, avance táctico y ES/EN implementados y cubiertos automáticamente. Sigue pendiente la matriz manual de `training-phase-6-8.es.md`.                                                         |
+| Fase 7                | No hay implementación específica de Opening Reports. El explorador y Games son infraestructura previa reutilizable.                                                                                                                                              |
 
 En Finales hay un pendiente material, no solo de documentación: `addEndgameSet` inicializa objetivos
 como `unknown`, y `installBundledEndgameSets` utiliza ese camino. El cálculo/edición del contenido
@@ -64,13 +64,13 @@ terminado el contenido de Finales para terceros.
 
 ## Comprobaciones ejecutadas en esta revisión
 
-| Comprobación | Resultado |
-| --- | --- |
-| `npm.cmd test` | 21 archivos, 144 pruebas aprobadas. |
-| `npm.cmd run lint` | TypeScript correcto; lint global con 44 avisos y cero errores. No confundir con el lint focalizado de 6.8. |
-| `npm.cmd run i18n:check` | 1.470 claves en ES y EN; sin claves faltantes, diferencias de interpolación ni texto de entrenamiento detectado fuera de traducciones. No valida calidad lingüística ni todos los textos dinámicos. |
-| `npm.cmd run build-vite` | Correcta; avisos de tamaño del bundle y tiempo de plugins. JavaScript principal de aproximadamente 5,17 MB, 1,56 MB comprimido. |
-| `cargo test --offline --manifest-path src-tauri/Cargo.toml` | 72 aprobadas, 8 fallidas y 6 omitidas. |
+| Comprobación                                                | Resultado                                                                                                                                                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm.cmd test`                                              | 21 archivos, 144 pruebas aprobadas.                                                                                                                                                                 |
+| `npm.cmd run lint`                                          | TypeScript correcto; lint global con 44 avisos y cero errores. No confundir con el lint focalizado de 6.8.                                                                                          |
+| `npm.cmd run i18n:check`                                    | 1.470 claves en ES y EN; sin claves faltantes, diferencias de interpolación ni texto de entrenamiento detectado fuera de traducciones. No valida calidad lingüística ni todos los textos dinámicos. |
+| `npm.cmd run build-vite`                                    | Correcta; avisos de tamaño del bundle y tiempo de plugins. JavaScript principal de aproximadamente 5,17 MB, 1,56 MB comprimido.                                                                     |
+| `cargo test --offline --manifest-path src-tauri/Cargo.toml` | 72 aprobadas, 8 fallidas y 6 omitidas.                                                                                                                                                              |
 
 Los ocho fallos Rust reproducen antecedentes documentados: siete pruebas de evaluación heurística
 en `chess.rs` y `get_move_after_exact_match_test`. Este último espera `e5` desde una FEN que omite

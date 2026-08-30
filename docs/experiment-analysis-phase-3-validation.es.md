@@ -19,11 +19,11 @@ Stockfish y el ELO humano de Lichess.
 
 ## Experimentos realizados
 
-| Caso | Partidas | Resultado observado desde blancas | Referencia Lichess |
-| --- | ---: | ---: | ---: |
-| FEN 1: Maia 1900 contra Stockfish 1900 | 20 | 45% - 0% - 55% | 47% - 7% - 46% |
-| FEN 2: Maia 1600 contra Maia 1600 | 20 | 55% - 5% - 40% | 53% - aproximadamente 4% - 43% |
-| FEN 3: Maia 2200 contra Maia 2200 | 20 | 40% - 30% - 30% | 46% - aproximadamente 10% - 44% |
+| Caso                                   | Partidas | Resultado observado desde blancas |              Referencia Lichess |
+| -------------------------------------- | -------: | --------------------------------: | ------------------------------: |
+| FEN 1: Maia 1900 contra Stockfish 1900 |       20 |                    45% - 0% - 55% |                  47% - 7% - 46% |
+| FEN 2: Maia 1600 contra Maia 1600      |       20 |                    55% - 5% - 40% |  53% - aproximadamente 4% - 43% |
+| FEN 3: Maia 2200 contra Maia 2200      |       20 |                   40% - 30% - 30% | 46% - aproximadamente 10% - 44% |
 
 En los tres casos se alternaron los colores y se utilizaron semillas diferentes. Las referencias
 de Lichess proceden de aproximadamente 5.300, 11.000 y 37.000 partidas, respectivamente. Son una
@@ -45,11 +45,11 @@ de `tests`.
 El panel W/D/L no genera partidas nuevas. Consulta la predicción de Maia desde la posición inicial
 del experimento y la compara con los resultados ya guardados.
 
-| Caso | ELO del análisis Maia | Predicción Maia | Resultado observado | MAE |
-| --- | ---: | ---: | ---: | ---: |
-| FEN 1 | 2500 | 43,9% - 10,0% - 46,1% | 45% - 0% - 55% | 10,0 pp |
-| FEN 2 | 1600 | 51,7% - 2,6% - 45,7% | 55% - 5% - 40% | 5,7 pp |
-| FEN 3 | 2200 | 47,1% - 7,2% - 45,7% | 40% - 30% - 30% | 22,8 pp |
+| Caso  | ELO del análisis Maia |       Predicción Maia | Resultado observado |     MAE |
+| ----- | --------------------: | --------------------: | ------------------: | ------: |
+| FEN 1 |                  2500 | 43,9% - 10,0% - 46,1% |      45% - 0% - 55% | 10,0 pp |
+| FEN 2 |                  1600 |  51,7% - 2,6% - 45,7% |      55% - 5% - 40% |  5,7 pp |
+| FEN 3 |                  2200 |  47,1% - 7,2% - 45,7% |     40% - 30% - 30% | 22,8 pp |
 
 La observación más positiva es que las predicciones de Maia se parecen bastante a las referencias
 humanas de Lichess en las tres posiciones. En particular, la predicción de la tercera posición es

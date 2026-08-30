@@ -10,13 +10,13 @@ Humano | Motor | Bot humano
 ## Perfiles iniciales
 
 | Perfil | ELO objetivo | Estilo de muestreo | Temperatura | TopP |
-| --- | ---: | --- | ---: | ---: |
-| Luna | 900 | Explorador | 1.25 | 0.98 |
-| Nico | 1200 | Explorador | 1.12 | 0.96 |
-| Vera | 1500 | Equilibrado | 1.00 | 0.94 |
-| Marcos | 1700 | Equilibrado | 0.92 | 0.92 |
-| Irene | 1900 | Selectivo | 0.82 | 0.88 |
-| Leo | 2200 | Selectivo | 0.72 | 0.84 |
+| ------ | -----------: | ------------------ | ----------: | ---: |
+| Luna   |          900 | Explorador         |        1.25 | 0.98 |
+| Nico   |         1200 | Explorador         |        1.12 | 0.96 |
+| Vera   |         1500 | Equilibrado        |        1.00 | 0.94 |
+| Marcos |         1700 | Equilibrado        |        0.92 | 0.92 |
+| Irene  |         1900 | Selectivo          |        0.82 | 0.88 |
+| Leo    |         2200 | Selectivo          |        0.72 | 0.84 |
 
 El estilo describe la amplitud de muestreo de jugadas humanas, no una personalidad estratégica
 como «táctico» o «posicional». Esa distinción necesitará medición sobre partidas y mecanismos

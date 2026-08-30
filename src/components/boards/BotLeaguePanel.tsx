@@ -111,7 +111,13 @@ function positiveInteger(value: string | number, fallback: number, max?: number)
   return max === undefined ? result : Math.min(max, result);
 }
 
-export default function BotLeaguePanel({ id, embedded = false }: { id: string; embedded?: boolean }) {
+export default function BotLeaguePanel({
+  id,
+  embedded = false,
+}: {
+  id: string;
+  embedded?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const engines = useAtomValue(enginesAtom);
@@ -141,7 +147,8 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
   const maiaEngines = useMemo(
     () =>
       (engines ?? []).filter(
-        (candidate): candidate is LocalEngine => candidate.type === "local" && isMaiaEngine(candidate),
+        (candidate): candidate is LocalEngine =>
+          candidate.type === "local" && isMaiaEngine(candidate),
       ),
     [engines],
   );
@@ -211,7 +218,9 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
 
   const buildConfig = useCallback((): BotLeagueConfig => {
     const opponentElo = selectedProfiles.length
-      ? Math.round(selectedProfiles.reduce((sum, profile) => sum + profile.elo, 0) / selectedProfiles.length)
+      ? Math.round(
+          selectedProfiles.reduce((sum, profile) => sum + profile.elo, 0) / selectedProfiles.length,
+        )
       : 1500;
     return {
       ownerId: id,
@@ -367,7 +376,12 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
         </Group>
 
         {error && (
-          <Alert color="red" icon={<IconAlertTriangle size="1rem" />} withCloseButton onClose={() => setError(null)}>
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size="1rem" />}
+            withCloseButton
+            onClose={() => setError(null)}
+          >
             {error}
           </Alert>
         )}
@@ -383,13 +397,22 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
                 label={t("BotLeague.Engine", "Motor Maia 3")}
                 description={
                   maiaEngines.length === 0
-                    ? t("BotLeague.Engine.Missing", "Instala o activa un motor Maia 3 antes de comenzar.")
-                    : t("BotLeague.Engine.Desc", "Todos los bots usarán este mismo motor con sus parámetros de perfil.")
+                    ? t(
+                        "BotLeague.Engine.Missing",
+                        "Instala o activa un motor Maia 3 antes de comenzar.",
+                      )
+                    : t(
+                        "BotLeague.Engine.Desc",
+                        "Todos los bots usarán este mismo motor con sus parámetros de perfil.",
+                      )
                 }
               />
               <MultiSelect
                 label={t("BotLeague.Players", "Bots participantes")}
-                description={t("BotLeague.Players.Desc", "El valor inicial usa seis bots de referencia para una prueba manejable.")}
+                description={t(
+                  "BotLeague.Players.Desc",
+                  "El valor inicial usa seis bots de referencia para una prueba manejable.",
+                )}
                 data={HUMAN_BOT_PROFILES.map((profile) => ({
                   value: profile.id,
                   label: `${profile.name} (${profile.elo})`,
@@ -412,14 +435,22 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
                   min={0}
                   max={4_294_967_295}
                   value={baseSeed}
-                  onChange={(value) => setBaseSeed(typeof value === "number" ? Math.max(0, Math.trunc(value)) : baseSeed)}
+                  onChange={(value) =>
+                    setBaseSeed(
+                      typeof value === "number" ? Math.max(0, Math.trunc(value)) : baseSeed,
+                    )
+                  }
                 />
                 <NumberInput
                   label={t("BotLeague.SeedStep", "Paso de semilla")}
                   min={0}
                   max={4_294_967_295}
                   value={seedStep}
-                  onChange={(value) => setSeedStep(typeof value === "number" ? Math.max(0, Math.trunc(value)) : seedStep)}
+                  onChange={(value) =>
+                    setSeedStep(
+                      typeof value === "number" ? Math.max(0, Math.trunc(value)) : seedStep,
+                    )
+                  }
                 />
                 <NumberInput
                   label={t("BotLeague.Concurrency", "Concurrencia")}
@@ -432,12 +463,18 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
               <Checkbox
                 checked={alternateColors}
                 onChange={(event) => setAlternateColors(event.currentTarget.checked)}
-                label={t("BotLeague.AlternateColors", "Alternar colores entre partidas de cada pareja")}
+                label={t(
+                  "BotLeague.AlternateColors",
+                  "Alternar colores entre partidas de cada pareja",
+                )}
               />
               <Checkbox
                 checked={useClock}
                 onChange={(event) => setUseClock(event.currentTarget.checked)}
-                label={t("BotLeague.UseClock", "Usar reloj 3+2 para que el tiempo forme parte del comportamiento")}
+                label={t(
+                  "BotLeague.UseClock",
+                  "Usar reloj 3+2 para que el tiempo forme parte del comportamiento",
+                )}
               />
               {useClock && (
                 <SimpleGrid cols={{ base: 1, sm: 2 }}>
@@ -451,20 +488,58 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
                     label={t("BotLeague.Increment", "Incremento (segundos)")}
                     min={0}
                     value={incrementSeconds}
-                    onChange={(value) => setIncrementSeconds(typeof value === "number" ? Math.max(0, Math.trunc(value)) : incrementSeconds)}
+                    onChange={(value) =>
+                      setIncrementSeconds(
+                        typeof value === "number"
+                          ? Math.max(0, Math.trunc(value))
+                          : incrementSeconds,
+                      )
+                    }
                   />
                 </SimpleGrid>
               )}
               <Divider label={t("BotLeague.Resources", "Recursos y reintentos")} />
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-                <NumberInput label={t("BotLeague.Cpu", "Hilos máximos")} min={1} max={1024} value={maxCpuThreads} onChange={(value) => setMaxCpuThreads(positiveInteger(value, maxCpuThreads))} />
-                <NumberInput label={t("BotLeague.Memory", "Hash máximo (MB)")} min={1} max={1_048_576} value={maxMemoryMb} onChange={(value) => setMaxMemoryMb(positiveInteger(value, maxMemoryMb))} />
-                <NumberInput label={t("BotLeague.Retries", "Reintentos por partida")} min={0} max={5} value={maxRetries} onChange={(value) => setMaxRetries(typeof value === "number" ? Math.max(0, Math.min(5, Math.trunc(value))) : maxRetries)} />
+                <NumberInput
+                  label={t("BotLeague.Cpu", "Hilos máximos")}
+                  min={1}
+                  max={1024}
+                  value={maxCpuThreads}
+                  onChange={(value) => setMaxCpuThreads(positiveInteger(value, maxCpuThreads))}
+                />
+                <NumberInput
+                  label={t("BotLeague.Memory", "Hash máximo (MB)")}
+                  min={1}
+                  max={1_048_576}
+                  value={maxMemoryMb}
+                  onChange={(value) => setMaxMemoryMb(positiveInteger(value, maxMemoryMb))}
+                />
+                <NumberInput
+                  label={t("BotLeague.Retries", "Reintentos por partida")}
+                  min={0}
+                  max={5}
+                  value={maxRetries}
+                  onChange={(value) =>
+                    setMaxRetries(
+                      typeof value === "number"
+                        ? Math.max(0, Math.min(5, Math.trunc(value)))
+                        : maxRetries,
+                    )
+                  }
+                />
               </SimpleGrid>
               <Text size="xs" c="dimmed">
-                {t("BotLeague.Resources.Desc", "La concurrencia efectiva se reduce automáticamente si Threads o Hash exceden estos presupuestos. La estimación de ELO de la tabla es interna y relativa; no pretende ser un ELO oficial.")}
+                {t(
+                  "BotLeague.Resources.Desc",
+                  "La concurrencia efectiva se reduce automáticamente si Threads o Hash exceden estos presupuestos. La estimación de ELO de la tabla es interna y relativa; no pretende ser un ELO oficial.",
+                )}
               </Text>
-              <Button leftSection={<IconPlayerPlay size="1rem" />} onClick={startLeague} loading={busy} disabled={!engine || selectedProfiles.length < 2}>
+              <Button
+                leftSection={<IconPlayerPlay size="1rem" />}
+                onClick={startLeague}
+                loading={busy}
+                disabled={!engine || selectedProfiles.length < 2}
+              >
                 {t("BotLeague.Start", "Iniciar liga")}
               </Button>
             </Stack>
@@ -480,26 +555,77 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
               </Group>
               <Progress value={progress} animated={state.status === "running"} />
               <Text size="sm">
-                {t("BotLeague.Progress.Summary", "{{finished}} de {{total}} partidas · {{active}} activas · {{queued}} en cola", {
-                  finished,
-                  total: state.totalGames,
-                  active: state.activeGames.length,
-                  queued: state.queuedGames,
-                })}
+                {t(
+                  "BotLeague.Progress.Summary",
+                  "{{finished}} de {{total}} partidas · {{active}} activas · {{queued}} en cola",
+                  {
+                    finished,
+                    total: state.totalGames,
+                    active: state.activeGames.length,
+                    queued: state.queuedGames,
+                  },
+                )}
               </Text>
               <Text size="xs" c="dimmed">
-                {t("BotLeague.Progress.Resources", "Concurrencia efectiva: {{concurrency}} · {{threads}} Threads/partida · {{hash}} MB Hash/partida", {
-                  concurrency: state.effectiveConcurrency,
-                  threads: state.estimatedThreadsPerGame,
-                  hash: state.estimatedHashMbPerGame,
-                })}
+                {t(
+                  "BotLeague.Progress.Resources",
+                  "Concurrencia efectiva: {{concurrency}} · {{threads}} Threads/partida · {{hash}} MB Hash/partida",
+                  {
+                    concurrency: state.effectiveConcurrency,
+                    threads: state.estimatedThreadsPerGame,
+                    hash: state.estimatedHashMbPerGame,
+                  },
+                )}
               </Text>
               <Group>
-                {!terminal && state.status === "running" && <Button variant="light" leftSection={<IconPlayerPause size="1rem" />} onClick={() => updateLeague("pause")} loading={busy}>{t("BotLeague.Pause", "Pausar")}</Button>}
-                {!terminal && state.status === "paused" && <Button variant="light" leftSection={<IconPlayerPlay size="1rem" />} onClick={() => updateLeague("resume")} loading={busy}>{t("BotLeague.Resume", "Continuar")}</Button>}
-                {!terminal && <Button color="red" variant="light" leftSection={<IconX size="1rem" />} onClick={() => updateLeague("cancel")} loading={busy}>{t("BotLeague.Cancel", "Cancelar")}</Button>}
-                {terminal && <Button leftSection={<IconDownload size="1rem" />} onClick={exportLeague}>{t("BotLeague.Export", "Exportar paquete")}</Button>}
-                {terminal && <Button variant="subtle" onClick={() => { setState(null); setLeagueId(null); void refreshSaved(); }}>{t("BotLeague.New", "Nueva liga")}</Button>}
+                {!terminal && state.status === "running" && (
+                  <Button
+                    variant="light"
+                    leftSection={<IconPlayerPause size="1rem" />}
+                    onClick={() => updateLeague("pause")}
+                    loading={busy}
+                  >
+                    {t("BotLeague.Pause", "Pausar")}
+                  </Button>
+                )}
+                {!terminal && state.status === "paused" && (
+                  <Button
+                    variant="light"
+                    leftSection={<IconPlayerPlay size="1rem" />}
+                    onClick={() => updateLeague("resume")}
+                    loading={busy}
+                  >
+                    {t("BotLeague.Resume", "Continuar")}
+                  </Button>
+                )}
+                {!terminal && (
+                  <Button
+                    color="red"
+                    variant="light"
+                    leftSection={<IconX size="1rem" />}
+                    onClick={() => updateLeague("cancel")}
+                    loading={busy}
+                  >
+                    {t("BotLeague.Cancel", "Cancelar")}
+                  </Button>
+                )}
+                {terminal && (
+                  <Button leftSection={<IconDownload size="1rem" />} onClick={exportLeague}>
+                    {t("BotLeague.Export", "Exportar paquete")}
+                  </Button>
+                )}
+                {terminal && (
+                  <Button
+                    variant="subtle"
+                    onClick={() => {
+                      setState(null);
+                      setLeagueId(null);
+                      void refreshSaved();
+                    }}
+                  >
+                    {t("BotLeague.New", "Nueva liga")}
+                  </Button>
+                )}
               </Group>
             </Stack>
           </Paper>
@@ -508,26 +634,68 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
         {state && (
           <SimpleGrid cols={{ base: 1, lg: 2 }}>
             <Paper withBorder p="md">
-              <Text fw={600} mb="sm">{t("BotLeague.Standings", "Tabla de posiciones")}</Text>
+              <Text fw={600} mb="sm">
+                {t("BotLeague.Standings", "Tabla de posiciones")}
+              </Text>
               <ScrollArea>
                 <Table striped highlightOnHover withTableBorder miw={650}>
-                  <Table.Thead><Table.Tr><Table.Th>#</Table.Th><Table.Th>{t("BotLeague.Bot", "Bot")}</Table.Th><Table.Th>{t("BotLeague.Target", "Objetivo")}</Table.Th><Table.Th>{t("BotLeague.WhiteBlack", "B/N")}</Table.Th><Table.Th>W/D/L</Table.Th><Table.Th>{t("BotLeague.Points", "Puntos")}</Table.Th><Table.Th>{t("BotLeague.Estimated", "Estimación")}</Table.Th></Table.Tr></Table.Thead>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>#</Table.Th>
+                      <Table.Th>{t("BotLeague.Bot", "Bot")}</Table.Th>
+                      <Table.Th>{t("BotLeague.Target", "Objetivo")}</Table.Th>
+                      <Table.Th>{t("BotLeague.WhiteBlack", "B/N")}</Table.Th>
+                      <Table.Th>W/D/L</Table.Th>
+                      <Table.Th>{t("BotLeague.Points", "Puntos")}</Table.Th>
+                      <Table.Th>{t("BotLeague.Estimated", "Estimación")}</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
                   <Table.Tbody>
                     {state.standings.map((standing, index) => (
-                      <Table.Tr key={standing.profileId}><Table.Td>{index + 1}</Table.Td><Table.Td>{standing.name}</Table.Td><Table.Td>{standing.targetElo}</Table.Td><Table.Td>{standing.whiteGames}/{standing.blackGames}</Table.Td><Table.Td>{standing.wins}/{standing.draws}/{standing.losses}</Table.Td><Table.Td>{standing.points.toFixed(1)}</Table.Td><Table.Td>{standing.estimatedElo ?? "—"}</Table.Td></Table.Tr>
+                      <Table.Tr key={standing.profileId}>
+                        <Table.Td>{index + 1}</Table.Td>
+                        <Table.Td>{standing.name}</Table.Td>
+                        <Table.Td>{standing.targetElo}</Table.Td>
+                        <Table.Td>
+                          {standing.whiteGames}/{standing.blackGames}
+                        </Table.Td>
+                        <Table.Td>
+                          {standing.wins}/{standing.draws}/{standing.losses}
+                        </Table.Td>
+                        <Table.Td>{standing.points.toFixed(1)}</Table.Td>
+                        <Table.Td>{standing.estimatedElo ?? "—"}</Table.Td>
+                      </Table.Tr>
                     ))}
                   </Table.Tbody>
                 </Table>
               </ScrollArea>
             </Paper>
             <Paper withBorder p="md">
-              <Text fw={600} mb="sm">{t("BotLeague.Results", "Resultados")}</Text>
+              <Text fw={600} mb="sm">
+                {t("BotLeague.Results", "Resultados")}
+              </Text>
               <ScrollArea h={320}>
                 <Stack gap="xs">
                   {state.results.map((result) => (
                     <Group key={result.index} justify="space-between" wrap="nowrap">
-                      <Text size="sm" truncate>{result.index + 1}. {result.whitePlayer} — {result.blackPlayer}</Text>
-                      <Group gap="xs" wrap="nowrap"><Text size="sm" fw={600}>{resultLabel(result.result)}</Text>{result.artifactAvailable && <Button size="compact-xs" variant="subtle" leftSection={<IconZoomCheck size="0.8rem" />} onClick={() => openGameByIndex(result)}>{t("BotLeague.Open", "Abrir")}</Button>}</Group>
+                      <Text size="sm" truncate>
+                        {result.index + 1}. {result.whitePlayer} — {result.blackPlayer}
+                      </Text>
+                      <Group gap="xs" wrap="nowrap">
+                        <Text size="sm" fw={600}>
+                          {resultLabel(result.result)}
+                        </Text>
+                        {result.artifactAvailable && (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            leftSection={<IconZoomCheck size="0.8rem" />}
+                            onClick={() => openGameByIndex(result)}
+                          >
+                            {t("BotLeague.Open", "Abrir")}
+                          </Button>
+                        )}
+                      </Group>
                     </Group>
                   ))}
                 </Stack>
@@ -537,13 +705,33 @@ export default function BotLeaguePanel({ id, embedded = false }: { id: string; e
         )}
 
         <Paper withBorder p="md">
-          <Text fw={600} mb="sm">{t("BotLeague.Saved", "Ligas guardadas")}</Text>
-          {savedLeagues.length === 0 ? <Text size="sm" c="dimmed">{t("BotLeague.Saved.Empty", "Todavía no hay ligas guardadas.")}</Text> : (
+          <Text fw={600} mb="sm">
+            {t("BotLeague.Saved", "Ligas guardadas")}
+          </Text>
+          {savedLeagues.length === 0 ? (
+            <Text size="sm" c="dimmed">
+              {t("BotLeague.Saved.Empty", "Todavía no hay ligas guardadas.")}
+            </Text>
+          ) : (
             <Stack gap="xs">
               {savedLeagues.slice(0, 12).map((summary) => (
                 <Group key={summary.leagueId} justify="space-between" wrap="nowrap">
-                  <Text size="sm" truncate>{summary.leagueId} · {summary.completedGames}/{summary.totalGames}</Text>
-                  <Group gap="xs" wrap="nowrap"><Badge color={statusColor(summary.status)}>{statusLabel(summary.status, t)}</Badge><Button size="compact-xs" variant="subtle" onClick={() => openSaved(summary)} loading={busy}>{t("BotLeague.View", "Ver")}</Button></Group>
+                  <Text size="sm" truncate>
+                    {summary.leagueId} · {summary.completedGames}/{summary.totalGames}
+                  </Text>
+                  <Group gap="xs" wrap="nowrap">
+                    <Badge color={statusColor(summary.status)}>
+                      {statusLabel(summary.status, t)}
+                    </Badge>
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      onClick={() => openSaved(summary)}
+                      loading={busy}
+                    >
+                      {t("BotLeague.View", "Ver")}
+                    </Button>
+                  </Group>
                 </Group>
               ))}
             </Stack>

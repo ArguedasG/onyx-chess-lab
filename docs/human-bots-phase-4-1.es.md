@@ -42,14 +42,14 @@ Se aprobó usar estos ejes como lenguaje común:
 
 La asignación inicial es:
 
-| Perfil | Decisión | Apertura | Interpretación breve |
-| --- | --- | --- | --- |
-| Luna | agresiva y complicadora | intermedia, poco teórica | exploratoria y variada |
-| Nico | agresivo y complicador | aguda, poco teórica | dinámico y táctico |
-| Vera | equilibrada | intermedia y equilibrada | punto de referencia general |
-| Marcos | defensivo y simplificador | sólida, moderadamente teórica | selectivo y posicional |
-| Irene | defensiva y simplificadora | sólida y teórica | clásica y paciente |
-| Leo | equilibrado | intermedia y teórica | preciso y orientado a líneas principales |
+| Perfil | Decisión                   | Apertura                      | Interpretación breve                     |
+| ------ | -------------------------- | ----------------------------- | ---------------------------------------- |
+| Luna   | agresiva y complicadora    | intermedia, poco teórica      | exploratoria y variada                   |
+| Nico   | agresivo y complicador     | aguda, poco teórica           | dinámico y táctico                       |
+| Vera   | equilibrada                | intermedia y equilibrada      | punto de referencia general              |
+| Marcos | defensivo y simplificador  | sólida, moderadamente teórica | selectivo y posicional                   |
+| Irene  | defensiva y simplificadora | sólida y teórica              | clásica y paciente                       |
+| Leo    | equilibrado                | intermedia y teórica          | preciso y orientado a líneas principales |
 
 Solo tras la calibración podremos marcar los perfiles como `measured` y describir diferencias con evidencia.
 

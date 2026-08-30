@@ -14,23 +14,23 @@ Los repertorios ahora distinguen líneas de blancas y negras. Así, un bot puede
 
 ## Catálogo 4.4.0
 
-| Bot | ELO objetivo | Estilo editorial | Blancas | Negras | Modo |
-| --- | ---: | --- | --- | --- | --- |
-| Luna | 900 | agresiva y complicadora, poco teórica | Italiana, Escocesa | Francesa, Escandinava | ponderado |
-| Sofía | 1050 | agresiva, complejidad media | Escandinava inicial | Escandinava inicial | línea fija |
-| Nico | 1200 | agresivo y táctico | Italiana, Dos caballos | Siciliana (Ataque inglés) | ponderado |
-| Daniela | 1300 | equilibrada y compleja | Escocesa | Francesa | ponderado |
-| Marcos | 1450 | equilibrado y natural | Maia | Maia | sin repertorio |
-| Vera | 1500 | equilibrada y clásica | Gambito de dama, Londres | Eslava | ponderado |
-| Carlos | 1650 | selectivo y teórico | Londres, Inglesa | Eslava, India de dama | ponderado |
-| Gabriel | 1700 | defensivo y simplificador | Gambito de dama, Londres | Eslava, India de dama | ponderado |
-| Nelson | 1800 | agresivo y complicador | Gambito de dama | Nimzoindia, India de dama, India de rey, Grünfeld | ponderado |
-| Irene | 1900 | sólida, paciente y teórica | Gambito de dama, Inglesa | Caro-Kann | ponderado |
-| Mariann | 2000 | sólida y clásica | Española, Gambito de dama | Francesa, Caro-Kann | ponderado |
-| Valeria | 2100 | agresiva y compleja | Italiana | Pirc, Moderna | ponderado |
-| Leo | 2200 | preciso y orientado a líneas principales | Española, Inglesa | Siciliana, Nimzoindia, India de rey | ponderado |
-| Tomás | 2300 | complejo y muy teórico | Ataque Indio de Rey | India de rey | ponderado |
-| Atlas | 2400 | preciso, agudo y muy teórico | Española, Escocesa | Siciliana, Nimzoindia, Grünfeld | ponderado |
+| Bot     | ELO objetivo | Estilo editorial                         | Blancas                   | Negras                                            | Modo           |
+| ------- | -----------: | ---------------------------------------- | ------------------------- | ------------------------------------------------- | -------------- |
+| Luna    |          900 | agresiva y complicadora, poco teórica    | Italiana, Escocesa        | Francesa, Escandinava                             | ponderado      |
+| Sofía   |         1050 | agresiva, complejidad media              | Escandinava inicial       | Escandinava inicial                               | línea fija     |
+| Nico    |         1200 | agresivo y táctico                       | Italiana, Dos caballos    | Siciliana (Ataque inglés)                         | ponderado      |
+| Daniela |         1300 | equilibrada y compleja                   | Escocesa                  | Francesa                                          | ponderado      |
+| Marcos  |         1450 | equilibrado y natural                    | Maia                      | Maia                                              | sin repertorio |
+| Vera    |         1500 | equilibrada y clásica                    | Gambito de dama, Londres  | Eslava                                            | ponderado      |
+| Carlos  |         1650 | selectivo y teórico                      | Londres, Inglesa          | Eslava, India de dama                             | ponderado      |
+| Gabriel |         1700 | defensivo y simplificador                | Gambito de dama, Londres  | Eslava, India de dama                             | ponderado      |
+| Nelson  |         1800 | agresivo y complicador                   | Gambito de dama           | Nimzoindia, India de dama, India de rey, Grünfeld | ponderado      |
+| Irene   |         1900 | sólida, paciente y teórica               | Gambito de dama, Inglesa  | Caro-Kann                                         | ponderado      |
+| Mariann |         2000 | sólida y clásica                         | Española, Gambito de dama | Francesa, Caro-Kann                               | ponderado      |
+| Valeria |         2100 | agresiva y compleja                      | Italiana                  | Pirc, Moderna                                     | ponderado      |
+| Leo     |         2200 | preciso y orientado a líneas principales | Española, Inglesa         | Siciliana, Nimzoindia, India de rey               | ponderado      |
+| Tomás   |         2300 | complejo y muy teórico                   | Ataque Indio de Rey       | India de rey                                      | ponderado      |
+| Atlas   |         2400 | preciso, agudo y muy teórico             | Española, Escocesa        | Siciliana, Nimzoindia, Grünfeld                   | ponderado      |
 
 Las descripciones de estilo y los ELO siguen siendo hipótesis editoriales o objetivos solicitados a Maia. La implementación no los presenta como una medición externa ni como una fuerza calibrada definitivamente.
 

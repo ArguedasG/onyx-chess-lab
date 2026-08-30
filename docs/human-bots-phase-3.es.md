@@ -31,13 +31,13 @@ La opción **Tiempo de reflexión humano** aparece al seleccionar un bot humano 
 Cada perfil tiene una distribución inicial diferente:
 
 | Perfil | Mínimo | Media objetivo | Máximo | Tiempo de repertorio |
-| --- | ---: | ---: | ---: | ---: |
-| Luna | 0,45 s | 1,20 s | 3,50 s | 45 % |
-| Nico | 0,50 s | 1,45 s | 4,20 s | 43 % |
-| Vera | 0,60 s | 1,75 s | 5,20 s | 40 % |
-| Marcos | 0,65 s | 2,00 s | 6,00 s | 38 % |
-| Irene | 0,70 s | 2,25 s | 6,80 s | 35 % |
-| Leo | 0,75 s | 2,50 s | 7,50 s | 32 % |
+| ------ | -----: | -------------: | -----: | -------------------: |
+| Luna   | 0,45 s |         1,20 s | 3,50 s |                 45 % |
+| Nico   | 0,50 s |         1,45 s | 4,20 s |                 43 % |
+| Vera   | 0,60 s |         1,75 s | 5,20 s |                 40 % |
+| Marcos | 0,65 s |         2,00 s | 6,00 s |                 38 % |
+| Irene  | 0,70 s |         2,25 s | 6,80 s |                 35 % |
+| Leo    | 0,75 s |         2,50 s | 7,50 s |                 32 % |
 
 No son pausas fijas. El tiempo objetivo varía aleatoriamente y se ajusta según la fase de la partida, la cantidad de jugadas legales y si el rey está en jaque. Las jugadas conocidas del repertorio suelen ser más rápidas; una decisión de Maia puede incluir ocasionalmente una pausa mayor.
 

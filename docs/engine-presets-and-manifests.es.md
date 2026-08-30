@@ -6,13 +6,13 @@ Este documento describe las fases 1.2 y 1.3 de Chess Lab. Ambas construyen la ba
 
 Chess Lab separa explícitamente cinco categorías:
 
-| Categoría | Propósito | Configuración aplicada |
-| --- | --- | --- |
-| Bot humano Maia | Simular decisiones humanas mediante un perfil Maia | ELO objetivo, muestreo, repertorio y tiempo propios del perfil |
-| Motor limitado | Pedir al motor una fuerza reducida, sin afirmar que esté calibrada por Chess Lab | `UCI_LimitStrength=true`, `UCI_Elo`, 1 hilo y 64 MB Hash. En modo ilimitado: profundidad 16 para motores alfa-beta o 500 nodos para Lc0/Leela |
-| Motor fuerte | Juego a fuerza completa con un presupuesto moderado y repetible | Sin límite de fuerza, Skill Level 20, 1 hilo y 64 MB Hash. En modo ilimitado: profundidad 18 para motores alfa-beta o 2000 nodos para Lc0/Leela |
-| Motor de referencia | Referencia superhumana con mayor presupuesto de cálculo | Sin límite de fuerza, Skill Level 20, 1 hilo y 256 MB Hash. En modo ilimitado: profundidad 24 para motores alfa-beta u 8000 nodos para Lc0/Leela |
-| Personalizada | Control manual del usuario | Conserva las opciones UCI y el límite de búsqueda seleccionados |
+| Categoría           | Propósito                                                                        | Configuración aplicada                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bot humano Maia     | Simular decisiones humanas mediante un perfil Maia                               | ELO objetivo, muestreo, repertorio y tiempo propios del perfil                                                                                   |
+| Motor limitado      | Pedir al motor una fuerza reducida, sin afirmar que esté calibrada por Chess Lab | `UCI_LimitStrength=true`, `UCI_Elo`, 1 hilo y 64 MB Hash. En modo ilimitado: profundidad 16 para motores alfa-beta o 500 nodos para Lc0/Leela    |
+| Motor fuerte        | Juego a fuerza completa con un presupuesto moderado y repetible                  | Sin límite de fuerza, Skill Level 20, 1 hilo y 64 MB Hash. En modo ilimitado: profundidad 18 para motores alfa-beta o 2000 nodos para Lc0/Leela  |
+| Motor de referencia | Referencia superhumana con mayor presupuesto de cálculo                          | Sin límite de fuerza, Skill Level 20, 1 hilo y 256 MB Hash. En modo ilimitado: profundidad 24 para motores alfa-beta u 8000 nodos para Lc0/Leela |
+| Personalizada       | Control manual del usuario                                                       | Conserva las opciones UCI y el límite de búsqueda seleccionados                                                                                  |
 
 En todos los presets se solicita `MultiPV=1` durante la partida. Las opciones que el preset no reconoce —por ejemplo `EvalFile`— se conservan. Al arrancar, el backend solo envía las opciones que el motor anunció durante el saludo UCI; las demás se omiten y quedan registradas.
 

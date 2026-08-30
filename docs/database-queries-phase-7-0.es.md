@@ -26,12 +26,12 @@ blancas, ELO de negras o ese orden base, y filtrar por un rango ELO común a amb
 
 ## Contrato de consulta
 
-| Operación | Respuesta |
-| --- | --- |
-| `query_position(file, query, tab_id, background)` | Token, huella, FEN normalizada, total, continuaciones, resultados desconocidos, errores de decodificación encontrados, duración y acierto de caché. |
-| `get_position_games(token, offset, limit, sort, direction, tab_id)` | Metadatos de 1–100 partidas en el orden global solicitado; la interfaz solicita 20. No contiene PGN. |
-| `get_position_game(token, offset)` | Una partida normalizada y su ply coincidente. |
-| `cancel_position_search(tab_id)` | Cancela al propietario, también si espera un permiso. |
+| Operación                                                           | Respuesta                                                                                                                                           |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query_position(file, query, tab_id, background)`                   | Token, huella, FEN normalizada, total, continuaciones, resultados desconocidos, errores de decodificación encontrados, duración y acierto de caché. |
+| `get_position_games(token, offset, limit, sort, direction, tab_id)` | Metadatos de 1–100 partidas en el orden global solicitado; la interfaz solicita 20. No contiene PGN.                                                |
+| `get_position_game(token, offset)`                                  | Una partida normalizada y su ply coincidente.                                                                                                       |
+| `cancel_position_search(tab_id)`                                    | Cancela al propietario, también si espera un permiso.                                                                                               |
 
 La identidad exacta incluye tablero, turno, derechos de enroque y captura al paso legal. No incluye
 los contadores FEN. Se conserva la primera aparición en la línea principal de cada partida: una
@@ -114,16 +114,16 @@ y añadir cancelación dentro de la validación heredada; no demuestran una acel
 
 Resultados finales sin otras compilaciones simultáneas:
 
-| Medida | Resultado |
-| --- | ---: |
-| Validación inicial de v4 | 25,351 s |
-| Escaneo completo | 26,005 s |
-| Coincidencias | 933.494 |
-| Archivo temporal de coincidencias | 22.403.856 bytes (~21,37 MiB) |
-| Página de 20 partidas, P50 / P95 | 15,799 / 22,323 ms |
-| Consulta a caché con comprobación de revisión, P50 / P95 | 0,601 / 0,871 ms |
-| Validación cancelada a los 100 ms, duración total | 101,338 ms |
-| Escaneo cancelado desde un hilo a los ~100 ms, duración total | 108,818 ms |
+| Medida                                                        |                     Resultado |
+| ------------------------------------------------------------- | ----------------------------: |
+| Validación inicial de v4                                      |                      25,351 s |
+| Escaneo completo                                              |                      26,005 s |
+| Coincidencias                                                 |                       933.494 |
+| Archivo temporal de coincidencias                             | 22.403.856 bytes (~21,37 MiB) |
+| Página de 20 partidas, P50 / P95                              |            15,799 / 22,323 ms |
+| Consulta a caché con comprobación de revisión, P50 / P95      |              0,601 / 0,871 ms |
+| Validación cancelada a los 100 ms, duración total             |                    101,338 ms |
+| Escaneo cancelado desde un hilo a los ~100 ms, duración total |                    108,818 ms |
 
 La duración de escaneo cancelado incluye la espera antes de solicitar la cancelación; no es una
 medición aislada de latencia desde la señal. P50/P95 de páginas y caché corresponden a 20 lecturas

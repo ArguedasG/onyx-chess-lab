@@ -10,13 +10,13 @@ Comprobar que los ELO objetivo producen un orden de fuerza razonable entre los s
 
 Se utilizaron series de 10 partidas con colores alternados, semillas registradas y configuraciones conservadas en los manifiestos locales. El usuario revisó manualmente partidas representativas y reportó lo siguiente:
 
-| Serie | Resultado reportado | Lectura |
-| --- | --- | --- |
-| Nico 1200 — Luna 900 | Nico 8–2 | Coherente con una diferencia de 300 ELO. Ambos son dinámicos; Nico se percibe más agresivo. |
-| Vera 1500 — Nico 1200 | Vera 7–3 en puntos | Coherente para una muestra de 10. El manifiesto local desglosa 6 victorias, 2 derrotas y 2 tablas para Vera. |
-| Marcos 1700 — Vera 1500 | Marcos 7–3 | Coherente con una diferencia de 200 ELO; apareció un error puntual de pieza de Marcos. |
-| Irene 1900 — Marcos 1700 | Irene 9–1 | Algo favorable a Irene, pero plausible en una muestra pequeña; su derrota fue un error instructivo de final de peones. |
-| Leo 2200 — Irene 1900 | Leo 8–2 | Coherente; hubo una tabla reñida, un ahogado y un mate en uno permitido por Leo. |
+| Serie                    | Resultado reportado | Lectura                                                                                                                |
+| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Nico 1200 — Luna 900     | Nico 8–2            | Coherente con una diferencia de 300 ELO. Ambos son dinámicos; Nico se percibe más agresivo.                            |
+| Vera 1500 — Nico 1200    | Vera 7–3 en puntos  | Coherente para una muestra de 10. El manifiesto local desglosa 6 victorias, 2 derrotas y 2 tablas para Vera.           |
+| Marcos 1700 — Vera 1500  | Marcos 7–3          | Coherente con una diferencia de 200 ELO; apareció un error puntual de pieza de Marcos.                                 |
+| Irene 1900 — Marcos 1700 | Irene 9–1           | Algo favorable a Irene, pero plausible en una muestra pequeña; su derrota fue un error instructivo de final de peones. |
+| Leo 2200 — Irene 1900    | Leo 8–2             | Coherente; hubo una tabla reñida, un ahogado y un mate en uno permitido por Leo.                                       |
 
 Los cuatro primeros lotes disponibles en el workspace tienen 10/10 partidas registradas, colores alternados y cero fallos. La quinta serie se conserva aquí como resultado reportado por el usuario; sus artefactos no están actualmente en la carpeta privada local.
 

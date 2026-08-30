@@ -14,14 +14,14 @@ Esta separación permite cambiar o medir una dimensión sin tener que redefinir 
 
 ## Repertorios incluidos
 
-| Perfil | Repertorio | Preferencias principales | Profundidad máxima |
-| --- | --- | --- | ---: |
-| Luna | Variedad temprana | Italiana, Dos Caballos, Escocesa y alternativas | 12 plies |
-| Nico | Juegos abiertos | Italiana, Dos Caballos, Escocesa y Siciliana | 14 plies |
-| Vera | Mezcla clásica | Española, Gambito de Dama, Eslava e Inglesa | 14 plies |
-| Marcos | Peón de dama | Gambito de Dama, Eslava, Nimzoindia e India de Dama | 16 plies |
-| Irene | Clásico sólido | Gambito de Dama, Nimzoindia, Caro-Kann y Francesa | 16 plies |
-| Leo | Líneas principales flexibles | Española, Siciliana, Nimzoindia, India de Rey e Inglesa | 16 plies |
+| Perfil | Repertorio                   | Preferencias principales                                | Profundidad máxima |
+| ------ | ---------------------------- | ------------------------------------------------------- | -----------------: |
+| Luna   | Variedad temprana            | Italiana, Dos Caballos, Escocesa y alternativas         |           12 plies |
+| Nico   | Juegos abiertos              | Italiana, Dos Caballos, Escocesa y Siciliana            |           14 plies |
+| Vera   | Mezcla clásica               | Española, Gambito de Dama, Eslava e Inglesa             |           14 plies |
+| Marcos | Peón de dama                 | Gambito de Dama, Eslava, Nimzoindia e India de Dama     |           16 plies |
+| Irene  | Clásico sólido               | Gambito de Dama, Nimzoindia, Caro-Kann y Francesa       |           16 plies |
+| Leo    | Líneas principales flexibles | Española, Siciliana, Nimzoindia, India de Rey e Inglesa |           16 plies |
 
 Los pesos no obligan a repetir siempre una línea. En cada posición se consideran únicamente las líneas cuyo prefijo coincide con la partida y cuya siguiente jugada es legal; después se elige una continuación según sus pesos.
 
