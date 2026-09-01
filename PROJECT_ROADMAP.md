@@ -166,7 +166,9 @@ Estas etiquetas describen principalmente amplitud de muestreo, no personalidades
 
 ### Próximo paso recomendado
 
-**Núcleo 7.0–7.2 implementado y Fase 5 en preparación. Siguiente paso: cerrar nombre y procedencia del logo, crear el repositorio canónico conservando el historial y después ejecutar la auditoría release.**
+**Núcleo 7.0–7.2 implementado y auditoría de Fase 5 en progreso. El repositorio canónico, upstream,
+nombre y licencia del logo ya están configurados. Siguiente paso: continuar la matriz release,
+definir/probar la migración de datos y cerrar los P0–P2 antes de la alpha.**
 La corrección de 7.2 tiene validación automática. La preparación de los objetivos incluidos de
 Finales y la validación manual consolidada/nativa/empaquetada se resolverán en la auditoría 5.2,
 antes de distribuir la alpha; no se consideran ya verificadas.
@@ -590,9 +592,10 @@ Fase 7.
 
 ## Fase 5 — Identidad de producto y alpha privada
 
-**Estado: Preparación iniciada el 2026-08-30 tras completar el núcleo 7.0–7.2. Nombre final Onyx
-Chess Lab y ubicación local `G:\dev\onyx-chess-lab` acordados; repositorio y auditoría release
-pendientes.**
+**Estado: Auditoría iniciada. Nombre final Onyx Chess Lab, ubicación local
+`G:\dev\onyx-chess-lab`, repositorio `ArguedasG/onyx-chess-lab`, remoto upstream y licencia CC BY
+4.0 del logo configurados. Primer lote de navegación y nombres resuelto el 2026-08-31; auditoría
+release completa y migración de datos pendientes.**
 
 Esta fase se divide en cuatro hitos. La identidad visual no debe bloquear el trabajo funcional, pero el
 nombre, el identificador de la aplicación, la migración y las licencias sí deben quedar resueltos antes
@@ -616,7 +619,7 @@ perder el historial, la licencia GPLv3, los avisos de copyright ni la atribució
 
 - congelar temporalmente funcionalidades nuevas y construir una línea base release identificada;
 - auditar instalación, migraciones, persistencia, navegación, motores, bases, informes,
-  entrenamiento, bots, laboratorio, traducciones y rendimiento;
+  entrenamiento, bots, Generador de partidas modelo, traducciones y rendimiento;
 - registrar antes de corregir, salvo bloqueos o riesgos de datos, y clasificar P0–P3;
 - completar la definición de objetivo, color y resultado aceptado de todas las posiciones incluidas
   de Finales;
@@ -887,7 +890,9 @@ configurado y no presentar esa evaluación como una verdad teórica absoluta.
 - la sesión de repertorio completo avanza automáticamente al siguiente capítulo entrenable al terminar sus líneas;
 - una desviación dentro de 30 centipeones se informa como buena y pausa la práctica antes de regresar a la continuación preparada;
 - `/training/endgames` importa los FEN del PGN de un estudio, consulta objetivos remotos y permite iniciar una partida desde cualquier posición;
-- los tres estudios incluidos instalan 180 posiciones una sola vez; el estudiante juega el lado al turno contra Maia máximo o Stockfish;
+- los tres estudios incluidos instalan 180 posiciones una sola vez; cada PGN fija por posición el
+  objetivo y el color del estudiante, independiente del lado al turno, para jugar contra Maia máximo
+  o Stockfish;
 - la biblioteca genérica anterior permanece solo como ruta técnica oculta y deja de presentarse como experiencia principal;
 - los formatos reales revisados, sus límites y las políticas previstas se documentan en `docs/training-import-formats-phase-6.es.md`;
 - la suite automática queda en 89 pruebas pasando y el build web se valida correctamente.
@@ -983,7 +988,7 @@ Táctica, Aperturas o Finales.
 - «Jugar desde aquí» deja intacto el análisis/repertorio y crea una pestaña de juego con identidad
   propia, sin origen de archivo. Solo copia el historial hasta el nodo seleccionado, incluidas
   subvariantes y FEN inicial; no utiliza el final de la línea principal ni una sesión anterior.
-- La confirmación de cierre se muestra también en Juego y Laboratorio y se vincula a la pestaña
+- La confirmación de cierre se muestra también en Juego y Generador de partidas modelo y se vincula a la pestaña
   solicitada, incluso si se cierra desde Entrenamiento. «Guardar y cerrar» espera la escritura;
   cancelar o fallar conserva la pestaña y el estado sucio. El origen cambia solo tras guardar bien.
 - 19 regresiones específicas pasan, incluidas pruebas de componentes/rutas montados, conservación
@@ -1001,7 +1006,7 @@ Táctica, Aperturas o Finales.
   de análisis; `NewTabHome` se conserva únicamente para restaurar sesiones antiguas durante la
   transición;
 - la barra lateral separa Tablero, Jugar, Importar y Entrenamiento de Archivos, Bases, Motores y
-  Cuentas; el Generador de partidas modelo queda agrupado como Laboratorio;
+  Cuentas; el Generador de partidas modelo queda agrupado como herramienta avanzada;
 - la barra puede expandirse a etiquetas visibles o contraerse a iconos con tooltips, y recuerda la
   preferencia local;
 - una tarjeta discreta en el panel Información del tablero vacío ofrece Jugar, Importar y elegir una
@@ -1028,7 +1033,7 @@ Táctica, Aperturas o Finales.
 - **Archivos, Bases, Motores y Ajustes**: continúan como espacios de administración, sin competir con
   las acciones primarias;
 - **Herramientas experimentales**: Model Game Generator y análisis de experimentos deben quedar en
-  un grupo avanzado o Laboratorio, no al mismo nivel visual que Jugar o Entrenar.
+  un grupo avanzado, no al mismo nivel visual que Jugar o Entrenar.
 
 #### Riesgos que debe resolver el prototipo
 
@@ -1103,6 +1108,19 @@ flujos nativos.
 - mantener durante un periodo amplio el esfuerzo activo exclusivamente en español e inglés;
 - priorizar otros idiomas mucho más adelante según usuarios reales o colaboradores, en vez de
   declarar todos los idiomas existentes como completos.
+
+### 6.9. Modo futuro de diagnóstico teórico de finales
+
+**Estado: Diferido hasta después de la primera alpha. No forma parte de la estabilización actual.**
+
+- presentar una posición inicial y señalar explícitamente qué color mueve;
+- pedir al estudiante que clasifique el resultado teórico como **ganan blancas**, **ganan negras** o
+  **tablas**, sin jugar la posición;
+- reutilizar tanto las posiciones incluidas como sets de finales importados por el usuario;
+- separar su progreso y métricas del modo actual de juego contra motor;
+- usar tablebase cuando la posición sea elegible y declarar el criterio empleado fuera de cobertura;
+- permitir sesiones por tema, set o selección de posiciones y explicar la respuesta después de cada
+  intento.
 
 ---
 
@@ -1503,7 +1521,10 @@ prioridades de producto y, como mínimo, después de la Fase 7.
 56. El primer corte detecta capítulos de partidas modelo y los mantiene como contenido analizable no entrenable; una biblioteca editable dedicada dentro de cada repertorio permanece pendiente.
 57. Los PGN de cursos comerciales usados para validar formatos son fixtures locales del propietario y no se distribuirán con la aplicación ni se copiarán a sus recursos.
 58. En Finales se prioriza la tablebase remota por el tamaño de las colecciones locales; `SyzygyPath` continúa como opción avanzada. Maia al ELO máximo será el rival predeterminado y Stockfish será seleccionable.
-59. Las 180 posiciones FEN válidas de los tres PGN de Finales se incluirán como contenido inicial; sus cuatro registros introductorios o vacíos se omiten. El estudiante juega por defecto el lado al turno de la FEN y cada posición ofrece una acción separada de análisis.
+59. Las 180 posiciones FEN válidas de los tres PGN de Finales se incluyen como contenido inicial; sus
+    cuatro registros introductorios o vacíos se omiten. Cada registro válido fija objetivo y color del
+    estudiante mediante metadatos PGN, sin confundirlo con el lado al turno, y ofrece una acción
+    separada de análisis.
 60. Crear un repertorio propio desde cero es el flujo principal de Aperturas; importar PGN es una alternativa. Un repertorio nuevo puede añadir capítulos y construir sus árboles directamente en el tablero.
 61. En Aperturas, la unidad de recuerdo y calificación es la línea completa. Los movimientos correctos continúan sin mostrar la escala de dificultad; esta aparece una sola vez al finalizar la línea.
 62. Marcar una línea como entrenable modifica la cola de práctica, no elimina contenido de la copia editable. El archivo importado permanece intacto y la copia conserva ramas, comentarios y anotaciones.
@@ -1569,10 +1590,10 @@ prioridades de producto y, como mínimo, después de la Fase 7.
 122. La Fase 5 se ejecutará como identidad/repositorio, auditoría completa sobre release,
      estabilización más capa visual ligera y alpha privada, en ese orden. La auditoría registra y prioriza
      antes de abrir otra ventana amplia de correcciones.
-123. El nombre definitivo es Onyx Chess Lab y el repositorio local canónico se ubicará en
-     `G:\dev\onyx-chess-lab`. El símbolo fue ideado inicialmente por el usuario y transformado con la
-     generación de imágenes de ChatGPT; permanece fuera del repositorio hasta documentar su procedencia y
-     asignarle una licencia gráfica explícita.
+123. El nombre definitivo es Onyx Chess Lab y el repositorio canónico es
+     `ArguedasG/onyx-chess-lab`, con `origin` propio y En Croissant como `upstream`. El símbolo fue
+     ideado inicialmente por el usuario y transformado con la generación de imágenes de ChatGPT; su
+     máster, procedencia y licencia CC BY 4.0 están documentados en `assets/brand/README.md`.
 
 ---
 
@@ -1602,6 +1623,29 @@ Estas preguntas no bloquean el trabajo actual, pero deberán resolverse en sus f
 ---
 
 ## 9. Registro breve de evolución
+
+### 2026-08-31
+
+- Se verificó el repositorio canónico con `origin` en `ArguedasG/onyx-chess-lab`, `upstream` en En
+  Croissant y la procedencia/licencia CC BY 4.0 del logo dentro de `assets/brand/`.
+- Primer lote de auditoría: Games abierto desde un jugador de Opening Reports ahora vuelve a la
+  pestaña y modal exactos del informe; Player Analysis conserva subpestaña y scroll por perfil al
+  consultar evidencias.
+- «Laboratorio» pasa a **Generador de partidas modelo**. Táctica aclara la función de las bases
+  locales de puzzles de Lichess frente a sets propios/PGN. La marca visible usa Onyx Chess Lab y la
+  opción de anarquía se llama al paso/en passant.
+- Los identificadores internos, rutas de datos y bundle identifier heredados no cambian hasta
+  definir y probar la migración. Se registran como bloqueos pre-alpha el actualizador y la telemetría
+  heredados; deben desactivarse o migrarse explícitamente antes del instalador. El detalle queda en
+  `docs/phase-5-brand-release-alpha-plan.es.md`.
+- Finales separa el color del alumno del turno del FEN. Se fijaron objetivo/color en los 180 finales
+  incluidos y se retiraron los controles temporales de autoría; la migración conserva victorias/tablas
+  y reinterpreta las pérdidas del contenido incluido como victorias del alumno con el bando contrario,
+  ya que aún no existen ejercicios de resistencia. Se difiere a 6.9 un modo de clasificación teórica
+  (ganan blancas/negras o tablas) reutilizable con contenido incluido y sets propios.
+- El contenido incluido de Finales sube a versión 2: instalaciones con la versión 1 refrescan
+  objetivo/color desde los PGN sobre los mismos IDs, conservan progreso y no duplican ni eliminan sets
+  propios. Esto corrige el «por definir» observado al abrir un release con el perfil local anterior.
 
 ### 2026-08-30
 
@@ -1734,7 +1778,7 @@ Estas preguntas no bloquean el trabajo actual, pero deberán resolverse en sus f
   histórica completa conserva el fallo conocido de `get_move_after_exact_match_test`; falta la prueba
   manual de navegación y la validación en una build empaquetada antes de cerrar 6.6 por completo.
 - Se implementó el prototipo 6.7 centrado en el tablero: nuevas pestañas de análisis por defecto,
-  acciones Jugar/Importar/Entrenamiento, administración separada, Laboratorio agrupado, barra lateral
+  acciones Jugar/Importar/Entrenamiento, administración separada, Generador agrupado, barra lateral
   expandible y descubrimiento inicial dentro del panel contextual derecho.
 - La reutilización de pestaña vacía queda activada por defecto y configurable. Solo acepta análisis sin
   origen ni estado persistido o pendiente del debounce; abrir PGN por menú/atajo o arrastrar archivos
@@ -1783,7 +1827,9 @@ Estas preguntas no bloquean el trabajo actual, pero deberán resolverse en sus f
 - Crear desde cero pasó a ser la acción principal de Aperturas; los repertorios propios pueden añadir capítulos editables y la repetición espaciada califica únicamente al completar una línea.
 - Aperturas permite editar y ordenar variantes, reclasificar partidas modelo y seleccionar líneas entrenables. Stockfish distingue una desviación buena antes de regresar a la línea estricta.
 - La práctica de repertorio completo encadena los capítulos entrenables dentro de una cola propia de la pestaña.
-- Los tres estudios de Finales se empaquetan como 180 posiciones iniciales y el dashboard prepara partidas contra Maia máximo o Stockfish desde el lado al turno de cada FEN.
+- Los tres estudios de Finales se empaquetan como 180 posiciones iniciales y el dashboard prepara
+  partidas contra Maia máximo o Stockfish desde el color del estudiante fijado en cada PGN, que puede
+  ser distinto del lado al turno.
 - La navegación, migración, filtrado no destructivo, extracción de variantes y contenido incluido quedaron cubiertos por 89 pruebas automáticas; el typecheck y el build web se validaron sin errores.
 
 ### 2026-08-21

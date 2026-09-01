@@ -28,7 +28,7 @@ import {
 } from "@tabler/icons-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useAtom, useSetAtom } from "jotai";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EngineOption, GoMode, NormalizedGame } from "@/bindings";
 import { commands } from "@/bindings";
@@ -36,6 +36,8 @@ import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
 import {
   playerAnalysisAtom,
   playerAnalysisProfileId,
+  playerAnalysisViewFamily,
+  type PlayerAnalysisSection,
   type StoredPlayerAnalysis,
 } from "@/state/playerAnalysis";
 import { trainingAreasAtom } from "@/state/trainingAreas";
@@ -233,6 +235,12 @@ export default function PlayerAnalysisPanel({
     () => playerAnalysisProfileId(playerName, sources),
     [playerName, sources],
   );
+  const [view, setView] = useAtom(playerAnalysisViewFamily(profileId));
+  const summaryViewport = useRef<HTMLDivElement>(null);
+  const openingsViewport = useRef<HTMLDivElement>(null);
+  const findingsViewport = useRef<HTMLDivElement>(null);
+  const engineViewport = useRef<HTMLDivElement>(null);
+  const selectedScrollY = view.scrollY[view.section];
   const storedCandidate = state.profiles[profileId];
   const stored =
     storedCandidate?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION ? storedCandidate : null;
@@ -251,6 +259,28 @@ export default function PlayerAnalysisPanel({
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const cancelled = useRef(false);
   const activeAnalysisId = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    const viewports: Record<PlayerAnalysisSection, React.RefObject<HTMLDivElement | null>> = {
+      summary: summaryViewport,
+      openings: openingsViewport,
+      findings: findingsViewport,
+      engine: engineViewport,
+    };
+    const viewport = viewports[view.section].current;
+    if (viewport) viewport.scrollTop = selectedScrollY;
+  }, [profileId, selectedScrollY, view.section]);
+
+  const rememberScroll = useCallback(
+    (section: PlayerAnalysisSection, y: number) => {
+      setView((previous) =>
+        previous.scrollY[section] === y
+          ? previous
+          : { ...previous, scrollY: { ...previous.scrollY, [section]: y } },
+      );
+    },
+    [setView],
+  );
 
   const localEngines = useMemo(
     () =>
@@ -657,7 +687,18 @@ export default function PlayerAnalysisPanel({
           )}
         </Alert>
       ) : (
-        <Tabs defaultValue="summary" flex={1} style={{ overflow: "hidden" }}>
+        <Tabs
+          value={view.section}
+          onChange={(value) =>
+            value &&
+            setView((previous) => ({
+              ...previous,
+              section: value as PlayerAnalysisSection,
+            }))
+          }
+          flex={1}
+          style={{ overflow: "hidden" }}
+        >
           <Tabs.List>
             <Tabs.Tab value="summary">{t("PlayerAnalysis.Summary", "Summary")}</Tabs.Tab>
             <Tabs.Tab value="openings">{t("PlayerAnalysis.Openings", "Openings")}</Tabs.Tab>
@@ -666,7 +707,12 @@ export default function PlayerAnalysisPanel({
           </Tabs.List>
 
           <Tabs.Panel value="summary" pt="sm">
-            <ScrollArea h="calc(100vh - 360px)" offsetScrollbars>
+            <ScrollArea
+              h="calc(100vh - 360px)"
+              offsetScrollbars
+              viewportRef={summaryViewport}
+              onScrollPositionChange={({ y }) => rememberScroll("summary", y)}
+            >
               <Stack>
                 <SimpleGrid cols={{ base: 2, sm: 4 }}>
                   <Metric
@@ -709,7 +755,12 @@ export default function PlayerAnalysisPanel({
           </Tabs.Panel>
 
           <Tabs.Panel value="openings" pt="sm">
-            <ScrollArea h="calc(100vh - 360px)" offsetScrollbars>
+            <ScrollArea
+              h="calc(100vh - 360px)"
+              offsetScrollbars
+              viewportRef={openingsViewport}
+              onScrollPositionChange={({ y }) => rememberScroll("openings", y)}
+            >
               <BucketTable
                 rows={metadata.openings}
                 label={t("PlayerAnalysis.Opening", "Opening")}
@@ -719,7 +770,12 @@ export default function PlayerAnalysisPanel({
           </Tabs.Panel>
 
           <Tabs.Panel value="findings" pt="sm">
-            <ScrollArea h="calc(100vh - 360px)" offsetScrollbars>
+            <ScrollArea
+              h="calc(100vh - 360px)"
+              offsetScrollbars
+              viewportRef={findingsViewport}
+              onScrollPositionChange={({ y }) => rememberScroll("findings", y)}
+            >
               <Stack>
                 {metadata.findings.length === 0 && (
                   <Alert color="green">
@@ -762,7 +818,12 @@ export default function PlayerAnalysisPanel({
           </Tabs.Panel>
 
           <Tabs.Panel value="engine" pt="sm">
-            <ScrollArea h="calc(100vh - 360px)" offsetScrollbars>
+            <ScrollArea
+              h="calc(100vh - 360px)"
+              offsetScrollbars
+              viewportRef={engineViewport}
+              onScrollPositionChange={({ y }) => rememberScroll("engine", y)}
+            >
               <Stack>
                 <Alert color="blue">
                   {t(

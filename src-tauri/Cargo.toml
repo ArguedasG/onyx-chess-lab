@@ -1,10 +1,10 @@
 [package]
-name = "en-croissant"
+name = "onyx-chess-lab"
 version = "0.15.0"
-description = "A Modern Chess Database"
+description = "A local-first chess study and training lab"
 authors = ["Francisco Salgueiro <fgcdbs@gmail.com>"]
 license = "GPL-3.0-only"
-repository = "https://github.com/franciscoBSalgueiro/en-croissant"
+repository = "https://github.com/ArguedasG/onyx-chess-lab"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

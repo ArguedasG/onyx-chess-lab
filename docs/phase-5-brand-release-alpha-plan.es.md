@@ -1,6 +1,7 @@
 # Fase 5 — Marca, auditoría release y preparación de la alpha
 
-Fecha: 2026-08-30. Estado: nombre y ubicación local acordados; creación del repositorio pendiente.
+Fecha: 2026-08-31. Estado: identidad, licencia del logo y repositorio canónico configurados;
+auditoría release en progreso.
 
 ## Nombre decidido
 
@@ -81,7 +82,7 @@ Matriz mínima:
 | Táctica            | sets incluidos/propios/PGN, ciclos, reintento, mostrar jugada, revisión y progreso                                     |
 | Aperturas          | crear/importar/editar/exportar, práctica, transposiciones, desviación con/sin motor y partidas modelo                  |
 | Finales            | objetivo visible, color, resultado teórico configurado, completar/fallar/salir/repetir/siguiente y progreso            |
-| Bots y laboratorio | partida contra cada familia de motor, historial, generador individual/lote, experimento y liga beta                    |
+| Bots y generador   | partida contra cada familia de motor, historial, generador individual/lote, experimento y liga beta                    |
 | Producto           | español/inglés, escalado, tema claro/oscuro, iconos, versión, licencias y enlaces                                      |
 | Rendimiento        | arranque, memoria, consultas grandes, cancelación, análisis largo y cierre de aplicación                               |
 
@@ -128,3 +129,78 @@ Objetivo: observar uso real antes de retomar ampliaciones del roadmap.
 4. Política de migración de datos desde la build actual.
 5. Contenido exacto de la edición alpha y licencia/permiso de cada recurso incluido.
 6. Versión mínima de Windows y motores que formarán parte del smoke test obligatorio.
+
+## Primer lote de auditoría — navegación y nombres
+
+El 2026-08-31 se resolvieron cinco hallazgos P2/P3 del recorrido previo a la alpha:
+
+- las pestañas Games abiertas desde un jugador de Opening Reports conservan la pestaña de origen y
+  ofrecen **Volver al informe de apertura**; la acción reactiva el panel Informe y reabre el reporte;
+- Player Analysis conserva por perfil la subpestaña seleccionada y el desplazamiento de Resumen,
+  Aperturas, Hallazgos o Motor mientras se consulta una evidencia en otra pestaña;
+- la navegación visible deja de llamar «Laboratorio» al módulo y usa **Generador de partidas
+  modelo**;
+- Táctica presenta las bases locales principalmente como una copia instalable de los puzzles de
+  Lichess y aclara que los sets siguen siendo apropiados para colecciones propias y cursos PGN;
+- la marca visible pasa a **Onyx Chess Lab** en ventana, título web, Acerca de, Ajustes, PGN y textos
+  traducidos; la opción lúdica se denomina captura **al paso / en passant**, no con el nombre del
+  producto anterior.
+
+Se mantienen deliberadamente por ahora `org.encroissant.app` y las rutas de datos `EnCroissant`.
+Cambiarlos antes de fijar y probar la migración puede ocultar datos existentes. El nombre de producto
+y el ejecutable sí pasan a **Onyx Chess Lab** / `onyx-chess-lab`, pues no trasladan el perfil de datos.
+El README general y los metadatos completos de distribución se resolverán junto con esa migración,
+preservando la atribución a En Croissant.
+
+### Bloqueos de identidad detectados para el instalador
+
+La revisión de código encontró dos integraciones heredadas que deben resolverse antes de distribuir
+la alpha, aunque no bloquean este lote de interfaz:
+
+- el actualizador conserva la clave y `https://www.encroissant.org/updates`; una build Onyx no debe
+  poder reemplazarse con una release del producto upstream. Debe desactivarse temporalmente o migrar
+  a un canal y clave propios antes del instalador;
+- la telemetría conserva un proyecto PostHog heredado y aparece activada por defecto. Debe decidirse
+  si se elimina para la alpha o se migra a infraestructura propia con consentimiento inequívoco y
+  documentación de privacidad.
+
+Los catálogos de motores, bases y puzzles también consumen `encroissant.org`. Pueden mantenerse como
+servicio upstream solo si esa dependencia es deliberada, atribuida y compatible con sus condiciones;
+no deben confundirse con endpoints operados por Onyx Chess Lab.
+
+### Validación de este lote
+
+- 148 pruebas frontend aprobadas en 27 archivos, incluidas regresiones del retorno al informe y del
+  estado de vista de Player Analysis;
+- TypeScript, lint focalizado sin avisos, formato y auditoría de 1.653 claves ES/EN aprobados;
+- build web de producción aprobada; el chunk principal sigue registrando el aviso previo de tamaño;
+- el navegador confirmó el título Onyx, pero el frontend web aislado no puede montar el shell porque
+  `TopBar` requiere el runtime Tauri. La revisión visual de los cinco flujos sigue pendiente en la
+  aplicación nativa y en el ejecutable empaquetado.
+
+## Segundo lote de auditoría — perspectiva del alumno en Finales
+
+El 2026-08-31 se corrigió el supuesto que identificaba al alumno con el bando que mueve primero:
+
+- cada posición guarda ahora `studentColor` con independencia del turno indicado por el FEN;
+- los objetivos de tablebase se traducen a la perspectiva del alumno, de modo que ganar o perder
+  cambia de sentido cuando el alumno lleva el color contrario al que mueve;
+- iniciar o reiniciar el ejercicio conserva el color configurado y permite que el motor haga el
+  primer movimiento cuando corresponda;
+- en desarrollo se muestra un selector temporal **Color del alumno**, junto con el turno inicial, y
+  una exportación JSON estable de objetivo/color para incorporar las decisiones al contenido antes
+  de retirar la herramienta de autoría;
+- la migración a esquema 10 conserva los objetivos ya preparados; en contenido incluido convierte
+  «pérdida del bando al turno» en «victoria del alumno con el bando contrario», pues todavía no hay
+  ejercicios de resistencia. Para victorias y tablas mantiene inicialmente el color que mueve hasta
+  que cada posición de tablas sea revisada.
+
+Validación automática: 155 pruebas frontend en 28 archivos, TypeScript y lint focalizado aprobados;
+la build web de producción también finaliza correctamente con el aviso de tamaño de chunk ya conocido.
+
+El contenido quedó fijado después de la revisión manual: 180 posiciones incluidas guardan objetivo y
+color del alumno en sus PGN (63 en Parte 1, 63 en Parte 2 y 54 en Parte 3). El cargador utiliza esos
+metadatos en instalaciones limpias y se retiraron el selector y la exportación temporales.
+La versión 2 del contenido también refresca instalaciones existentes sobre los mismos IDs, preserva
+su progreso y elimina cualquier set incluido obsoleto sin tocar los sets propios. Esto evita que una
+release que reutiliza el perfil local de la versión dev conserve objetivos antiguos «por definir».

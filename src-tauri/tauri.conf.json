@@ -24,7 +24,7 @@
       }
     },
     "publisher": "Francisco Salgueiro",
-    "shortDescription": "Ultimate Chess Toolkit",
+    "shortDescription": "Local-first chess study and training lab",
     "longDescription": "",
     "macOS": {
       "entitlements": null,
@@ -48,8 +48,8 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420"
   },
-  "productName": "en-croissant",
-  "mainBinaryName": "en-croissant",
+  "productName": "Onyx Chess Lab",
+  "mainBinaryName": "onyx-chess-lab",
   "identifier": "org.encroissant.app",
   "plugins": {
     "cli": {
@@ -72,7 +72,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "En Croissant",
+        "title": "Onyx Chess Lab",
         "visible": false,
         "decorations": true
       }

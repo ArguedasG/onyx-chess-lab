@@ -1,10 +1,17 @@
 import { Alert, Button, Group, Modal, NumberInput, ScrollArea, Stack, Text } from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
-import { useSetAtom, useStore } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, type OpeningReport, type PositionSummary } from "@/bindings";
-import { activeTabAtom, dbTabFamily, localOptionsFamily, tabFamily, tabsAtom } from "@/state/atoms";
+import {
+  activeTabAtom,
+  dbTabFamily,
+  localOptionsFamily,
+  openingReportReopenFamily,
+  tabFamily,
+  tabsAtom,
+} from "@/state/atoms";
 import { openingReportHtml, openingTheoryPgn, openingVariationPgn } from "@/utils/openingReport";
 import { openingReferenceGamesPgn, saveOpeningReport } from "@/utils/openingReportFiles";
 import { createTab } from "@/utils/tabs";
@@ -40,6 +47,7 @@ export default function OpeningReportPanel({
   const [saved, setSaved] = useState(false);
   const running = useRef<AbortController | null>(null);
   const reportOwner = `report:${owner}`;
+  const reopenRequest = useAtomValue(openingReportReopenFamily(owner));
 
   useEffect(
     () => () => {
@@ -47,6 +55,9 @@ export default function OpeningReportPanel({
     },
     [],
   );
+  useEffect(() => {
+    if (reopenRequest > 0 && report) setOpened(true);
+  }, [reopenRequest, report]);
   const cancel = () => {
     running.current?.abort();
     running.current = null;
@@ -137,7 +148,11 @@ export default function OpeningReportPanel({
       const pgn = openingVariationPgn(report, []);
       signal.throwIfAborted();
       const tabId = await createTab({
-        tab: { name: `${name} · ${t("Board.Database.Games")}`, type: "analysis" },
+        tab: {
+          name: `${name} · ${t("Board.Database.Games")}`,
+          type: "analysis",
+          returnTabId: owner,
+        },
         setTabs,
         setActiveTab,
         pgn,

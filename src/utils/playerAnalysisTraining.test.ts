@@ -4,6 +4,7 @@ import {
     addTacticsSet,
     createEmptyTrainingAreas,
     persistedTrainingAreasSchema,
+    TRAINING_AREAS_SCHEMA_VERSION,
     type ParsedTrainingRecord,
 } from "./trainingAreas";
 
@@ -34,9 +35,9 @@ it("adds a Player Analysis position to an embedded user set and deduplicates its
     expect(exercise.tags).toContain("player-analysis");
 });
 
-it("migrates training state v8 to the provenance-aware v9 schema", () => {
+it("migrates training state v8 through the current schema", () => {
     const current = createEmptyTrainingAreas();
     const migrated = persistedTrainingAreasSchema.parse({ ...current, schemaVersion: 8 });
-    expect(migrated.schemaVersion).toBe(9);
+    expect(migrated.schemaVersion).toBe(TRAINING_AREAS_SCHEMA_VERSION);
     expect(migrated.tactics.sets).toEqual({});
 });

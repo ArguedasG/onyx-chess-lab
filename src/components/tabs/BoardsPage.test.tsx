@@ -13,7 +13,13 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import {
+  activeTabAtom,
+  dbTabFamily,
+  openingReportReopenFamily,
+  tabFamily,
+  tabsAtom,
+} from "@/state/atoms";
 import { defaultTree } from "@/utils/treeReducer";
 import type { Tab } from "@/utils/tabs";
 import BoardsPage, { WorkspaceTabs } from "./BoardsPage";
@@ -148,6 +154,23 @@ async function click(element: Element | null) {
 }
 
 describe("workspace tab navigation and closing", () => {
+  it("returns a player Games tab to its exact opening report tab", async () => {
+    const playerGames: Tab = {
+      name: "Player games",
+      value: "player-games",
+      type: "analysis",
+      returnTabId: "board",
+      gameOrigin: { kind: "none" },
+    };
+    const { store, router } = await mountWorkspace("/", [board, playerGames], "player-games");
+    await click(document.querySelector('[aria-label="Return to opening report"]'));
+    expect(store.get(activeTabAtom)).toBe("board");
+    expect(store.get(tabFamily("board"))).toBe("database");
+    expect(store.get(dbTabFamily("board"))).toBe("report");
+    expect(store.get(openingReportReopenFamily("board"))).toBe(1);
+    expect(router.state.location.pathname).toBe("/");
+  });
+
   it("shows the tabs in the hub and converts the same tab into each training area", async () => {
     const { store, router } = await mountWorkspace();
     const trainingId = store.get(activeTabAtom);

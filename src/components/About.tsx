@@ -30,7 +30,7 @@ function AboutModal({
     load();
   }, []);
   return (
-    <Modal centered opened={opened} onClose={() => setOpened(false)} title="En Croissant">
+    <Modal centered opened={opened} onClose={() => setOpened(false)} title="Onyx Chess Lab">
       <Text>Version: {info?.version}</Text>
       <Text>Tauri version: {info?.tauri}</Text>
       <Text>
@@ -39,8 +39,16 @@ function AboutModal({
 
       <br />
 
-      <Anchor href="https://www.encroissant.org" target="_blank" rel="noreferrer">
-        www.encroissant.org
+      <Anchor href="https://github.com/ArguedasG/onyx-chess-lab" target="_blank" rel="noreferrer">
+        github.com/ArguedasG/onyx-chess-lab
+      </Anchor>
+      <br />
+      <Anchor
+        href="https://github.com/franciscoBSalgueiro/en-croissant"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Based on En Croissant (GPLv3)
       </Anchor>
     </Modal>
   );

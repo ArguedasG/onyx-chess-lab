@@ -16,6 +16,7 @@ import OpeningReportView from "./OpeningReportView";
 const { atomSet } = vi.hoisted(() => ({ atomSet: vi.fn() }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("jotai", () => ({
+  useAtomValue: () => 0,
   useSetAtom: () => vi.fn(),
   useStore: () => ({ set: atomSet }),
 }));
@@ -24,6 +25,7 @@ vi.mock("@/state/atoms", () => ({
   activeTabAtom: {},
   dbTabFamily: (id: string) => `db-tab:${id}`,
   localOptionsFamily: (id: string) => `local-options:${id}`,
+  openingReportReopenFamily: (id: string) => `opening-report-reopen:${id}`,
   tabFamily: (id: string) => `panel-tab:${id}`,
 }));
 vi.mock("@/utils/tabs", () => ({ createTab: vi.fn().mockResolvedValue(undefined) }));
@@ -148,7 +150,7 @@ it("opens every matching game for a report player in a separate Games tab", asyn
   await click("Ana");
   expect(createTab).toHaveBeenCalledWith(
     expect.objectContaining({
-      tab: expect.objectContaining({ type: "analysis" }),
+      tab: expect.objectContaining({ type: "analysis", returnTabId: "board" }),
     }),
   );
   expect(atomSet).toHaveBeenCalledWith(

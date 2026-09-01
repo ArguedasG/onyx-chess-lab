@@ -147,7 +147,7 @@ export function SideBar() {
           <Divider my={4} />
           <NavbarAction
             icon={IconFlask}
-            label={t("SideBar.Laboratory", "Laboratory")}
+            label={t("SideBar.Laboratory", "Model Game Generator")}
             expanded={expanded}
             onClick={() => void openLaboratory()}
           />

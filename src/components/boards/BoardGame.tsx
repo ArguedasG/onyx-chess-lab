@@ -771,7 +771,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
             ? getHumanBotProfile(playerSettings.black.profileId).elo
             : undefined,
         event: eventStr,
-        site: "En Croissant",
+        site: "Onyx Chess Lab",
         date: dateStr,
         time: timeStr,
         time_control: undefined,
@@ -1259,11 +1259,11 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         ChessLabEndgamePositionId: position.id,
         ChessLabEndgameSetId: ownerSet?.id ?? "",
         ChessLabEndgameObjective: position.objective,
-        ChessLabEndgameStudentColor: chessPosition.turn,
+        ChessLabEndgameStudentColor: position.studentColor,
         ChessLabEndgameAutoStart: "1",
       },
     };
-    setInputColor(chessPosition.turn);
+    setInputColor(position.studentColor);
     setTreeState(nextTree);
     setTabs((previous) =>
       previous.map((tab) =>

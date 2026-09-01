@@ -492,6 +492,8 @@ export const currentDbTypeAtom = tabValue(dbTypeFamily);
 export const dbTabFamily = atomFamily((_tab: string) => atom("stats"));
 export const currentDbTabAtom = tabValue(dbTabFamily);
 
+export const openingReportReopenFamily = atomFamily((_tab: string) => atom(0));
+
 const analysisTabFamily = atomFamily((_tab: string) => atom("engines"));
 export const currentAnalysisTabAtom = tabValue(analysisTabFamily);
 

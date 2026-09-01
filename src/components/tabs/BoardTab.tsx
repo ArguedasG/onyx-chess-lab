@@ -15,6 +15,8 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import cx from "clsx";
 import { useEffect } from "react";
+import { useAtomValue, useStore } from "jotai";
+import { dbTabFamily, openingReportReopenFamily, tabFamily, tabsAtom } from "@/state/atoms";
 import type { Tab } from "@/utils/tabs";
 import { InlineInput } from "../common/InlineInput";
 import classes from "./BoardTab.module.css";
@@ -40,7 +42,11 @@ export function BoardTab({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const atomStore = useStore();
+  const tabs = useAtomValue(tabsAtom);
   const returnPath = tab.returnPath;
+  const returnTabId = tab.returnTabId;
+  const canReturnToTab = returnTabId && tabs.some((candidate) => candidate.value === returnTabId);
   const [open, toggleOpen] = useToggle();
   const [renaming, toggleRenaming] = useToggle();
 
@@ -74,14 +80,26 @@ export function BoardTab({
           leftSection={<TabIcon tab={tab} tabType={tabType} />}
           rightSection={
             <Group gap={3} wrap="nowrap">
-              {returnPath && (
+              {(returnPath || canReturnToTab) && (
                 <ActionIcon
                   component="div"
                   className={classes.closeTabBtn}
-                  aria-label={t("PlayerAnalysis.ReturnToAnalysis", "Return to Player Analysis")}
+                  aria-label={
+                    canReturnToTab
+                      ? t("OpeningReport.ReturnToReport", "Return to opening report")
+                      : t("PlayerAnalysis.ReturnToAnalysis", "Return to Player Analysis")
+                  }
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
-                    void navigate({ to: returnPath });
+                    if (canReturnToTab) {
+                      setActiveTab(returnTabId);
+                      atomStore.set(tabFamily(returnTabId), "database");
+                      atomStore.set(dbTabFamily(returnTabId), "report");
+                      atomStore.set(openingReportReopenFamily(returnTabId), (value) => value + 1);
+                      void navigate({ to: "/" });
+                    } else if (returnPath) {
+                      void navigate({ to: returnPath });
+                    }
                     event.stopPropagation();
                   }}
                   size="0.875rem"

@@ -1,4 +1,5 @@
-import { atomWithStorage } from "jotai/utils";
+import { atom } from "jotai";
+import { atomFamily, atomWithStorage } from "jotai/utils";
 import {
     PLAYER_ANALYSIS_SCHEMA_VERSION,
     type PlayerEngineAnalysis,
@@ -25,6 +26,24 @@ export const playerAnalysisAtom = atomWithStorage<PlayerAnalysisState>("player-a
     enabled: true,
     profiles: {},
 });
+
+export type PlayerAnalysisSection = "summary" | "openings" | "findings" | "engine";
+
+export type PlayerAnalysisViewState = {
+    section: PlayerAnalysisSection;
+    scrollY: Record<PlayerAnalysisSection, number>;
+};
+
+const defaultViewState = (): PlayerAnalysisViewState => ({
+    section: "summary",
+    scrollY: { summary: 0, openings: 0, findings: 0, engine: 0 },
+});
+
+// Session-only UI state. Keeping it outside the persisted analytical profile avoids
+// changing the profile schema while allowing evidence tabs to return to the exact view.
+export const playerAnalysisViewFamily = atomFamily((_profileId: string) =>
+    atom<PlayerAnalysisViewState>(defaultViewState()),
+);
 
 export function playerAnalysisProfileId(
     playerName: string,

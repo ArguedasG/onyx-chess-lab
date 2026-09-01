@@ -3,13 +3,16 @@ import { getMainLine, parsePGN } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { getGameName } from "@/utils/treeReducer";
 
-export const TRAINING_AREAS_SCHEMA_VERSION = 9;
+export const TRAINING_AREAS_SCHEMA_VERSION = 10;
 const TACTICS_ACCEPTANCE_THRESHOLD_CP = 30;
 
 const timestamp = () => new Date().toISOString();
 
 export const trainingObjectiveSchema = z.enum(["win", "draw", "loss", "unknown"]);
 export type TrainingObjective = z.infer<typeof trainingObjectiveSchema>;
+
+export const endgameStudentColorSchema = z.enum(["white", "black"]);
+export type EndgameStudentColor = z.infer<typeof endgameStudentColorSchema>;
 
 const sourceSchema = z.object({
     label: z.string().optional(),
@@ -221,6 +224,7 @@ const endgamePositionSchema = z.object({
     title: z.string(),
     fen: z.string(),
     objective: trainingObjectiveSchema,
+    studentColor: endgameStudentColorSchema,
     objectiveSource: z.enum(["pending", "tablebase", "stockfish", "manual"]),
     category: z.string().optional(),
     theme: z.enum(["pawn", "rook", "minorPiece", "queen", "mixed", "other"]),
@@ -544,7 +548,45 @@ export const persistedTrainingAreasSchema = z.preprocess((value) => {
     }
 
     if (migrated.schemaVersion === 8) {
-        migrated = { ...migrated, schemaVersion: TRAINING_AREAS_SCHEMA_VERSION };
+        migrated = { ...migrated, schemaVersion: 9 };
+    }
+
+    if (migrated.schemaVersion === 9) {
+        const endgames = migrated.endgames as Record<string, unknown> | undefined;
+        const sets = (endgames?.sets as Record<string, Record<string, unknown>> | undefined) ?? {};
+        const positions =
+            (endgames?.positions as Record<string, Record<string, unknown>> | undefined) ?? {};
+        const bundledPositionIds = new Set(
+            Object.values(sets)
+                .filter((set) => set.origin === "bundled")
+                .flatMap((set) => (set.positionIds as string[] | undefined) ?? []),
+        );
+        migrated = {
+            ...migrated,
+            schemaVersion: TRAINING_AREAS_SCHEMA_VERSION,
+            endgames: {
+                ...endgames,
+                positions: Object.fromEntries(
+                    Object.entries(positions).map(([id, position]) => {
+                        const sideToMove = inferEndgameStudentColor(String(position.fen ?? ""));
+                        const bundledWinnerMovesSecond =
+                            bundledPositionIds.has(id) && position.objective === "loss";
+                        return [
+                            id,
+                            {
+                                ...position,
+                                objective: bundledWinnerMovesSecond ? "win" : position.objective,
+                                studentColor:
+                                    position.studentColor ??
+                                    (bundledWinnerMovesSecond
+                                        ? oppositeEndgameColor(sideToMove)
+                                        : sideToMove),
+                            },
+                        ];
+                    }),
+                ),
+            },
+        };
     }
 
     return migrated;
@@ -556,6 +598,8 @@ export type ParsedTrainingRecord = {
     title: string;
     sourcePgn?: string;
     playerAnalysis?: TacticsExercise["source"]["playerAnalysis"];
+    endgameObjective?: TrainingObjective;
+    endgameStudentColor?: EndgameStudentColor;
     hasExplicitFen: boolean;
 };
 
@@ -586,6 +630,45 @@ export function createEmptyTrainingAreas(): TrainingAreasState {
         },
         endgames: { sets: {}, positions: {}, bundledContentVersion: 0 },
     };
+}
+
+export function inferEndgameStudentColor(fen: string): EndgameStudentColor {
+    return fen.trim().split(/\s+/)[1] === "b" ? "black" : "white";
+}
+
+export function oppositeEndgameColor(color: EndgameStudentColor): EndgameStudentColor {
+    return color === "white" ? "black" : "white";
+}
+
+export function parseEndgameRecordMetadata(pgn: string): {
+    objective?: TrainingObjective;
+    studentColor?: EndgameStudentColor;
+} {
+    const objectiveValue = /^\[ChessLabEndgameObjective\s+"([^"]+)"\]$/im
+        .exec(pgn)?.[1]
+        ?.trim()
+        .toLowerCase();
+    const studentColorValue = /^\[ChessLabEndgameStudentColor\s+"([^"]+)"\]$/im
+        .exec(pgn)?.[1]
+        ?.trim()
+        .toLowerCase();
+    const objective = trainingObjectiveSchema.safeParse(objectiveValue);
+    const studentColor = endgameStudentColorSchema.safeParse(studentColorValue);
+    return {
+        objective: objective.success ? objective.data : undefined,
+        studentColor: studentColor.success ? studentColor.data : undefined,
+    };
+}
+
+export function endgameObjectiveFromTablebase(
+    category: string,
+    sideToMove: EndgameStudentColor,
+    studentColor: EndgameStudentColor,
+): TrainingObjective {
+    if (category === "win") return sideToMove === studentColor ? "win" : "loss";
+    if (category === "loss") return sideToMove === studentColor ? "loss" : "win";
+    if (["draw", "blessed-loss", "cursed-win"].includes(category)) return "draw";
+    return "unknown";
 }
 
 function isFenLine(value: string): boolean {
@@ -647,6 +730,7 @@ export async function parseTrainingRecords(
             if (!positionFromFen(fen)[0]) {
                 throw new Error(`El registro ${index + 1} no contiene una posición FEN válida.`);
             }
+            const endgameMetadata = parseEndgameRecordMetadata(block);
 
             records.push({
                 fen,
@@ -656,6 +740,8 @@ export async function parseTrainingRecords(
                     getGameName(tree.headers) ||
                     `Posición ${index + 1}`,
                 sourcePgn: block,
+                endgameObjective: endgameMetadata.objective,
+                endgameStudentColor: endgameMetadata.studentColor,
                 hasExplicitFen: explicitFen !== undefined,
             });
         } catch (error) {
@@ -1652,8 +1738,9 @@ export function addEndgameSet(
             id,
             title: record.title || `Final ${index + 1}`,
             fen: record.fen,
-            objective: "unknown",
-            objectiveSource: "pending",
+            objective: record.endgameObjective ?? "unknown",
+            studentColor: record.endgameStudentColor ?? inferEndgameStudentColor(record.fen),
+            objectiveSource: record.endgameObjective ? "manual" : "pending",
             theme: inferEndgameTheme(record.title, record.fen),
             sourcePgn: record.sourcePgn,
             progress: {
@@ -1693,12 +1780,71 @@ export function installBundledEndgameSets(
     version: number,
 ): EndgamesState {
     if (state.bundledContentVersion >= version) return state;
-    let next = state;
+
+    const previousBundledSets = Object.values(state.sets).filter((set) => set.origin === "bundled");
+    const refreshedSetIds = new Set<string>();
+    let next: EndgamesState = {
+        ...state,
+        sets: { ...state.sets },
+        positions: { ...state.positions },
+    };
+
     for (const bundle of bundles) {
-        next = addEndgameSet(next, bundle.name, bundle.description, bundle.records, {
-            origin: "bundled",
-        });
+        const existingSet = previousBundledSets.find(
+            (set) =>
+                !refreshedSetIds.has(set.id) &&
+                set.positionIds.length === bundle.records.length &&
+                set.positionIds.every(
+                    (positionId, index) =>
+                        next.positions[positionId]?.fen === bundle.records[index]?.fen,
+                ),
+        );
+
+        if (!existingSet) {
+            next = addEndgameSet(next, bundle.name, bundle.description, bundle.records, {
+                origin: "bundled",
+            });
+            continue;
+        }
+
+        refreshedSetIds.add(existingSet.id);
+        for (const [index, positionId] of existingSet.positionIds.entries()) {
+            const current = next.positions[positionId];
+            const record = bundle.records[index];
+            if (!current || !record) continue;
+            next.positions[positionId] = {
+                ...current,
+                title: record.title || current.title,
+                fen: record.fen,
+                objective: record.endgameObjective ?? current.objective,
+                studentColor: record.endgameStudentColor ?? current.studentColor,
+                objectiveSource: record.endgameObjective ? "manual" : current.objectiveSource,
+                theme: inferEndgameTheme(record.title, record.fen),
+                sourcePgn: record.sourcePgn,
+            };
+        }
+        next.sets[existingSet.id] = {
+            ...existingSet,
+            name: bundle.name,
+            description: bundle.description,
+            updatedAt: timestamp(),
+        };
     }
+
+    const staleSetIds = new Set(
+        previousBundledSets.filter((set) => !refreshedSetIds.has(set.id)).map((set) => set.id),
+    );
+    const stalePositionIds = previousBundledSets
+        .filter((set) => staleSetIds.has(set.id))
+        .flatMap((set) => set.positionIds);
+    for (const setId of staleSetIds) delete next.sets[setId];
+    const referencedPositionIds = new Set(
+        Object.values(next.sets).flatMap((set) => set.positionIds),
+    );
+    for (const positionId of stalePositionIds) {
+        if (!referencedPositionIds.has(positionId)) delete next.positions[positionId];
+    }
+
     return { ...next, bundledContentVersion: version };
 }
 
@@ -1716,6 +1862,22 @@ export function updateEndgameObjective(
         positions: {
             ...state.positions,
             [positionId]: { ...position, objective, objectiveSource: source, category },
+        },
+    };
+}
+
+export function updateEndgameStudentColor(
+    state: EndgamesState,
+    positionId: string,
+    studentColor: EndgameStudentColor,
+): EndgamesState {
+    const position = state.positions[positionId];
+    if (!position) return state;
+    return {
+        ...state,
+        positions: {
+            ...state.positions,
+            [positionId]: { ...position, studentColor },
         },
     };
 }

@@ -51,7 +51,7 @@ import { isMaiaEngine, MAIA_ELO_MAX } from "@/utils/humanBots";
 import type { LocalEngine } from "@/utils/engines";
 import { positionFromFen } from "@/utils/chessops";
 
-const BUNDLED_ENDGAMES_VERSION = 1;
+const BUNDLED_ENDGAMES_VERSION = 2;
 const bundledEndgameFiles = [
   {
     file: "FinalesParte1.pgn",

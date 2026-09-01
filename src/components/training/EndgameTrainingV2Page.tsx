@@ -53,6 +53,7 @@ import { launchTrainingPosition } from "@/utils/trainingLaunch";
 import {
   addEndgameSet,
   deleteEndgameSet,
+  endgameObjectiveFromTablebase,
   getEndgameSetProgress,
   installBundledEndgameSets,
   parseTrainingRecords,
@@ -63,7 +64,7 @@ import {
   type TrainingObjective,
 } from "@/utils/trainingAreas";
 
-const BUNDLED_ENDGAMES_VERSION = 1;
+const BUNDLED_ENDGAMES_VERSION = 2;
 const bundledEndgameFiles = ["FinalesParte1.pgn", "FinalesParte2.pgn", "FinalesParte3.pgn"];
 
 const getThemeMetadata = (
@@ -130,13 +131,6 @@ function filename(path: string, trainingT: typeof i18n.t = i18n.t) {
       .pop()
       ?.replace(/\.[^.]+$/, "") || trainingT("Training.Copy.Endgameset.cb6b7408", "Endgame set")
   );
-}
-
-function objectiveFromTablebase(category: string): TrainingObjective {
-  if (category === "win") return "win";
-  if (category === "loss") return "loss";
-  if (["draw", "blessed-loss", "cursed-win"].includes(category)) return "draw";
-  return "unknown";
 }
 
 function objectiveLabel(objective: TrainingObjective, trainingT: typeof i18n.t = i18n.t) {
@@ -311,14 +305,6 @@ export default function EndgameTrainingV2Page() {
     await resolvePositionObjectives(set.positionIds, set.id);
   }
 
-  async function resolveIncludedThemeObjectives() {
-    if (!import.meta.env.DEV || !selectedTheme) return;
-    await resolvePositionObjectives(
-      visibleThemePositions.map(({ position }) => position.id),
-      `bundled-${selectedTheme}`,
-    );
-  }
-
   async function resolvePositionObjectives(positionIds: string[], busyId: string) {
     setResolvingSetId(busyId);
     let resolved = 0;
@@ -328,12 +314,14 @@ export default function EndgameTrainingV2Page() {
       if (!position) continue;
       try {
         const data = await getTablebaseInfo(position.fen);
+        const [chessPosition] = positionFromFen(position.fen);
+        if (!chessPosition) throw new Error("Invalid FEN");
         setAreas((previous) => ({
           ...previous,
           endgames: updateEndgameObjective(
             previous.endgames,
             positionId,
-            objectiveFromTablebase(data.category),
+            endgameObjectiveFromTablebase(data.category, chessPosition.turn, position.studentColor),
             "tablebase",
             data.category,
           ),
@@ -402,7 +390,7 @@ export default function EndgameTrainingV2Page() {
       });
       return;
     }
-    setInputColor(chessPosition.turn);
+    setInputColor(position.studentColor);
     setPlayer1({ type: "human", name: trainingT("Training.Copy.Student.789a6356", "Student") });
     setPlayer2({
       type: "engine",
@@ -423,7 +411,7 @@ export default function EndgameTrainingV2Page() {
         ChessLabEndgamePositionId: position.id,
         ChessLabEndgameSetId: setId,
         ChessLabEndgameObjective: position.objective,
-        ChessLabEndgameStudentColor: chessPosition.turn,
+        ChessLabEndgameStudentColor: position.studentColor,
         ChessLabEndgameAutoStart: "1",
       },
     });
@@ -563,26 +551,10 @@ export default function EndgameTrainingV2Page() {
             </Text>
           </div>
           {selectedTheme && (
-            <Group>
-              {import.meta.env.DEV && (
-                <Button
-                  variant="light"
-                  leftSection={<IconDatabase size={16} />}
-                  loading={resolvingSetId === `bundled-${selectedTheme}`}
-                  onClick={resolveIncludedThemeObjectives}
-                >
-                  {" "}
-                  {trainingT(
-                    "Training.Copy.Calculatethemeobjectives.410764ed",
-                    "Calculate theme objectives",
-                  )}{" "}
-                </Button>
-              )}
-              <Button variant="default" onClick={() => setSelectedTheme(null)}>
-                {" "}
-                {trainingT("Training.Copy.Viewallthemes.67a3bfda", "View all themes")}{" "}
-              </Button>
-            </Group>
+            <Button variant="default" onClick={() => setSelectedTheme(null)}>
+              {" "}
+              {trainingT("Training.Copy.Viewallthemes.67a3bfda", "View all themes")}{" "}
+            </Button>
           )}
         </Group>
 
@@ -644,10 +616,8 @@ export default function EndgameTrainingV2Page() {
                 key={position.id}
                 position={position}
                 index={index}
-                locked={!import.meta.env.DEV}
                 onPlay={() => playPosition(position, setId)}
                 onAnalyze={() => analyzePosition(position)}
-                onObjectiveChange={(value) => setManualObjective(position.id, value)}
               />
             ))}
           </SimpleGrid>
@@ -881,17 +851,13 @@ export default function EndgameTrainingV2Page() {
 function EndgamePositionCard({
   position,
   index,
-  locked,
   onPlay,
   onAnalyze,
-  onObjectiveChange,
 }: {
   position: EndgamePosition;
   index: number;
-  locked: boolean;
   onPlay: () => void;
   onAnalyze: () => void;
-  onObjectiveChange?: (value: string | null) => void;
 }) {
   const { t: trainingT } = useTrainingTranslation();
 
@@ -916,32 +882,14 @@ function EndgamePositionCard({
           <Text size="xs" c="dimmed" ff="monospace" truncate mt={4}>
             {position.fen}
           </Text>
-          {locked ? (
-            <Badge
-              mt="sm"
-              color={objectiveColor(position.objective)}
-              variant="light"
-              leftSection={<IconLock size={11} />}
-            >
-              {objectiveLabel(position.objective, trainingT)}
-            </Badge>
-          ) : (
-            <Select
-              mt="sm"
-              label={trainingT("Training.Copy.Preparationgoal.c75e6c82", "Preparation goal")}
-              value={position.objective}
-              data={[
-                {
-                  value: "unknown",
-                  label: trainingT("Training.Copy.Tobedetermined.20317191", "To be determined"),
-                },
-                { value: "win", label: trainingT("Training.Copy.Win.fc572f64", "Win") },
-                { value: "draw", label: trainingT("Training.Copy.Draw.9c0dd07e", "Draw") },
-                { value: "loss", label: trainingT("Training.Copy.Defend.69d716e2", "Defend") },
-              ]}
-              onChange={onObjectiveChange}
-            />
-          )}
+          <Badge
+            mt="sm"
+            color={objectiveColor(position.objective)}
+            variant="light"
+            leftSection={<IconLock size={11} />}
+          >
+            {objectiveLabel(position.objective, trainingT)}
+          </Badge>
           {position.progress.attempts > 0 && (
             <Text size="xs" c="dimmed" mt="sm">
               {position.progress.successes}{" "}
