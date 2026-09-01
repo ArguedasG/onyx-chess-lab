@@ -188,7 +188,7 @@ export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>(
     "erase-drawables-on-click",
     false,
 );
-export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", true);
+export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", false);
 export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
 export const previewBoardOnHoverAtom = atomWithStorage<boolean>("preview-board-on-hover", true);
 export const flipBoardAfterMoveAtom = atomWithStorage<boolean>("flip-board-after-move", true);
@@ -214,7 +214,7 @@ export const soundVolumeAtom = atomWithStorage<number>("sound-volume", 0.8, unde
     getOnInit: true,
 });
 
-export const pieceSetAtom = atomWithStorage<string>("piece-set", "staunty");
+export const pieceSetAtom = atomWithStorage<string>("piece-set", "maestro");
 export const boardImageAtom = atomWithStorage<string>("board-image", "gray.svg");
 export const primaryColorAtom = atomWithStorage<MantineColor>("mantine-primary-color", "blue");
 export const sessionsAtom = atomWithStorage<Session[]>("sessions", []);
