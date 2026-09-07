@@ -50,7 +50,7 @@ i18n
       order: ["localStorage"],
       caches: ["localStorage"],
     },
-    fallbackLng: "en-US",
+    fallbackLng: "es-ES",
     returnEmptyString: false,
   });
 

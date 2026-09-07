@@ -188,7 +188,7 @@ export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>(
     "erase-drawables-on-click",
     false,
 );
-export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", true);
+export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", false);
 export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
 export const previewBoardOnHoverAtom = atomWithStorage<boolean>("preview-board-on-hover", true);
 export const flipBoardAfterMoveAtom = atomWithStorage<boolean>("flip-board-after-move", true);

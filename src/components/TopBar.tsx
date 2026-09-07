@@ -2,6 +2,7 @@ import { Box, Button, Center, Group, Image, Menu, Text } from "@mantine/core";
 import { useColorScheme } from "@mantine/hooks";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useState } from "react";
+import onyxLogo from "../../logo/OnyxLogov2.png";
 import classes from "./TopBar.module.css";
 
 const appWindow = getCurrentWebviewWindow();
@@ -103,7 +104,7 @@ function TopBar({ menuActions }: { menuActions: MenuGroup[] }) {
       <Box style={{ flexGrow: 1 }}>
         <Group data-tauri-drag-region gap="xs" px="sm">
           <Box h="1.25rem" w="1.25rem">
-            <Image src="/logo.png" fit="fill" />
+            <Image src={onyxLogo} fit="fill" />
           </Box>
           <Group gap={0}>
             {menuActions.map((action) => (
