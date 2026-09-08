@@ -1,6 +1,8 @@
 # Fase 6.8 — Repertorios, PGN e idiomas
 
-Implementación del 2026-08-27. Los flujos nativos y la build empaquetada siguen pendientes de prueba manual; las pruebas automatizadas no los sustituyen.
+Implementación del 2026-08-27; regresión de incorporación corregida el 2026-09-07. Los flujos
+nativos y la build empaquetada siguen pendientes de prueba manual; las pruebas automatizadas no
+los sustituyen.
 
 ## Accesos y comportamiento
 
@@ -8,6 +10,9 @@ Implementación del 2026-08-27. Los flujos nativos y la build empaquetada siguen
 - El campo de registros acepta números de partida desde 1: `1, 3-5`. Vacío importa todos. Los intervalos contiguos se leen juntos.
 - En el menú **⋯** del tablero, **Añadir al repertorio** captura la línea hasta la jugada seleccionada o esa rama con sus continuaciones. Conserva el recorrido desde la FEN inicial, no las ramas hermanas ajenas a la selección.
 - En ese mismo diálogo, **Partidas modelo** guarda el árbol completo de la partida en la biblioteca del repertorio. También admite importación desde archivo.
+- Si una pestaña procedente de una base, Games u Opening Report aún no tiene jugadas hidratadas, la
+  acción recupera la partida canónica por base e ID antes de abrir el diálogo. Desde la posición
+  inicial, «línea» usa la línea principal completa en vez de producir un registro vacío.
 - Las partidas modelo tienen una sección propia para abrirlas y analizarlas. No entran en la cola de memorización ni en los agregados de progreso del repertorio. La clasificación explícita se conserva al exportar y volver a importar.
 - Las nuevas importaciones de repertorios seleccionan **Todas las subvariantes** por defecto. No se cambia la política ni el progreso de repertorios anteriores.
 - En Táctica, el avance automático oculta la acción de finalización «Siguiente problema». La navegación manual Anterior/Siguiente continúa disponible. Cambiar de ejercicio, desactivar el avance o salir cancela el temporizador pendiente.
@@ -68,9 +73,17 @@ Realizar en desarrollo y en una aplicación empaquetada, preferiblemente con cop
 2. Añadir un PGN completo y luego `1, 3-5` a una variante. Repetir una importación: no deben duplicarse líneas; sí conservarse comentarios y el respaldo.
 3. Intentar una FEN incompatible y una importación con cambios pendientes en una pestaña: el editable debe permanecer igual.
 4. Capturar una línea y luego un subárbol desde análisis. Comprobar la selección, las ramas y la reapertura del repertorio.
-5. Guardar/importar una partida modelo, abrirla desde su biblioteca y comprobar que nunca entra en la práctica de memorización.
+5. Abrir desde Games y desde un Opening Report una partida situada en su posición inicial; añadirla
+   como partida modelo y como línea. Debe conservar toda la partida o la línea principal,
+   respectivamente. Abrir la partida modelo desde su biblioteca y comprobar que nunca entra en la
+   práctica de memorización.
 6. Abrir una partida intermedia de un PGN de más de 200 registros. Probar Guardar, Guardar como y Exportar; verificar cabeceras, comentarios, variantes, partidas vecinas, cancelación y negativa a sobrescribir.
 7. En Táctica, acertar con avance automático, navegar durante la espera y cambiar al modo manual. Comprobar la reanudación y el cierre del ciclo.
 8. Alternar español/inglés sin reiniciar: hub, importaciones, biblioteca modelo, menús PGN, errores y sesiones de entrenamiento.
 
-Verificación automatizada: 144 pruebas frontend, dos regresiones Rust de PGN, typecheck, build web y auditoría de 1.470 claves por idioma correctos. El lint focalizado de los flujos nuevos no tiene avisos; en `RepertoireInfo.tsx` permanecen dos avisos previos de dependencias React. La build conserva avisos de tamaño de bundle y tiempo de plugins. No se ejecutó la suite Rust completa; su estado previo está registrado en `PROJECT_ROADMAP.md`.
+Verificación automatizada original: 144 pruebas frontend, dos regresiones Rust de PGN, typecheck,
+build web y auditoría de 1.470 claves por idioma correctos. La corrección del 2026-09-07 añade dos
+regresiones focalizadas; 9/9 pruebas de `repertoireAddition.test.ts` y el typecheck pasan. El lint
+focalizado de los flujos nuevos no tiene avisos; en `RepertoireInfo.tsx` permanecen dos avisos
+previos de dependencias React. La build conserva avisos de tamaño de bundle y tiempo de plugins. No
+se ejecutó la suite Rust completa; su estado previo está registrado en `PROJECT_ROADMAP.md`.

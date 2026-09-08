@@ -1,15 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTreeStore } from "@/state/store/tree";
+import { commands } from "@/bindings";
 import { addOpeningRepertoire, createEmptyTrainingAreas } from "./trainingAreas";
 import { extractOpeningImportLines, isModelGame } from "./openingTraining";
 import {
     mergeRepertoireTree,
     parseRecordSelection,
     prepareRepertoireAddition,
+    recoverRepertoireSourceTree,
     selectRepertoireTree,
 } from "./repertoireAddition";
 
 vi.mock("i18next", () => ({ default: { t: (_key: string, fallback: string) => fallback } }));
+
+afterEach(() => vi.restoreAllMocks());
 
 function tree(moves: string[]) {
     const store = createTreeStore();
@@ -136,6 +140,62 @@ describe("repertoire additions", () => {
             extractOpeningImportLines(selectRepertoireTree(a.root, [0], "subtree"), "all"),
         ).toHaveLength(1);
         expect(selectRepertoireTree(a.root, [], "game")).toEqual(a.root);
+    });
+    it("uses the complete main line when a game is selected at its initial position", () => {
+        const game = tree(["e4", "e5", "Nf3"]);
+        expect(
+            extractOpeningImportLines(selectRepertoireTree(game.root, [], "line"), "all")[0].moves,
+        ).toEqual(["e2e4", "e7e5", "g1f3"]);
+    });
+    it("recovers an unhydrated database game before adding it", async () => {
+        vi.spyOn(commands, "getGames").mockResolvedValue({
+            status: "ok",
+            data: {
+                count: null,
+                data: [
+                    {
+                        id: 42,
+                        fen: tree([]).root.fen,
+                        event: "Reference",
+                        event_id: 1,
+                        site: "Local",
+                        site_id: 1,
+                        white: "White",
+                        white_id: 1,
+                        black: "Black",
+                        black_id: 2,
+                        result: "*",
+                        moves: "1. e4 e5 2. Nf3 *",
+                    },
+                ],
+            },
+        });
+        vi.spyOn(commands, "lexPgn").mockResolvedValue({
+            status: "ok",
+            data: [
+                { type: "San", value: "e4" },
+                { type: "San", value: "e5" },
+                { type: "San", value: "Nf3" },
+                { type: "Outcome", value: "*" },
+            ],
+        });
+
+        const recovered = await recoverRepertoireSourceTree(tree([]), {
+            kind: "database",
+            database: "games.db3",
+            gameId: 42,
+        });
+
+        expect(commands.getGames).toHaveBeenCalledWith(
+            "games.db3",
+            expect.objectContaining({ game_id: 42 }),
+        );
+        expect(extractOpeningImportLines(recovered.root, "all")[0].moves).toEqual([
+            "e2e4",
+            "e7e5",
+            "g1f3",
+        ]);
+        expect(recovered.headers.white).toBe("White");
     });
     it("validates ranges and removes duplicate record selections", () => {
         expect(parseRecordSelection("1, 3-5, 3", 5)).toEqual([0, 2, 3, 4]);

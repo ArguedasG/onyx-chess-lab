@@ -1,7 +1,7 @@
 # Fase 5 — Marca, auditoría release y preparación de la alpha
 
-Fecha: 2026-08-31. Estado: identidad, licencia del logo y repositorio canónico configurados;
-auditoría release en progreso.
+Fecha: 2026-08-31; actualizado el 2026-09-07. Estado: identidad, licencia del logo y repositorio
+canónico configurados; canal Windows x64 implementado técnicamente y prueba N → N+1 pendiente.
 
 ## Nombre decidido
 
@@ -93,6 +93,35 @@ los campos editoriales y de validación permanecerán internos.
 **Salida:** informe de auditoría cerrado, inventario priorizado P0–P3 y una decisión explícita sobre
 qué P2/P3 se acepta para la primera alpha.
 
+### Puerta P0 — Actualizaciones automáticas propias
+
+El incidente del 2026-09-06 demostró que la configuración heredada podía ofrecer e instalar En
+Croissant sobre Onyx Chess Lab. El hotfix deja el actualizador desactivado. Antes de volver a
+habilitarlo se exige:
+
+1. endpoint y metadatos administrados por Onyx, sin dominios ni nombres heredados;
+2. par de claves exclusivo, clave pública en la aplicación y privada protegida como secreto de
+   release con respaldo documentado;
+3. artefactos y firmas generados desde el mismo commit, versión y plataforma;
+4. auditoría automática que rechace configuración upstream o incompleta;
+5. pruebas Onyx N → Onyx N+1, sin actualización, red caída, firma inválida, paquete alterado o
+   ajeno, cancelación y conservación de datos;
+6. descarga manual de recuperación y política de custodia, rotación y pérdida de clave.
+
+**Salida P0:** una instalación de Onyx solo reconoce una release posterior de Onyx y rechaza un
+instalador de En Croissant o cualquier artefacto sin firma válida. Esta puerta precede al siguiente
+instalador distribuido a usuarios; la cobertura multiplataforma avanzada queda en Fase 9.
+
+Alcance aprobado el 2026-09-07: Windows x64, instalador NSIS, un único canal estable en GitHub
+Releases y confirmación visible antes de descargar. La release permanece como borrador hasta la
+aprobación manual. macOS Intel, macOS Apple Silicon y Linux quedan pendientes explícitos de Fase 9 y
+no forman parte del criterio de salida de esta primera implementación.
+
+Estado técnico al 2026-09-07: repositorio público, endpoint propio, par de claves cifrado, secretos
+de Actions, integración Tauri, auditoría de aislamiento y workflow Windows configurados. La build
+local `0.15.2` produjo instalador NSIS y firma. Faltan revisar/publicar la transición y validar
+`0.15.2 → 0.15.3`; por ello la puerta P0 continúa abierta.
+
 ### Paso 3 — Estabilización y capa visual de marca
 
 Objetivo: corregir la línea base sin convertir el corte en otro rediseño funcional.
@@ -108,6 +137,23 @@ Objetivo: corregir la línea base sin convertir el corte en otro rediseño funci
 
 **Salida:** candidato `alpha.1` reproducible, sin P0/P1 conocidos, objetivos de Finales completos y
 regresión release aprobada.
+
+### Hito P1 — Instalación directa de Maia 3
+
+Después de asegurar el canal de actualización y antes de la alpha, Motores debe permitir instalar
+Maia 3 sin requerir Python, Git, PowerShell, selección manual del ejecutable ni configuración de
+argumentos. El primer objetivo es Windows x64 con CPU.
+
+El flujo mostrará licencia, procedencia, versión y tamaño; descargará a un directorio administrado
+con progreso, cancelación, reintento y verificación; registrará automáticamente el ejecutable y sus
+opciones UCI; y comprobará `uci`/`isready`. También ofrecerá reparar, actualizar y desinstalar la
+instalación administrada sin modificar motores añadidos manualmente.
+
+Se prefiere un paquete autocontenido y versionado si la revisión de código, dependencias, Python y
+pesos permite redistribuirlo. Si no es viable, la aplicación realizará una instalación guiada tan
+automática como sea posible y seguirá ocultando la configuración UCI al usuario. La alpha no se
+considerará preparada mientras una instalación limpia no pueda usar Maia inmediatamente desde
+Jugar, bots humanos, Finales y el Generador de partidas modelo.
 
 ### Paso 4 — Alpha privada
 
@@ -157,9 +203,9 @@ preservando la atribución a En Croissant.
 La revisión de código encontró dos integraciones heredadas que deben resolverse antes de distribuir
 la alpha, aunque no bloquean este lote de interfaz:
 
-- el actualizador conserva la clave y `https://www.encroissant.org/updates`; una build Onyx no debe
-  poder reemplazarse con una release del producto upstream. Debe desactivarse temporalmente o migrar
-  a un canal y clave propios antes del instalador;
+- el riesgo heredado del actualizador se corrigió con un endpoint y una clave exclusivos de Onyx; la
+  auditoría impide reintroducir `https://www.encroissant.org/updates`. Aún debe completarse la prueba
+  distribuida `0.15.2 → 0.15.3` antes de cerrar la puerta P0;
 - la telemetría conserva un proyecto PostHog heredado y aparece activada por defecto. Debe decidirse
   si se elimina para la alpha o se migra a infraestructura propia con consentimiento inequívoco y
   documentación de privacidad.

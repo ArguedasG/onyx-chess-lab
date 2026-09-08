@@ -40,7 +40,7 @@
       "resources/endgames/FinalesParte3.pgn": "training/endgames/FinalesParte3.pgn"
     },
     "targets": "all",
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": true
   },
   "build": {
     "beforeDevCommand": "pnpm start-vite",
@@ -52,6 +52,15 @@
   "mainBinaryName": "onyx-chess-lab",
   "identifier": "org.encroissant.app",
   "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0NjZBMzg3NDEwMkNERTcKUldUbnpRSkJoNk5tdEtCTTZjNzk2MGdyaUs1eHRvS0xiTTU5WEU0YnRoNzUyaDFET2F5TWUrb1AK",
+      "endpoints": [
+        "https://github.com/ArguedasG/onyx-chess-lab/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "cli": {
       "args": [
         {

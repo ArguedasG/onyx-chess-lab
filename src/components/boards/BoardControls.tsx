@@ -33,6 +33,7 @@ import {
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { buildModelGameSourcePgn } from "@/utils/modelGame";
+import { recoverRepertoireSourceTree } from "@/utils/repertoireAddition";
 import { createTab, getTabFile, getTabGameNumber, saveToFile } from "@/utils/tabs";
 import type { TreeState } from "@/utils/treeReducer";
 import RepertoireAdditionModal from "../training/RepertoireAdditionModal";
@@ -79,6 +80,7 @@ function BoardControls({
     tree: TreeState;
     source: { label: string; recordIndexes: number[] };
   } | null>(null);
+  const [additionLoading, setAdditionLoading] = useState(false);
   const file = getTabFile(currentTab);
   const trainingAreas = useAtomValue(trainingAreasAtom);
 
@@ -199,25 +201,34 @@ function BoardControls({
           <Menu.Divider />
           <Menu.Item
             leftSection={<IconBook2 size={16} />}
+            disabled={additionLoading}
             onClick={() => {
               const state = store.getState();
-              setAddition({
-                source: {
-                  label:
-                    file?.path ??
-                    (currentTab?.gameOrigin.kind === "database"
-                      ? `${currentTab.gameOrigin.database} #${currentTab.gameOrigin.gameId}`
-                      : (currentTab?.name ?? t("Repertoire.AnalysisSource", "Analysis board"))),
-                  recordIndexes: [getTabGameNumber(currentTab)],
-                },
-                tree: structuredClone({
-                  root: state.root,
-                  headers: state.headers,
-                  position: state.position,
-                  dirty: state.dirty,
-                  report: state.report,
-                }),
+              const source = {
+                label:
+                  file?.path ??
+                  (currentTab?.gameOrigin.kind === "database"
+                    ? `${currentTab.gameOrigin.database} #${currentTab.gameOrigin.gameId}`
+                    : (currentTab?.name ?? t("Repertoire.AnalysisSource", "Analysis board"))),
+                recordIndexes: [getTabGameNumber(currentTab)],
+              };
+              const tree = structuredClone({
+                root: state.root,
+                headers: state.headers,
+                position: state.position,
+                dirty: state.dirty,
+                report: state.report,
               });
+              setAdditionLoading(true);
+              void recoverRepertoireSourceTree(tree, currentTab?.gameOrigin)
+                .then((recovered) => setAddition({ source, tree: recovered }))
+                .catch((error) =>
+                  notifications.show({
+                    color: "red",
+                    message: String(error),
+                  }),
+                )
+                .finally(() => setAdditionLoading(false));
             }}
           >
             {t("Repertoire.AddContent", "Add to repertoire")}

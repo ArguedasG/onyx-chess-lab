@@ -25,6 +25,7 @@ import AboutModal from "@/components/About";
 import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { WorkspaceTabs } from "@/components/tabs/BoardsPage";
+import { requestAppUpdateCheck } from "@/utils/appUpdater";
 import { isTrainingPath } from "@/utils/trainingTabs";
 import {
   activeTabAtom,
@@ -151,84 +152,63 @@ function RootLayout() {
 
   const isMacOS = platform() === "macos";
 
-  const aboutOption = {
-    label: t("Menu.Help.About"),
-    id: "about",
-    action: () => setOpened(true),
-  };
+  const menuActions: MenuGroup[] = useMemo(() => {
+    const aboutOption = {
+      label: t("Menu.Help.About"),
+      id: "about",
+      action: () => setOpened(true),
+    };
+    const checkForUpdatesOption = {
+      label: t("Menu.Help.CheckUpdate"),
+      id: "check_for_updates",
+      action: requestAppUpdateCheck,
+    };
+    const appMenu: MenuGroup = {
+      label: "Application Menu",
+      options: [
+        {
+          label: t("Menu.Application.About", {
+            defaultValue: t("Menu.Help.About"),
+          }),
+          id: aboutOption.id,
+          action: aboutOption.action,
+        },
+        checkForUpdatesOption,
+        { label: "divider" },
+        {
+          label: t("SideBar.Settings") + "...",
+          id: "settings",
+          shortcut: "cmd+,",
+          action: openSettings,
+        },
+        {
+          label: t("Menu.Application.Hide"),
+          item: "Hide",
+        },
+        { label: "divider" },
+        {
+          label: t("Menu.Application.Quit", {
+            defaultValue: t("Menu.File.Exit"),
+          }),
+          item: "Quit",
+        },
+      ],
+    };
+    const macOSEditMenu: MenuGroup = {
+      label: t("Menu.Edit"),
+      options: [
+        { label: t("Menu.Edit.Undo"), item: "Undo" },
+        { label: t("Menu.Edit.Redo"), item: "Redo" },
+        { label: "divider" },
+        { label: t("Menu.Edit.Copy"), item: "Copy" },
+        { label: t("Menu.Edit.Cut"), item: "Cut" },
+        { label: t("Menu.Edit.Paste"), item: "Paste" },
+        { label: "divider" },
+        { label: t("Menu.Edit.SelectAll"), item: "SelectAll" },
+      ],
+    };
 
-  const checkForUpdatesOption = {
-    label: t("Menu.Help.CheckUpdate"),
-    id: "check_for_updates",
-    action: () => openUrl("https://github.com/ArguedasG/onyx-chess-lab/releases/latest"),
-  };
-
-  const appMenu: MenuGroup = {
-    label: "Application Menu",
-    options: [
-      {
-        label: t("Menu.Application.About", {
-          defaultValue: t("Menu.Help.About"),
-        }),
-        id: aboutOption.id,
-        action: aboutOption.action,
-      },
-      checkForUpdatesOption,
-      { label: "divider" },
-      {
-        label: t("SideBar.Settings") + "...",
-        id: "settings",
-        shortcut: "cmd+,",
-        action: openSettings,
-      },
-      {
-        label: t("Menu.Application.Hide"),
-        item: "Hide",
-      },
-      { label: "divider" },
-      {
-        label: t("Menu.Application.Quit", {
-          defaultValue: t("Menu.File.Exit"),
-        }),
-        item: "Quit",
-      },
-    ],
-  };
-
-  const macOSEditMenu: MenuGroup = {
-    label: t("Menu.Edit"),
-    options: [
-      {
-        label: t("Menu.Edit.Undo"),
-        item: "Undo",
-      },
-      {
-        label: t("Menu.Edit.Redo"),
-        item: "Redo",
-      },
-      { label: "divider" },
-      {
-        label: t("Menu.Edit.Copy"),
-        item: "Copy",
-      },
-      {
-        label: t("Menu.Edit.Cut"),
-        item: "Cut",
-      },
-      {
-        label: t("Menu.Edit.Paste"),
-        item: "Paste",
-      },
-      { label: "divider" },
-      {
-        label: t("Menu.Edit.SelectAll"),
-        item: "SelectAll",
-      },
-    ],
-  };
-
-  const menuActions: MenuGroup[] = useMemo(
-    () => [
+    return [
       ...(isMacOS ? [appMenu] : []),
       {
         label: t("Menu.File"),
@@ -315,9 +295,8 @@ function RootLayout() {
           ...(!isMacOS ? [checkForUpdatesOption, aboutOption] : []),
         ],
       },
-    ],
-    [t, createNewTab, keyMap, openNewFile, toggleFullscreen],
-  );
+    ];
+  }, [createNewTab, isMacOS, keyMap, openNewFile, openSettings, t, toggleFullscreen]);
 
   const { data: menu } = useSWRImmutable(["menu", menuActions], () => createMenu(menuActions));
 

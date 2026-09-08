@@ -1,7 +1,8 @@
 # Fase 7.2 — Player Analysis local y accionable
 
-Fecha: 2026-08-29. Estado: núcleo implementado y validación automática aprobada; validación manual
-nativa y empaquetada pendiente. Las fuentes principales son cuentas Lichess descargadas e
+Fecha: 2026-08-29; cierre funcional ampliado el 2026-09-07. Estado: núcleo implementado y
+validación automática aprobada; validación manual nativa y empaquetada pendiente. Las fuentes
+principales son cuentas Lichess descargadas e
 importaciones PGN que
 ya forman parte de una base local. No se envían partidas, evaluaciones ni perfiles a servicios
 externos.
@@ -41,8 +42,10 @@ externos.
 - Una partida ofrece oportunidad de conversión si el jugador alcanza al menos +150 cp al inicio de
   uno de sus turnos; cuenta como convertida si gana. Una partida inferior usa -150 cp y se considera
   salvada si termina en victoria o tablas. Estas métricas dependen del motor y presupuesto elegidos.
-- Los errores recurrentes agrupan al menos dos posiciones por fase, severidad y ECO. Todavía no se
-  les asigna automáticamente un motivo táctico o estratégico.
+- Los errores recurrentes agrupan al menos dos posiciones por fase, severidad y ECO. Una cantidad
+  de 18 significa 18 posiciones críticas dentro de ese grupo amplio; no 18 repeticiones de la misma
+  jugada, posición, clavada u otro motivo. Todavía no se les asigna automáticamente un motivo
+  táctico o estratégico.
 - Si una partida no contiene cabecera ECO, el backend recorre su línea principal y conserva el
   nombre de apertura más profundo reconocido por el catálogo local. El nombre derivado se usa en
   estadísticas, hallazgos y agrupaciones de errores del motor.
@@ -61,6 +64,18 @@ externos.
 incluido permanecen inmutables. Se deduplica la misma base, partida y ply dentro de un set. Esta
 procedencia prepara una ampliación que construya y mantenga automáticamente un set de errores
 tácticos, pero esa automatización no forma parte del núcleo actual.
+
+## Requisitos añadidos para cerrar 7.2
+
+- El análisis de motor tendrá selección múltiple de ritmos. Bullet, Blitz, Rapid, Classical y otras
+  categorías presentes podrán combinarse, y la muestra/versionado indicarán exactamente cuáles se
+  analizaron y cuántas partidas aportaron.
+- Al añadir una candidata al set, el usuario podrá escoger **mejorar mi decisión** —posición antes
+  del error, juega el usuario— o **castigar mi error** —posición después del error, juega el rival—.
+- La procedencia distinguirá modo, ply, FEN, bando al turno y solución. Las dos perspectivas no se
+  deduplicarán entre sí por accidente.
+- La interfaz explicará la semántica amplia del contador de errores recurrentes. La detección de
+  jugada, posición o motivo táctico repetido continúa en 7.3 y deberá ser verificable.
 
 ## Alcance y límites actuales
 

@@ -57,6 +57,7 @@ const colorSchemeManager = localStorageColorSchemeManager({
 });
 
 import { getVersion } from "@tauri-apps/api/app";
+import AppUpdater from "@/components/AppUpdater";
 import ErrorComponent from "@/components/ErrorComponent";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
@@ -274,6 +275,7 @@ export default function App() {
       >
         <ContextMenuProvider>
           <Notifications />
+          <AppUpdater />
           <RouterProvider router={router} />
         </ContextMenuProvider>
       </MantineProvider>

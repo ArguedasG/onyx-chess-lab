@@ -2,7 +2,7 @@
 
 > Documento vivo y fuente de verdad del proyecto.
 >
-> Última actualización: 2026-08-30.
+> Última actualización: 2026-09-07.
 
 ## Cómo utilizar este documento
 
@@ -95,27 +95,29 @@ El valor profesional no depende únicamente de entrenar un modelo nuevo. Tambié
 
 ### Resumen
 
-| Área                                    | Estado                                                | Observaciones                                                                                                                                                                                                                                                                                  |
-| --------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Integración Maia 3                      | Validada                                              | Maia funciona como motor UCI local seleccionado por el usuario.                                                                                                                                                                                                                                |
-| Perfiles de bots humanos                | Implementada; validación del catálogo pendiente       | Catálogo 4.4.0 con 15 perfiles, repertorios versionados y clasificación editorial; la calibración estadística sigue pendiente.                                                                                                                                                                 |
-| Nivel, muestreo y repertorio            | Validada                                              | Componentes separados y repertorios ponderados por perfil.                                                                                                                                                                                                                                     |
-| Tiempo de reflexión humano              | Validada                                              | Pausas variables, configurables y conscientes del reloj.                                                                                                                                                                                                                                       |
-| Trazabilidad y mediciones               | Validada                                              | Origen de jugadas, resumen local, JSON/CSV y cabeceras PGN.                                                                                                                                                                                                                                    |
-| Historial contra bots                   | Validada                                              | PGN completos, análisis, marcadores, reinicios y eliminación.                                                                                                                                                                                                                                  |
-| Calibración estadística profunda        | Diferida                                              | Se recopilarán pruebas gradualmente; no bloquea otras fases.                                                                                                                                                                                                                                   |
-| Fiabilidad de motores fuertes           | Validada                                              | Stockfish funcionó correctamente en profundidad 24 y 3+2; Lc0 funcionó con el paquete `windows-onnx-dml`.                                                                                                                                                                                      |
-| Presets de jugador/motor                | Validada                                              | Categorías explícitas y configuración comprobada manualmente con Stockfish.                                                                                                                                                                                                                    |
-| Manifiesto reproducible                 | Validada                                              | Exportación JSON versionada comprobada manualmente con una partida real.                                                                                                                                                                                                                       |
-| Model Game Generator                    | Validada                                              | Fases 2.1, 2.2 y 2.3 validadas manualmente; incluye generación individual y por lotes, registro local, navegación, análisis, exportación, recuperación y eliminación.                                                                                                                          |
-| Experiment Analysis                     | Validada                                              | Fases 3.1, 3.2 y benchmark básico 3.3 implementados y validados con lotes reales; la calibración estadística profunda queda diferida.                                                                                                                                                          |
-| Fase 4 — Beta de bots humanos y torneos | Cerrada como beta                                     | Model Game Generator con bots a velocidad estándar, catálogo editorial 4.4.0 de 15 perfiles y liga round robin reducida integrada dentro del generador. La expansión, calibración profunda y torneos jugables pasan a la Fase 10.                                                              |
-| Fase 6 — Táctica, Aperturas y Finales   | En progreso; 6.8 implementada                         | Incorporación a repertorios, biblioteca modelo, guardado PGN explícito, avance táctico y catálogos ES/EN implementados. Pendiente la validación manual consolidada, nativa y empaquetada.                                                                                                      |
-| Estabilidad de bases grandes            | Implementada; cierre manual pendiente                 | 7.0 añade prioridad frente a cobertura, consultas compartidas, índice por bloques y paginación completa. Regresión automática y benchmark real aprobados; pendientes interfaz nativa/build empaquetada y mediciones release.                                                                   |
-| Consultas compartidas de Fase 7.0       | Implementada; validación automática aprobada          | Games usa todas las coincidencias y abre en el nodo encontrado. La medición de 7.0 registró unos 26 s de escaneo en debug, además de la primera validación del índice.                                                                                                                         |
-| Opening Reports de Fase 7.1             | Núcleo local ampliado; cierre manual pendiente        | Añade jugadores frecuentes y más fuertes, resultados por jugador, franjas ELO y acceso a sus partidas. Games filtra por ELO y ordena globalmente por fecha/ELO. Conserva teoría, transposiciones y exportación HTML/PGN; interpretación estratégica y Lichess siguen diferidos.                |
-| Player Analysis de Fase 7.2             | Núcleo implementado; validación automática aprobada   | Perfil local versionado sobre Lichess/PGN importados, estadísticas avanzadas, evidencia, muestra de motor cancelable/reanudable, conversión/defensa, fases, errores recurrentes y posiciones añadibles a sets tácticos. Límites en `docs/player-analysis-phase-7-2.es.md`.                     |
-| Shell centrado en el tablero            | Probado por el usuario; ajustes finales implementados | Entrenamiento comparte la barra de pestañas y convierte el hub en el área elegida. Jugar tiene icono propio; «Jugar desde aquí» copia solo la rama seleccionada a una partida independiente y el cierre protege correctamente los cambios. Falta el smoke test de estos ajustes en escritorio. |
+| Área                                    | Estado                                                                      | Observaciones                                                                                                                                                                                                                                                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Integración Maia 3                      | Validada técnicamente; instalación directa pendiente                        | Maia funciona como motor UCI local cuando el usuario lo configura manualmente. La instalación administrada sin Python, Git ni argumentos manuales pasa a ser un P1 explícito de Fase 5.3.                                                                                                      |
+| Perfiles de bots humanos                | Implementada; validación del catálogo pendiente                             | Catálogo 4.4.0 con 15 perfiles, repertorios versionados y clasificación editorial; la calibración estadística sigue pendiente.                                                                                                                                                                 |
+| Nivel, muestreo y repertorio            | Validada                                                                    | Componentes separados y repertorios ponderados por perfil.                                                                                                                                                                                                                                     |
+| Tiempo de reflexión humano              | Validada                                                                    | Pausas variables, configurables y conscientes del reloj.                                                                                                                                                                                                                                       |
+| Trazabilidad y mediciones               | Validada                                                                    | Origen de jugadas, resumen local, JSON/CSV y cabeceras PGN.                                                                                                                                                                                                                                    |
+| Historial contra bots                   | Validada                                                                    | PGN completos, análisis, marcadores, reinicios y eliminación.                                                                                                                                                                                                                                  |
+| Calibración estadística profunda        | Diferida                                                                    | Se recopilarán pruebas gradualmente; no bloquea otras fases.                                                                                                                                                                                                                                   |
+| Fiabilidad de motores fuertes           | Validada                                                                    | Stockfish funcionó correctamente en profundidad 24 y 3+2; Lc0 funcionó con el paquete `windows-onnx-dml`.                                                                                                                                                                                      |
+| Presets de jugador/motor                | Validada                                                                    | Categorías explícitas y configuración comprobada manualmente con Stockfish.                                                                                                                                                                                                                    |
+| Manifiesto reproducible                 | Validada                                                                    | Exportación JSON versionada comprobada manualmente con una partida real.                                                                                                                                                                                                                       |
+| Model Game Generator                    | Validada                                                                    | Fases 2.1, 2.2 y 2.3 validadas manualmente; incluye generación individual y por lotes, registro local, navegación, análisis, exportación, recuperación y eliminación.                                                                                                                          |
+| Experiment Analysis                     | Validada                                                                    | Fases 3.1, 3.2 y benchmark básico 3.3 implementados y validados con lotes reales; la calibración estadística profunda queda diferida.                                                                                                                                                          |
+| Fase 4 — Beta de bots humanos y torneos | Cerrada como beta                                                           | Model Game Generator con bots a velocidad estándar, catálogo editorial 4.4.0 de 15 perfiles y liga round robin reducida integrada dentro del generador. La expansión, calibración profunda y torneos jugables pasan a la Fase 10.                                                              |
+| Fase 6 — Táctica, Aperturas y Finales   | En progreso; 6.8 implementada                                               | Incorporación a repertorios, biblioteca modelo, guardado PGN explícito, avance táctico y catálogos ES/EN implementados. El 2026-09-07 se corrigió la incorporación de partidas abiertas desde bases e informes. Pendiente la validación manual consolidada, nativa y empaquetada.              |
+| Estabilidad de bases grandes            | Implementada; cierre manual pendiente                                       | 7.0 añade prioridad frente a cobertura, consultas compartidas, índice por bloques y paginación completa. Regresión automática y benchmark real aprobados; pendientes interfaz nativa/build empaquetada y mediciones release.                                                                   |
+| Consultas compartidas de Fase 7.0       | Implementada; validación automática aprobada                                | Games usa todas las coincidencias y abre en el nodo encontrado. La medición de 7.0 registró unos 26 s de escaneo en debug, además de la primera validación del índice.                                                                                                                         |
+| Opening Reports de Fase 7.1             | Núcleo local ampliado; cierre manual pendiente                              | Añade jugadores frecuentes y más fuertes, resultados por jugador, franjas ELO y acceso a sus partidas. Games filtra por ELO y ordena globalmente por fecha/ELO. Conserva teoría, transposiciones y exportación HTML/PGN; interpretación estratégica y Lichess siguen diferidos.                |
+| Player Analysis de Fase 7.2             | Núcleo implementado; cierre funcional ampliado                              | Se añaden al cierre de 7.2 la selección múltiple Blitz/Rapid/Bullet/etc. para la muestra de motor y la elección entre entrenar la alternativa propia o el castigo del rival. Validación manual nativa/empaquetada pendiente.                                                                   |
+| Actualizaciones de Onyx                 | Implementación técnica Windows x64 completada; validación N → N+1 pendiente | Canal estable mediante GitHub Releases, confirmación previa y artefactos firmados para NSIS. Clave cifrada, secretos, auditoría y build local `0.15.2` firmada ya están preparados; el P0 se cierra solo tras publicar y probar `0.15.2 → 0.15.3`. macOS y Linux quedan pendientes.            |
+| Instalación directa de Maia 3           | Pendiente; prioridad P1                                                     | Motores deberá ofrecer Instalar, progreso, verificación, registro UCI automático, reparación y desinstalación de Maia sin exigir Python, Git, PowerShell ni configuración manual. Pertenece a Fase 5.3 y debe completarse antes de la alpha.                                                   |
+| Shell centrado en el tablero            | Probado por el usuario; ajustes finales implementados                       | Entrenamiento comparte la barra de pestañas y convierte el hub en el área elegida. Jugar tiene icono propio; «Jugar desde aquí» copia solo la rama seleccionada a una partida independiente y el cierre protege correctamente los cambios. Falta el smoke test de estos ajustes en escritorio. |
 
 ### Bots humanos disponibles
 
@@ -163,15 +165,20 @@ Estas etiquetas describen principalmente amplitud de muestreo, no personalidades
 - `docs/opening-reports-phase-7-1.es.md`
 - `docs/player-analysis-phase-7-2.es.md`
 - `docs/phase-5-brand-release-alpha-plan.es.md`
+- `docs/updater-phase-5-2.es.md`
 
 ### Próximo paso recomendado
 
-**Núcleo 7.0–7.2 implementado y auditoría de Fase 5 en progreso. El repositorio canónico, upstream,
-nombre y licencia del logo ya están configurados. Siguiente paso: continuar la matriz release,
-definir/probar la migración de datos y cerrar los P0–P2 antes de la alpha.**
-La corrección de 7.2 tiene validación automática. La preparación de los objetivos incluidos de
-Finales y la validación manual consolidada/nativa/empaquetada se resolverán en la auditoría 5.2,
-antes de distribuir la alpha; no se consideran ya verificadas.
+**Primero se publica manualmente la corrección urgente de 6.8 y se construye el canal de
+actualizaciones propio de Fase 5.2. Inmediatamente después se implementa la instalación directa de
+Maia 3 desde Motores como P1 de Fase 5.3. Luego se completa la mejora prevista de Finales y el cierre
+funcional de 7.2: selección múltiple de ritmos para el motor y perspectiva configurable de los
+ejercicios de error. Por último se ejecuta la matriz manual consolidada y se cierra la Fase 7 antes
+de avanzar a Fase 8.**
+El canal automático es un P0 de distribución: no se vuelve a activar el actualizador hasta tener
+endpoint, clave pública y artefactos firmados propios de Onyx. La preparación de los objetivos
+incluidos de Finales y la validación manual consolidada/nativa/empaquetada se resolverán en la
+auditoría 5.2; no se consideran ya verificadas.
 La prioridad y cancelación de cobertura de 6.6 ya se integraron en las consultas de 7.0.
 La matriz manual de entrenamiento sigue en `docs/training-phase-6-8.es.md`.
 
@@ -201,7 +208,13 @@ Explorador de posiciones y partidas paginadas + Opening Reports [7.0–7.1]
         ↓
 Player Analysis y entrenamiento personalizado [7.2]
         ↓
-Ingeniería de release, identidad final y alpha privada [Fase 5]
+Canal de actualización propio, firmado y aislado [Fase 5.2, P0]
+        ↓
+Instalación directa y administrada de Maia 3 [Fase 5.3, P1]
+        ↓
+Mejora de Finales + cierre funcional y manual de 7.2 [cierre actual]
+        ↓
+Ingeniería de release restante, identidad final y alpha privada [Fase 5]
         ↓
 Serious Preparation Tools [Fase 8]
         ↓
@@ -626,6 +639,41 @@ perder el historial, la licencia GPLv3, los avisos de copyright ni la atribució
 - comparar con desarrollo solo para aislar diferencias; la aceptación se decide sobre el ejecutable
   release.
 
+#### 5.2.1. Canal propio de actualizaciones automáticas — P0
+
+El incidente observado el 2026-09-06 confirmó que una build del fork todavía podía consultar el
+canal heredado e instalar En Croissant sobre Onyx. El hotfix mantiene el actualizador desactivado;
+reactivarlo requiere completar todo este contrato, no solo cambiar una URL:
+
+- generar un par de claves exclusivo de Onyx, incluir únicamente la clave pública en la aplicación
+  y guardar la privada como secreto de release con respaldo y acceso restringido;
+- publicar un endpoint propio y metadatos de actualización que apunten exclusivamente a artefactos
+  de Onyx Chess Lab;
+- producir y firmar instalador, artefacto de actualización y metadatos desde el mismo commit,
+  versión y plataforma dentro del workflow de release;
+- adaptar la auditoría automática de aislamiento para rechazar dominios, claves o nombres heredados
+  y comprobar la configuración propia habilitada;
+- probar instalación limpia, Onyx N → Onyx N+1, ausencia de actualización, red caída, firma
+  inválida, artefacto ajeno y cancelación, manteniendo una descarga manual de recuperación;
+- documentar custodia, copia de seguridad, rotación y pérdida de la clave. Una clave privada perdida
+  no debe improvisarse en una release ya distribuida.
+
+**Criterio de salida:** una versión de prueba instalada solo ofrece la siguiente versión de Onyx,
+rechaza un artefacto alterado o de En Croissant y conserva datos y configuración tras actualizar.
+La ampliación multiplataforma y una política avanzada de rotación continúan en Fase 9.
+
+**Alcance inicial decidido el 2026-09-07:** únicamente Windows x64 con NSIS, un canal estable y
+confirmación visible antes de descargar. Las releases se preparan como borrador y solo se vuelven
+detectables al publicarlas. La implementación y validación del actualizador para macOS —Intel y
+Apple Silicon— y Linux quedan pendientes explícitos de Fase 9; generar un artefacto no equivaldrá a
+declararlo soportado.
+
+**Estado técnico al 2026-09-07:** el cliente, endpoint exclusivo de Onyx, permiso e integración
+Tauri, auditoría de aislamiento, workflow Windows, par de claves cifrado y secretos de GitHub Actions
+están configurados. Una build local de `0.15.2` produjo el instalador NSIS y su firma. El P0 permanece
+abierto hasta revisar una release borrador, instalar manualmente la transición y demostrar el recorrido
+real `0.15.2 → 0.15.3`, incluidas las pruebas negativas y la conservación de datos.
+
 ### 5.3. Estabilización, ediciones y capa visual de marca
 
 - español como idioma predeterminado en instalaciones nuevas, conservando la preferencia de usuarios
@@ -644,6 +692,35 @@ perder el historial, la licencia GPLv3, los avisos de copyright ni la atribució
 - smoke tests en Linux y macOS;
 - mecanismo sencillo para reportar errores;
 - documentación de instalación, contenido, licencias, backup y recuperación.
+
+#### 5.3.1. Instalación directa y administrada de Maia 3 — P1
+
+La integración UCI ya funciona, pero el procedimiento actual exige instalar Python y Git, crear un
+entorno virtual, descargar el modelo, localizar el ejecutable y escribir argumentos manualmente. No
+es una experiencia aceptable para usuarios finales. El objetivo es que **Motores → Maia 3 →
+Instalar** resuelva el proceso completo:
+
+- ofrecer un paquete preparado y versionado por plataforma cuando la revisión técnica y legal lo
+  permita; el primer objetivo operativo es Windows x64 con CPU;
+- mostrar licencia, procedencia, versión, tamaño estimado y componentes que se descargarán antes de
+  confirmar;
+- instalar en un directorio administrado de datos de Onyx, con progreso, cancelación, reintento,
+  verificación de hash/firma y limpieza segura de descargas incompletas;
+- registrar automáticamente el ejecutable, argumentos UCI, semilla aleatoria, modelo y opciones
+  predeterminadas, sin pedir al usuario rutas ni líneas de comandos;
+- ejecutar una comprobación `uci`/`isready` al terminar y comunicar errores accionables;
+- permitir reparar, actualizar y desinstalar únicamente la instalación administrada, sin tocar
+  motores Maia añadidos manualmente;
+- conservar como alternativa una instalación guiada dentro de la aplicación si no es viable
+  redistribuir un paquete autocontenido o los pesos. Aun en ese caso, el usuario no debe tener que
+  configurar argumentos UCI manualmente;
+- documentar licencia y obligaciones de Maia, Python, dependencias y modelo por separado antes de
+  publicar el paquete.
+
+**Criterio de salida:** en una instalación limpia de Windows, una persona sin Python ni Git puede
+instalar Maia desde Motores, superar la comprobación automática y usarlo inmediatamente en Jugar,
+bots humanos, Finales y Generador de partidas modelo. La descarga interrumpida se puede reanudar o
+limpiar, y la desinstalación no afecta otros motores.
 
 Ediciones previstas desde el mismo código:
 
@@ -1059,7 +1136,8 @@ Táctica, Aperturas o Finales.
 
 ### 6.8. Pulido de entrenamiento, repertorios, PGN e idiomas
 
-**Estado: Implementada el 2026-08-27; pendiente de validación manual nativa y empaquetada.**
+**Estado: Implementada el 2026-08-27; regresión de incorporación corregida el 2026-09-07;
+pendiente de validación manual nativa y empaquetada.**
 
 Accesos, reglas de conflicto, recuperación y matriz manual en `docs/training-phase-6-8.es.md`.
 La incorporación exige vista previa y confirmación, conserva respaldos del PGN editable, rechaza
@@ -1083,6 +1161,10 @@ flujos nativos.
 - desde el tablero de análisis, añadir la línea actual o un árbol seleccionado a un repertorio y
   variante concretos;
 - permitir guardar una partida como partida modelo de un repertorio;
+- [x] recuperar la partida canónica cuando una pestaña abierta desde una base, Games u Opening
+      Report todavía no tiene hidratado su árbol; una partida modelo copia la partida completa y una
+      línea solicitada desde la posición inicial usa la línea principal completa, nunca un registro de
+      cero jugadas;
 - mostrar partidas modelo en una sección o biblioteca visual propia dentro del repertorio, conservando
   su relación con él pero sin presentarlas como líneas entrenables;
 - definir conflictos por FEN inicial, duplicados, color, comentarios, transposiciones y nombres antes
@@ -1251,8 +1333,8 @@ Requisitos de escala:
 
 ### 7.2. Player Analysis
 
-**Estado: Núcleo implementado el 2026-08-29; validación automática aprobada y validación manual
-nativa/empaquetada pendiente.**
+**Estado: Núcleo implementado el 2026-08-29; cierre funcional ampliado el 2026-09-07 y validación
+manual nativa/empaquetada pendiente.**
 
 Resultado y límites en `docs/player-analysis-phase-7-2.es.md`. El perfil personal y el perfil de un
 jugador de base incorporan una pestaña Análisis con fuentes Lichess/PGN ya importadas, filtros,
@@ -1276,6 +1358,22 @@ versionados. Detectar:
 - posiciones candidatas para entrenamiento.
 
 Cada conclusión debe mostrar evidencia, partidas y tamaño de muestra. Las recomendaciones deben enlazar con posiciones entrenables, no limitarse a consejos genéricos.
+
+#### Requisitos añadidos al cierre de 7.2 — 2026-09-07
+
+- permitir una selección múltiple explícita de ritmos —Bullet, Blitz, Rapid, Classical y los que
+  existan en la fuente— antes de ejecutar el motor; solo esas partidas forman la muestra y la
+  interfaz muestra los ritmos elegidos y su tamaño. El selector único descriptivo actual no basta;
+- permitir elegir la perspectiva de cada ejercicio creado desde un error personal:
+  - **mejorar mi decisión**: posición anterior al error, mueve el jugador y debe encontrar su mejor
+    alternativa;
+  - **castigar mi error**: posición inmediatamente posterior al error, mueve el rival y debe
+    encontrar el mejor castigo;
+- guardar en la procedencia el modo, ply, bando al turno y solución; validar que FEN y turno
+  corresponden a la perspectiva elegida y deduplicar sin confundir ambas versiones;
+- explicar junto a «errores recurrentes» que la cantidad actual es el número de posiciones críticas
+  con la misma fase, severidad y apertura/ECO. No significa la misma jugada, la misma posición ni un
+  motivo táctico repetido.
 
 #### Integración con Entrenamiento
 
@@ -1301,6 +1399,8 @@ Concentra todas las ampliaciones posteriores de 7.1 y 7.2:
 - consulta de metadatos de jugador sin hidratar PGN, alias múltiples y sincronización incremental;
 - administración del tiempo con cobertura `[%clk]` explícita;
 - motivos tácticos verificables y patrones estratégicos con confianza visible;
+- agrupación futura por posición normalizada, jugada o motivo verificable, separada del contador
+  amplio actual por fase, severidad y ECO;
 - tablebases y clases de finales dentro del perfil;
 - comparación temporal del perfil y relación observacional con el entrenamiento;
 - creación y actualización automática, siempre configurable, de un set de errores tácticos;
@@ -1343,6 +1443,8 @@ Comenzar con paquetes locales exportables antes de añadir cuentas, nube o colab
 - privacidad local;
 - telemetría solamente opcional;
 - instaladores multiplataforma;
+- [ ] habilitar y validar el actualizador firmado en macOS Intel, macOS Apple Silicon y Linux,
+      incluyendo instalación, relanzamiento, permisos, firma, fallo de red y recuperación;
 - actualizaciones;
 - accesibilidad;
 - documentación de usuario;
@@ -1594,6 +1696,19 @@ prioridades de producto y, como mínimo, después de la Fase 7.
      `ArguedasG/onyx-chess-lab`, con `origin` propio y En Croissant como `upstream`. El símbolo fue
      ideado inicialmente por el usuario y transformado con la generación de imágenes de ChatGPT; su
      máster, procedencia y licencia CC BY 4.0 están documentados en `assets/brand/README.md`.
+124. El canal automático propio pertenece a Fase 5.2 y es P0 antes de otro instalador distribuido.
+     El aislamiento temporal no se sustituye por un cambio de URL: endpoint, claves, firmas,
+     workflow, recuperación y pruebas forman un solo criterio de salida.
+125. La selección múltiple de ritmos para la muestra del motor se cierra en 7.2 porque define qué
+     partidas sustentan las métricas personales; no se difiere a la inteligencia avanzada 7.3.
+126. Los ejercicios derivados de un error podrán entrenar la alternativa del jugador antes del
+     fallo o el castigo del rival después del fallo. Ambas perspectivas conservarán ply, turno y
+     procedencia distintos y pertenecen al cierre de 7.2.
+127. «Error recurrente» conserva por ahora su definición amplia —misma fase, severidad y ECO—. Una
+     coincidencia de jugada, posición o motivo táctico requerirá otra agrupación verificable en 7.3.
+128. La instalación directa de Maia 3 es un P1 de Fase 5.3 inmediatamente posterior al canal de
+     actualización propio. Debe eliminar Python, Git, rutas y argumentos manuales de la experiencia
+     normal, sin confundir un paquete administrado por Onyx con motores Maia agregados por el usuario.
 
 ---
 
@@ -1623,6 +1738,24 @@ Estas preguntas no bloquean el trabajo actual, pero deberán resolverse en sus f
 ---
 
 ## 9. Registro breve de evolución
+
+### 2026-09-07
+
+- Se corrigió en 6.8 la incorporación al repertorio desde partidas abiertas en bases, Games y
+  Opening Reports: si el árbol visible aún está vacío se recupera la partida canónica; una partida
+  modelo conserva la partida completa y una línea elegida desde el inicio conserva la principal.
+- Se incorporan al cierre de 7.2 la selección múltiple de ritmos para el análisis de motor y la
+  elección entre entrenar la alternativa previa al error o el castigo posterior del rival.
+- El actualizador automático propio pasa a Fase 5.2 como P0 de distribución, con endpoint, claves,
+  artefactos firmados, pruebas negativas y ruta manual de recuperación.
+- La instalación directa de Maia 3 se formaliza como P1 de Fase 5.3 y se coloca inmediatamente
+  después del actualizador. El flujo objetivo instala, verifica y registra Maia desde Motores sin
+  requerir Python, Git, PowerShell, rutas ni argumentos UCI manuales.
+- Se completó la implementación técnica inicial del canal Windows x64: repositorio público, endpoint
+  propio, par de claves cifrado con custodia fuera del repositorio, secretos de GitHub Actions,
+  workflow NSIS firmado, cliente con confirmación y auditoría automática. La build local `0.15.2`
+  generó instalador y firma; quedan pendientes la release borrador y la validación real
+  `0.15.2 → 0.15.3`, por lo que el P0 todavía no se declara cerrado.
 
 ### 2026-08-31
 

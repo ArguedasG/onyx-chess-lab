@@ -1,6 +1,7 @@
 import { makeUci } from "chessops";
 import i18n from "i18next";
-import { getPGN } from "./chess";
+import { commands } from "@/bindings";
+import { getPGN, parsePGN } from "./chess";
 import {
     extractOpeningImportLines,
     filterOpeningTree,
@@ -8,6 +9,8 @@ import {
 } from "./openingTraining";
 import { addBlankOpeningVariant, updateOpeningVariant, type OpeningsState } from "./trainingAreas";
 import type { TreeNode, TreeState } from "./treeReducer";
+import type { GameOrigin } from "./tabs";
+import { unwrap } from "./unwrap";
 
 export type AdditionMode = "theory" | "modelGame";
 export type AdditionSource = { label: string; recordIndexes: number[] };
@@ -18,11 +21,77 @@ export function selectRepertoireTree(
     scope: "line" | "subtree" | "game",
 ): TreeNode {
     if (scope === "game") return structuredClone(root);
-    if (scope === "line") return filterOpeningTree(root, [position]);
+    if (scope === "line") {
+        const selectedPath = [...position];
+        // A database game normally opens at its initial position. In that case,
+        // "line" means its complete main line instead of an empty prefix.
+        if (selectedPath.length === 0) {
+            let node = root;
+            while (node.children[0]?.move) {
+                selectedPath.push(0);
+                node = node.children[0];
+            }
+        }
+        return filterOpeningTree(root, [selectedPath]);
+    }
     const paths = extractOpeningImportLines(root, "all")
         .map((line) => line.path)
         .filter((path) => position.every((index, depth) => path[depth] === index));
     return filterOpeningTree(root, paths.length ? paths : [position]);
+}
+
+function pathExists(root: TreeNode, path: number[]): boolean {
+    let node = root;
+    for (const index of path) {
+        const child = node.children[index];
+        if (!child) return false;
+        node = child;
+    }
+    return true;
+}
+
+/**
+ * Recover the canonical game when a persisted board tab has not hydrated its
+ * move tree. This keeps database/report and multi-game PGN sources usable
+ * without replacing a non-empty tree that may contain the user's edits.
+ */
+export async function recoverRepertoireSourceTree(
+    tree: TreeState,
+    origin: GameOrigin | undefined,
+): Promise<TreeState> {
+    if (extractOpeningImportLines(tree.root, "all").length > 0 || !origin) return tree;
+
+    let recovered: TreeState | undefined;
+    if (origin.kind === "database") {
+        const response = unwrap(
+            await commands.getGames(origin.database, {
+                game_id: origin.gameId,
+                options: {
+                    page: 1,
+                    pageSize: 1,
+                    skipCount: true,
+                    sort: "id",
+                    direction: "asc",
+                },
+            }),
+        );
+        const game = response.data[0];
+        if (game) {
+            recovered = await parsePGN(game.moves, game.fen);
+            recovered.headers = { ...recovered.headers, ...game };
+        }
+    } else if (origin.kind === "file" || origin.kind === "temp_file") {
+        const raw = unwrap(
+            await commands.readGames(origin.file.path, origin.gameNumber, origin.gameNumber),
+        )[0];
+        if (raw) recovered = await parsePGN(raw);
+    }
+
+    if (!recovered || extractOpeningImportLines(recovered.root, "all").length === 0) return tree;
+    recovered.position = pathExists(recovered.root, tree.position)
+        ? [...tree.position]
+        : [...recovered.position];
+    return recovered;
 }
 
 // Keep both authors' annotations; an identical move is one node, not a duplicate line.

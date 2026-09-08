@@ -1,6 +1,6 @@
 [package]
 name = "onyx-chess-lab"
-version = "0.15.1"
+version = "0.15.2"
 description = "A local-first chess study and training lab"
 authors = ["Francisco Salgueiro <fgcdbs@gmail.com>"]
 license = "GPL-3.0-only"
@@ -68,6 +68,7 @@ tauri-plugin-opener = "2"
 memmap2 = "0.9"
 rkyv = { version = "0.8", features = ["bytecheck"] }
 polyglot-book-rs = "0.1.0"
+tauri-plugin-updater = "2.10.0"
 
 [features]
 # by default Tauri runs in production mode

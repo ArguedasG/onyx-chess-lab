@@ -26,6 +26,7 @@
         "os:default",
         "cli:default",
         "process:default",
+        "updater:default",
         "log:default",
         "fs:default",
         "fs:write-all",
