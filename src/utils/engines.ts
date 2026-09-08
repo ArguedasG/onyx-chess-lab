@@ -50,6 +50,13 @@ const localEngineSchema = z.object({
     go: goModeSchema.nullish(),
     enabled: z.boolean().nullish(),
     settings: engineSettingsSchema.nullish(),
+    managed: z
+        .object({
+            provider: z.literal("onyx"),
+            kind: z.literal("maia3"),
+            version: z.string(),
+        })
+        .nullish(),
 });
 
 export type LocalEngine = z.output<typeof localEngineSchema>;

@@ -28,7 +28,10 @@ const UCI_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 const UCI_READY_TIMEOUT: Duration = Duration::from_secs(600);
 const UCI_BEST_MOVE_TIMEOUT: Duration = Duration::from_secs(600);
 
-fn resolve_launch_args(args: &[String], requested_seed: Option<u32>) -> (Vec<String>, Option<u32>) {
+pub(crate) fn resolve_launch_args(
+    args: &[String],
+    requested_seed: Option<u32>,
+) -> (Vec<String>, Option<u32>) {
     let uses_random_seed = args.iter().any(|arg| arg.contains(RANDOM_SEED_PLACEHOLDER));
     let random_seed = requested_seed.unwrap_or_else(rand::random::<u32>);
     let random_seed_text = random_seed.to_string();

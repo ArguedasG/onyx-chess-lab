@@ -4,8 +4,11 @@ Fecha: 2026-09-07. Alcance inicial: Windows x64, NSIS, un único canal estable y
 público en `ArguedasG/onyx-chess-lab`. macOS y Linux permanecen pendientes de Fase 9.
 
 Estado al 2026-09-07: `v0.15.2` se construyó y firmó en GitHub Actions, se publicó como transición y
-se instaló manualmente. El usuario validó el caso «sin actualización» contra el feed público. El
-cierre del P0 continúa pendiente de la prueba real `0.15.2 → 0.15.3` y las pruebas negativas.
+se instaló manualmente. Después se publicó `v0.15.3`: el usuario validó la detección, confirmación,
+descarga, firma, instalación, reapertura y conservación de un repertorio en el recorrido real
+`0.15.2 → 0.15.3`. El canal Windows x64 queda operativo y permite avanzar a Fase 5.3. Las pruebas
+negativas de red, firma y paquete alterado continúan como endurecimiento pendiente antes de cerrar
+por completo la auditoría P0.
 
 ## Contrato del canal
 
@@ -44,14 +47,31 @@ publicar la transición. Ninguno de esos archivos debe añadirse a Git.
 
 ## Flujo de release
 
-1. Ejecutar pruebas, typecheck, lint, auditorías y build local.
-2. Confirmar que `package.json` y `src-tauri/Cargo.toml` tienen la misma versión.
-3. Crear y subir el tag `vX.Y.Z` únicamente desde el commit aprobado.
-4. GitHub Actions construye Windows x64 NSIS, firma el artefacto y genera `latest.json`.
-5. La release queda como borrador. Revisar versión, notas, instalador, `.sig`, `latest.json` y hashes.
-6. Instalar el candidato manualmente en el equipo de prueba y publicar la release solo al aprobarlo.
-7. Tras publicarla, comprobar **Buscar actualizaciones** desde la versión anterior y después el
+Hacer merge o push a `main` no publica nada por sí solo. El workflow actual solo se activa al subir
+un tag `v*` y crea una release en borrador. El número de versión no se deduce de los
+commits.
+
+1. Terminar y revisar el trabajo en `dev`.
+2. Elegir `X.Y.Z` y actualizar el mismo valor, sin prefijo `v`, en `package.json` y
+   `src-tauri/Cargo.toml`. Regenerar `src-tauri/Cargo.lock` con Cargo y confirmar que el paquete raíz
+   contiene esa versión.
+3. Ejecutar pruebas, typecheck, lint, auditorías y build local; guardar el cambio de versión en el
+   mismo conjunto que se va a publicar.
+4. Integrar `dev` en `main`, subir `main` y comprobar que el commit remoto es exactamente el
+   candidato aprobado.
+5. Crear el tag anotado `vX.Y.Z` sobre ese commit de `main` y subir el tag. No reutilizar ni mover un
+   tag publicado. El workflow rechaza automáticamente si el tag no coincide con las tres versiones
+   o no apunta al commit actual de `origin/main`.
+6. GitHub Actions construye Windows x64 NSIS, firma el artefacto y genera `latest.json`.
+7. La release queda como borrador. Revisar versión, notas, instalador, `.sig`, `latest.json` y hashes.
+8. Instalar el candidato manualmente en el equipo de prueba y publicar la release solo al aprobarlo.
+9. Tras publicarla, comprobar **Buscar actualizaciones** desde la versión anterior y después el
    arranque de la versión instalada.
+
+Mientras la release sea borrador, los usuarios no reciben el aviso. Al publicarla como release
+estable pasa a ser la release `latest`, el endpoint comienza a servir su `latest.json` y las builds
+anteriores la ofrecen al iniciar. Por tanto, la publicación manual sigue siendo la puerta de
+aprobación; no se debe publicar automáticamente en cada merge a `main`.
 
 ## Transición y validación obligatoria
 
@@ -59,8 +79,7 @@ publicar la transición. Ninguno de esos archivos debe añadirse a Git.
   Onyx y conserva sus datos actuales.
 - `0.15.2` está publicada e instalada; la comprobación manual devuelve correctamente que Onyx está
   actualizado cuando el feed anuncia la misma versión.
-- `0.15.3` debe demostrar el recorrido completo `0.15.2 → 0.15.3`
-  antes de considerar cerrado el P0.
+- `0.15.3` demostró el recorrido completo `0.15.2 → 0.15.3`, incluida la conservación de datos.
 - Probar: sin actualización, actualización aceptada, cancelación antes de descargar, red caída,
   metadatos inválidos, firma incorrecta, paquete ajeno, conservación de datos y reapertura.
 - Conservar el instalador manual de la última versión válida. La primera implementación no promete

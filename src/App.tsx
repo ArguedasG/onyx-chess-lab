@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Autocomplete,
+  Badge,
   createTheme,
   Input,
   localStorageColorSchemeManager,
@@ -250,6 +251,11 @@ export default function App() {
         defaultProps: {
           variant: "transparent",
           color: "gray",
+        },
+      }),
+      Badge: Badge.extend({
+        styles: {
+          root: { flexShrink: 0 },
         },
       }),
       TextInput: TextInput.extend({ defaultProps: { spellCheck } }),

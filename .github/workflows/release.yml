@@ -3,7 +3,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 jobs:
   release:
@@ -38,6 +37,18 @@ jobs:
         with:
           node-version: "lts/*"
           cache: "pnpm"
+
+      - name: Verify release version
+        run: node scripts/verify-release-version.mjs
+
+      - name: Verify tag points to main
+        shell: pwsh
+        run: |
+          git fetch origin main --depth=1
+          $mainSha = git rev-parse origin/main
+          if ($mainSha -ne $env:GITHUB_SHA) {
+            throw "Release tag must point to the current origin/main commit. main=$mainSha tag=$env:GITHUB_SHA"
+          }
 
       - name: Install app dependencies
         run: pnpm install --frozen-lockfile

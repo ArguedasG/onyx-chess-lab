@@ -3520,6 +3520,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "shakmaty",
  "specta",
  "specta-typescript",

@@ -16,6 +16,7 @@ type Props = {
     inProgress: string;
     finalizing?: string;
   };
+  finalizingAt?: number;
   disabled?: boolean;
   redoable?: boolean;
   inProgress: boolean;
@@ -29,6 +30,7 @@ function ProgressButton({
   onCancel,
   leftIcon,
   labels,
+  finalizingAt = 100,
   disabled,
   redoable,
   inProgress,
@@ -58,7 +60,7 @@ function ProgressButton({
     label = labels.completed;
   } else {
     if (progress === 0 && !showProgress) label = labels.action;
-    else if (progress === 100) label = labels.finalizing ?? labels.inProgress;
+    else if (progress >= finalizingAt) label = labels.finalizing ?? labels.inProgress;
     else label = labels.inProgress;
   }
 

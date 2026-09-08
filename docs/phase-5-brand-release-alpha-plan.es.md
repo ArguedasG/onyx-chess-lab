@@ -120,8 +120,9 @@ no forman parte del criterio de salida de esta primera implementación.
 Estado técnico al 2026-09-07: repositorio público, endpoint propio, par de claves cifrado, secretos
 de Actions, integración Tauri, auditoría de aislamiento y workflow Windows configurados. `v0.15.2`
 se construyó, firmó y publicó mediante el workflow; el usuario validó su instalación manual y el caso
-«sin actualización». Falta validar `0.15.2 → 0.15.3` y las pruebas negativas; por ello la puerta P0
-continúa abierta.
+«sin actualización». Después validó `0.15.2 → 0.15.3`, incluida la reapertura y conservación de un
+repertorio. El canal Windows x64 queda operativo; las pruebas negativas permanecen como cierre de la
+auditoría P0.
 
 ### Paso 3 — Estabilización y capa visual de marca
 
@@ -155,6 +156,11 @@ pesos permite redistribuirlo. Si no es viable, la aplicación realizará una ins
 automática como sea posible y seguirá ocultando la configuración UCI al usuario. La alpha no se
 considerará preparada mientras una instalación limpia no pueda usar Maia inmediatamente desde
 Jugar, bots humanos, Finales y el Generador de partidas modelo.
+
+Estado al 2026-09-07: implementación Windows x64 completada con instalación administrada, versiones
+fijadas, verificación SHA-256 del bootstrap, comprobación UCI, progreso, cancelación, reparación,
+registro y desinstalación aislada. Pendiente la matriz manual desde un ejecutable empaquetado descrita
+en `docs/managed-maia3.es.md`.
 
 ### Paso 4 — Alpha privada
 

@@ -33,6 +33,7 @@ import { formatBytes } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
 import ProgressButton from "../common/ProgressButton";
 import EngineForm from "./EngineForm";
+import ManagedMaiaCard from "./ManagedMaiaCard";
 
 function AddEngine({
   opened,
@@ -94,6 +95,7 @@ function AddEngine({
           )}
           <ScrollArea.Autosize mah={720} offsetScrollbars>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
+              {os === "windows" && <ManagedMaiaCard opened={opened} />}
               {defaultEngines?.map((engine, i) => (
                 <EngineCard
                   engine={engine}

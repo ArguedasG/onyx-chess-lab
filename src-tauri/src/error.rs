@@ -128,6 +128,9 @@ pub enum Error {
 
     #[error("Search stopped")]
     SearchCancelled,
+
+    #[error("Managed engine error: {0}")]
+    ManagedEngine(String),
 }
 
 impl From<std::io::Error> for Error {

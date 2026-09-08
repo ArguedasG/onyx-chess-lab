@@ -759,6 +759,33 @@ async getProgress(id: string) : Promise<ProgressItem | null> {
 async clearProgress(id: string) : Promise<void> {
     await TAURI_INVOKE("clear_progress", { id });
 },
+async getManagedMaiaStatus(enginesDir: string) : Promise<Result<ManagedMaiaStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_managed_maia_status", { enginesDir }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async installManagedMaia(id: string, enginesDir: string, repair: boolean) : Promise<Result<ManagedMaiaInstallation, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_managed_maia", { id, enginesDir, repair }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelManagedMaiaInstall(id: string) : Promise<boolean> {
+    return await TAURI_INVOKE("cancel_managed_maia_install", { id });
+},
+async uninstallManagedMaia(enginesDir: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("uninstall_managed_maia", { enginesDir }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSoundServerPort() : Promise<Result<number, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_sound_server_port") };
@@ -852,6 +879,8 @@ export type GameState = { gameId: string; status: GameStatus; initialFen: string
 export type GameStatus = "playing" | { finished: { result: GameResult } }
 export type GoMode = { t: "PlayersTime"; c: PlayersTime } | { t: "Depth"; c: number } | { t: "Time"; c: number } | { t: "Nodes"; c: number } | { t: "Infinite" }
 export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: number; maxThinkTimeMs: number; repertoireTimePercent: number }
+export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
+export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
 export type ManifestHardware = { operatingSystem: string; architecture: string; logicalCpus: bigint }
 export type ModelGameBatchConfig = { ownerId: string; gameConfig: GameConfig; gameCount: number; alternateColors: boolean; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number }
 export type ModelGameBatchEvent = { state: ModelGameBatchState }

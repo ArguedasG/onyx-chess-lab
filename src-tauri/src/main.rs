@@ -12,6 +12,7 @@ mod game;
 
 mod fs;
 mod lexer;
+mod managed_engine;
 mod model_game_batch;
 mod model_game_experiment;
 mod oauth;
@@ -31,6 +32,10 @@ use db::{generate_opening_report, get_position_game, get_position_games, query_p
 use db::{ActivePositionSearches, DatabaseProgress, GameQuery, PositionSearchCache};
 use derivative::Derivative;
 use game::GameManager;
+use managed_engine::{
+    cancel_managed_maia_install, get_managed_maia_status, install_managed_maia,
+    uninstall_managed_maia,
+};
 use model_game_batch::ModelGameBatchManager;
 use model_game_experiment::{
     analyze_model_game_experiment, analyze_model_game_experiment_empirical_wdl,
@@ -126,6 +131,7 @@ pub struct AppState {
     model_game_batch_manager: ModelGameBatchManager,
     bot_league_manager: BotLeagueManager,
     progress_state: ProgressStore,
+    managed_install_cancel_flags: DashMap<String, Arc<AtomicBool>>,
 }
 
 #[tauri::command]
@@ -239,6 +245,10 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             preload_reference_db,
             get_progress,
             clear_progress,
+            get_managed_maia_status,
+            install_managed_maia,
+            cancel_managed_maia_install,
+            uninstall_managed_maia,
             get_sound_server_port
         ))
         .events(tauri_specta::collect_events!(
