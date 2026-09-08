@@ -3,9 +3,9 @@
 Fecha: 2026-09-07. Alcance inicial: Windows x64, NSIS, un único canal estable y GitHub Releases
 público en `ArguedasG/onyx-chess-lab`. macOS y Linux permanecen pendientes de Fase 9.
 
-Estado al 2026-09-07: la implementación técnica está preparada y la build local firmada de `0.15.2`
-se generó correctamente. El cierre del P0 continúa pendiente de la release borrador, la instalación
-manual de transición y la prueba real `0.15.2 → 0.15.3`.
+Estado al 2026-09-07: `v0.15.2` se construyó y firmó en GitHub Actions, se publicó como transición y
+se instaló manualmente. El usuario validó el caso «sin actualización» contra el feed público. El
+cierre del P0 continúa pendiente de la prueba real `0.15.2 → 0.15.3` y las pruebas negativas.
 
 ## Contrato del canal
 
@@ -57,8 +57,8 @@ publicar la transición. Ninguno de esos archivos debe añadirse a Git.
 
 - `0.15.2` es la transición que los usuarios instalan manualmente; incorpora el canal firmado de
   Onyx y conserva sus datos actuales.
-- `0.15.2` ya compila localmente como NSIS firmado; todavía no se ha publicado ni instalado como
-  transición.
+- `0.15.2` está publicada e instalada; la comprobación manual devuelve correctamente que Onyx está
+  actualizado cuando el feed anuncia la misma versión.
 - `0.15.3` debe demostrar el recorrido completo `0.15.2 → 0.15.3`
   antes de considerar cerrado el P0.
 - Probar: sin actualización, actualización aceptada, cancelación antes de descargar, red caída,

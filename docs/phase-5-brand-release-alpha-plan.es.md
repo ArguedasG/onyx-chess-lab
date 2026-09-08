@@ -118,9 +118,10 @@ aprobación manual. macOS Intel, macOS Apple Silicon y Linux quedan pendientes e
 no forman parte del criterio de salida de esta primera implementación.
 
 Estado técnico al 2026-09-07: repositorio público, endpoint propio, par de claves cifrado, secretos
-de Actions, integración Tauri, auditoría de aislamiento y workflow Windows configurados. La build
-local `0.15.2` produjo instalador NSIS y firma. Faltan revisar/publicar la transición y validar
-`0.15.2 → 0.15.3`; por ello la puerta P0 continúa abierta.
+de Actions, integración Tauri, auditoría de aislamiento y workflow Windows configurados. `v0.15.2`
+se construyó, firmó y publicó mediante el workflow; el usuario validó su instalación manual y el caso
+«sin actualización». Falta validar `0.15.2 → 0.15.3` y las pruebas negativas; por ello la puerta P0
+continúa abierta.
 
 ### Paso 3 — Estabilización y capa visual de marca
 

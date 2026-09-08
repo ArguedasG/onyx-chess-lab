@@ -1,6 +1,6 @@
 [package]
 name = "onyx-chess-lab"
-version = "0.15.2"
+version = "0.15.3"
 description = "A local-first chess study and training lab"
 authors = ["Francisco Salgueiro <fgcdbs@gmail.com>"]
 license = "GPL-3.0-only"
