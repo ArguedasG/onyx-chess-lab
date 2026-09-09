@@ -1,5 +1,6 @@
 import { Paper, Portal, Stack, Tabs } from "@mantine/core";
 import { useHotkeys, useToggle } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import {
   IconDatabase,
   IconInfoCircle,
@@ -99,31 +100,37 @@ function BoardAnalysis() {
     }
   }, [setCurrentTab, currentTab, documentDir, store, tabFile, setTrainingAreas]);
   const userSaveFile = useCallback(async () => {
-    const saved = await saveToFile({
-      dir: documentDir,
-      setCurrentTab,
-      tab: currentTab,
-      store,
-      isUserSave: true,
-    });
-    if (saved && tabFile?.metadata.type === "repertoire" && currentTab) {
-      const gameNumber =
-        currentTab.gameOrigin.kind === "file" || currentTab.gameOrigin.kind === "temp_file"
-          ? currentTab.gameOrigin.gameNumber
-          : 0;
-      const state = store.getState();
-      setTrainingAreas((previous) => {
-        const openings = syncOpeningVariantTree(
-          previous.openings,
-          tabFile.path,
-          gameNumber,
-          state.root,
-          state.headers,
-        );
-        return openings === previous.openings ? previous : { ...previous, openings };
+    try {
+      const saved = await saveToFile({
+        dir: documentDir,
+        setCurrentTab,
+        tab: currentTab,
+        store,
+        isUserSave: true,
       });
+      if (!saved) return;
+      if (tabFile?.metadata.type === "repertoire" && currentTab) {
+        const gameNumber =
+          currentTab.gameOrigin.kind === "file" || currentTab.gameOrigin.kind === "temp_file"
+            ? currentTab.gameOrigin.gameNumber
+            : 0;
+        const state = store.getState();
+        setTrainingAreas((previous) => {
+          const openings = syncOpeningVariantTree(
+            previous.openings,
+            tabFile.path,
+            gameNumber,
+            state.root,
+            state.headers,
+          );
+          return openings === previous.openings ? previous : { ...previous, openings };
+        });
+      }
+      notifications.show({ color: "green", message: t("Pgn.SaveSuccess") });
+    } catch (error) {
+      notifications.show({ color: "red", message: String(error) });
     }
-  }, [setCurrentTab, currentTab, documentDir, store, tabFile, setTrainingAreas]);
+  }, [setCurrentTab, currentTab, documentDir, store, tabFile, setTrainingAreas, t]);
 
   const generateModelGameFromPosition = useCallback(async () => {
     const pgn = buildModelGameSourcePgn(root, headers, position);

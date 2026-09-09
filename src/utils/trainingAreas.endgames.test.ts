@@ -5,10 +5,14 @@ import { describe, expect, it } from "vitest";
 import {
     addEndgameSet,
     createEmptyTrainingAreas,
+    endgameOutcomeGuessFromObjective,
     endgameObjectiveFromTablebase,
     installBundledEndgameSets,
+    isEndgamePositionCompleted,
     parseEndgameRecordMetadata,
     persistedTrainingAreasSchema,
+    recordEndgameAttempt,
+    recordEndgameRecognitionAttempt,
     updateEndgameObjective,
     updateEndgameStudentColor,
 } from "./trainingAreas";
@@ -193,5 +197,96 @@ describe("endgame student color", () => {
         expect(endgameObjectiveFromTablebase("win", "white", "black")).toBe("loss");
         expect(endgameObjectiveFromTablebase("loss", "white", "black")).toBe("win");
         expect(endgameObjectiveFromTablebase("draw", "white", "black")).toBe("draw");
+    });
+
+    it("turns the training objective into an absolute board result", () => {
+        expect(endgameOutcomeGuessFromObjective("win", "white")).toBe("white");
+        expect(endgameOutcomeGuessFromObjective("win", "black")).toBe("black");
+        expect(endgameOutcomeGuessFromObjective("loss", "white")).toBe("black");
+        expect(endgameOutcomeGuessFromObjective("loss", "black")).toBe("white");
+        expect(endgameOutcomeGuessFromObjective("draw", "black")).toBe("draw");
+        expect(endgameOutcomeGuessFromObjective("unknown", "white")).toBeNull();
+    });
+
+    it("records recognition separately from playing the endgame", () => {
+        const initial = createEmptyTrainingAreas();
+        const withSet = addEndgameSet(initial.endgames, "Prueba", "", [
+            { ...whiteToMoveRecord, endgameObjective: "win", endgameStudentColor: "white" },
+        ]);
+        const positionId = Object.keys(withSet.positions)[0];
+
+        const correct = recordEndgameRecognitionAttempt(withSet, positionId, {
+            guess: "white",
+            timeMs: 1200,
+        });
+        const unsure = recordEndgameRecognitionAttempt(correct, positionId, {
+            guess: null,
+            timeMs: 800,
+        });
+
+        expect(unsure.positions[positionId].progress).toMatchObject({
+            attempts: 0,
+            successes: 0,
+            completed: false,
+            recognition: {
+                attempts: 2,
+                successes: 1,
+                failures: 1,
+                totalTimeMs: 2000,
+                lastGuess: null,
+                lastCorrect: false,
+            },
+        });
+    });
+
+    it("only completes a position after a successful played attempt", () => {
+        const initial = createEmptyTrainingAreas();
+        const withSet = addEndgameSet(initial.endgames, "Prueba", "", [
+            { ...whiteToMoveRecord, endgameObjective: "win", endgameStudentColor: "white" },
+        ]);
+        const positionId = Object.keys(withSet.positions)[0];
+        const recognized = recordEndgameRecognitionAttempt(withSet, positionId, {
+            guess: "white",
+            timeMs: 500,
+        });
+        const failedPlay = recordEndgameAttempt(recognized, positionId, {
+            outcome: "0-1",
+            success: false,
+            timeMs: 1_000,
+        });
+        const successfulPlay = recordEndgameAttempt(failedPlay, positionId, {
+            outcome: "1-0",
+            success: true,
+            timeMs: 1_000,
+        });
+
+        expect(isEndgamePositionCompleted(recognized.positions[positionId])).toBe(false);
+        expect(isEndgamePositionCompleted(failedPlay.positions[positionId])).toBe(false);
+        expect(isEndgamePositionCompleted(successfulPlay.positions[positionId])).toBe(true);
+    });
+
+    it("migrates existing endgame progress with empty recognition statistics", () => {
+        const initial = createEmptyTrainingAreas();
+        const withSet = addEndgameSet(initial.endgames, "Prueba", "", [whiteToMoveRecord]);
+        const positionId = Object.keys(withSet.positions)[0];
+        const legacy = JSON.parse(
+            JSON.stringify({ ...initial, schemaVersion: 10, endgames: withSet }),
+        ) as Record<string, unknown>;
+        delete (
+            legacy.endgames as {
+                positions: Record<string, { progress: Record<string, unknown> }>;
+            }
+        ).positions[positionId].progress.recognition;
+
+        const migrated = persistedTrainingAreasSchema.parse(legacy);
+
+        expect(migrated.schemaVersion).toBe(11);
+        expect(migrated.endgames.positions[positionId].progress.recognition).toMatchObject({
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            lastGuess: null,
+            lastCorrect: null,
+        });
     });
 });

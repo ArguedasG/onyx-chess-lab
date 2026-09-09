@@ -3,6 +3,7 @@ import i18n from "i18next";
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Container,
@@ -26,7 +27,9 @@ import {
   IconChess,
   IconChevronRight,
   IconDatabase,
-  IconLock,
+  IconDice5,
+  IconEye,
+  IconHelpCircle,
   IconPlayerPlay,
   IconSearch,
   IconTrash,
@@ -45,6 +48,7 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { Chessground } from "@/chessground/Chessground";
 import { positionFromFen } from "@/utils/chessops";
 import type { LocalEngine } from "@/utils/engines";
 import { isMaiaEngine, MAIA_ELO_MAX } from "@/utils/humanBots";
@@ -53,12 +57,16 @@ import { launchTrainingPosition } from "@/utils/trainingLaunch";
 import {
   addEndgameSet,
   deleteEndgameSet,
+  endgameOutcomeGuessFromObjective,
   endgameObjectiveFromTablebase,
   getEndgameSetProgress,
   installBundledEndgameSets,
+  isEndgamePositionCompleted,
   parseTrainingRecords,
+  recordEndgameRecognitionAttempt,
   updateEndgameObjective,
   type EndgamePosition,
+  type EndgameOutcomeGuess,
   type EndgameSet,
   type EndgameTheme,
   type TrainingObjective,
@@ -66,6 +74,17 @@ import {
 
 const BUNDLED_ENDGAMES_VERSION = 2;
 const bundledEndgameFiles = ["FinalesParte1.pgn", "FinalesParte2.pgn", "FinalesParte3.pgn"];
+
+type OutcomeQuizState = {
+  position: EndgamePosition;
+  setId: string;
+  startedAt: number;
+  result: null | {
+    guess: EndgameOutcomeGuess | null;
+    expected: EndgameOutcomeGuess;
+    correct: boolean;
+  };
+};
 
 const getThemeMetadata = (
   trainingT: typeof i18n.t = i18n.t,
@@ -133,19 +152,6 @@ function filename(path: string, trainingT: typeof i18n.t = i18n.t) {
   );
 }
 
-function objectiveLabel(objective: TrainingObjective, trainingT: typeof i18n.t = i18n.t) {
-  return {
-    win: trainingT("Training.Copy.Win.fc572f64", "Win"),
-    draw: trainingT("Training.Copy.Holdadraw.1c931742", "Hold a draw"),
-    loss: trainingT("Training.Copy.Defend.69d716e2", "Defend"),
-    unknown: trainingT("Training.Copy.Tobedetermined.20317191", "To be determined"),
-  }[objective];
-}
-
-function objectiveColor(objective: TrainingObjective) {
-  return objective === "win" ? "teal" : objective === "draw" ? "blue" : "gray";
-}
-
 export default function EndgameTrainingV2Page() {
   const { t: trainingT } = useTrainingTranslation();
 
@@ -167,7 +173,9 @@ export default function EndgameTrainingV2Page() {
   const [feedback, setFeedback] = useState<{ text: string; color?: string } | null>(null);
   const [resolvingSetId, setResolvingSetId] = useState<string | null>(null);
   const [deletingSetId, setDeletingSetId] = useState<string | null>(null);
+  const [outcomeQuiz, setOutcomeQuiz] = useState<OutcomeQuizState | null>(null);
   const bundledLoadStarted = useRef(false);
+  const lastRandomPositionId = useRef<string | null>(null);
 
   const sets = useMemo(() => Object.values(areas.endgames.sets), [areas.endgames.sets]);
   const bundledSets = sets.filter((set) => set.origin === "bundled");
@@ -185,8 +193,8 @@ export default function EndgameTrainingV2Page() {
   const visibleThemePositions = selectedTheme
     ? bundledPositions.filter(({ position }) => position.theme === selectedTheme)
     : [];
-  const includedCompleted = bundledPositions.filter(
-    ({ position }) => position.progress.completed,
+  const includedCompleted = bundledPositions.filter(({ position }) =>
+    isEndgamePositionCompleted(position),
   ).length;
 
   const engines = useMemo(() => storedEngines ?? [], [storedEngines]);
@@ -360,6 +368,73 @@ export default function EndgameTrainingV2Page() {
         "manual",
       ),
     }));
+  }
+
+  function openOutcomeQuiz(position: EndgamePosition, setId: string) {
+    if (!endgameOutcomeGuessFromObjective(position.objective, position.studentColor)) {
+      setFeedback({
+        text: trainingT(
+          "Endgames.Quiz.UnknownObjective",
+          "Calculate or set this position's objective before training its result.",
+        ),
+        color: "yellow",
+      });
+      return;
+    }
+    setOutcomeQuiz({ position, setId, startedAt: Date.now(), result: null });
+  }
+
+  function answerOutcomeQuiz(guess: EndgameOutcomeGuess | null) {
+    if (!outcomeQuiz || outcomeQuiz.result) return;
+    const expected = endgameOutcomeGuessFromObjective(
+      outcomeQuiz.position.objective,
+      outcomeQuiz.position.studentColor,
+    );
+    if (!expected) return;
+    setAreas((previous) => ({
+      ...previous,
+      endgames: recordEndgameRecognitionAttempt(previous.endgames, outcomeQuiz.position.id, {
+        guess,
+        timeMs: Date.now() - outcomeQuiz.startedAt,
+      }),
+    }));
+    setOutcomeQuiz((current) =>
+      current
+        ? {
+            ...current,
+            result: { guess, expected, correct: guess === expected },
+          }
+        : current,
+    );
+  }
+
+  function outcomeGuessLabel(guess: EndgameOutcomeGuess) {
+    if (guess === "white") return trainingT("Endgames.Quiz.WhiteWins", "White wins");
+    if (guess === "black") return trainingT("Endgames.Quiz.BlackWins", "Black wins");
+    return trainingT("Endgames.Quiz.Draw", "Draw");
+  }
+
+  function trainRandomThemePosition() {
+    const candidates = visibleThemePositions.filter(({ position }) =>
+      endgameOutcomeGuessFromObjective(position.objective, position.studentColor),
+    );
+    if (candidates.length === 0) {
+      setFeedback({
+        text: trainingT(
+          "Endgames.Quiz.NoRandomCandidates",
+          "There are no positions with a defined objective in this theme.",
+        ),
+        color: "yellow",
+      });
+      return;
+    }
+    const pool =
+      candidates.length > 1
+        ? candidates.filter(({ position }) => position.id !== lastRandomPositionId.current)
+        : candidates;
+    const selected = pool[Math.floor(Math.random() * pool.length)];
+    lastRandomPositionId.current = selected.position.id;
+    openOutcomeQuiz(selected.position, selected.setId);
   }
 
   async function playPosition(position: EndgamePosition, setId: string) {
@@ -551,10 +626,19 @@ export default function EndgameTrainingV2Page() {
             </Text>
           </div>
           {selectedTheme && (
-            <Button variant="default" onClick={() => setSelectedTheme(null)}>
-              {" "}
-              {trainingT("Training.Copy.Viewallthemes.67a3bfda", "View all themes")}{" "}
-            </Button>
+            <Group>
+              <Button
+                color="teal"
+                leftSection={<IconDice5 size={16} />}
+                onClick={trainRandomThemePosition}
+              >
+                {trainingT("Endgames.Quiz.RandomPosition", "Random position")}
+              </Button>
+              <Button variant="default" onClick={() => setSelectedTheme(null)}>
+                {" "}
+                {trainingT("Training.Copy.Viewallthemes.67a3bfda", "View all themes")}{" "}
+              </Button>
+            </Group>
           )}
         </Group>
 
@@ -565,8 +649,8 @@ export default function EndgameTrainingV2Page() {
                 ({ position }) => position.theme === theme.id,
               );
               if (positions.length === 0) return null;
-              const completed = positions.filter(
-                ({ position }) => position.progress.completed,
+              const completed = positions.filter(({ position }) =>
+                isEndgamePositionCompleted(position),
               ).length;
               return (
                 <Card key={theme.id} withBorder>
@@ -616,8 +700,9 @@ export default function EndgameTrainingV2Page() {
                 key={position.id}
                 position={position}
                 index={index}
-                onPlay={() => playPosition(position, setId)}
+                onTrain={() => openOutcomeQuiz(position, setId)}
                 onAnalyze={() => analyzePosition(position)}
+                onPlay={() => playPosition(position, setId)}
               />
             ))}
           </SimpleGrid>
@@ -746,7 +831,7 @@ export default function EndgameTrainingV2Page() {
                               ]}
                               onChange={(value) => setManualObjective(position.id, value)}
                             />
-                            {position.progress.completed && (
+                            {isEndgamePositionCompleted(position) && (
                               <Badge color="teal" leftSection={<IconCheck size={12} />}>
                                 {" "}
                                 {trainingT("Training.Copy.Completed.856641d2", "Completed")}{" "}
@@ -764,11 +849,20 @@ export default function EndgameTrainingV2Page() {
                             <Button
                               size="xs"
                               variant="subtle"
+                              leftSection={<IconEye size={14} />}
+                              onClick={() => openOutcomeQuiz(position, set.id)}
+                            >
+                              {" "}
+                              {trainingT("Endgames.Quiz.Train", "Train")}{" "}
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="subtle"
+                              color="teal"
                               leftSection={<IconPlayerPlay size={14} />}
                               onClick={() => playPosition(position, set.id)}
                             >
-                              {" "}
-                              {trainingT("Training.Copy.Play.b61eda6f", "Play")}{" "}
+                              {trainingT("Endgames.Quiz.PlayDirectly", "Play directly")}
                             </Button>
                           </Group>
                         </Group>
@@ -819,6 +913,133 @@ export default function EndgameTrainingV2Page() {
       </Stack>
 
       <Modal
+        opened={outcomeQuiz !== null}
+        onClose={() => setOutcomeQuiz(null)}
+        title={outcomeQuiz?.position.title}
+        fullScreen
+      >
+        {outcomeQuiz && (
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl">
+            <Box w="min(84vh, 100%)" mx="auto">
+              <Chessground
+                fen={outcomeQuiz.position.fen}
+                orientation={outcomeQuiz.position.studentColor}
+                coordinates
+                viewOnly
+              />
+            </Box>
+            <Stack justify="center">
+              <div>
+                <Badge color="orange" variant="light">
+                  {outcomeQuiz.position.fen.trim().split(/\s+/)[1] === "b"
+                    ? trainingT("Endgames.Quiz.BlackToMove", "Black to move")
+                    : trainingT("Endgames.Quiz.WhiteToMove", "White to move")}
+                </Badge>
+                <Title order={4} mt="sm">
+                  {trainingT("Endgames.Quiz.Question", "What is the result with best play?")}
+                </Title>
+                <Text size="sm" c="dimmed" mt={4}>
+                  {trainingT(
+                    "Endgames.Quiz.Instruction",
+                    "Evaluate the initial position before moving any piece.",
+                  )}
+                </Text>
+              </div>
+
+              {!outcomeQuiz.result ? (
+                <Stack gap="xs">
+                  <Button variant="light" onClick={() => answerOutcomeQuiz("white")}>
+                    {trainingT("Endgames.Quiz.WhiteWins", "White wins")}
+                  </Button>
+                  <Button variant="light" onClick={() => answerOutcomeQuiz("draw")}>
+                    {trainingT("Endgames.Quiz.Draw", "Draw")}
+                  </Button>
+                  <Button variant="light" onClick={() => answerOutcomeQuiz("black")}>
+                    {trainingT("Endgames.Quiz.BlackWins", "Black wins")}
+                  </Button>
+                  <Button
+                    variant="default"
+                    leftSection={<IconHelpCircle size={16} />}
+                    onClick={() => answerOutcomeQuiz(null)}
+                  >
+                    {trainingT("Endgames.Quiz.ShowAnswer", "I don't know · Show answer")}
+                  </Button>
+                  <Button
+                    color="teal"
+                    variant="light"
+                    leftSection={<IconPlayerPlay size={16} />}
+                    onClick={() => {
+                      const { position, setId } = outcomeQuiz;
+                      setOutcomeQuiz(null);
+                      void playPosition(position, setId);
+                    }}
+                  >
+                    {trainingT("Endgames.Quiz.PlayDirectly", "Play directly")}
+                  </Button>
+                </Stack>
+              ) : (
+                <Stack>
+                  <Alert
+                    color={
+                      outcomeQuiz.result.correct
+                        ? "teal"
+                        : outcomeQuiz.result.guess === null
+                          ? "yellow"
+                          : "red"
+                    }
+                  >
+                    <Text fw={600}>
+                      {outcomeQuiz.result.correct
+                        ? trainingT("Endgames.Quiz.Correct", "Correct")
+                        : outcomeQuiz.result.guess === null
+                          ? trainingT(
+                              "Endgames.Quiz.Revealed",
+                              "Answer shown · counted as a failed attempt",
+                            )
+                          : trainingT("Endgames.Quiz.Incorrect", "Not quite")}
+                    </Text>
+                    <Text size="sm">
+                      {trainingT("Endgames.Quiz.Answer", "The theoretical result is: {{result}}.", {
+                        result: outcomeGuessLabel(outcomeQuiz.result.expected),
+                      })}
+                    </Text>
+                  </Alert>
+                  <Text size="sm" c="dimmed">
+                    {trainingT(
+                      "Endgames.Quiz.NextStep",
+                      "Analyze the position to understand it, or demonstrate the result by playing the current endgame exercise.",
+                    )}
+                  </Text>
+                  <Button
+                    variant="default"
+                    leftSection={<IconSearch size={16} />}
+                    onClick={() => {
+                      const position = outcomeQuiz.position;
+                      setOutcomeQuiz(null);
+                      void analyzePosition(position);
+                    }}
+                  >
+                    {trainingT("Endgames.Quiz.Analyze", "Analyze position")}
+                  </Button>
+                  <Button
+                    color="teal"
+                    leftSection={<IconPlayerPlay size={16} />}
+                    onClick={() => {
+                      const { position, setId } = outcomeQuiz;
+                      setOutcomeQuiz(null);
+                      void playPosition(position, setId);
+                    }}
+                  >
+                    {trainingT("Endgames.Quiz.Demonstrate", "Demonstrate by playing")}
+                  </Button>
+                </Stack>
+              )}
+            </Stack>
+          </SimpleGrid>
+        )}
+      </Modal>
+
+      <Modal
         opened={deletingSetId !== null}
         onClose={() => setDeletingSetId(null)}
         title={trainingT("Training.Copy.Deleteset.0d8bbde1", "Delete set")}
@@ -851,13 +1072,15 @@ export default function EndgameTrainingV2Page() {
 function EndgamePositionCard({
   position,
   index,
-  onPlay,
+  onTrain,
   onAnalyze,
+  onPlay,
 }: {
   position: EndgamePosition;
   index: number;
-  onPlay: () => void;
+  onTrain: () => void;
   onAnalyze: () => void;
+  onPlay: () => void;
 }) {
   const { t: trainingT } = useTrainingTranslation();
 
@@ -867,7 +1090,7 @@ function EndgamePositionCard({
         <div>
           <Group justify="space-between">
             <Badge variant="outline">{index + 1}</Badge>
-            {position.progress.completed ? (
+            {isEndgamePositionCompleted(position) ? (
               <Badge color="teal" leftSection={<IconTrophy size={12} />}>
                 {" "}
                 {trainingT("Training.Copy.Completed.856641d2", "Completed")}{" "}
@@ -882,14 +1105,17 @@ function EndgamePositionCard({
           <Text size="xs" c="dimmed" ff="monospace" truncate mt={4}>
             {position.fen}
           </Text>
-          <Badge
-            mt="sm"
-            color={objectiveColor(position.objective)}
-            variant="light"
-            leftSection={<IconLock size={11} />}
-          >
-            {objectiveLabel(position.objective, trainingT)}
+          <Badge mt="sm" color="orange" variant="light" leftSection={<IconEye size={11} />}>
+            {trainingT("Endgames.Quiz.PredictResult", "Predict the result")}
           </Badge>
+          {position.progress.recognition.attempts > 0 && (
+            <Text size="xs" c="dimmed" mt="sm">
+              {trainingT("Endgames.Quiz.Score", "Recognition: {{correct}}/{{attempts}}", {
+                correct: position.progress.recognition.successes,
+                attempts: position.progress.recognition.attempts,
+              })}
+            </Text>
+          )}
           {position.progress.attempts > 0 && (
             <Text size="xs" c="dimmed" mt="sm">
               {position.progress.successes}{" "}
@@ -899,16 +1125,24 @@ function EndgamePositionCard({
             </Text>
           )}
         </div>
-        <Group grow mt="md">
+        <SimpleGrid cols={3} spacing="xs" mt="md">
           <Button variant="default" leftSection={<IconSearch size={15} />} onClick={onAnalyze}>
             {" "}
             {trainingT("Training.Copy.Analyze.67ffbe0d", "Analyze")}{" "}
           </Button>
-          <Button color="teal" leftSection={<IconPlayerPlay size={15} />} onClick={onPlay}>
+          <Button color="teal" leftSection={<IconEye size={15} />} onClick={onTrain}>
             {" "}
-            {trainingT("Training.Copy.Play.b61eda6f", "Play")}{" "}
+            {trainingT("Endgames.Quiz.Train", "Train")}{" "}
           </Button>
-        </Group>
+          <Button
+            color="teal"
+            variant="light"
+            leftSection={<IconPlayerPlay size={15} />}
+            onClick={onPlay}
+          >
+            {trainingT("Endgames.Quiz.Play", "Play")}
+          </Button>
+        </SimpleGrid>
       </Stack>
     </Card>
   );

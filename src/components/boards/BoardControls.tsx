@@ -91,7 +91,7 @@ function BoardControls({
         return;
       }
       const ownerId = currentTab?.value;
-      await saveToFile({
+      const saved = await saveToFile({
         dir: documentDir,
         tab: currentTab,
         store,
@@ -107,6 +107,18 @@ function BoardControls({
             ),
           ),
       });
+      if (saved) {
+        notifications.show({
+          color: "green",
+          message: t(
+            mode === "saveAs"
+              ? "Pgn.SaveAsSuccess"
+              : mode === "export"
+                ? "Pgn.ExportSuccess"
+                : "Pgn.SaveSuccess",
+          ),
+        });
+      }
     } catch (error) {
       notifications.show({ color: "red", message: String(error) });
     }

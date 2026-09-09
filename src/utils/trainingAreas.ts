@@ -3,7 +3,7 @@ import { getMainLine, parsePGN } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { getGameName } from "@/utils/treeReducer";
 
-export const TRAINING_AREAS_SCHEMA_VERSION = 10;
+export const TRAINING_AREAS_SCHEMA_VERSION = 11;
 const TACTICS_ACCEPTANCE_THRESHOLD_CP = 30;
 
 const timestamp = () => new Date().toISOString();
@@ -13,6 +13,9 @@ export type TrainingObjective = z.infer<typeof trainingObjectiveSchema>;
 
 export const endgameStudentColorSchema = z.enum(["white", "black"]);
 export type EndgameStudentColor = z.infer<typeof endgameStudentColorSchema>;
+
+export const endgameOutcomeGuessSchema = z.enum(["white", "black", "draw"]);
+export type EndgameOutcomeGuess = z.infer<typeof endgameOutcomeGuessSchema>;
 
 const sourceSchema = z.object({
     label: z.string().optional(),
@@ -236,6 +239,15 @@ const endgamePositionSchema = z.object({
         totalTimeMs: z.number().nonnegative(),
         lastOutcome: z.enum(["1-0", "0-1", "1/2-1/2", "*"]).nullable(),
         lastPlayedAt: z.string().nullable(),
+        recognition: z.object({
+            attempts: z.number().int().nonnegative(),
+            successes: z.number().int().nonnegative(),
+            failures: z.number().int().nonnegative(),
+            totalTimeMs: z.number().nonnegative(),
+            lastGuess: endgameOutcomeGuessSchema.nullable(),
+            lastCorrect: z.boolean().nullable(),
+            lastAnsweredAt: z.string().nullable(),
+        }),
     }),
     createdAt: z.string(),
 });
@@ -563,7 +575,7 @@ export const persistedTrainingAreasSchema = z.preprocess((value) => {
         );
         migrated = {
             ...migrated,
-            schemaVersion: TRAINING_AREAS_SCHEMA_VERSION,
+            schemaVersion: 10,
             endgames: {
                 ...endgames,
                 positions: Object.fromEntries(
@@ -581,6 +593,43 @@ export const persistedTrainingAreasSchema = z.preprocess((value) => {
                                     (bundledWinnerMovesSecond
                                         ? oppositeEndgameColor(sideToMove)
                                         : sideToMove),
+                            },
+                        ];
+                    }),
+                ),
+            },
+        };
+    }
+
+    if (migrated.schemaVersion === 10) {
+        const endgames = migrated.endgames as Record<string, unknown> | undefined;
+        const positions =
+            (endgames?.positions as Record<string, Record<string, unknown>> | undefined) ?? {};
+        migrated = {
+            ...migrated,
+            schemaVersion: TRAINING_AREAS_SCHEMA_VERSION,
+            endgames: {
+                ...endgames,
+                positions: Object.fromEntries(
+                    Object.entries(positions).map(([id, position]) => {
+                        const progress =
+                            (position.progress as Record<string, unknown> | undefined) ?? {};
+                        return [
+                            id,
+                            {
+                                ...position,
+                                progress: {
+                                    ...progress,
+                                    recognition: progress.recognition ?? {
+                                        attempts: 0,
+                                        successes: 0,
+                                        failures: 0,
+                                        totalTimeMs: 0,
+                                        lastGuess: null,
+                                        lastCorrect: null,
+                                        lastAnsweredAt: null,
+                                    },
+                                },
                             },
                         ];
                     }),
@@ -1750,6 +1799,15 @@ export function addEndgameSet(
                 totalTimeMs: 0,
                 lastOutcome: null,
                 lastPlayedAt: null,
+                recognition: {
+                    attempts: 0,
+                    successes: 0,
+                    failures: 0,
+                    totalTimeMs: 0,
+                    lastGuess: null,
+                    lastCorrect: null,
+                    lastAnsweredAt: null,
+                },
             },
             createdAt,
         };
@@ -1896,6 +1954,53 @@ export function isEndgameObjectiveMet(
     return actual >= expected;
 }
 
+export function endgameOutcomeGuessFromObjective(
+    objective: TrainingObjective,
+    studentColor: EndgameStudentColor,
+): EndgameOutcomeGuess | null {
+    if (objective === "unknown") return null;
+    if (objective === "draw") return "draw";
+    if (objective === "win") return studentColor;
+    return oppositeEndgameColor(studentColor);
+}
+
+export function recordEndgameRecognitionAttempt(
+    state: EndgamesState,
+    positionId: string,
+    input: {
+        guess: EndgameOutcomeGuess | null;
+        timeMs: number;
+    },
+): EndgamesState {
+    const position = state.positions[positionId];
+    if (!position) return state;
+    const expected = endgameOutcomeGuessFromObjective(position.objective, position.studentColor);
+    if (!expected) return state;
+    const correct = input.guess === expected;
+    return {
+        ...state,
+        positions: {
+            ...state.positions,
+            [positionId]: {
+                ...position,
+                progress: {
+                    ...position.progress,
+                    recognition: {
+                        attempts: position.progress.recognition.attempts + 1,
+                        successes: position.progress.recognition.successes + (correct ? 1 : 0),
+                        failures: position.progress.recognition.failures + (correct ? 0 : 1),
+                        totalTimeMs:
+                            position.progress.recognition.totalTimeMs + Math.max(0, input.timeMs),
+                        lastGuess: input.guess,
+                        lastCorrect: correct,
+                        lastAnsweredAt: timestamp(),
+                    },
+                },
+            },
+        },
+    };
+}
+
 export function recordEndgameAttempt(
     state: EndgamesState,
     positionId: string,
@@ -1920,10 +2025,19 @@ export function recordEndgameAttempt(
                     totalTimeMs: position.progress.totalTimeMs + Math.max(0, input.timeMs),
                     lastOutcome: input.outcome,
                     lastPlayedAt: timestamp(),
+                    recognition: position.progress.recognition,
                 },
             },
         },
     };
+}
+
+export function isEndgamePositionCompleted(position: EndgamePosition): boolean {
+    return (
+        position.progress.completed &&
+        position.progress.attempts > 0 &&
+        position.progress.successes > 0
+    );
 }
 
 export function deleteEndgameSet(state: EndgamesState, setId: string): EndgamesState {
@@ -1942,7 +2056,7 @@ export function getEndgameSetProgress(state: EndgamesState, setId: string) {
         const position = state.positions[id];
         return position ? [position] : [];
     });
-    const completed = positions.filter((position) => position.progress.completed).length;
+    const completed = positions.filter(isEndgamePositionCompleted).length;
     return {
         total: positions.length,
         completed,
