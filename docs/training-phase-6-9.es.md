@@ -48,7 +48,11 @@ Las acciones explícitas **Guardar cambios**, **Guardar como PGN nuevo** y **Exp
 muestran una notificación verde únicamente después de terminar la escritura. Los errores muestran
 una notificación roja. El autoguardado continúa silencioso para no producir avisos repetitivos.
 
-## Matriz manual pendiente
+## Validación manual y cierre de release
+
+El flujo funcional de reconocimiento, tablero grande, selección aleatoria y juego directo fue
+validado por el usuario el 2026-09-09. Antes de publicar 0.15.4 queda repetir el smoke test sobre el
+instalador NSIS firmado que genera GitHub Actions.
 
 - abrir una posición con blancas al turno y otra con negras al turno;
 - comprobar las tres respuestas correctas posibles;

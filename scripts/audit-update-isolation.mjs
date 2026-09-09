@@ -25,11 +25,7 @@ const required = [
   ["src-tauri/capabilities/main.json", "updater:default", "the updater IPC permission"],
   ["src-tauri/src/main.rs", "tauri_plugin_updater", "the updater initialization"],
   [".github/workflows/release.yml", "TAURI_SIGNING_PRIVATE_KEY", "the updater signing secret"],
-  [
-    ".github/workflows/release.yml",
-    "verify-release-version.mjs",
-    "the release version guard",
-  ],
+  [".github/workflows/release.yml", "verify-release-version.mjs", "the release version guard"],
   [".github/workflows/release.yml", "origin/main", "the release branch guard"],
 ];
 

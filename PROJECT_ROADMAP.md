@@ -1216,7 +1216,7 @@ flujos nativos.
 
 ### 6.9. Reconocimiento y demostración de finales
 
-**Estado: Implementada el 2026-09-08; validación manual nativa y empaquetada pendiente.**
+**Estado: Implementada y validada manualmente el 2026-09-09; validación del instalador NSIS 0.15.4 pendiente.**
 
 - [x] presentar la posición inicial en un tablero no interactivo y señalar explícitamente qué color mueve;
 - [x] pedir la clasificación **ganan blancas**, **tablas** o **ganan negras** antes de jugar;
@@ -1233,7 +1233,8 @@ flujos nativos.
 - [x] contar una posición como completada solo después de jugar y alcanzar el objetivo;
 - [x] permitir abrir una posición aleatoria dentro del tema activo, evitando repeticiones consecutivas;
 - [x] migrar sin pérdida el almacenamiento local del esquema 10 al 11;
-- [ ] validar manualmente tablero, respuesta, persistencia, análisis y demostración en Windows empaquetado;
+- [x] validar manualmente tablero, respuesta, persistencia, análisis y demostración en Windows;
+- [ ] repetir el smoke test con el instalador NSIS 0.15.4 firmado antes de publicar la release;
 - [ ] añadir en una iteración posterior sesiones continuas completas por tema o set; la selección
       aleatoria actual abre un ejercicio cada vez.
 
