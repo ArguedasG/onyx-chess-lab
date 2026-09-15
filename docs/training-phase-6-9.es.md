@@ -51,7 +51,7 @@ una notificación roja. El autoguardado continúa silencioso para no producir av
 ## Validación manual y cierre de release
 
 El flujo funcional de reconocimiento, tablero grande, selección aleatoria y juego directo fue
-validado por el usuario el 2026-09-09. Antes de publicar 0.15.4 queda repetir el smoke test sobre el
+validado por el usuario el 2026-09-09. Antes de publicar 0.15.5 queda repetir el smoke test sobre el
 instalador NSIS firmado que genera GitHub Actions.
 
 - abrir una posición con blancas al turno y otra con negras al turno;
