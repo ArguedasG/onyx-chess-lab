@@ -15,14 +15,15 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import type { PlayerGameInfo } from "@/bindings";
 import { sessionsAtom } from "@/state/atoms";
+import { playerAnalysisProfileId } from "@/state/playerAnalysis";
 import type { DatabaseViewStore } from "@/state/store/database";
+import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
 import { DatabaseViewStateContext } from "../databases/DatabaseViewStateContext";
 import FideInfo from "../databases/FideInfo";
 import OpeningsPanel from "./PersonalCardPanels/OpeningsPanel";
 import OverviewPanel from "./PersonalCardPanels/OverviewPanel";
 import RatingsPanel from "./PersonalCardPanels/RatingsPanel";
 import PlayerAnalysisPanel from "./PersonalCardPanels/PlayerAnalysisPanel";
-import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
 
 function PersonalPlayerCard({
   name,
@@ -116,8 +117,12 @@ function PersonalPlayerCard({
         <Tabs.Panel value="ratings">
           <RatingsPanel playerName={name} info={info} isDatabase={isDatabase} />
         </Tabs.Panel>
-        <Tabs.Panel value="analysis" style={{ overflow: "hidden" }}>
-          <PlayerAnalysisPanel playerName={name} sources={analysisSources} />
+        <Tabs.Panel value="analysis" style={{ overflow: "hidden", flex: 1, minHeight: 0 }}>
+          <PlayerAnalysisPanel
+            key={playerAnalysisProfileId(name, analysisSources)}
+            playerName={name}
+            sources={analysisSources}
+          />
         </Tabs.Panel>
       </Tabs>
     </Paper>

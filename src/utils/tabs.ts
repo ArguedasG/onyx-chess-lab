@@ -68,7 +68,14 @@ export const tabSchema = z.object({
         .regex(/^\/training(?:\/[^?#]*)?$/)
         .optional(),
     returnPath: z.enum(["/accounts", "/databases"]).optional(),
+    returnPlayerAnalysis: z
+        .object({
+            profileId: z.string(),
+            playerName: z.string(),
+        })
+        .optional(),
     returnTabId: z.string().optional(),
+    returnTabView: z.enum(["report", "games"]).optional(),
     gameOrigin: gameOriginSchema,
 });
 

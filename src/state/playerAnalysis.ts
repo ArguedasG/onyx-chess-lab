@@ -27,6 +27,13 @@ export const playerAnalysisAtom = atomWithStorage<PlayerAnalysisState>("player-a
     profiles: {},
 });
 
+export type PlayerAnalysisReturnTarget = {
+    profileId: string;
+    playerName: string;
+};
+
+export const playerAnalysisReturnTargetAtom = atom<PlayerAnalysisReturnTarget | null>(null);
+
 export type PlayerAnalysisSection = "summary" | "openings" | "findings" | "engine";
 
 export type PlayerAnalysisViewState = {

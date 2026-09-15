@@ -59,6 +59,7 @@ import {
   currentGameStateAtom,
   currentModelGameBatchIdAtom,
   currentPlayersAtom,
+  currentPlayRunAtom,
   gameInputColorAtom,
   gameOpeningBookEnabledAtom,
   gameOpeningBookMaxPlyAtom,
@@ -209,6 +210,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const [selectedPiece, setSelectedPiece] = useState<Piece | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isAborting, setIsAborting] = useState(false);
+  const [humanHasMoved, setHumanHasMoved] = useState(false);
   const [batchActionBusy, setBatchActionBusy] = useState(false);
 
   const [inputColor, setInputColor] = useAtom(gameInputColorAtom);
@@ -297,6 +299,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const cgRef = useRef<ChessgroundRef>(null);
   const [gameState, setGameState] = useAtom(currentGameStateAtom);
   const [players, setPlayers] = useAtom(currentPlayersAtom);
+  const [playRun, setPlayRun] = useAtom(currentPlayRunAtom);
 
   const [whiteTime, setWhiteTime] = useState<number | null>(null);
   const [blackTime, setBlackTime] = useState<number | null>(null);
@@ -304,6 +307,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const setHistory = useSetAtom(humanBotHistoryAtom);
   const setMeasurements = useSetAtom(humanBotMeasurementsAtom);
   const historySavedRef = useRef(false);
+  const discardGameResultRef = useRef(false);
   const modelGameRunRef = useRef<ModelGameRun | null>(null);
   const singleExperimentIdRef = useRef<string | null>(null);
   const singleExperimentFinalizedRef = useRef(false);
@@ -363,6 +367,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const isPlayerVsEngine =
     (players.white.type === "human" && blackIsEngineControlled) ||
     (players.black.type === "human" && whiteIsEngineControlled);
+  const isPlayerVsHumanBot = getHumanBotHistoryMatch(players) !== null;
+  const canAbortBeforeFirstMove =
+    !generatorMode && isPlayerVsHumanBot && gameState === "playing" && !humanHasMoved;
 
   const orientation = headers.orientation || "white";
   const toggleOrientation = useCallback(() => {
@@ -642,7 +649,16 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   async function launchConfiguredGame(config: GameConfig, playerSettings: GamePlayers) {
     setIsStarting(true);
     setPlayers(playerSettings);
+    if (!generatorMode) {
+      setPlayRun({
+        config: structuredClone(config),
+        players: structuredClone(playerSettings),
+        source: snapshotTreeState(store.getState()),
+      });
+    }
     historySavedRef.current = false;
+    discardGameResultRef.current = false;
+    setHumanHasMoved(false);
     if (endgamePositionId) {
       endgameStartedAtRef.current = Date.now();
       endgameAttemptRecordedRef.current = false;
@@ -835,12 +851,14 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const handleHumanMove = useCallback(
     async (uci: string) => {
       if (!gameId || gameState !== "playing") return;
+      setHumanHasMoved(true);
       try {
         await commands.makeGameMove(gameId, uci);
         if (!isPlayerVsEngine && autoFlipBoard) {
           toggleOrientation();
         }
       } catch (err) {
+        setHumanHasMoved(false);
         console.error("Failed to make move:", err);
       }
     },
@@ -919,6 +937,12 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       pendingTimesRef.current = null;
 
       syncTreeWithMovesRef.current(mapBackendMoves(payload.moves));
+
+      if (discardGameResultRef.current) {
+        setGameState("gameOver");
+        setResult("*");
+        return;
+      }
 
       const outcome = gameResultToOutcome(payload.result);
       const recordedAt = new Date().toISOString();
@@ -1131,6 +1155,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   async function handleAbort() {
     if (!gameId) return;
     setIsAborting(true);
+    discardGameResultRef.current = true;
     try {
       const experimentId = singleExperimentIdRef.current;
       if (generatorMode && experimentId && !singleExperimentFinalizedRef.current) {
@@ -1153,6 +1178,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       setGameState("gameOver");
       setResult("*");
     } catch (err) {
+      discardGameResultRef.current = false;
       notifications.show({
         title: t("ModelGame.Abort.Error", "Could not abort the game"),
         message: err instanceof Error ? err.message : String(err),
@@ -1236,11 +1262,25 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   }
 
   async function handleNewGame() {
+    discardGameResultRef.current = false;
+    setHumanHasMoved(false);
     setGameId(null);
     setGameState("settingUp");
     setWhiteTime(null);
     setBlackTime(null);
     resetTree();
+  }
+
+  async function handleRematch() {
+    const run = playRun;
+    if (!run || isStarting) return;
+    setTreeState(structuredClone(run.source));
+    setResult("*");
+    setWhiteTime(null);
+    setBlackTime(null);
+    setHumanHasMoved(false);
+    setGameId(null);
+    await launchConfiguredGame(structuredClone(run.config), structuredClone(run.players));
   }
 
   function prepareEndgamePosition(position: EndgamePosition) {
@@ -1809,11 +1849,15 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                         <Button
                           variant="default"
                           color="red"
-                          onClick={isEngineVsEngine ? handleAbort : handleResign}
+                          onClick={
+                            isEngineVsEngine || canAbortBeforeFirstMove ? handleAbort : handleResign
+                          }
                           leftSection={<IconX />}
-                          loading={isEngineVsEngine && isAborting}
+                          loading={(isEngineVsEngine || canAbortBeforeFirstMove) && isAborting}
                         >
-                          {isEngineVsEngine ? "Abort" : "Resign"}
+                          {isEngineVsEngine || canAbortBeforeFirstMove
+                            ? t("Game.Abort", "Abort game")
+                            : t("Game.Resign", "Resign")}
                         </Button>
                       )}
                       {gameState === "gameOver" && !generatorMode && trainingReturn && (
@@ -1825,6 +1869,22 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                           {trainingReturn.label}
                         </Button>
                       )}
+                      {gameState === "gameOver" &&
+                        !generatorMode &&
+                        !trainingReturn &&
+                        playRun &&
+                        ((players.white.type === "human" && isEngineControlled(players.black)) ||
+                          (players.black.type === "human" &&
+                            isEngineControlled(players.white))) && (
+                          <Button
+                            variant="default"
+                            onClick={() => void handleRematch()}
+                            leftSection={<IconRefresh />}
+                            loading={isStarting}
+                          >
+                            {t("Game.Rematch", "Rematch")}
+                          </Button>
+                        )}
                       {gameState === "gameOver" && !generatorMode && (
                         <Button
                           variant="default"

@@ -17,6 +17,7 @@ import cx from "clsx";
 import { useEffect } from "react";
 import { useAtomValue, useStore } from "jotai";
 import { dbTabFamily, openingReportReopenFamily, tabFamily, tabsAtom } from "@/state/atoms";
+import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import type { Tab } from "@/utils/tabs";
 import { InlineInput } from "../common/InlineInput";
 import classes from "./BoardTab.module.css";
@@ -94,10 +95,16 @@ export function BoardTab({
                     if (canReturnToTab) {
                       setActiveTab(returnTabId);
                       atomStore.set(tabFamily(returnTabId), "database");
-                      atomStore.set(dbTabFamily(returnTabId), "report");
-                      atomStore.set(openingReportReopenFamily(returnTabId), (value) => value + 1);
+                      const returnView = tab.returnTabView ?? "report";
+                      atomStore.set(dbTabFamily(returnTabId), returnView);
+                      if (returnView === "report") {
+                        atomStore.set(openingReportReopenFamily(returnTabId), (value) => value + 1);
+                      }
                       void navigate({ to: "/" });
                     } else if (returnPath) {
+                      if (returnPath === "/accounts" && tab.returnPlayerAnalysis) {
+                        atomStore.set(playerAnalysisReturnTargetAtom, tab.returnPlayerAnalysis);
+                      }
                       void navigate({ to: returnPath });
                     }
                     event.stopPropagation();

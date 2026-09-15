@@ -1,6 +1,6 @@
 import { Alert, Group, SegmentedControl, Select, Text } from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
-import { useSetAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { DataTable } from "mantine-datatable";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,7 +11,7 @@ import {
   type PositionSummary,
   type SortDirection,
 } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { activeTabAtom, positionGamesViewFamily, tabsAtom } from "@/state/atoms";
 import { isTransientPositionError } from "@/utils/db";
 import { createTab } from "@/utils/tabs";
 
@@ -30,12 +30,12 @@ export default function PositionGamesTable({
   const setTabs = useSetAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
   const navigate = useNavigate();
-  const [pagination, setPagination] = useState({ token: snapshot.token, page: 1 });
-  const page = pagination.token === snapshot.token ? pagination.page : 1;
+  const [view, setView] = useAtom(positionGamesViewFamily(owner));
+  const page = view.token === snapshot.token ? view.page : 1;
   const offset = (page - 1) * 20;
   const [opening, setOpening] = useState(false);
-  const [sort, setSort] = useState<PositionGameSort>("index");
-  const [direction, setDirection] = useState<SortDirection>("asc");
+  const sort: PositionGameSort = view.sort;
+  const direction: SortDirection = view.direction;
   const [openError, setOpenError] = useState(false);
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     ["position-page", snapshot.token, offset, sort, direction, owner],
@@ -67,10 +67,6 @@ export default function PositionGamesTable({
     },
     [owner],
   );
-  useEffect(
-    () => setPagination({ token: snapshot.token, page: 1 }),
-    [snapshot.token, sort, direction],
-  );
   useEffect(() => {
     if (expired && refreshed.current !== snapshot.token) {
       refreshed.current = snapshot.token;
@@ -85,7 +81,7 @@ export default function PositionGamesTable({
     }
   }, [transientError, snapshot.token, offset, sort, direction, mutate]);
 
-  if ((error && !transientError) || openError) {
+  if ((error && !transientError && !expired) || openError) {
     return <Alert color="red">{t("Board.Database.QueryFailed")}</Alert>;
   }
   return (
@@ -94,7 +90,9 @@ export default function PositionGamesTable({
         <Select
           label={t("Board.Database.SortBy")}
           value={sort}
-          onChange={(value) => setSort(value as PositionGameSort)}
+          onChange={(value) =>
+            setView({ token: snapshot.token, page: 1, sort: value as PositionGameSort, direction })
+          }
           data={[
             { value: "index", label: t("Board.Database.Sort.Index") },
             { value: "date", label: t("Board.Database.Sort.Date") },
@@ -105,7 +103,9 @@ export default function PositionGamesTable({
         />
         <SegmentedControl
           value={direction}
-          onChange={(value) => setDirection(value as SortDirection)}
+          onChange={(value) =>
+            setView({ token: snapshot.token, page: 1, sort, direction: value as SortDirection })
+          }
           data={[
             { value: "asc", label: t("Board.Database.Sort.Asc") },
             { value: "desc", label: t("Board.Database.Sort.Desc") },
@@ -119,11 +119,11 @@ export default function PositionGamesTable({
         withTableBorder
         highlightOnHover
         records={data ?? []}
-        fetching={isLoading || isValidating || transientError || opening}
+        fetching={isLoading || isValidating || transientError || expired || opening}
         totalRecords={snapshot.total}
         recordsPerPage={20}
         page={page}
-        onPageChange={(next) => setPagination({ token: snapshot.token, page: next })}
+        onPageChange={(next) => setView({ token: snapshot.token, page: next, sort, direction })}
         noRecordsText={t("Board.Database.NoGames")}
         onRowClick={async ({ index }) => {
           if (opening) return;
@@ -141,7 +141,12 @@ export default function PositionGamesTable({
             }
             const { game, ply } = result.data;
             await createTab({
-              tab: { name: `${game.white} - ${game.black}`, type: "analysis" },
+              tab: {
+                name: `${game.white} - ${game.black}`,
+                type: "analysis",
+                returnTabId: owner,
+                returnTabView: "games",
+              },
               setTabs,
               setActiveTab,
               pgn: game.moves,

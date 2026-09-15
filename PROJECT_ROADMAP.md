@@ -2,7 +2,7 @@
 
 > Documento vivo y fuente de verdad del proyecto.
 >
-> Última actualización: 2026-09-07.
+> Última actualización: 2026-09-15.
 
 ## Cómo utilizar este documento
 
@@ -110,11 +110,12 @@ El valor profesional no depende únicamente de entrenar un modelo nuevo. Tambié
 | Model Game Generator                    | Validada                                              | Fases 2.1, 2.2 y 2.3 validadas manualmente; incluye generación individual y por lotes, registro local, navegación, análisis, exportación, recuperación y eliminación.                                                                                                                          |
 | Experiment Analysis                     | Validada                                              | Fases 3.1, 3.2 y benchmark básico 3.3 implementados y validados con lotes reales; la calibración estadística profunda queda diferida.                                                                                                                                                          |
 | Fase 4 — Beta de bots humanos y torneos | Cerrada como beta                                     | Model Game Generator con bots a velocidad estándar, catálogo editorial 4.4.0 de 15 perfiles y liga round robin reducida integrada dentro del generador. La expansión, calibración profunda y torneos jugables pasan a la Fase 10.                                                              |
-| Fase 6 — Táctica, Aperturas y Finales   | En progreso; 6.9 implementada                         | Finales añade reconocimiento W/D/L previo, respuesta, análisis y demostración jugando, con métricas separadas. Incorporación a repertorios, guardado PGN explícito y catálogos ES/EN están implementados. Pendiente la validación manual consolidada, nativa y empaquetada.                    |
+| Fase 6 — Táctica, Aperturas y Finales   | En progreso; 6.9 validada y 6.10 implementada         | Cada set táctico expone rendimiento, muestra evaluable, tiempos, cobertura, evolución diaria y ciclos separados. Finales añade reconocimiento W/D/L previo. Pendientes el smoke test NSIS y la validación manual consolidada.                                                                  |
+| Estabilización de uso real              | Implementada; validación manual pendiente             | Se corrigieron navegación rápida de bases, retorno a informes, conservación de estado por pestaña, flechas de práctica, revancha y aborto inicial contra bots, valores de dibujo y aislamiento de Motor al alternar perfiles.                                                                  |
 | Estabilidad de bases grandes            | Implementada; cierre manual pendiente                 | 7.0 añade prioridad frente a cobertura, consultas compartidas, índice por bloques y paginación completa. Regresión automática y benchmark real aprobados; pendientes interfaz nativa/build empaquetada y mediciones release.                                                                   |
 | Consultas compartidas de Fase 7.0       | Implementada; validación automática aprobada          | Games usa todas las coincidencias y abre en el nodo encontrado. La medición de 7.0 registró unos 26 s de escaneo en debug, además de la primera validación del índice.                                                                                                                         |
 | Opening Reports de Fase 7.1             | Núcleo local ampliado; cierre manual pendiente        | Añade jugadores frecuentes y más fuertes, resultados por jugador, franjas ELO y acceso a sus partidas. Games filtra por ELO y ordena globalmente por fecha/ELO. Conserva teoría, transposiciones y exportación HTML/PGN; interpretación estratégica y Lichess siguen diferidos.                |
-| Player Analysis de Fase 7.2             | Núcleo implementado; cierre funcional ampliado        | Se añaden al cierre de 7.2 la selección múltiple Blitz/Rapid/Bullet/etc. para la muestra de motor y la elección entre entrenar la alternativa propia o el castigo del rival. Validación manual nativa/empaquetada pendiente.                                                                   |
+| Player Analysis de Fase 7.2             | Implementada; validación manual pendiente             | La muestra de motor combina varios ritmos antes de aplicar las últimas X partidas y registra el aporte por categoría. «Añadir al set» pregunta qué perspectiva entrenar y las evidencias regresan al perfil exacto que las abrió.                                                              |
 | Actualizaciones de Onyx                 | Operativo en Windows x64; endurecimiento P0 pendiente | `0.15.2 → 0.15.3` validó detección, confirmación, descarga, firma, instalación, reapertura y conservación de datos. Quedan pruebas negativas antes de cerrar toda la auditoría; macOS y Linux siguen pendientes de Fase 9.                                                                     |
 | Instalación directa de Maia 3           | Reparación validada; instalación limpia pendiente     | Fase 5.3.1 ofrece instalación, progreso, cancelación, verificación UCI, registro automático, reparación y desinstalación segura. La recuperación real pasó tras corregir limpieza y semilla; falta probar desde cero en Windows x64 limpio.                                                    |
 | Shell centrado en el tablero            | Probado por el usuario; ajustes finales implementados | Entrenamiento comparte la barra de pestañas y convierte el hub en el área elegida. Jugar tiene icono propio; «Jugar desde aquí» copia solo la rama seleccionada a una partida independiente y el cierre protege correctamente los cambios. Falta el smoke test de estos ajustes en escritorio. |
@@ -167,13 +168,14 @@ Estas etiquetas describen principalmente amplitud de muestreo, no personalidades
 - `docs/phase-5-brand-release-alpha-plan.es.md`
 - `docs/updater-phase-5-2.es.md`
 - `docs/training-phase-6-9.es.md`
+- `docs/training-phase-6-10.es.md`
 
 ### Próximo paso recomendado
 
-**Primero se valida manualmente el reconocimiento y demostración de Finales de 6.9. Luego se ejecuta
-la matriz consolidada de Entrenamiento, el cierre funcional de 7.2 —selección múltiple de ritmos y
-perspectiva de ejercicios de error— y la instalación limpia de Maia. Por último se completan las
-pruebas negativas del actualizador y el corte de release antes de avanzar a Fase 8.**
+**Primero se valida la estabilización surgida del uso real y se ejecuta la matriz manual consolidada
+de Entrenamiento y Fase 7, incluidas 6.10 y el cierre funcional de 7.2. Después se valida la instalación limpia de Maia,
+se completan las pruebas negativas del actualizador y se realiza el corte de release antes de avanzar
+a Fase 8.**
 El canal automático Windows x64 ya está activo con endpoint, clave pública y artefactos firmados
 propios de Onyx; sus pruebas negativas continúan dentro de la auditoría P0. La preparación de los objetivos
 incluidos de Finales y la validación manual consolidada/nativa/empaquetada se resolverán en la
@@ -211,7 +213,7 @@ Canal de actualización propio, firmado y aislado [Fase 5.2, P0]
         ↓
 Instalación directa y administrada de Maia 3 [Fase 5.3, recuperación validada; instalación limpia pendiente]
         ↓
-Reconocimiento de Finales 6.9 + cierre funcional y manual de 7.2 [cierre actual]
+Estabilización de uso real + cierre funcional y manual de 7.2 [cierre actual]
         ↓
 Ingeniería de release restante, identidad final y alpha privada [Fase 5]
         ↓
@@ -796,7 +798,7 @@ alpha privada. Las mejoras 7.3 continúan sin bloquearla.
 
 ## Fase 6 — Entrenamiento de Táctica, Aperturas y Finales
 
-**Estado: En progreso; primer corte especializado implementado y validado automáticamente.**
+**Estado: En progreso; 6.10 implementada y validada automáticamente.**
 
 La Fase 6 no es un único entrenador genérico. Son tres áreas claramente separadas, con sus propias
 pantallas, configuraciones, contenido, sesiones y progreso:
@@ -862,6 +864,8 @@ progreso común a las tres áreas.
 - [x] revisión táctica alternativa tipo lista PGN, virtualizada y marcada por ciclo;
 - [x] navegación exploratoria separada del primer problema pendiente y acceso explícito para regresar;
 - [x] aviso de jugada incorrecta persistente durante el reintento;
+- [x] estadísticas por set táctico con aciertos, errores, muestra evaluable, tiempos, cobertura,
+      evolución diaria, ciclo actual e historial de ciclos;
 - [x] práctica individual de líneas de Aperturas y repetición libre desde el gestor;
 - [x] evaluación de desviaciones y pregunta de dificultad configurables, ambas desactivadas por defecto;
 - [x] ayuda «Mostrar jugada» que registra fallo, enseña, restaura y exige repetir la respuesta;
@@ -1247,6 +1251,40 @@ pero distintas.
 La implementación, persistencia y matriz manual se documentan en
 `docs/training-phase-6-9.es.md`.
 
+### Estabilización de uso real previa al cierre de la Fase 7
+
+**Estado: Implementada el 2026-09-14; validación manual nativa pendiente.**
+
+Los primeros usuarios y el uso personal más frecuente revelaron problemas de continuidad que se
+incorporaron al cierre previo a la validación de la Fase 7:
+
+- ocultar durante el entrenamiento las flechas del motor, variantes y dibujos guardados que puedan
+  revelar la respuesta;
+- usar por defecto el borrado de dibujos con un clic para instalaciones nuevas, respetando la
+  preferencia ya guardada de usuarios existentes;
+- tratar cancelaciones y reemplazos de consultas durante navegación rápida como estados de carga, no
+  como fallos visibles, y reservar el aviso de error para fallos persistentes;
+- conservar por pestaña los filtros, paginación y controles visuales pequeños que el usuario espera
+  encontrar al volver, sin mantener necesariamente montados tableros, motores o consultas ocultas;
+- regresar desde partidas y variantes abiertas por un Opening Report al informe que las originó;
+- ofrecer revancha directa al terminar una partida de una persona contra un bot, conservando la
+  partida terminada en el historial y reutilizando posición, colores y configuración;
+- medir memoria antes de introducir límites o descarte automático de estado entre pestañas.
+
+### 6.10. Estadísticas de sets tácticos
+
+**Estado: Implementada el 2026-09-15; validación manual nativa pendiente.**
+
+Cada tarjeta de Táctica abre una vista estadística propia a partir del historial que ya estaba
+persistido. Presenta aciertos, errores, intentos no evaluables, porcentaje con numerador y denominador,
+tiempo total y medio por intento, cobertura del set y evolución de los últimos ocho días activos.
+
+En Woodpecker, el ciclo actual se muestra por separado con progreso, fallos, porcentaje y último
+tiempo guardado. Los ciclos terminados conservan su tabla histórica con fecha, cobertura, fallos,
+porcentaje y tiempos. Los intentos sin evaluación quedan fuera del porcentaje y aparecen como una
+categoría visible; los tiempos generales sí incluyen cada intento registrado. La definición y la
+validación están documentadas en `docs/training-phase-6-10.es.md`.
+
 ---
 
 ## Fase 7 — Inteligencia sobre bases de datos y jugadores
@@ -1376,8 +1414,7 @@ Requisitos de escala:
 
 ### 7.2. Player Analysis
 
-**Estado: Núcleo implementado el 2026-08-29; cierre funcional ampliado el 2026-09-07 y validación
-manual nativa/empaquetada pendiente.**
+**Estado: Implementada el 2026-09-14; validación manual nativa/empaquetada pendiente.**
 
 Resultado y límites en `docs/player-analysis-phase-7-2.es.md`. El perfil personal y el perfil de un
 jugador de base incorporan una pestaña Análisis con fuentes Lichess/PGN ya importadas, filtros,
@@ -1403,6 +1440,8 @@ versionados. Detectar:
 Cada conclusión debe mostrar evidencia, partidas y tamaño de muestra. Las recomendaciones deben enlazar con posiciones entrenables, no limitarse a consejos genéricos.
 
 #### Requisitos añadidos al cierre de 7.2 — 2026-09-07
+
+**Implementados el 2026-09-14; pendientes de la matriz manual consolidada.**
 
 - permitir una selección múltiple explícita de ritmos —Bullet, Blitz, Rapid, Classical y los que
   existan en la fuente— antes de ejecutar el motor; solo esas partidas forman la muestra y la
@@ -1456,6 +1495,25 @@ Concentra todas las ampliaciones posteriores de 7.1 y 7.2:
 **Estado: Pendiente.**
 
 Orientada especialmente al equipo de ajedrez del TEC.
+
+### 8.0. Biblioteca personal de estudios
+
+Crear una biblioteca local de estudios o carpetas que agrupe partidas y análisis propios, incluidos
+los realizados contra bots. Cada estudio debe permitir crear, renombrar, ordenar, editar y exportar
+partidas PGN, y desde el inicio debe definir borrado, respaldo, migración y recuperación. Esta capa
+local precede a paquetes compartibles o colaboración y se convierte en la base organizativa de la
+preparación individual y de equipo.
+
+### 8.1. Acciones de posición desde el tablero
+
+- buscar la posición actual en todos los repertorios locales y mostrar coincidencias exactas con su
+  repertorio, variante y línea;
+- ampliar después la búsqueda a transposiciones y explicar cómo se alcanza cada coincidencia;
+- añadir la posición actual a un set táctico propio mediante una vista previa que exija una solución
+  comprobable;
+- añadirla a un set de finales propio mediante una vista previa que defina objetivo, color del
+  estudiante y validez de la posición;
+- reutilizar los formatos y migraciones de Entrenamiento en lugar de crear colecciones paralelas.
 
 ### Funcionalidad potencial
 
@@ -1784,6 +1842,35 @@ Estas preguntas no bloquean el trabajo actual, pero deberán resolverse en sus f
 ---
 
 ## 9. Registro breve de evolución
+
+### 2026-09-15
+
+- Se implementó 6.10: cada set táctico abre estadísticas acumuladas, cobertura y evolución diaria;
+  Woodpecker separa el ciclo en curso de los ciclos terminados. Todos los porcentajes muestran su
+  muestra evaluable y los intentos sin evaluación quedan identificados aparte. Pasan 175 pruebas
+  frontend en 31 archivos, typecheck, lint, auditoría de 1.762 claves ES/EN y build web.
+- Las pestañas de evidencia de Player Analysis conservan el perfil de origen y lo restauran al
+  volver o cerrar la pestaña. «Añadir al set» abre un diálogo por cada candidata para elegir entre
+  mejorar la decisión previa o entrenar el castigo posterior, en lugar de depender de un selector
+  global fácil de pasar por alto.
+
+### 2026-09-14
+
+- Se completó el cierre funcional de 7.2. El análisis de perfil permite combinar ritmos antes de
+  tomar las últimas X partidas, muestra el total elegible y versiona el aporte por categoría. Las
+  posiciones críticas pueden guardarse para mejorar la decisión propia o castigar el error desde el
+  turno rival; el esquema de Entrenamiento sube a 12 para conservar modo, ply, FEN, turno y solución.
+- Se corrigió la navegación del panel Motor: usa el alto disponible y muestra una barra vertical
+  estable. Cada perfil hidrata y conserva su propia muestra en una caché de sesión acotada, sin
+  reutilizar los conteos del perfil anterior. Las partidas humano contra bot pueden abortarse antes
+  de la primera jugada del usuario sin registrar resultado, medición ni historial.
+- Se implementó una estabilización basada en uso real antes del cierre manual de la Fase 7:
+  navegación de bases, retorno a informes, estado por pestaña, dibujos de práctica y revancha contra
+  bots. Su validación manual nativa queda pendiente.
+- Las estadísticas por set táctico pasan a 6.10. La biblioteca personal de estudios pasa a 8.0 y las
+  acciones de posición para repertorios, táctica y finales a 8.1.
+- No se crea otra fase principal: 7.3 conserva las ampliaciones avanzadas de inteligencia y sigue
+  diferida.
 
 ### 2026-09-08
 

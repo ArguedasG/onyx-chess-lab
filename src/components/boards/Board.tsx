@@ -387,7 +387,7 @@ function Board({
   }
 
   let shapes: DrawShape[] = [];
-  if (showArrows && evalOpen && arrows.size > 0 && pos) {
+  if (!practicing && showArrows && evalOpen && arrows.size > 0 && pos) {
     const entries = Array.from(arrows.entries()).sort((a, b) => a[0] - b[0]);
     for (const [i, moves] of entries) {
       if (i < 4) {
@@ -441,7 +441,7 @@ function Board({
   }
 
   // Variation arrows: show all children moves when there are alternatives
-  if (showVariationArrows && currentNode.children.length > 1) {
+  if (!practicing && showVariationArrows && currentNode.children.length > 1) {
     for (const child of currentNode.children) {
       if (child.move) {
         const m = child.move as NormalMove;
@@ -461,7 +461,7 @@ function Board({
     }
   }
 
-  if (currentNode.shapes.length > 0) {
+  if (!practicing && currentNode.shapes.length > 0) {
     shapes = shapes.concat(currentNode.shapes);
   }
 

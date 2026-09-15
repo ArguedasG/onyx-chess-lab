@@ -14,7 +14,7 @@ import type {
 } from "jotai/vanilla/utils/atomWithStorage";
 import type { ReviewLog } from "ts-fsrs";
 import { z } from "zod";
-import type { BestMoves, GoMode } from "@/bindings";
+import type { BestMoves, GameConfig, GoMode, OpeningReport } from "@/bindings";
 import { DEFAULT_TIME_CONTROL, type OpponentSettings } from "@/components/boards/OpponentForm";
 import { type Position, positionSchema } from "@/components/files/opening";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
@@ -36,6 +36,7 @@ import {
 } from "@/utils/lichess/explorer";
 import { getWinChance, normalizeScore } from "@/utils/score";
 import { genID, type Tab, tabSchema } from "@/utils/tabs";
+import type { TreeState } from "@/utils/treeReducer";
 import { getEnginesDir } from "../utils/directories";
 import type { Session } from "../utils/session";
 import { createAsyncZodStorage, createZodStorage, fileStorage } from "./utils";
@@ -184,10 +185,7 @@ export const snapArrowsAtom = atomWithStorage<boolean>("snap-dests", true);
 export const showArrowsAtom = atomWithStorage<boolean>("show-arrows", true);
 export const showConsecutiveArrowsAtom = atomWithStorage<boolean>("show-consecutive-arrows", false);
 export const showVariationArrowsAtom = atomWithStorage<boolean>("show-variation-arrows", false);
-export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>(
-    "erase-drawables-on-click",
-    false,
-);
+export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>("erase-drawables-on-click", true);
 export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", false);
 export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
 export const previewBoardOnHoverAtom = atomWithStorage<boolean>("preview-board-on-hover", true);
@@ -493,6 +491,23 @@ export const dbTabFamily = atomFamily((_tab: string) => atom("stats"));
 export const currentDbTabAtom = tabValue(dbTabFamily);
 
 export const openingReportReopenFamily = atomFamily((_tab: string) => atom(0));
+export const openingReportCacheFamily = atomFamily((_tab: string) =>
+    atom<{ token: string; report: OpeningReport } | null>(null),
+);
+export const positionGamesViewFamily = atomFamily((_tab: string) =>
+    atom<{
+        token: string;
+        page: number;
+        sort: "index" | "date" | "averageElo" | "whiteElo" | "blackElo";
+        direction: "asc" | "desc";
+    }>({
+        token: "",
+        page: 1,
+        sort: "index",
+        direction: "asc",
+    }),
+);
+export const openingExpandedFamily = atomFamily((_tab: string) => atom<string[]>([]));
 
 const analysisTabFamily = atomFamily((_tab: string) => atom("engines"));
 export const currentAnalysisTabAtom = tabValue(analysisTabFamily);
@@ -546,6 +561,14 @@ const playersFamily = atomFamily((_tab: string) =>
     }>({ white: {} as OpponentSettings, black: {} as OpponentSettings }),
 );
 export const currentPlayersAtom = tabValue(playersFamily);
+
+export type PlayRun = {
+    config: GameConfig;
+    players: { white: OpponentSettings; black: OpponentSettings };
+    source: TreeState;
+};
+export const playRunFamily = atomFamily((_tab: string) => atom<PlayRun | null>(null));
+export const currentPlayRunAtom = tabValue(playRunFamily);
 
 const gameIdFamily = atomFamily((_tab: string) => atom<string | null>(null));
 export const currentGameIdAtom = tabValue(gameIdFamily);

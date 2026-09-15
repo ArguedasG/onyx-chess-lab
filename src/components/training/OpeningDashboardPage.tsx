@@ -42,6 +42,7 @@ import { useAtom } from "jotai";
 import { useMemo, useState } from "react";
 import {
   activeTabAtom,
+  openingExpandedFamily,
   currentPracticeTabAtom,
   currentTabSelectedAtom,
   currentPracticeUnitAtom,
@@ -106,7 +107,10 @@ export default function OpeningDashboardPage() {
   const { documentDir } = useLoaderData({ from: "/training/openings" });
   const [areas, setAreas] = useAtom(trainingAreasAtom);
   const [, setTabs] = useAtom(tabsAtom);
-  const [, setActiveTab] = useAtom(activeTabAtom);
+  const [activeTab, setActiveTab] = useAtom(activeTabAtom);
+  const [expandedRepertoires, setExpandedRepertoires] = useAtom(
+    openingExpandedFamily(activeTab ?? "training-openings"),
+  );
   const [, setPracticeTab] = useAtom(currentPracticeTabAtom);
   const [, setSelectedPanel] = useAtom(currentTabSelectedAtom);
   const [, setPracticeUnit] = useAtom(currentPracticeUnitAtom);
@@ -875,7 +879,12 @@ export default function OpeningDashboardPage() {
           </Card>
         ) : (
           <DragDropContext onDragEnd={(result) => void handleOpeningDrag(result)}>
-            <Accordion variant="separated" multiple>
+            <Accordion
+              variant="separated"
+              multiple
+              value={expandedRepertoires}
+              onChange={setExpandedRepertoires}
+            >
               {repertoires.map((repertoire) => {
                 const variants = repertoire.variantIds
                   .map((id) => areas.openings.variants[id])

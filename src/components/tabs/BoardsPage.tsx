@@ -17,8 +17,20 @@ import { useTranslation } from "react-i18next";
 import { Mosaic, type MosaicNode } from "react-mosaic-component";
 import { match } from "ts-pattern";
 import { commands } from "@/bindings";
-import { activeTabAtom, importModalOpenAtom, tabsAtom } from "@/state/atoms";
+import {
+  activeTabAtom,
+  dbTabFamily,
+  importModalOpenAtom,
+  openingExpandedFamily,
+  openingReportCacheFamily,
+  openingReportReopenFamily,
+  playRunFamily,
+  positionGamesViewFamily,
+  tabFamily,
+  tabsAtom,
+} from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
+import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
 import { createTab, genID, isPersistentGameOrigin, type Tab } from "@/utils/tabs";
 import {
@@ -114,9 +126,24 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         }
         if (value === activeTab) {
           const index = tabs.findIndex((tab) => tab.value === value);
-          if (closedTab.returnPath) {
+          if (closedTab.returnTabId && tabs.some((tab) => tab.value === closedTab.returnTabId)) {
+            const returnView = closedTab.returnTabView ?? "report";
+            setActiveTab(closedTab.returnTabId);
+            atomStore.set(tabFamily(closedTab.returnTabId), "database");
+            atomStore.set(dbTabFamily(closedTab.returnTabId), returnView);
+            if (returnView === "report") {
+              atomStore.set(
+                openingReportReopenFamily(closedTab.returnTabId),
+                (current) => current + 1,
+              );
+            }
+            void navigate({ to: "/" });
+          } else if (closedTab.returnPath) {
             const nextTab = tabs[index === tabs.length - 1 ? index - 1 : index + 1];
             setActiveTab(nextTab?.value ?? null);
+            if (closedTab.returnPath === "/accounts" && closedTab.returnPlayerAnalysis) {
+              atomStore.set(playerAnalysisReturnTargetAtom, closedTab.returnPlayerAnalysis);
+            }
             void navigate({ to: closedTab.returnPath });
           } else if (tabs.length > 1) {
             activateTab(tabs[index === tabs.length - 1 ? index - 1 : index + 1]);
@@ -127,6 +154,11 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         }
         setPendingClose(null);
         setTabs((prev) => prev.filter((tab) => tab.value !== value));
+        openingReportCacheFamily.remove(value);
+        openingReportReopenFamily.remove(value);
+        positionGamesViewFamily.remove(value);
+        openingExpandedFamily.remove(value);
+        playRunFamily.remove(value);
         if (tabs.length === 1) {
           await createTab({
             tab: { name: "Home.Card.AnalysisBoard.Title", type: "analysis" },
@@ -145,7 +177,7 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         ]);
       }
     },
-    [tabs, activeTab, setTabs, setActiveTab, activateTab, navigate],
+    [tabs, activeTab, setTabs, setActiveTab, activateTab, navigate, atomStore],
   );
 
   function selectTab(index: number) {

@@ -4,7 +4,10 @@ import {
     aggregateEngineAnalysis,
     analyzePlayerGames,
     buildEngineGameMetrics,
+    criticalPositionForPerspective,
     DEFAULT_PLAYER_ANALYSIS_FILTERS,
+    getPlayerAnalysisTimeControl,
+    playerAnalysisTimeControlCounts,
     selectPlayerEngineGames,
     type PlayerAnalysisGame,
     type PlayerAnalysisSource,
@@ -61,7 +64,7 @@ describe("player metadata analysis", () => {
             DEFAULT_PLAYER_ANALYSIS_FILTERS,
             "2026-01-20T00:00:00.000Z",
         );
-        expect(report.schemaVersion).toBe(2);
+        expect(report.schemaVersion).toBe(3);
         expect(report.summary.games).toBe(10);
         expect(report.summary.wins).toBe(6);
         expect(report.summary.losses).toBe(4);
@@ -130,6 +133,76 @@ describe("player metadata analysis", () => {
             3,
         );
     });
+
+    it("combines selected time controls before applying the newest-game limit", () => {
+        const games = [
+            game(1, {
+                white: "Player",
+                black: "A",
+                result: "1-0",
+                date: "2026.04.01",
+                time_control: "60+0",
+            }),
+            game(2, {
+                white: "Player",
+                black: "B",
+                result: "1-0",
+                date: "2026.03.01",
+                time_control: "180+2",
+            }),
+            game(3, {
+                white: "Player",
+                black: "C",
+                result: "1-0",
+                date: "2026.02.01",
+                time_control: "600+0",
+            }),
+            game(4, {
+                white: "Player",
+                black: "D",
+                result: "1-0",
+                date: "2026.01.01",
+                time_control: "180+2",
+            }),
+        ];
+
+        expect(
+            selectPlayerEngineGames(games, DEFAULT_PLAYER_ANALYSIS_FILTERS, 2, [
+                "blitz",
+                "rapid",
+            ]).map((item) => item.game.id),
+        ).toEqual([2, 3]);
+        expect(playerAnalysisTimeControlCounts(games, DEFAULT_PLAYER_ANALYSIS_FILTERS)).toEqual([
+            { value: "bullet", count: 1 },
+            { value: "blitz", count: 2 },
+            { value: "rapid", count: 1 },
+        ]);
+    });
+
+    it("recognizes Chess.com daily games and unknown time controls", () => {
+        const daily = game(1, {
+            white: "Player",
+            black: "A",
+            result: "1-0",
+            site: "https://www.chess.com/game/daily/1",
+            time_control: "1/86400",
+        });
+        const unknown = game(2, {
+            white: "Player",
+            black: "B",
+            result: "1-0",
+            time_control: "?",
+        });
+        const malformed = game(3, {
+            white: "Player",
+            black: "C",
+            result: "1-0",
+            time_control: "40/7200:3600",
+        });
+        expect(getPlayerAnalysisTimeControl(daily)).toBe("daily");
+        expect(getPlayerAnalysisTimeControl(unknown)).toBe("unknown");
+        expect(getPlayerAnalysisTimeControl(malformed)).toBe("unknown");
+    });
 });
 
 function moveAnalysis(
@@ -163,6 +236,7 @@ describe("player engine analysis", () => {
                 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                 "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
                 "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+                "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
             ],
             analysis: [
                 moveAnalysis({ type: "cp", value: 200 }),
@@ -180,6 +254,22 @@ describe("player engine analysis", () => {
             ply: 0,
             classification: "blunder",
         });
+        expect(
+            criticalPositionForPerspective(metrics.criticalPositions[0], "improveDecision"),
+        ).toMatchObject({
+            mode: "improveDecision",
+            ply: 0,
+            sideToMove: "white",
+            fen: metrics.criticalPositions[0].fen,
+        });
+        expect(
+            criticalPositionForPerspective(metrics.criticalPositions[0], "punishError"),
+        ).toMatchObject({
+            mode: "punishError",
+            ply: 1,
+            sideToMove: "black",
+            fen: metrics.criticalPositions[0].postMoveFen,
+        });
 
         const aggregate = aggregateEngineAnalysis({
             engine: {
@@ -190,11 +280,23 @@ describe("player engine analysis", () => {
                 limit: "time:250ms",
             },
             requestedGames: 1,
+            eligibleGames: 4,
+            timeControls: ["blitz", "rapid"],
+            timeControlBreakdown: [
+                { value: "blitz", eligibleGames: 3, analyzedGames: 1 },
+                { value: "rapid", eligibleGames: 1, analyzedGames: 0 },
+            ],
             skippedGames: 0,
             games: [metrics],
             analyzedAt: "2026-01-20T00:00:00.000Z",
         });
         expect(aggregate.analyzedGames).toBe(1);
+        expect(aggregate.eligibleGames).toBe(4);
+        expect(aggregate.timeControls).toEqual(["blitz", "rapid"]);
+        expect(aggregate.timeControlBreakdown).toEqual([
+            { value: "blitz", eligibleGames: 3, analyzedGames: 1 },
+            { value: "rapid", eligibleGames: 1, analyzedGames: 0 },
+        ]);
         expect(aggregate.moves).toBe(2);
         expect(aggregate.criticalPositions).toHaveLength(2);
         expect(aggregate.advantageGames).toBe(1);

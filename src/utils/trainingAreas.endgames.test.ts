@@ -13,6 +13,7 @@ import {
     persistedTrainingAreasSchema,
     recordEndgameAttempt,
     recordEndgameRecognitionAttempt,
+    TRAINING_AREAS_SCHEMA_VERSION,
     updateEndgameObjective,
     updateEndgameStudentColor,
 } from "./trainingAreas";
@@ -280,7 +281,7 @@ describe("endgame student color", () => {
 
         const migrated = persistedTrainingAreasSchema.parse(legacy);
 
-        expect(migrated.schemaVersion).toBe(11);
+        expect(migrated.schemaVersion).toBe(TRAINING_AREAS_SCHEMA_VERSION);
         expect(migrated.endgames.positions[positionId].progress.recognition).toMatchObject({
             attempts: 0,
             successes: 0,

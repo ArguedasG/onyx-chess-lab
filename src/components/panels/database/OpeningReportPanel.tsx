@@ -1,14 +1,15 @@
 import { Alert, Button, Group, Modal, NumberInput, ScrollArea, Stack, Text } from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
-import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, type OpeningReport, type PositionSummary } from "@/bindings";
+import { commands, type PositionSummary } from "@/bindings";
 import {
   activeTabAtom,
   dbTabFamily,
   localOptionsFamily,
   openingReportReopenFamily,
+  openingReportCacheFamily,
   tabFamily,
   tabsAtom,
 } from "@/state/atoms";
@@ -40,7 +41,8 @@ export default function OpeningReportPanel({
   const navigate = useNavigate();
   const [depth, setDepth] = useState(12);
   const [theoryGames, setTheoryGames] = useState(5000);
-  const [report, setReport] = useState<OpeningReport | null>(null);
+  const [cachedReport, setCachedReport] = useAtom(openingReportCacheFamily(owner));
+  const report = cachedReport?.token === snapshot.token ? cachedReport.report : null;
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export default function OpeningReportPanel({
         const expired = error instanceof Error && error.message === "Position query expired";
         setMessage(t(expired ? "OpeningReport.Expired" : "OpeningReport.Failed"));
         if (expired) {
-          setReport(null);
+          setCachedReport(null);
           setOpened(false);
           onExpired();
         }
@@ -105,7 +107,7 @@ export default function OpeningReportPanel({
       );
       signal.throwIfAborted();
       if (response.status === "error") throw new Error(response.error);
-      setReport(response.data);
+      setCachedReport({ token: snapshot.token, report: response.data });
       setOpened(true);
     });
   const game = (offset: number, extraPly = 0) =>
@@ -116,7 +118,12 @@ export default function OpeningReportPanel({
       if (response.status === "error") throw new Error(response.error);
       const { game, ply } = response.data;
       await createTab({
-        tab: { name: `${game.white} - ${game.black}`, type: "analysis" },
+        tab: {
+          name: `${game.white} - ${game.black}`,
+          type: "analysis",
+          returnTabId: owner,
+          returnTabView: "report",
+        },
         setTabs,
         setActiveTab,
         pgn: game.moves,
@@ -133,7 +140,12 @@ export default function OpeningReportPanel({
       const pgn = openingVariationPgn(report, moves, fen);
       signal.throwIfAborted();
       await createTab({
-        tab: { name: t("OpeningReport.Variation"), type: "analysis" },
+        tab: {
+          name: t("OpeningReport.Variation"),
+          type: "analysis",
+          returnTabId: owner,
+          returnTabView: "report",
+        },
         setTabs,
         setActiveTab,
         pgn,
@@ -152,6 +164,7 @@ export default function OpeningReportPanel({
           name: `${name} · ${t("Board.Database.Games")}`,
           type: "analysis",
           returnTabId: owner,
+          returnTabView: "report",
         },
         setTabs,
         setActiveTab,

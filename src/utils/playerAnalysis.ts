@@ -1,8 +1,22 @@
 import type { MoveAnalysis, NormalizedGame } from "@/bindings";
 import { getCPLoss, normalizeScore } from "@/utils/score";
 import { positionFromFen } from "@/utils/chessops";
+import { getTimeControl } from "@/utils/timeControl";
 
-export const PLAYER_ANALYSIS_SCHEMA_VERSION = 2;
+export const PLAYER_ANALYSIS_SCHEMA_VERSION = 3;
+
+export const PLAYER_ANALYSIS_TIME_CONTROLS = [
+    "ultra_bullet",
+    "bullet",
+    "blitz",
+    "rapid",
+    "classical",
+    "correspondence",
+    "daily",
+    "unknown",
+] as const;
+export type PlayerAnalysisTimeControl = (typeof PLAYER_ANALYSIS_TIME_CONTROLS)[number];
+export type PlayerAnalysisExercisePerspective = "improveDecision" | "punishError";
 
 export type PlayerAnalysisSource = {
     databasePath: string;
@@ -81,8 +95,11 @@ export type PlayerAnalysisClassification = "inaccuracy" | "mistake" | "blunder";
 
 export type PlayerAnalysisCriticalPosition = PlayerAnalysisReference & {
     fen: string;
+    postMoveFen: string;
     playedMove: string;
     bestLine: string[];
+    punishmentLine: string[];
+    playerColor: "white" | "black";
     cpLoss: number;
     classification: PlayerAnalysisClassification;
     phase: PlayerAnalysisPhase;
@@ -124,6 +141,13 @@ export type PlayerEngineAnalysis = {
         limit: string;
     };
     requestedGames: number;
+    eligibleGames: number;
+    timeControls: PlayerAnalysisTimeControl[];
+    timeControlBreakdown: Array<{
+        value: PlayerAnalysisTimeControl;
+        eligibleGames: number;
+        analyzedGames: number;
+    }>;
     analyzedGames: number;
     skippedGames: number;
     moves: number;
@@ -298,13 +322,73 @@ export function selectPlayerEngineGames(
     games: PlayerAnalysisGame[],
     filters: PlayerAnalysisFilters,
     limit: number | "all",
+    timeControls: PlayerAnalysisTimeControl[] = [...PLAYER_ANALYSIS_TIME_CONTROLS],
 ): PlayerAnalysisGame[] {
+    const selectedTimeControls = new Set(timeControls);
     const eligible = games
-        .filter((game) => filtersPlayerAnalysisGame(game, filters))
+        .filter(
+            (game) =>
+                filtersPlayerAnalysisGame(game, filters) &&
+                selectedTimeControls.has(getPlayerAnalysisTimeControl(game)),
+        )
         .sort(
             (a, b) => (b.game.date ?? "").localeCompare(a.game.date ?? "") || b.game.id - a.game.id,
         );
     return limit === "all" ? eligible : eligible.slice(0, Math.max(1, limit));
+}
+
+export function getPlayerAnalysisTimeControl(item: PlayerAnalysisGame): PlayerAnalysisTimeControl {
+    const raw = item.game.time_control?.trim() ?? "";
+    const direct = raw.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+    if (direct === "ultrabullet") return "ultra_bullet";
+    if (PLAYER_ANALYSIS_TIME_CONTROLS.includes(direct as PlayerAnalysisTimeControl)) {
+        return direct as PlayerAnalysisTimeControl;
+    }
+    if (!raw || raw === "?") return "unknown";
+    const website = item.game.site.toLowerCase().includes("chess.com") ? "Chess.com" : null;
+    const isDaily = website === "Chess.com" && /^\d+\/\d+$/.test(raw);
+    if (raw !== "-" && !isDaily && !/^\d+(?:\+\d+)?$/.test(raw)) return "unknown";
+    const category = getTimeControl(website, raw);
+    return PLAYER_ANALYSIS_TIME_CONTROLS.includes(category as PlayerAnalysisTimeControl)
+        ? (category as PlayerAnalysisTimeControl)
+        : "unknown";
+}
+
+export function playerAnalysisTimeControlCounts(
+    games: PlayerAnalysisGame[],
+    filters: PlayerAnalysisFilters,
+): Array<{ value: PlayerAnalysisTimeControl; count: number }> {
+    const counts = new Map<PlayerAnalysisTimeControl, number>();
+    for (const game of games) {
+        if (!filtersPlayerAnalysisGame(game, filters)) continue;
+        const value = getPlayerAnalysisTimeControl(game);
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return PLAYER_ANALYSIS_TIME_CONTROLS.flatMap((value) =>
+        counts.has(value) ? [{ value, count: counts.get(value)! }] : [],
+    );
+}
+
+export function criticalPositionForPerspective(
+    critical: PlayerAnalysisCriticalPosition,
+    mode: PlayerAnalysisExercisePerspective,
+) {
+    if (mode === "punishError") {
+        return {
+            mode,
+            fen: critical.postMoveFen,
+            moves: critical.punishmentLine,
+            ply: (critical.ply ?? 0) + 1,
+            sideToMove: critical.playerColor === "white" ? ("black" as const) : ("white" as const),
+        };
+    }
+    return {
+        mode,
+        fen: critical.fen,
+        moves: critical.bestLine,
+        ply: critical.ply ?? 0,
+        sideToMove: critical.playerColor,
+    };
 }
 
 function findingPriority(
@@ -439,11 +523,17 @@ export function buildEngineGameMetrics(input: {
         losses.push({ loss, phase });
         const label = classification(loss);
         if (label) {
+            const postMoveFen = preMoveFens[ply + 1];
+            const punishmentLine = analysis[ply + 1].best[0].uciMoves.slice(0, 8);
+            if (!postMoveFen || punishmentLine.length === 0) continue;
             criticalPositions.push({
                 ...reference(item, ply),
                 fen: preFen,
+                postMoveFen,
                 playedMove: uciMoves[ply],
                 bestLine: analysis[ply].best[0].uciMoves.slice(0, 8),
+                punishmentLine,
+                playerColor: position.turn,
                 cpLoss: loss,
                 classification: label,
                 phase,
@@ -480,6 +570,9 @@ export function buildEngineGameMetrics(input: {
 export function aggregateEngineAnalysis(input: {
     engine: PlayerEngineAnalysis["engine"];
     requestedGames: number;
+    eligibleGames?: number;
+    timeControls?: PlayerAnalysisTimeControl[];
+    timeControlBreakdown?: PlayerEngineAnalysis["timeControlBreakdown"];
     skippedGames: number;
     games: PlayerEngineGameMetrics[];
     analyzedAt?: string;
@@ -519,6 +612,9 @@ export function aggregateEngineAnalysis(input: {
         analyzedAt: input.analyzedAt ?? new Date().toISOString(),
         engine: input.engine,
         requestedGames: input.requestedGames,
+        eligibleGames: input.eligibleGames ?? input.requestedGames,
+        timeControls: input.timeControls ?? [...PLAYER_ANALYSIS_TIME_CONTROLS],
+        timeControlBreakdown: input.timeControlBreakdown ?? [],
         analyzedGames: metrics.length,
         skippedGames: input.skippedGames,
         moves,

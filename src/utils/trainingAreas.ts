@@ -3,7 +3,7 @@ import { getMainLine, parsePGN } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { getGameName } from "@/utils/treeReducer";
 
-export const TRAINING_AREAS_SCHEMA_VERSION = 11;
+export const TRAINING_AREAS_SCHEMA_VERSION = 12;
 const TACTICS_ACCEPTANCE_THRESHOLD_CP = 30;
 
 const timestamp = () => new Date().toISOString();
@@ -27,6 +27,10 @@ const sourceSchema = z.object({
             ply: z.number().int().nonnegative(),
             cpLoss: z.number().nonnegative(),
             classification: z.enum(["inaccuracy", "mistake", "blunder"]),
+            mode: z.enum(["improveDecision", "punishError"]),
+            fen: z.string(),
+            sideToMove: z.enum(["white", "black"]),
+            solution: z.array(z.string()),
         })
         .optional(),
 });
@@ -607,7 +611,7 @@ export const persistedTrainingAreasSchema = z.preprocess((value) => {
             (endgames?.positions as Record<string, Record<string, unknown>> | undefined) ?? {};
         migrated = {
             ...migrated,
-            schemaVersion: TRAINING_AREAS_SCHEMA_VERSION,
+            schemaVersion: 11,
             endgames: {
                 ...endgames,
                 positions: Object.fromEntries(
@@ -628,6 +632,49 @@ export const persistedTrainingAreasSchema = z.preprocess((value) => {
                                         lastGuess: null,
                                         lastCorrect: null,
                                         lastAnsweredAt: null,
+                                    },
+                                },
+                            },
+                        ];
+                    }),
+                ),
+            },
+        };
+    }
+
+    if (migrated.schemaVersion === 11) {
+        const tactics = migrated.tactics as Record<string, unknown> | undefined;
+        const exercises =
+            (tactics?.exercises as Record<string, Record<string, unknown>> | undefined) ?? {};
+        migrated = {
+            ...migrated,
+            schemaVersion: TRAINING_AREAS_SCHEMA_VERSION,
+            tactics: {
+                ...tactics,
+                exercises: Object.fromEntries(
+                    Object.entries(exercises).map(([id, exercise]) => {
+                        const source =
+                            (exercise.source as Record<string, unknown> | undefined) ?? {};
+                        const playerAnalysis = source.playerAnalysis as
+                            | Record<string, unknown>
+                            | undefined;
+                        if (!playerAnalysis) return [id, exercise];
+                        const fen = String(exercise.fen ?? "");
+                        const solution = (exercise.solutionMoves as string[] | undefined) ?? [];
+                        return [
+                            id,
+                            {
+                                ...exercise,
+                                source: {
+                                    ...source,
+                                    playerAnalysis: {
+                                        ...playerAnalysis,
+                                        mode: playerAnalysis.mode ?? "improveDecision",
+                                        fen: playerAnalysis.fen ?? fen,
+                                        sideToMove:
+                                            playerAnalysis.sideToMove ??
+                                            inferEndgameStudentColor(fen),
+                                        solution: playerAnalysis.solution ?? solution,
                                     },
                                 },
                             },
@@ -878,7 +925,8 @@ export function addTacticsExerciseToSet(
             incoming &&
             existing.databasePath === incoming.databasePath &&
             existing.gameId === incoming.gameId &&
-            existing.ply === incoming.ply
+            existing.ply === incoming.ply &&
+            existing.mode === incoming.mode
         );
     });
     if (duplicate) return state;
@@ -2084,5 +2132,144 @@ export function getTacticsSetProgress(state: TacticsState, setId: string) {
         correct: attempts.filter((attempt) => attempt.outcome === "correct").length,
         incorrect: attempts.filter((attempt) => attempt.outcome === "incorrect").length,
         percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+    };
+}
+
+export type TacticsAttemptStatistics = {
+    attempts: number;
+    evaluated: number;
+    correct: number;
+    incorrect: number;
+    unsupported: number;
+    accuracyPercent: number | null;
+    totalTimeMs: number;
+    averageTimeMs: number | null;
+};
+
+export type TacticsCycleStatistics = {
+    number: number;
+    exerciseCount: number;
+    completedCount: number;
+    failures: number;
+    evaluated: number;
+    accuracyPercent: number | null;
+    timeMs: number;
+    averageTimeMs: number | null;
+    completedAt: string | null;
+};
+
+export type TacticsEvolutionPoint = TacticsAttemptStatistics & {
+    date: string;
+};
+
+export type TacticsSetStatistics = {
+    totalExercises: number;
+    attemptedExercises: number;
+    solvedExercises: number;
+    attemptedPercent: number;
+    solvedPercent: number;
+    overall: TacticsAttemptStatistics;
+    activeCycle: TacticsCycleStatistics | null;
+    completedCycles: TacticsCycleStatistics[];
+    evolution: TacticsEvolutionPoint[];
+};
+
+function percentage(part: number, total: number): number | null {
+    if (total === 0) return null;
+    return Math.round((part / total) * 1_000) / 10;
+}
+
+function summarizeTacticsAttempts(attempts: TacticsAttempt[]): TacticsAttemptStatistics {
+    const correct = attempts.filter((attempt) => attempt.outcome === "correct").length;
+    const incorrect = attempts.filter((attempt) => attempt.outcome === "incorrect").length;
+    const unsupported = attempts.filter((attempt) => attempt.outcome === "unsupported").length;
+    const evaluated = correct + incorrect;
+    const totalTimeMs = attempts.reduce((total, attempt) => total + attempt.timeMs, 0);
+    return {
+        attempts: attempts.length,
+        evaluated,
+        correct,
+        incorrect,
+        unsupported,
+        accuracyPercent: percentage(correct, evaluated),
+        totalTimeMs,
+        averageTimeMs: attempts.length > 0 ? totalTimeMs / attempts.length : null,
+    };
+}
+
+function summarizeTacticsCycle(
+    cycle: Pick<
+        TacticsCycleSummary,
+        "number" | "exerciseCount" | "completedCount" | "failures" | "timeMs"
+    >,
+    completedAt: string | null,
+): TacticsCycleStatistics {
+    const evaluated = cycle.completedCount + cycle.failures;
+    return {
+        ...cycle,
+        evaluated,
+        accuracyPercent: percentage(cycle.completedCount, evaluated),
+        averageTimeMs: evaluated > 0 ? cycle.timeMs / evaluated : null,
+        completedAt,
+    };
+}
+
+export function getTacticsSetStatistics(
+    state: TacticsState,
+    setId: string,
+): TacticsSetStatistics | null {
+    const set = state.sets[setId];
+    if (!set) return null;
+
+    const attempts = state.attempts.filter((attempt) => attempt.setId === setId);
+    const totalExercises = getTacticsSetSize(set);
+    const attemptedExercises = new Set(
+        attempts
+            .map((attempt) => getTacticsExerciseIndex(set, attempt.exerciseId))
+            .filter((index) => index >= 0 && index < totalExercises),
+    ).size;
+    const solvedExercises = getTacticsCompletedIndexes(state, setId).length;
+    const evolutionByDate = new Map<string, TacticsAttempt[]>();
+
+    for (const attempt of attempts) {
+        const date = attempt.createdAt.slice(0, 10);
+        const existing = evolutionByDate.get(date);
+        if (existing) existing.push(attempt);
+        else evolutionByDate.set(date, [attempt]);
+    }
+
+    const activeCycle = set.progress.activeCycle;
+    const activeCycleCompleted = activeCycle
+        ? getTacticsCompletedIndexes(state, setId, activeCycle.number).length
+        : 0;
+
+    return {
+        totalExercises,
+        attemptedExercises,
+        solvedExercises,
+        attemptedPercent: percentage(attemptedExercises, totalExercises) ?? 0,
+        solvedPercent: percentage(solvedExercises, totalExercises) ?? 0,
+        overall: summarizeTacticsAttempts(attempts),
+        activeCycle: activeCycle
+            ? summarizeTacticsCycle(
+                  {
+                      number: activeCycle.number,
+                      exerciseCount: totalExercises,
+                      completedCount: activeCycleCompleted,
+                      failures: activeCycle.failures,
+                      timeMs: activeCycle.timeMs,
+                  },
+                  null,
+              )
+            : null,
+        completedCycles: set.progress.cycles
+            .map((cycle) => summarizeTacticsCycle(cycle, cycle.completedAt))
+            .sort((left, right) => left.number - right.number),
+        evolution: Array.from(evolutionByDate.entries())
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([date, dailyAttempts]) => ({
+                date,
+                ...summarizeTacticsAttempts(dailyAttempts),
+            })),
     };
 }

@@ -149,7 +149,12 @@ describe("board shell tab reuse", () => {
         let activeTab: string | null = "home";
 
         const id = await createTab({
-            tab: { name: "Evidence", type: "analysis", returnPath: "/accounts" },
+            tab: {
+                name: "Evidence",
+                type: "analysis",
+                returnPath: "/accounts",
+                returnPlayerAnalysis: { profileId: "profile-second", playerName: "Second" },
+            },
             preserveNewTab: true,
             setTabs: (update) => {
                 tabs = typeof update === "function" ? update(tabs) : update;
@@ -161,6 +166,10 @@ describe("board shell tab reuse", () => {
 
         expect(tabs.map((tab) => tab.value)).toEqual(["home", id]);
         expect(tabs[1].returnPath).toBe("/accounts");
+        expect(tabs[1].returnPlayerAnalysis).toEqual({
+            profileId: "profile-second",
+            playerName: "Second",
+        });
         expect(activeTab).toBe(id);
     });
 });

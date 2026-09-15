@@ -1,6 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import i18n from "i18next";
-import { act, type ReactNode } from "react";
+import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -16,6 +16,7 @@ import OpeningReportView from "./OpeningReportView";
 const { atomSet } = vi.hoisted(() => ({ atomSet: vi.fn() }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("jotai", () => ({
+  useAtom: () => useState(null),
   useAtomValue: () => 0,
   useSetAtom: () => vi.fn(),
   useStore: () => ({ set: atomSet }),
@@ -26,6 +27,7 @@ vi.mock("@/state/atoms", () => ({
   dbTabFamily: (id: string) => `db-tab:${id}`,
   localOptionsFamily: (id: string) => `local-options:${id}`,
   openingReportReopenFamily: (id: string) => `opening-report-reopen:${id}`,
+  openingReportCacheFamily: (id: string) => `opening-report-cache:${id}`,
   tabFamily: (id: string) => `panel-tab:${id}`,
 }));
 vi.mock("@/utils/tabs", () => ({ createTab: vi.fn().mockResolvedValue(undefined) }));
@@ -177,6 +179,7 @@ it("opens a reference at root ply plus continuation length with its database ide
   expect(commands.getPositionGame).toHaveBeenCalledWith("fixture", 0);
   expect(createTab).toHaveBeenCalledWith(
     expect.objectContaining({
+      tab: expect.objectContaining({ returnTabId: "board", returnTabView: "report" }),
       position: Array(10).fill(0),
       gameOrigin: { kind: "database", database: "local.db3", gameId: 1 },
     }),

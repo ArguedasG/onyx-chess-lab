@@ -171,6 +171,23 @@ describe("workspace tab navigation and closing", () => {
     expect(router.state.location.pathname).toBe("/");
   });
 
+  it("returns to the originating report when its game tab is closed", async () => {
+    const reportGame: Tab = {
+      name: "Report game",
+      value: "report-game",
+      type: "analysis",
+      returnTabId: "board",
+      returnTabView: "report",
+      gameOrigin: { kind: "database", database: "db", gameId: 1 },
+    };
+    const { store, router } = await mountWorkspace("/", [board, reportGame], "report-game");
+    await click(document.querySelector('[aria-label="Close: Report game"]'));
+    expect(store.get(activeTabAtom)).toBe("board");
+    expect(store.get(tabFamily("board"))).toBe("database");
+    expect(store.get(dbTabFamily("board"))).toBe("report");
+    expect(router.state.location.pathname).toBe("/");
+  });
+
   it("shows the tabs in the hub and converts the same tab into each training area", async () => {
     const { store, router } = await mountWorkspace();
     const trainingId = store.get(activeTabAtom);

@@ -4,6 +4,8 @@ import {
   Button,
   Divider,
   Group,
+  Modal,
+  MultiSelect,
   NumberInput,
   Paper,
   Progress,
@@ -48,15 +50,21 @@ import {
   aggregateEngineAnalysis,
   analyzePlayerGames,
   buildEngineGameMetrics,
+  criticalPositionForPerspective,
   DEFAULT_PLAYER_ANALYSIS_FILTERS,
+  getPlayerAnalysisTimeControl,
   PLAYER_ANALYSIS_SCHEMA_VERSION,
+  PLAYER_ANALYSIS_TIME_CONTROLS,
+  playerAnalysisTimeControlCounts,
   selectPlayerEngineGames,
   type PlayerAnalysisBucket,
   type PlayerAnalysisCriticalPosition,
+  type PlayerAnalysisExercisePerspective,
   type PlayerAnalysisFilters,
   type PlayerAnalysisGame,
   type PlayerAnalysisReference,
   type PlayerAnalysisSource,
+  type PlayerAnalysisTimeControl,
 } from "@/utils/playerAnalysis";
 import { createTab } from "@/utils/tabs";
 import {
@@ -68,6 +76,18 @@ import { treeIteratorMainLine } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 
 const PAGE_SIZE = 250;
+const PLAYER_GAMES_CACHE_LIMIT = 3;
+const playerGamesCache = new Map<string, PlayerAnalysisGame[]>();
+const playerGamesLoads = new Map<string, Promise<PlayerAnalysisGame[]>>();
+
+function cachePlayerGames(profileId: string, games: PlayerAnalysisGame[]) {
+  playerGamesCache.delete(profileId);
+  playerGamesCache.set(profileId, games);
+  while (playerGamesCache.size > PLAYER_GAMES_CACHE_LIMIT) {
+    const oldest = playerGamesCache.keys().next().value;
+    if (oldest) playerGamesCache.delete(oldest);
+  }
+}
 
 function formatScore(value: number | null): string {
   return value == null ? "—" : `${value.toFixed(1)}%`;
@@ -126,6 +146,22 @@ function classificationLabel(
   }[value];
 }
 
+function timeControlLabel(
+  value: PlayerAnalysisTimeControl,
+  t: (key: string, fallback: string) => string,
+): string {
+  return {
+    ultra_bullet: t("TimeControl.UltraBullet", "Ultra bullet"),
+    bullet: t("TimeControl.Bullet", "Bullet"),
+    blitz: t("TimeControl.Blitz", "Blitz"),
+    rapid: t("TimeControl.Rapid", "Rapid"),
+    classical: t("TimeControl.Classical", "Classical"),
+    correspondence: t("TimeControl.Correspondence", "Correspondence"),
+    daily: t("PlayerAnalysis.TimeDaily", "Daily"),
+    unknown: t("PlayerAnalysis.TimeUnknown", "Unknown"),
+  }[value];
+}
+
 async function loadSourceGames(source: PlayerAnalysisSource): Promise<PlayerAnalysisGame[]> {
   const games: NormalizedGame[] = [];
   let page = 1;
@@ -154,6 +190,36 @@ async function loadSourceGames(source: PlayerAnalysisSource): Promise<PlayerAnal
     source,
     game,
   }));
+}
+
+async function loadProfileGames(
+  sources: PlayerAnalysisSource[],
+  onProgress?: (progress: number) => void,
+): Promise<PlayerAnalysisGame[]> {
+  const loaded: PlayerAnalysisGame[] = [];
+  for (const [index, source] of sources.entries()) {
+    loaded.push(...(await loadSourceGames(source)));
+    onProgress?.(((index + 1) / sources.length) * 100);
+  }
+  return [...new Map(loaded.map((game) => [game.key, game])).values()];
+}
+
+function loadProfileGamesOnce(
+  profileId: string,
+  sources: PlayerAnalysisSource[],
+): Promise<PlayerAnalysisGame[]> {
+  const existing = playerGamesLoads.get(profileId);
+  if (existing) return existing;
+  const pending = loadProfileGames(sources)
+    .then((games) => {
+      cachePlayerGames(profileId, games);
+      return games;
+    })
+    .finally(() => {
+      if (playerGamesLoads.get(profileId) === pending) playerGamesLoads.delete(profileId);
+    });
+  playerGamesLoads.set(profileId, pending);
+  return pending;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -254,11 +320,61 @@ export default function PlayerAnalysisPanel({
   const [engineGames, setEngineGames] = useState(10);
   const [analyzeAllGames, setAnalyzeAllGames] = useState(false);
   const [engineTimeMs, setEngineTimeMs] = useState(250);
+  const [engineTimeControls, setEngineTimeControls] = useState<PlayerAnalysisTimeControl[]>(
+    () => stored?.engine?.timeControls ?? [...PLAYER_ANALYSIS_TIME_CONTROLS],
+  );
   const [engineLoading, setEngineLoading] = useState(false);
   const [engineProgress, setEngineProgress] = useState(0);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+  const [pendingCritical, setPendingCritical] = useState<PlayerAnalysisCriticalPosition | null>(
+    null,
+  );
   const cancelled = useRef(false);
   const activeAnalysisId = useRef<string | null>(null);
+  const loadRequestId = useRef(0);
+  const profileSnapshot = useRef({ sources, filters: stored?.metadata.filters, t });
+  profileSnapshot.current = { sources, filters: stored?.metadata.filters, t };
+  const hasStoredProfile = stored !== null;
+
+  useEffect(() => {
+    const requestId = ++loadRequestId.current;
+    const snapshot = profileSnapshot.current;
+    setFilters(snapshot.filters ?? DEFAULT_PLAYER_ANALYSIS_FILTERS);
+    const cached = playerGamesCache.get(profileId);
+    if (cached) {
+      cachePlayerGames(profileId, cached);
+      setGames(cached);
+      setLoading(false);
+      return;
+    }
+    setGames([]);
+    if (!hasStoredProfile || snapshot.sources.length === 0) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadingProgress(0);
+    void loadProfileGamesOnce(profileId, snapshot.sources)
+      .then((loaded) => {
+        if (loadRequestId.current !== requestId) return;
+        setLoadingProgress(100);
+        setGames(loaded);
+      })
+      .catch((error) => {
+        if (loadRequestId.current !== requestId) return;
+        notifications.show({
+          color: "red",
+          title: snapshot.t("PlayerAnalysis.Error", "Player analysis failed"),
+          message: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (loadRequestId.current === requestId) setLoading(false);
+      });
+    return () => {
+      if (loadRequestId.current === requestId) loadRequestId.current += 1;
+    };
+  }, [hasStoredProfile, profileId]);
 
   useLayoutEffect(() => {
     const viewports: Record<PlayerAnalysisSection, React.RefObject<HTMLDivElement | null>> = {
@@ -295,6 +411,10 @@ export default function PlayerAnalysisPanel({
     }
   }, [engineId, localEngines]);
 
+  useEffect(() => {
+    setEngineTimeControls(stored?.engine?.timeControls ?? [...PLAYER_ANALYSIS_TIME_CONTROLS]);
+  }, [profileId, stored?.engine?.timeControls]);
+
   const userTacticsSets = useMemo(
     () =>
       Object.values(trainingAreas.tactics.sets).filter(
@@ -308,6 +428,37 @@ export default function PlayerAnalysisPanel({
     }
   }, [selectedSetId, userTacticsSets]);
 
+  const engineTimeControlCounts = useMemo(
+    () =>
+      playerAnalysisTimeControlCounts(
+        games,
+        stored?.metadata.filters ?? DEFAULT_PLAYER_ANALYSIS_FILTERS,
+      ),
+    [games, stored?.metadata.filters],
+  );
+  const availableEngineTimeControls = useMemo(
+    () => engineTimeControlCounts.map(({ value }) => value),
+    [engineTimeControlCounts],
+  );
+  useEffect(() => {
+    setEngineTimeControls((previous) => {
+      if (availableEngineTimeControls.length === 0) return previous;
+      const available = new Set(availableEngineTimeControls);
+      const retained = previous.filter((value) => available.has(value));
+      return retained.length > 0 ? retained : availableEngineTimeControls;
+    });
+  }, [availableEngineTimeControls]);
+  const eligibleEngineGames = useMemo(
+    () =>
+      selectPlayerEngineGames(
+        games,
+        stored?.metadata.filters ?? DEFAULT_PLAYER_ANALYSIS_FILTERS,
+        "all",
+        engineTimeControls,
+      ),
+    [engineTimeControls, games, stored?.metadata.filters],
+  );
+
   const saveProfile = useCallback(
     (profile: StoredPlayerAnalysis) => {
       setState((previous) => ({
@@ -320,15 +471,15 @@ export default function PlayerAnalysisPanel({
   );
 
   const generate = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     setLoadingProgress(0);
     try {
-      const loaded: PlayerAnalysisGame[] = [];
-      for (const [index, source] of sources.entries()) {
-        loaded.push(...(await loadSourceGames(source)));
-        setLoadingProgress(((index + 1) / sources.length) * 100);
-      }
-      const unique = [...new Map(loaded.map((game) => [game.key, game])).values()];
+      const unique = await loadProfileGames(sources, (progress) => {
+        if (loadRequestId.current === requestId) setLoadingProgress(progress);
+      });
+      if (loadRequestId.current !== requestId) return;
+      cachePlayerGames(profileId, unique);
       setGames(unique);
       const metadata = analyzePlayerGames(playerName, unique, sources, filters);
       saveProfile({
@@ -340,13 +491,14 @@ export default function PlayerAnalysisPanel({
         engine: null,
       });
     } catch (error) {
+      if (loadRequestId.current !== requestId) return;
       notifications.show({
         color: "red",
         title: t("PlayerAnalysis.Error", "Player analysis failed"),
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      setLoading(false);
+      if (loadRequestId.current === requestId) setLoading(false);
     }
   }, [filters, playerName, profileId, saveProfile, sources, t]);
 
@@ -372,6 +524,7 @@ export default function PlayerAnalysisPanel({
             name: `${game.white} - ${game.black}`,
             type: "analysis",
             returnPath: pathname === "/databases" ? "/databases" : "/accounts",
+            returnPlayerAnalysis: { profileId, playerName },
           },
           setTabs,
           setActiveTab,
@@ -394,7 +547,7 @@ export default function PlayerAnalysisPanel({
         });
       }
     },
-    [navigate, pathname, setActiveTab, setTabs, t],
+    [navigate, pathname, playerName, profileId, setActiveTab, setTabs, t],
   );
 
   const runEngineAnalysis = useCallback(async () => {
@@ -404,6 +557,7 @@ export default function PlayerAnalysisPanel({
       games,
       stored.metadata.filters,
       analyzeAllGames ? "all" : engineGames,
+      engineTimeControls,
     );
     const options: EngineOption[] = (engine.settings ?? []).map((setting) => ({
       name: setting.name,
@@ -430,7 +584,7 @@ export default function PlayerAnalysisPanel({
           const tree = await parsePGN(item.game.moves, item.game.fen);
           const uciMoves = getMainLine(tree.root);
           const nodes = [...treeIteratorMainLine(tree.root)].map((entry) => entry.node);
-          const preMoveFens = nodes.slice(0, uciMoves.length).map((node) => node.fen);
+          const preMoveFens = nodes.slice(0, uciMoves.length + 1).map((node) => node.fen);
           const goMode: GoMode = { t: "Time", c: engineTimeMs };
           const response = await commands.analyzeGame(
             analysisId,
@@ -465,6 +619,20 @@ export default function PlayerAnalysisPanel({
           limit,
         },
         requestedGames: selected.length,
+        eligibleGames: eligibleEngineGames.length,
+        timeControls: engineTimeControls,
+        timeControlBreakdown: engineTimeControls.flatMap((value) => {
+          const eligibleGames = eligibleEngineGames.filter(
+            (game) => getPlayerAnalysisTimeControl(game) === value,
+          ).length;
+          const selectedKeys = new Set(
+            selected
+              .filter((game) => getPlayerAnalysisTimeControl(game) === value)
+              .map((game) => game.key),
+          );
+          const analyzedGames = analyzed.filter((game) => selectedKeys.has(game.key)).length;
+          return eligibleGames > 0 ? [{ value, eligibleGames, analyzedGames }] : [];
+        }),
         skippedGames: skipped,
         games: analyzed,
       });
@@ -478,6 +646,8 @@ export default function PlayerAnalysisPanel({
     engineGames,
     engineId,
     engineTimeMs,
+    engineTimeControls,
+    eligibleEngineGames,
     games,
     localEngines,
     profileId,
@@ -492,18 +662,23 @@ export default function PlayerAnalysisPanel({
   }, []);
 
   const addCriticalToSet = useCallback(
-    (critical: PlayerAnalysisCriticalPosition) => {
+    (critical: PlayerAnalysisCriticalPosition, perspective: PlayerAnalysisExercisePerspective) => {
+      const exercise = criticalPositionForPerspective(critical, perspective);
       const record: ParsedTrainingRecord = {
-        fen: critical.fen,
-        moves: critical.bestLine,
+        fen: exercise.fen,
+        moves: exercise.moves,
         title: `${critical.gameLabel} · ${critical.classification}`,
         hasExplicitFen: true,
         playerAnalysis: {
           databasePath: critical.databasePath,
           gameId: critical.gameId,
-          ply: critical.ply ?? 0,
+          ply: exercise.ply,
           cpLoss: critical.cpLoss,
           classification: critical.classification,
+          mode: exercise.mode,
+          fen: exercise.fen,
+          sideToMove: exercise.sideToMove,
+          solution: exercise.moves,
         },
       };
       if (selectedSetId) {
@@ -511,6 +686,7 @@ export default function PlayerAnalysisPanel({
           ...previous,
           tactics: addTacticsExerciseToSet(previous.tactics, selectedSetId, record, [
             "player-analysis",
+            exercise.mode,
             critical.classification,
             critical.phase,
           ]),
@@ -554,7 +730,62 @@ export default function PlayerAnalysisPanel({
   const timeControls = [...new Set(games.map((game) => game.game.time_control || "unknown"))];
 
   return (
-    <Stack h="100%" gap="sm">
+    <Stack h="100%" gap="sm" style={{ minHeight: 0 }}>
+      <Modal
+        opened={pendingCritical !== null}
+        onClose={() => setPendingCritical(null)}
+        title={t("PlayerAnalysis.PerspectiveQuestion", "Choose the exercise perspective")}
+        centered
+      >
+        {pendingCritical && (
+          <Stack>
+            <Text size="sm" c="dimmed">
+              {t(
+                "PlayerAnalysis.PerspectiveQuestionDescription",
+                "Choose which side of this error you want to train. The selected perspective will be saved in the exercise.",
+              )}
+            </Text>
+            <div>
+              <Button
+                fullWidth
+                variant="light"
+                disabled={pendingCritical.bestLine.length === 0}
+                onClick={() => {
+                  addCriticalToSet(pendingCritical, "improveDecision");
+                  setPendingCritical(null);
+                }}
+              >
+                {t("PlayerAnalysis.PerspectiveImprove", "Improve my decision")}
+              </Button>
+              <Text size="xs" c="dimmed" mt={4}>
+                {t(
+                  "PlayerAnalysis.PerspectiveImproveDescription",
+                  "The exercise starts before your mistake and asks you to find the better decision.",
+                )}
+              </Text>
+            </div>
+            <div>
+              <Button
+                fullWidth
+                variant="light"
+                disabled={pendingCritical.punishmentLine.length === 0}
+                onClick={() => {
+                  addCriticalToSet(pendingCritical, "punishError");
+                  setPendingCritical(null);
+                }}
+              >
+                {t("PlayerAnalysis.PerspectivePunish", "Punish my error")}
+              </Button>
+              <Text size="xs" c="dimmed" mt={4}>
+                {t(
+                  "PlayerAnalysis.PerspectivePunishDescription",
+                  "The exercise starts after your mistake and asks you to find the opponent's punishment.",
+                )}
+              </Text>
+            </div>
+          </Stack>
+        )}
+      </Modal>
       <Group justify="space-between" align="flex-start">
         <div>
           <Title order={4}>{t("PlayerAnalysis.Title", "Player Analysis")}</Title>
@@ -579,13 +810,14 @@ export default function PlayerAnalysisPanel({
             color="red"
             leftSection={<IconTrash size={14} />}
             disabled={!stored || loading || engineLoading}
-            onClick={() =>
+            onClick={() => {
+              playerGamesCache.delete(profileId);
               setState((previous) => {
                 const profiles = { ...previous.profiles };
                 delete profiles[profileId];
                 return { ...previous, profiles };
-              })
-            }
+              });
+            }}
           >
             {t("PlayerAnalysis.Delete", "Delete profile")}
           </Button>
@@ -697,7 +929,7 @@ export default function PlayerAnalysisPanel({
             }))
           }
           flex={1}
-          style={{ overflow: "hidden" }}
+          style={{ overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}
         >
           <Tabs.List>
             <Tabs.Tab value="summary">{t("PlayerAnalysis.Summary", "Summary")}</Tabs.Tab>
@@ -706,9 +938,10 @@ export default function PlayerAnalysisPanel({
             <Tabs.Tab value="engine">{t("PlayerAnalysis.Engine", "Engine")}</Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="summary" pt="sm">
+          <Tabs.Panel value="summary" pt="sm" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             <ScrollArea
-              h="calc(100vh - 360px)"
+              h="100%"
+              type="always"
               offsetScrollbars
               viewportRef={summaryViewport}
               onScrollPositionChange={({ y }) => rememberScroll("summary", y)}
@@ -754,9 +987,14 @@ export default function PlayerAnalysisPanel({
             </ScrollArea>
           </Tabs.Panel>
 
-          <Tabs.Panel value="openings" pt="sm">
+          <Tabs.Panel
+            value="openings"
+            pt="sm"
+            style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
+          >
             <ScrollArea
-              h="calc(100vh - 360px)"
+              h="100%"
+              type="always"
               offsetScrollbars
               viewportRef={openingsViewport}
               onScrollPositionChange={({ y }) => rememberScroll("openings", y)}
@@ -769,9 +1007,14 @@ export default function PlayerAnalysisPanel({
             </ScrollArea>
           </Tabs.Panel>
 
-          <Tabs.Panel value="findings" pt="sm">
+          <Tabs.Panel
+            value="findings"
+            pt="sm"
+            style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
+          >
             <ScrollArea
-              h="calc(100vh - 360px)"
+              h="100%"
+              type="always"
               offsetScrollbars
               viewportRef={findingsViewport}
               onScrollPositionChange={({ y }) => rememberScroll("findings", y)}
@@ -817,9 +1060,10 @@ export default function PlayerAnalysisPanel({
             </ScrollArea>
           </Tabs.Panel>
 
-          <Tabs.Panel value="engine" pt="sm">
+          <Tabs.Panel value="engine" pt="sm" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             <ScrollArea
-              h="calc(100vh - 360px)"
+              h="100%"
+              type="always"
               offsetScrollbars
               viewportRef={engineViewport}
               onScrollPositionChange={({ y }) => rememberScroll("engine", y)}
@@ -831,6 +1075,40 @@ export default function PlayerAnalysisPanel({
                     "The engine analyzes the newest games in the filtered sample. Results are cached by game, engine and limit, so an interrupted run can continue.",
                   )}
                 </Alert>
+                <MultiSelect
+                  label={t("PlayerAnalysis.EngineTimeControls", "Time controls to analyze")}
+                  description={t(
+                    "PlayerAnalysis.EngineTimeControlsDescription",
+                    "Choose one or more rhythms. The most recent game limit is applied after combining them.",
+                  )}
+                  placeholder={t(
+                    "PlayerAnalysis.SelectTimeControls",
+                    "Select at least one time control",
+                  )}
+                  searchable
+                  clearable
+                  hidePickedOptions
+                  value={engineTimeControls}
+                  data={engineTimeControlCounts.map(({ value, count }) => ({
+                    value,
+                    label: `${timeControlLabel(value, t)} (${count})`,
+                  }))}
+                  onChange={(values) =>
+                    setEngineTimeControls(values as PlayerAnalysisTimeControl[])
+                  }
+                />
+                <Text size="xs" c="dimmed">
+                  {t(
+                    "PlayerAnalysis.EngineSampleScope",
+                    "{{eligible}} eligible games; {{selected}} will be analyzed with the current limit.",
+                    {
+                      eligible: eligibleEngineGames.length,
+                      selected: analyzeAllGames
+                        ? eligibleEngineGames.length
+                        : Math.min(engineGames, eligibleEngineGames.length),
+                    },
+                  )}
+                </Text>
                 <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
                   <Select
                     label={t("PlayerAnalysis.Engine", "Engine")}
@@ -843,7 +1121,7 @@ export default function PlayerAnalysisPanel({
                   <NumberInput
                     label={t("PlayerAnalysis.EngineGames", "Most recent games to analyze")}
                     min={1}
-                    max={Math.max(1, metadata.sampleSize)}
+                    max={Math.max(1, eligibleEngineGames.length)}
                     step={5}
                     value={engineGames}
                     disabled={analyzeAllGames}
@@ -857,7 +1135,7 @@ export default function PlayerAnalysisPanel({
                       "PlayerAnalysis.EngineAllGames",
                       "Analyze all filtered games ({{count}})",
                       {
-                        count: metadata.sampleSize,
+                        count: eligibleEngineGames.length,
                       },
                     )}
                     onChange={(event) => setAnalyzeAllGames(event.currentTarget.checked)}
@@ -874,7 +1152,13 @@ export default function PlayerAnalysisPanel({
                 <Group>
                   <Button
                     leftSection={<IconPlayerPlay size={16} />}
-                    disabled={!engineId || games.length === 0 || engineLoading}
+                    disabled={
+                      !engineId ||
+                      games.length === 0 ||
+                      engineTimeControls.length === 0 ||
+                      eligibleEngineGames.length === 0 ||
+                      engineLoading
+                    }
                     loading={engineLoading}
                     onClick={runEngineAnalysis}
                   >
@@ -901,6 +1185,24 @@ export default function PlayerAnalysisPanel({
                 {engine && (
                   <>
                     <Divider />
+                    <Group gap="xs">
+                      <Text size="xs" c="dimmed">
+                        {t(
+                          "PlayerAnalysis.EngineSavedScope",
+                          "Saved sample: {{analyzed}} of {{eligible}} eligible games",
+                          {
+                            analyzed: engine.analyzedGames,
+                            eligible: engine.eligibleGames,
+                          },
+                        )}
+                      </Text>
+                      {engine.timeControlBreakdown.map((item) => (
+                        <Badge key={item.value} size="sm" variant="light">
+                          {timeControlLabel(item.value, t)} · {item.analyzedGames}/
+                          {item.eligibleGames}
+                        </Badge>
+                      ))}
+                    </Group>
                     <SimpleGrid cols={{ base: 2, sm: 6 }}>
                       <Metric
                         label={t("PlayerAnalysis.AnalyzedGames", "Analyzed games")}
@@ -948,6 +1250,12 @@ export default function PlayerAnalysisPanel({
                     {engine.recurringErrors.length > 0 && (
                       <>
                         <Title order={5}>{t("PlayerAnalysis.Recurring", "Recurring errors")}</Title>
+                        <Text size="xs" c="dimmed">
+                          {t(
+                            "PlayerAnalysis.RecurringExplanation",
+                            "Errors are grouped when the same opening, game phase and severity occur at least twice. This identifies patterns; open the evidence to inspect the concrete positions.",
+                          )}
+                        </Text>
                         <Table withTableBorder striped>
                           <Table.Thead>
                             <Table.Tr>
@@ -1023,8 +1331,11 @@ export default function PlayerAnalysisPanel({
                                 </Button>
                                 <Button
                                   size="compact-xs"
-                                  disabled={critical.bestLine.length === 0}
-                                  onClick={() => addCriticalToSet(critical)}
+                                  disabled={
+                                    critical.bestLine.length === 0 &&
+                                    critical.punishmentLine.length === 0
+                                  }
+                                  onClick={() => setPendingCritical(critical)}
                                 >
                                   {t("PlayerAnalysis.AddToSet", "Add to set")}
                                 </Button>

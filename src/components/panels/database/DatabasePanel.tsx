@@ -212,7 +212,7 @@ function DatabasePanel() {
       activeQuery.current = { key: JSON.stringify([source, owner]), controller };
       return fetchOpening(source, owner || "", controller.signal);
     },
-    { keepPreviousData: true },
+    { keepPreviousData: true, shouldRetryOnError: false },
   );
 
   const transientError = isTransientPositionError(error);

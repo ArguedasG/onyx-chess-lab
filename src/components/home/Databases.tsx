@@ -10,13 +10,14 @@ import {
   Title,
 } from "@mantine/core";
 import { IconDatabaseOff } from "@tabler/icons-react";
-import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
+import { useAtom, useAtomValue } from "jotai";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWRImmutable from "swr/immutable";
 import type { DatabaseInfo as PlainDatabaseInfo, PlayerGameInfo } from "@/bindings";
 import { commands, events } from "@/bindings";
 import { sessionsAtom } from "@/state/atoms";
+import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import { activeDatabaseViewStore } from "@/state/store/database";
 import { getDatabases, query_players } from "@/utils/db";
 import type { Session } from "@/utils/session";
@@ -56,8 +57,12 @@ function Databases() {
   const { t } = useTranslation();
   const sessions = useAtomValue(sessionsAtom);
 
-  const players = Array.from(
-    new Set(sessions.map((s) => s.player || s.lichess?.username || s.chessCom?.username || "")),
+  const players = useMemo(
+    () =>
+      Array.from(
+        new Set(sessions.map((s) => s.player || s.lichess?.username || s.chessCom?.username || "")),
+      ),
+    [sessions],
   );
   const playerDbNames = players.map((name) => ({
     name,
@@ -70,12 +75,20 @@ function Databases() {
       ),
   }));
 
-  const [name, setName] = useState("");
+  const [returnTarget, setReturnTarget] = useAtom(playerAnalysisReturnTargetAtom);
+  const [name, setName] = useState(() => returnTarget?.playerName ?? "");
   useEffect(() => {
-    if (sessions.length > 0) {
-      setName(sessions[0].player || getSessionUsername(sessions[0]));
+    if (returnTarget) {
+      if (players.length === 0) return;
+      if (players.includes(returnTarget.playerName)) {
+        setName(returnTarget.playerName);
+        setReturnTarget(null);
+        return;
+      }
+      setReturnTarget(null);
     }
-  }, [sessions]);
+    if (players.length > 0 && !players.includes(name)) setName(players[0]);
+  }, [name, players, returnTarget, setReturnTarget]);
 
   const { data: databases } = useSWRImmutable<DatabaseInfo[]>(
     sessions.length === 0 ? null : ["personalDatabases", sessions],

@@ -1,4 +1,4 @@
-import { act, type ReactNode } from "react";
+import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { SWRConfig, type State } from "swr";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -49,8 +49,16 @@ vi.mock("@mantine/core", () => ({
   Text: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
-vi.mock("jotai", () => ({ useSetAtom: () => vi.fn() }));
-vi.mock("@/state/atoms", () => ({ tabsAtom: {}, activeTabAtom: {} }));
+vi.mock("jotai", () => ({
+  useAtom: () =>
+    useState({ token: "", page: 1, sort: "index" as const, direction: "asc" as const }),
+  useSetAtom: () => vi.fn(),
+}));
+vi.mock("@/state/atoms", () => ({
+  tabsAtom: {},
+  activeTabAtom: {},
+  positionGamesViewFamily: () => {},
+}));
 vi.mock("@/utils/tabs", () => ({ createTab: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("@/bindings", () => ({
@@ -222,7 +230,7 @@ it("requests a fresh snapshot once when a cached token expires", async () => {
   await mount();
   await mount();
   expect(expired).toHaveBeenCalledTimes(1);
-  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
 it("retries a lifecycle cancellation without showing a database failure", async () => {

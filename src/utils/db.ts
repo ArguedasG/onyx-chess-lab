@@ -42,10 +42,12 @@ export type Speed =
 export function isTransientPositionError(error: unknown): boolean {
     if (error instanceof DOMException && error.name === "AbortError") return true;
     const message = error instanceof Error ? error.message : String(error ?? "");
+    const normalized = message.toLowerCase();
     return (
-        message === "Search cancelled" ||
-        message === "Search preempted" ||
-        message === "This operation was aborted"
+        normalized.includes("search cancelled") ||
+        normalized.includes("search preempted") ||
+        normalized.includes("operation was aborted") ||
+        normalized.includes("aborterror")
     );
 }
 

@@ -25,6 +25,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   IconArrowLeft,
+  IconChartBar,
   IconChevronLeft,
   IconChevronRight,
   IconCheck,
@@ -43,6 +44,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PuzzleDatabaseInfo } from "@/bindings";
 import Board from "@/components/boards/Board";
 import { TreeStateProvider } from "@/components/common/TreeStateContext";
+import TacticsSetStatisticsModal from "@/components/training/TacticsSetStatisticsModal";
 import { activeTabAtom, tabsAtom } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { getPuzzleDatabases } from "@/utils/puzzles";
@@ -122,6 +124,7 @@ export default function TacticsDashboardV2Page() {
   const [draftRatingMin, setDraftRatingMin] = useState<string | number>("");
   const [draftRatingMax, setDraftRatingMax] = useState<string | number>("");
   const [deletingSetId, setDeletingSetId] = useState<string | null>(null);
+  const [statisticsSetId, setStatisticsSetId] = useState<string | null>(null);
 
   const [reviewSetId, setReviewSetId] = useState<string | null>(null);
   const [reviewIndex, setReviewIndex] = useState(0);
@@ -140,6 +143,7 @@ export default function TacticsDashboardV2Page() {
     [areas.tactics.sets],
   );
   const reviewSet = reviewSetId ? areas.tactics.sets[reviewSetId] : undefined;
+  const statisticsSet = statisticsSetId ? areas.tactics.sets[statisticsSetId] : undefined;
   const reviewTotal = reviewSet
     ? reviewSet.source?.kind === "pgnFile"
       ? reviewSet.source.recordCount
@@ -535,6 +539,13 @@ export default function TacticsDashboardV2Page() {
                               )
                             : trainingT("Training.Copy.Startset.88c407a1", "Start set")}
                       </Button>
+                      <Button
+                        variant="light"
+                        leftSection={<IconChartBar size={16} />}
+                        onClick={() => setStatisticsSetId(set.id)}
+                      >
+                        {trainingT("Training.Tactics.Stats.Button", "Statistics")}
+                      </Button>
                       <Group grow>
                         <Button
                           variant="default"
@@ -730,6 +741,15 @@ export default function TacticsDashboardV2Page() {
           </Stack>
         )}
       </Modal>
+
+      {statisticsSet && (
+        <TacticsSetStatisticsModal
+          opened
+          onClose={() => setStatisticsSetId(null)}
+          set={statisticsSet}
+          state={areas.tactics}
+        />
+      )}
 
       <Modal
         opened={editingSetId !== null}

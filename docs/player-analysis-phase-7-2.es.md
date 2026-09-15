@@ -1,7 +1,8 @@
 # Fase 7.2 — Player Analysis local y accionable
 
-Fecha: 2026-08-29; cierre funcional ampliado el 2026-09-07. Estado: núcleo implementado y
-validación automática aprobada; validación manual nativa y empaquetada pendiente. Las fuentes
+Fecha: 2026-08-29; cierre funcional ampliado el 2026-09-07 e implementado el 2026-09-14. Estado:
+implementación funcional terminada y validación automática aprobada; validación manual nativa y
+empaquetada pendiente. Las fuentes
 principales son cuentas Lichess descargadas e
 importaciones PGN que
 ya forman parte de una base local. No se envían partidas, evaluaciones ni perfiles a servicios
@@ -16,25 +17,37 @@ externos.
 4. Consultar resultados por color, control de tiempo, fuerza relativa, apertura/ECO, rival y año;
    abrir una partida de evidencia por su base e ID exactos en una pestaña separada, conservando el
    perfil para regresar o consultar otra evidencia.
-5. Elegir un motor local distinto de Maia, cantidad de partidas recientes y tiempo acotado por
-   posición. El análisis conserva ACPL, errores, fases, conversión, defensa y posiciones críticas.
-6. Abrir una posición crítica en su ply o añadirla a un set táctico propio. Si no existe un set
-   embebido seleccionable, se puede crear **Mis errores tácticos** desde la primera posición.
+5. Elegir uno o varios ritmos, un motor local distinto de Maia, cantidad de partidas recientes y
+   tiempo acotado por posición. Los ritmos se combinan antes de aplicar el límite de últimas partidas.
+   El análisis conserva ACPL, errores, fases, conversión, defensa y posiciones críticas.
+6. Abrir una posición crítica en su ply o pulsar **Añadir al set**. Cada pulsación abre un diálogo
+   para escoger **mejorar mi decisión** o **castigar mi error** antes de crear el ejercicio. Si no
+   existe un set embebido seleccionable, se puede crear **Mis errores tácticos** desde la primera
+   posición.
 
 ## Contrato y reproducibilidad
 
-- `player-analysis-v1` conserva perfiles locales con `schemaVersion: 2`, fuente, jugador, filtros,
+- `player-analysis-v1` conserva perfiles locales con `schemaVersion: 3`, fuente, jugador, filtros,
   fecha de cálculo, agregados y referencias. Se puede desactivar todo el perfil, recalcularlo o
-  borrarlo. La versión 2 invalida los perfiles anteriores para recalcular correctamente nombres de
-  apertura desde las jugadas cuando falta la cabecera ECO.
+  borrarlo. La versión 3 invalida los perfiles anteriores para guardar la selección múltiple, el
+  total elegible y el aporte analizado por cada ritmo.
 - El motor se registra con nombre, ruta, argumentos, opciones UCI y límite. Maia se excluye de las
   métricas objetivas.
-- El análisis de motor usa las partidas más recientes dentro de la muestra filtrada. El usuario
-  puede elegir la cantidad en pasos de cinco o analizar explícitamente toda la muestra. El valor
-  predeterminado es 10 partidas y 250 ms por posición; no se inicia automáticamente al importar.
+- El análisis de motor usa las partidas más recientes dentro de los ritmos elegidos y la muestra
+  filtrada. El usuario puede combinar categorías, elegir la cantidad en pasos de cinco o analizar
+  explícitamente toda la muestra. La interfaz presenta el total elegible y, en el resultado guardado,
+  cuántas partidas aportó cada ritmo. El valor predeterminado es 10 partidas y 250 ms por posición;
+  no se inicia automáticamente al importar.
 - Los resultados por partida se reutilizan cuando coinciden partida, motor y límite. Una ejecución
   cancelada conserva lo ya terminado y puede continuar después. El proceso activo recibe la misma
   cancelación cooperativa que el análisis de partidas existente.
+- Al alternar perfiles, Motor carga automáticamente las partidas del perfil activo. Una caché LRU de
+  sesión conserva como máximo tres perfiles para agilizar cambios frecuentes sin dejar crecer la RAM
+  sin límite. La instancia visual también cambia con el identificador del perfil, por lo que filtros,
+  conteos y cargas pendientes no se mezclan.
+- Cada pestaña de evidencia conserva el identificador y nombre del perfil que la abrió. La flecha de
+  regreso y el cierre de esa pestaña restauran ese perfil y su sección de análisis, incluso cuando no
+  es el primer perfil configurado.
 - ACPL y clasificación usan únicamente las jugadas del jugador. Los umbrales reproducen el pipeline
   existente: 40 cp para inexactitud, 100 cp para error y 200 cp para error grave.
 - Apertura/medio juego/final se clasifican mediante ply, damas y cantidad de piezas no peón. Es una
@@ -52,29 +65,29 @@ externos.
 
 ## Integración con Táctica
 
-`training-areas-v1` migra al esquema 9. Cada ejercicio creado desde Player Analysis conserva:
+`training-areas-v1` migra al esquema 12. Cada ejercicio creado desde Player Analysis conserva:
 
 - base e ID de la partida;
-- ply exacto anterior al error;
+- modo y ply exacto de la perspectiva seleccionada;
 - pérdida en centipeones y clasificación;
-- FEN y variante principal propuesta por el motor;
-- etiquetas `player-analysis`, fase y severidad.
+- FEN, bando al turno y solución propuesta por el motor;
+- etiquetas `player-analysis`, modo, fase y severidad.
 
 **Añadir al set** solo modifica sets propios embebidos. Los sets enlazados a un PGN y el contenido
-incluido permanecen inmutables. Se deduplica la misma base, partida y ply dentro de un set. Esta
+incluido permanecen inmutables. Se deduplica la misma base, partida, ply y modo dentro de un set. Esta
 procedencia prepara una ampliación que construya y mantenga automáticamente un set de errores
 tácticos, pero esa automatización no forma parte del núcleo actual.
 
-## Requisitos añadidos para cerrar 7.2
+## Requisitos implementados para cerrar 7.2
 
-- El análisis de motor tendrá selección múltiple de ritmos. Bullet, Blitz, Rapid, Classical y otras
-  categorías presentes podrán combinarse, y la muestra/versionado indicarán exactamente cuáles se
+- El análisis de motor tiene selección múltiple de ritmos. Bullet, Blitz, Rapid, Classical y otras
+  categorías presentes pueden combinarse, y la muestra versionada indica exactamente cuáles se
   analizaron y cuántas partidas aportaron.
-- Al añadir una candidata al set, el usuario podrá escoger **mejorar mi decisión** —posición antes
+- Al añadir una candidata al set, el usuario puede escoger **mejorar mi decisión** —posición antes
   del error, juega el usuario— o **castigar mi error** —posición después del error, juega el rival—.
-- La procedencia distinguirá modo, ply, FEN, bando al turno y solución. Las dos perspectivas no se
-  deduplicarán entre sí por accidente.
-- La interfaz explicará la semántica amplia del contador de errores recurrentes. La detección de
+- La procedencia distingue modo, ply, FEN, bando al turno y solución. Las dos perspectivas no se
+  deduplican entre sí por accidente.
+- La interfaz explica la semántica amplia del contador de errores recurrentes. La detección de
   jugada, posición o motivo táctico repetido continúa en 7.3 y deberá ser verificable.
 
 ## Alcance y límites actuales
@@ -90,9 +103,10 @@ tácticos, pero esa automatización no forma parte del núcleo actual.
   clasificador verificable. Las posiciones críticas sí quedan disponibles para revisión y sets.
 - No hay aún análisis incremental automático al descargar nuevas partidas, exportación HTML/JSON,
   comparación entre periodos entrenados ni tablebases dentro de Player Analysis.
-- La prueba manual debe cubrir cuenta Lichess, PGN genérico con alias, cancelación y continuación,
-  reapertura de evidencia, borrado, ausencia de motor, set táctico existente/nuevo y build
-  empaquetada.
+- La prueba manual debe cubrir cuenta Lichess, PGN genérico con alias, alternancia entre perfiles de
+  tamaños distintos, retorno desde evidencia al segundo perfil, scroll completo de Motor,
+  cancelación y continuación, diálogo de ambas perspectivas, borrado, ausencia de motor, set táctico
+  existente/nuevo y build empaquetada.
 
 ## Fase posterior de mejora
 
@@ -104,11 +118,12 @@ sincronización incremental, set táctico automático y medición longitudinal d
 
 ## Validación ejecutada
 
-- 178 pruebas frontend aprobadas en 28 archivos, incluidas métricas, filtros, evidencia, migración y
+- 172 pruebas frontend aprobadas en 30 archivos, incluidas métricas, selección múltiple, ambas
+  perspectivas, evidencia, migración y
   deduplicación del ejercicio táctico;
 - 53 pruebas del módulo de base de datos Rust aprobadas y cuatro omitidas por estar marcadas como
   ignoradas;
 - `tsgo --noEmit --incremental false`, lint focalizado y auditoría de traducciones aprobados;
-- 1.648 claves coincidentes en inglés y español, sin claves o placeholders ausentes;
+- 1.728 claves coincidentes en inglés y español, sin claves o placeholders ausentes;
 - build web aprobada. La prueba manual en Tauri con una cuenta real, un motor local y una build
   empaquetada sigue siendo requisito del corte de presentación.
