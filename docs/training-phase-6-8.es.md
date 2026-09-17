@@ -1,8 +1,7 @@
 # Fase 6.8 — Repertorios, PGN e idiomas
 
-Implementación del 2026-08-27; regresión de incorporación corregida el 2026-09-07. Los flujos
-nativos y la build empaquetada siguen pendientes de prueba manual; las pruebas automatizadas no
-los sustituyen.
+Implementación del 2026-08-27; regresión de incorporación corregida el 2026-09-07. Estado vigente:
+**cerrada y validada manualmente** como parte del cierre consolidado de la Fase 6.
 
 ## Accesos y comportamiento
 
@@ -65,9 +64,10 @@ El fallback sigue siendo inglés y las traducciones vacías no se muestran. Los 
 
 `npm run i18n:check` comprueba igualdad y valores no vacíos de los dos catálogos, variables de interpolación, claves literales usadas en TS/TSX y texto JSX/etiquetas sin traducir en entrenamiento y práctica. La extracción reconoce `trainingT`. Las claves construidas dinámicamente y la calidad lingüística requieren revisión humana adicional.
 
-## Verificación manual pendiente
+## Matriz de verificación manual utilizada
 
-Realizar en desarrollo y en una aplicación empaquetada, preferiblemente con copias de los PGN reales:
+La validación consolidada de la Fase 6 tomó como referencia los siguientes casos en desarrollo y en
+una aplicación empaquetada, preferiblemente con copias de los PGN reales:
 
 1. Importar un repertorio nuevo y comprobar que todas sus ramas quedan disponibles; comprobar que uno antiguo conserva su selección y progreso.
 2. Añadir un PGN completo y luego `1, 3-5` a una variante. Repetir una importación: no deben duplicarse líneas; sí conservarse comentarios y el respaldo.

@@ -1,8 +1,7 @@
 # Fase 7.2 — Player Analysis local y accionable
 
-Fecha: 2026-08-29; cierre funcional ampliado el 2026-09-07 e implementado el 2026-09-14. Estado:
-implementación funcional terminada y validación automática aprobada; validación manual nativa y
-empaquetada pendiente. Las fuentes
+Fecha: 2026-08-29; cierre funcional ampliado el 2026-09-07 e implementado el 2026-09-14. Estado
+vigente: **cerrada y validada manualmente**. Las fuentes
 principales son cuentas Lichess descargadas e
 importaciones PGN que
 ya forman parte de una base local. No se envían partidas, evaluaciones ni perfiles a servicios
@@ -75,8 +74,8 @@ externos.
 
 **Añadir al set** solo modifica sets propios embebidos. Los sets enlazados a un PGN y el contenido
 incluido permanecen inmutables. Se deduplica la misma base, partida, ply y modo dentro de un set. Esta
-procedencia prepara una ampliación que construya y mantenga automáticamente un set de errores
-tácticos, pero esa automatización no forma parte del núcleo actual.
+procedencia permite una ampliación opcional futura que construya y mantenga automáticamente un set
+de errores tácticos. Esa automatización no forma parte de 7.2 ni 7.3; se estudiará en la Fase 10.
 
 ## Requisitos implementados para cerrar 7.2
 
@@ -103,18 +102,20 @@ tácticos, pero esa automatización no forma parte del núcleo actual.
   clasificador verificable. Las posiciones críticas sí quedan disponibles para revisión y sets.
 - No hay aún análisis incremental automático al descargar nuevas partidas, exportación HTML/JSON,
   comparación entre periodos entrenados ni tablebases dentro de Player Analysis.
-- La prueba manual debe cubrir cuenta Lichess, PGN genérico con alias, alternancia entre perfiles de
+- La matriz manual histórica incluía cuenta Lichess, PGN genérico con alias, alternancia entre perfiles de
   tamaños distintos, retorno desde evidencia al segundo perfil, scroll completo de Motor,
   cancelación y continuación, diálogo de ambas perspectivas, borrado, ausencia de motor, set táctico
-  existente/nuevo y build empaquetada.
+  existente/nuevo y build empaquetada. La fase fue validada manualmente posteriormente; las
+  regresiones nuevas pertenecen a mantenimiento.
 
-## Fase posterior de mejora
+## Ampliación posterior
 
-Los pendientes de 7.1 y 7.2 se concentran en 7.3 en vez de dispersarse entre ambas fases. Incluyen
-interpretación estratégica de informes, planes y finales típicos, fuente Lichess remota para
-Opening Reports, biblioteca persistente, novedades/desviaciones, filtros de evento/ritmo,
-metadatos paginados de Player Analysis, relojes, motivos tácticos/estratégicos, tablebases,
-sincronización incremental, set táctico automático y medición longitudinal del entrenamiento.
+Estos pendientes se concentraron y se implementaron posteriormente en 7.3: fuente Lichess remota
+para Opening Reports, biblioteca persistente, desviaciones relativas, filtros de evento/ritmo,
+metadatos paginados de Player Analysis, relojes, motivos tácticos verificables, tablebases,
+sincronización incremental y observación longitudinal del entrenamiento. El estado vigente y sus
+límites están en `phase-7-3-progress.es.md`. La interpretación estratégica, los planes, los finales
+típicos y el set táctico automático opcional permanecen en Fase 10.
 
 ## Validación ejecutada
 
@@ -125,5 +126,5 @@ sincronización incremental, set táctico automático y medición longitudinal d
   ignoradas;
 - `tsgo --noEmit --incremental false`, lint focalizado y auditoría de traducciones aprobados;
 - 1.728 claves coincidentes en inglés y español, sin claves o placeholders ausentes;
-- build web aprobada. La prueba manual en Tauri con una cuenta real, un motor local y una build
-  empaquetada sigue siendo requisito del corte de presentación.
+- build web aprobada. La validación manual en el producto se confirmó posteriormente al cierre
+  automático documentado aquí.

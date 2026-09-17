@@ -1,5 +1,9 @@
 # Fase 7.1 — Informes locales de apertura
 
+Estado vigente: **cerrada y validada manualmente**. Las limitaciones y la matriz original se
+conservan como evidencia de la entrega; las ampliaciones aceptadas pertenecen a 7.3 o 10 según el
+roadmap vigente.
+
 Fecha: 2026-08-28. Núcleo inicial implementado después de la autorización del usuario.
 No incluye Player Analysis, interpretación estratégica ni fuentes remotas.
 
@@ -226,20 +230,20 @@ cargo test --offline --manifest-path src-tauri/Cargo.toml benchmark_real_opening
 cargo test --offline --manifest-path src-tauri/Cargo.toml benchmark_position_snapshot -- --ignored --nocapture
 ```
 
-## Pendientes explícitos
+## Matriz de validación y ampliaciones posteriores
 
-Para el corte de marca/release: revisar ventana estrecha y tema claro/oscuro, posición inicial y FEN
+La matriz original del corte pedía revisar ventana estrecha y tema claro/oscuro, posición inicial y FEN
 con negras al turno, apertura de referencias y variantes, cancelación/cierre/cambio de base,
 actualización simultánea de la fuente, exportación real y reapertura HTML/PGN, diálogos de
 sobrescritura, falta de permisos y comparación con una base pequeña contada manualmente. Repetir
-en Tauri y build empaquetada, y fijar objetivos de rendimiento release por selectividad.
+en Tauri y build empaquetada, y fijar objetivos de rendimiento release por selectividad. El flujo fue
+cerrado posteriormente mediante validación manual; cualquier regresión nueva se trata como
+mantenimiento.
 
-Ampliaciones posteriores: temas estratégicos, planes, finales típicos, fuentes Lichess, biblioteca
-persistente de informes, títulos FIDE/perfiles biográficos, partidas modelo, novedades y desviaciones.
-Games conserva pendientes los filtros por evento/control de tiempo y una definición de relevancia;
-el filtro ELO y los órdenes por fecha/ELO/identificador ya están implementados. No se inicia 7.2
-automáticamente desde este hito; su núcleo fue implementado posteriormente y se documenta en
+Las ampliaciones de fuentes Lichess, biblioteca persistente, partidas modelo, desviaciones relativas,
+filtros de evento/control de tiempo y relevancia reproducible se implementaron posteriormente en
+7.3 y se documentan en `phase-7-3-progress.es.md`. Los títulos FIDE y perfiles biográficos no forman
+parte del alcance vigente. El núcleo de 7.2 fue implementado después de este hito y se documenta en
 `player-analysis-phase-7-2.es.md`.
 
-Los objetivos incluidos de Finales y la matriz de entrenamiento de 6.8 siguen pendientes del corte
-acordado, sin considerarlos resueltos por haber terminado el núcleo del informe.
+Los temas estratégicos, planes y finales típicos fueron trasladados posteriormente a la Fase 10.

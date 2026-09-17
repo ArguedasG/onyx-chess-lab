@@ -49,6 +49,7 @@ export const lichessGamesOptionsSchema = z.object({
     moves: z.number().min(0).optional(),
     topGames: z.number().min(0).optional(),
     recentGames: z.number().min(0).optional(),
+    history: z.boolean().optional(),
     player: z.string().optional(),
     color: z.enum(["white", "black"]),
 });
@@ -96,6 +97,7 @@ export function getLichessGamesQueryParams(
             options.recentGames <= 4
         )
             params.append("recentGames", options.recentGames.toString());
+        if (options.history) params.append("history", "true");
     }
     return params.toString();
 }

@@ -60,6 +60,7 @@ use self::encoding::{
 };
 pub use self::search_index::{get_index_path, MmapSearchIndex, SearchGameEntry, SearchIndex};
 
+pub use self::models::GameMetadata;
 pub use self::models::NormalizedGame;
 pub use self::models::Puzzle;
 pub use self::schema::puzzle_themes;
@@ -1022,6 +1023,8 @@ pub struct GameQuery {
     #[specta(optional)]
     pub game_id: Option<i32>,
     #[specta(optional)]
+    pub after_game_id: Option<i32>,
+    #[specta(optional)]
     pub tournament_id: Option<i32>,
     #[specta(optional)]
     pub start_date: Option<String>,
@@ -1081,6 +1084,10 @@ pub async fn get_games(
     if let Some(game_id) = query.game_id {
         sql_query = sql_query.filter(games::id.eq(game_id));
         count_query = count_query.filter(games::id.eq(game_id));
+    }
+    if let Some(after_game_id) = query.after_game_id {
+        sql_query = sql_query.filter(games::id.gt(after_game_id));
+        count_query = count_query.filter(games::id.gt(after_game_id));
     }
 
     // if let Some(speed) = query.speed {
@@ -1261,6 +1268,284 @@ pub async fn get_games(
     Ok(QueryResponse {
         data: normalized_games,
         count: count.map(|c| c as i32),
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_game_metadata(
+    file: PathBuf,
+    query: GameQuery,
+    state: tauri::State<'_, AppState>,
+) -> Result<QueryResponse<Vec<GameMetadata>>, Error> {
+    let db = &mut get_db_or_create(&state, file.to_str().unwrap(), ConnectionOptions::default())?;
+    let mut count: Option<i64> = None;
+    let query_options = query.options.unwrap_or_default();
+
+    let (white_players, black_players) = diesel::alias!(players as white, players as black);
+    let mut sql_query = games::table
+        .inner_join(white_players.on(games::white_id.eq(white_players.field(players::id))))
+        .inner_join(black_players.on(games::black_id.eq(black_players.field(players::id))))
+        .inner_join(events::table.on(games::event_id.eq(events::id)))
+        .inner_join(sites::table.on(games::site_id.eq(sites::id)))
+        .into_boxed();
+    let mut count_query = games::table.into_boxed();
+
+    if let Some(game_id) = query.game_id {
+        sql_query = sql_query.filter(games::id.eq(game_id));
+        count_query = count_query.filter(games::id.eq(game_id));
+    }
+    if let Some(after_game_id) = query.after_game_id {
+        sql_query = sql_query.filter(games::id.gt(after_game_id));
+        count_query = count_query.filter(games::id.gt(after_game_id));
+    }
+    if let Some(outcome) = query.outcome {
+        sql_query = sql_query.filter(games::result.eq(outcome.clone()));
+        count_query = count_query.filter(games::result.eq(outcome));
+    }
+    if let Some(start_date) = query.start_date {
+        sql_query = sql_query.filter(games::date.ge(start_date.clone()));
+        count_query = count_query.filter(games::date.ge(start_date));
+    }
+    if let Some(end_date) = query.end_date {
+        sql_query = sql_query.filter(games::date.le(end_date.clone()));
+        count_query = count_query.filter(games::date.le(end_date));
+    }
+    if let Some(tournament_id) = query.tournament_id {
+        sql_query = sql_query.filter(games::event_id.eq(tournament_id));
+        count_query = count_query.filter(games::event_id.eq(tournament_id));
+    }
+    if let Some(limit) = query_options.page_size {
+        sql_query = sql_query.limit(limit as i64);
+    }
+    if let Some(page) = query_options.page {
+        sql_query = sql_query.offset(((page - 1) * query_options.page_size.unwrap_or(10)) as i64);
+    }
+
+    match query.sides {
+        Some(Sides::BlackWhite) => {
+            if let Some(player1) = query.player1 {
+                sql_query = sql_query.filter(games::black_id.eq(player1));
+                count_query = count_query.filter(games::black_id.eq(player1));
+            }
+            if let Some(player2) = query.player2 {
+                sql_query = sql_query.filter(games::white_id.eq(player2));
+                count_query = count_query.filter(games::white_id.eq(player2));
+            }
+            if let Some(range1) = query.range1 {
+                sql_query = sql_query.filter(games::black_elo.between(range1.0, range1.1));
+                count_query = count_query.filter(games::black_elo.between(range1.0, range1.1));
+            }
+            if let Some(range2) = query.range2 {
+                sql_query = sql_query.filter(games::white_elo.between(range2.0, range2.1));
+                count_query = count_query.filter(games::white_elo.between(range2.0, range2.1));
+            }
+        }
+        Some(Sides::WhiteBlack) => {
+            if let Some(player1) = query.player1 {
+                sql_query = sql_query.filter(games::white_id.eq(player1));
+                count_query = count_query.filter(games::white_id.eq(player1));
+            }
+            if let Some(player2) = query.player2 {
+                sql_query = sql_query.filter(games::black_id.eq(player2));
+                count_query = count_query.filter(games::black_id.eq(player2));
+            }
+            if let Some(range1) = query.range1 {
+                sql_query = sql_query.filter(games::white_elo.between(range1.0, range1.1));
+                count_query = count_query.filter(games::white_elo.between(range1.0, range1.1));
+            }
+            if let Some(range2) = query.range2 {
+                sql_query = sql_query.filter(games::black_elo.between(range2.0, range2.1));
+                count_query = count_query.filter(games::black_elo.between(range2.0, range2.1));
+            }
+        }
+        Some(Sides::Any) => {
+            if let Some(player1) = query.player1 {
+                sql_query =
+                    sql_query.filter(games::white_id.eq(player1).or(games::black_id.eq(player1)));
+                count_query =
+                    count_query.filter(games::white_id.eq(player1).or(games::black_id.eq(player1)));
+            }
+            if let Some(player2) = query.player2 {
+                sql_query =
+                    sql_query.filter(games::white_id.eq(player2).or(games::black_id.eq(player2)));
+                count_query =
+                    count_query.filter(games::white_id.eq(player2).or(games::black_id.eq(player2)));
+            }
+            if let (Some(range1), Some(range2)) = (query.range1, query.range2) {
+                let ranges = games::white_elo
+                    .between(range1.0, range1.1)
+                    .or(games::black_elo.between(range1.0, range1.1))
+                    .or(games::white_elo.between(range2.0, range2.1))
+                    .or(games::black_elo.between(range2.0, range2.1));
+                sql_query = sql_query.filter(ranges);
+                count_query = count_query.filter(
+                    games::white_elo
+                        .between(range1.0, range1.1)
+                        .or(games::black_elo.between(range1.0, range1.1))
+                        .or(games::white_elo.between(range2.0, range2.1))
+                        .or(games::black_elo.between(range2.0, range2.1)),
+                );
+            } else {
+                if let Some(range1) = query.range1 {
+                    sql_query = sql_query.filter(
+                        games::white_elo
+                            .between(range1.0, range1.1)
+                            .or(games::black_elo.between(range1.0, range1.1)),
+                    );
+                    count_query = count_query.filter(
+                        games::white_elo
+                            .between(range1.0, range1.1)
+                            .or(games::black_elo.between(range1.0, range1.1)),
+                    );
+                }
+                if let Some(range2) = query.range2 {
+                    sql_query = sql_query.filter(
+                        games::white_elo
+                            .between(range2.0, range2.1)
+                            .or(games::black_elo.between(range2.0, range2.1)),
+                    );
+                    count_query = count_query.filter(
+                        games::white_elo
+                            .between(range2.0, range2.1)
+                            .or(games::black_elo.between(range2.0, range2.1)),
+                    );
+                }
+            }
+        }
+        None => {}
+    }
+
+    sql_query = match query_options.sort {
+        GameSort::Id => match query_options.direction {
+            SortDirection::Asc => sql_query.order(games::id.asc()),
+            SortDirection::Desc => sql_query.order(games::id.desc()),
+        },
+        GameSort::Date => match query_options.direction {
+            SortDirection::Asc => sql_query.order((games::date.asc(), games::time.asc())),
+            SortDirection::Desc => sql_query.order((games::date.desc(), games::time.desc())),
+        },
+        GameSort::WhiteElo => match query_options.direction {
+            SortDirection::Asc => sql_query.order(games::white_elo.asc()),
+            SortDirection::Desc => sql_query.order(games::white_elo.desc()),
+        },
+        GameSort::BlackElo => match query_options.direction {
+            SortDirection::Asc => sql_query.order(games::black_elo.asc()),
+            SortDirection::Desc => sql_query.order(games::black_elo.desc()),
+        },
+        GameSort::PlyCount => match query_options.direction {
+            SortDirection::Asc => sql_query.order(games::ply_count.asc()),
+            SortDirection::Desc => sql_query.order(games::ply_count.desc()),
+        },
+    };
+
+    if !query_options.skip_count {
+        count = Some(
+            count_query
+                .select(diesel::dsl::count(games::id))
+                .first(db)?,
+        );
+    }
+
+    type MetadataCore = (
+        i32,
+        i32,
+        i32,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        i32,
+        Option<i32>,
+        i32,
+        Option<i32>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<i32>,
+        Option<String>,
+    );
+    type MetadataRow = (
+        MetadataCore,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    );
+    let rows: Vec<MetadataRow> = sql_query
+        .select((
+            (
+                games::id,
+                games::event_id,
+                games::site_id,
+                games::date,
+                games::time,
+                games::round,
+                games::white_id,
+                games::white_elo,
+                games::black_id,
+                games::black_elo,
+                games::result,
+                games::time_control,
+                games::eco,
+                games::ply_count,
+                games::fen,
+            ),
+            white_players.field(players::name),
+            black_players.field(players::name),
+            events::name,
+            sites::name,
+        ))
+        .load(db)?;
+
+    let data = rows
+        .into_iter()
+        .map(|(core, white, black, event, site)| {
+            let (
+                id,
+                event_id,
+                site_id,
+                date,
+                time,
+                round,
+                white_id,
+                white_elo,
+                black_id,
+                black_elo,
+                result,
+                time_control,
+                eco,
+                ply_count,
+                fen,
+            ) = core;
+            GameMetadata {
+                id,
+                fen: fen.unwrap_or_else(|| Fen::default().to_string()),
+                event: event.unwrap_or_default(),
+                event_id,
+                site: site.unwrap_or_default(),
+                site_id,
+                date,
+                time,
+                round,
+                white: white.unwrap_or_default(),
+                white_id,
+                white_elo,
+                black: black.unwrap_or_default(),
+                black_id,
+                black_elo,
+                result: Outcome::from_str(result.as_deref().unwrap_or_default())
+                    .unwrap_or_default(),
+                time_control,
+                eco,
+                opening: None,
+                ply_count,
+            }
+        })
+        .collect();
+
+    Ok(QueryResponse {
+        data,
+        count: count.map(|value| value as i32),
     })
 }
 

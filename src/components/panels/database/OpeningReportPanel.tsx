@@ -1,4 +1,14 @@
-import { Alert, Button, Group, Modal, NumberInput, ScrollArea, Stack, Text } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Group,
+  Modal,
+  NumberInput,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +27,7 @@ import { openingReportHtml, openingTheoryPgn, openingVariationPgn } from "@/util
 import { openingReferenceGamesPgn, saveOpeningReport } from "@/utils/openingReportFiles";
 import { createTab } from "@/utils/tabs";
 import DatabaseLoader from "./DatabaseLoader";
+import OpeningReportLibraryModal from "./OpeningReportLibraryModal";
 import OpeningReportView from "./OpeningReportView";
 
 export default function OpeningReportPanel({
@@ -41,12 +52,15 @@ export default function OpeningReportPanel({
   const navigate = useNavigate();
   const [depth, setDepth] = useState(12);
   const [theoryGames, setTheoryGames] = useState(5000);
+  const [eventFilter, setEventFilter] = useState("");
+  const [timeControlFilter, setTimeControlFilter] = useState("");
   const [cachedReport, setCachedReport] = useAtom(openingReportCacheFamily(owner));
   const report = cachedReport?.token === snapshot.token ? cachedReport.report : null;
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [libraryOpened, setLibraryOpened] = useState(false);
   const running = useRef<AbortController | null>(null);
   const reportOwner = `report:${owner}`;
   const reopenRequest = useAtomValue(openingReportReopenFamily(owner));
@@ -102,7 +116,14 @@ export default function OpeningReportPanel({
     run(async (signal) => {
       const response = await commands.generateOpeningReport(
         snapshot.token,
-        { depth, theoryGames, maxLines: 64, displayFen },
+        {
+          depth,
+          theoryGames,
+          maxLines: 64,
+          displayFen,
+          event: eventFilter.trim() || undefined,
+          timeControl: timeControlFilter.trim() || undefined,
+        },
         reportOwner,
       );
       signal.throwIfAborted();
@@ -212,6 +233,23 @@ export default function OpeningReportPanel({
       );
       if (!signal.aborted) setSaved(didSave);
     });
+  const saveVersion = () =>
+    run(async (signal) => {
+      if (!report) return;
+      const response = await commands.saveAnalysisArtifact(
+        "openingReport",
+        cachedReport?.artifactId ?? null,
+        `${t("OpeningReport.Title")} · ${report.databaseName}`,
+        report.databaseName,
+        JSON.stringify(report),
+      );
+      signal.throwIfAborted();
+      if (response.status === "error") throw new Error(response.error);
+      setCachedReport((previous) =>
+        previous ? { ...previous, artifactId: response.data.summary.id } : previous,
+      );
+      setSaved(true);
+    });
   const feedback = (
     <>
       {message && <Alert color="red">{message}</Alert>}
@@ -220,6 +258,7 @@ export default function OpeningReportPanel({
   );
   return (
     <Stack p="sm" gap="md">
+      <OpeningReportLibraryModal opened={libraryOpened} onClose={() => setLibraryOpened(false)} />
       <Text fw={600}>{t("OpeningReport.Title")}</Text>
       <Text size="sm" c="dimmed">
         {t("OpeningReport.Intro")}
@@ -245,10 +284,34 @@ export default function OpeningReportPanel({
           onChange={(value) => setTheoryGames(Math.max(1, Math.min(10000, Number(value) || 1)))}
         />
       </Group>
+      <Group grow align="start">
+        <TextInput
+          label={t("OpeningReport.EventFilter", "Event contains")}
+          description={t(
+            "OpeningReport.EventFilterScope",
+            "Optional, case-insensitive literal text",
+          )}
+          value={eventFilter}
+          maxLength={200}
+          disabled={busy}
+          onChange={(event) => setEventFilter(event.currentTarget.value)}
+        />
+        <TextInput
+          label={t("OpeningReport.TimeControlFilter", "Exact time control")}
+          description={t("OpeningReport.TimeControlExample", "For example: 600+5")}
+          value={timeControlFilter}
+          maxLength={100}
+          disabled={busy}
+          onChange={(event) => setTimeControlFilter(event.currentTarget.value)}
+        />
+      </Group>
       <Text size="xs" c="dimmed">
         {t("OpeningReport.Selection")}
       </Text>
       <Group>
+        <Button variant="subtle" onClick={() => setLibraryOpened(true)}>
+          {t("AnalysisLibrary.Title", "Analysis library")}
+        </Button>
         <Button
           onClick={() => {
             void generate();
@@ -286,6 +349,15 @@ export default function OpeningReportPanel({
             <Group>
               <Button
                 variant="light"
+                disabled={Boolean(report.filters.event || report.filters.timeControl)}
+                title={
+                  report.filters.event || report.filters.timeControl
+                    ? t(
+                        "OpeningReport.ReportOnlyFilters",
+                        "Event and time-control filters apply only inside this report, so the broader Games view is disabled.",
+                      )
+                    : undefined
+                }
                 onClick={() => {
                   setOpened(false);
                   onGames();
@@ -301,6 +373,15 @@ export default function OpeningReportPanel({
                 }}
               >
                 {t("OpeningReport.ExportHtml")}
+              </Button>
+              <Button
+                variant="default"
+                disabled={busy}
+                onClick={() => {
+                  void saveVersion();
+                }}
+              >
+                {t("OpeningReport.SaveVersion", "Save version")}
               </Button>
               <Button
                 variant="default"

@@ -1,5 +1,7 @@
 # Fase 6.9 — Reconocimiento y demostración de finales
 
+Estado vigente: **cerrada y validada manualmente** como parte de la Fase 6.
+
 ## Objetivo
 
 Antes de jugar una posición de Finales, el estudiante observa el tablero inicial y clasifica su

@@ -99,6 +99,12 @@ pub enum Error {
     #[error("Invalid model game experiment: {0}")]
     InvalidModelGameExperiment(String),
 
+    #[error("Analysis artifact not found: {0}")]
+    AnalysisArtifactNotFound(String),
+
+    #[error("Invalid analysis artifact: {0}")]
+    InvalidAnalysisArtifact(String),
+
     #[error(transparent)]
     Json(Box<serde_json::Error>),
 

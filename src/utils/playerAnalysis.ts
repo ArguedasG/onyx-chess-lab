@@ -1,4 +1,4 @@
-import type { MoveAnalysis, NormalizedGame } from "@/bindings";
+import type { GameMetadata, MoveAnalysis } from "@/bindings";
 import { getCPLoss, normalizeScore } from "@/utils/score";
 import { positionFromFen } from "@/utils/chessops";
 import { getTimeControl } from "@/utils/timeControl";
@@ -28,7 +28,7 @@ export type PlayerAnalysisSource = {
 export type PlayerAnalysisGame = {
     key: string;
     source: PlayerAnalysisSource;
-    game: NormalizedGame;
+    game: GameMetadata;
 };
 
 export type PlayerAnalysisFilters = {
@@ -92,6 +92,7 @@ export type PlayerMetadataAnalysis = {
 
 export type PlayerAnalysisPhase = "opening" | "middlegame" | "endgame";
 export type PlayerAnalysisClassification = "inaccuracy" | "mistake" | "blunder";
+export type PlayerClockCoverageLevel = "insufficient" | "exploratory" | "adequate" | "high";
 
 export type PlayerAnalysisCriticalPosition = PlayerAnalysisReference & {
     fen: string;
@@ -105,6 +106,7 @@ export type PlayerAnalysisCriticalPosition = PlayerAnalysisReference & {
     phase: PlayerAnalysisPhase;
     opening: string;
     gameLabel: string;
+    gameDate?: string | null;
 };
 
 export type PlayerEngineGameMetrics = {
@@ -128,6 +130,15 @@ export type PlayerEngineGameMetrics = {
         blunders: number;
     }>;
     criticalPositions: PlayerAnalysisCriticalPosition[];
+    hasClockData?: boolean;
+    clock?: {
+        clockedMoves: number;
+        measuredDecisions: number;
+        totalDecisionSeconds: number;
+        averageDecisionSeconds: number | null;
+        lowTimeMoves: number;
+        criticalErrorsInLowTime: number;
+    };
 };
 
 export type PlayerEngineAnalysis = {
@@ -164,6 +175,8 @@ export type PlayerEngineAnalysis = {
     phases: PlayerEngineGameMetrics["phases"];
     recurringErrors: Array<{
         key: string;
+        fen?: string;
+        playedMove?: string;
         phase: PlayerAnalysisPhase;
         classification: PlayerAnalysisClassification;
         opening: string;
@@ -173,7 +186,35 @@ export type PlayerEngineAnalysis = {
     }>;
     games: PlayerEngineGameMetrics[];
     criticalPositions: PlayerAnalysisCriticalPosition[];
+    clockCoverage?: {
+        selectedGames: number;
+        gamesWithClock: number;
+        percent: number;
+        level: PlayerClockCoverageLevel;
+    };
+    timeManagement?: {
+        measuredDecisions: number;
+        averageDecisionSeconds: number;
+        lowTimeMoves: number;
+        criticalErrorsInLowTime: number;
+    };
 };
+
+export function playerClockCoverage(
+    gamesWithClock: number,
+    selectedGames: number,
+): NonNullable<PlayerEngineAnalysis["clockCoverage"]> {
+    const percent = selectedGames ? (gamesWithClock / selectedGames) * 100 : 0;
+    const level: PlayerClockCoverageLevel =
+        gamesWithClock >= 50 && percent >= 85
+            ? "high"
+            : gamesWithClock >= 20 && percent >= 70
+              ? "adequate"
+              : gamesWithClock >= 10 && percent >= 50
+                ? "exploratory"
+                : "insufficient";
+    return { selectedGames, gamesWithClock, percent, level };
+}
 
 export const DEFAULT_PLAYER_ANALYSIS_FILTERS: PlayerAnalysisFilters = {
     startDate: null,
@@ -497,12 +538,23 @@ export function buildEngineGameMetrics(input: {
     uciMoves: string[];
     preMoveFens: string[];
     analysis: MoveAnalysis[];
+    hasClockData?: boolean;
+    clockSeconds?: Array<number | null>;
 }): PlayerEngineGameMetrics {
     const { item, uciMoves, preMoveFens, analysis } = input;
     const losses: Array<{ loss: number; phase: PlayerAnalysisPhase }> = [];
     const criticalPositions: PlayerAnalysisCriticalPosition[] = [];
     let hadAdvantage = false;
     let wasInferior = false;
+    let previousPlayerClock: number | null = null;
+    let clockedMoves = 0;
+    let measuredDecisions = 0;
+    let totalDecisionSeconds = 0;
+    let lowTimeMoves = 0;
+    let criticalErrorsInLowTime = 0;
+    const simpleTimeControl = item.game.time_control?.match(/^(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)$/);
+    const initialSeconds = simpleTimeControl ? Number(simpleTimeControl[1]) : null;
+    const incrementSeconds = simpleTimeControl ? Number(simpleTimeControl[2]) : null;
     for (let ply = 0; ply < uciMoves.length; ply += 1) {
         const preFen = preMoveFens[ply];
         const [position] = positionFromFen(preFen);
@@ -510,7 +562,22 @@ export function buildEngineGameMetrics(input: {
         const playerTurn =
             (position.turn === "white" && item.game.white_id === item.source.playerId) ||
             (position.turn === "black" && item.game.black_id === item.source.playerId);
-        if (!playerTurn || !analysis[ply]?.best[0] || !analysis[ply + 1]?.best[0]) continue;
+        if (!playerTurn) continue;
+        const currentClock = input.clockSeconds?.[ply];
+        if (currentClock != null && Number.isFinite(currentClock) && currentClock >= 0) {
+            clockedMoves += 1;
+            if (currentClock <= 30) lowTimeMoves += 1;
+            const previous = previousPlayerClock ?? initialSeconds;
+            if (previous != null && incrementSeconds != null) {
+                const decisionSeconds = previous + incrementSeconds - currentClock;
+                if (decisionSeconds >= 0 && decisionSeconds <= 86_400) {
+                    measuredDecisions += 1;
+                    totalDecisionSeconds += decisionSeconds;
+                }
+            }
+            previousPlayerClock = currentClock;
+        }
+        if (!analysis[ply]?.best[0] || !analysis[ply + 1]?.best[0]) continue;
         const playerScore = normalizeScore(analysis[ply].best[0].score.value, position.turn);
         if (playerScore >= 150) hadAdvantage = true;
         if (playerScore <= -150) wasInferior = true;
@@ -523,6 +590,7 @@ export function buildEngineGameMetrics(input: {
         losses.push({ loss, phase });
         const label = classification(loss);
         if (label) {
+            if (currentClock != null && currentClock <= 30) criticalErrorsInLowTime += 1;
             const postMoveFen = preMoveFens[ply + 1];
             const punishmentLine = analysis[ply + 1].best[0].uciMoves.slice(0, 8);
             if (!postMoveFen || punishmentLine.length === 0) continue;
@@ -539,6 +607,7 @@ export function buildEngineGameMetrics(input: {
                 phase,
                 opening: item.game.opening || item.game.eco || "Unknown opening",
                 gameLabel: `${item.game.white} – ${item.game.black}`,
+                gameDate: item.game.date,
             });
         }
     }
@@ -564,6 +633,21 @@ export function buildEngineGameMetrics(input: {
             ...summarize(losses.filter((value) => value.phase === phase)),
         })),
         criticalPositions,
+        hasClockData:
+            clockedMoves > 0 || (input.clockSeconds === undefined && (input.hasClockData ?? false)),
+        clock:
+            clockedMoves > 0
+                ? {
+                      clockedMoves,
+                      measuredDecisions,
+                      totalDecisionSeconds,
+                      averageDecisionSeconds: measuredDecisions
+                          ? totalDecisionSeconds / measuredDecisions
+                          : null,
+                      lowTimeMoves,
+                      criticalErrorsInLowTime,
+                  }
+                : undefined,
     };
 }
 
@@ -604,9 +688,37 @@ export function aggregateEngineAnalysis(input: {
         .sort((a, b) => b.cpLoss - a.cpLoss);
     const recurring = new Map<string, PlayerAnalysisCriticalPosition[]>();
     for (const critical of criticalPositions) {
-        const key = `${critical.phase}:${critical.classification}:${critical.opening}`;
+        const normalizedFen = critical.fen.split(" ").slice(0, 4).join(" ");
+        const key = `${normalizedFen}:${critical.playedMove}:${critical.classification}`;
         recurring.set(key, [...(recurring.get(key) ?? []), critical]);
     }
+    const clockCoverage = playerClockCoverage(
+        metrics.filter((game) => game.hasClockData).length,
+        input.requestedGames,
+    );
+    const measuredDecisions = metrics.reduce(
+        (sum, game) => sum + (game.clock?.measuredDecisions ?? 0),
+        0,
+    );
+    const timeManagement =
+        clockCoverage.level !== "insufficient" && measuredDecisions > 0
+            ? {
+                  measuredDecisions,
+                  averageDecisionSeconds:
+                      metrics.reduce(
+                          (sum, game) => sum + (game.clock?.totalDecisionSeconds ?? 0),
+                          0,
+                      ) / measuredDecisions,
+                  lowTimeMoves: metrics.reduce(
+                      (sum, game) => sum + (game.clock?.lowTimeMoves ?? 0),
+                      0,
+                  ),
+                  criticalErrorsInLowTime: metrics.reduce(
+                      (sum, game) => sum + (game.clock?.criticalErrorsInLowTime ?? 0),
+                      0,
+                  ),
+              }
+            : undefined;
     return {
         schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
         analyzedAt: input.analyzedAt ?? new Date().toISOString(),
@@ -633,6 +745,8 @@ export function aggregateEngineAnalysis(input: {
             .filter(([, values]) => values.length >= 2)
             .map(([key, values]) => ({
                 key,
+                fen: values[0].fen.split(" ").slice(0, 4).join(" "),
+                playedMove: values[0].playedMove,
                 phase: values[0].phase,
                 classification: values[0].classification,
                 opening: values[0].opening,
@@ -650,5 +764,7 @@ export function aggregateEngineAnalysis(input: {
             .sort((a, b) => b.count - a.count || b.averageLoss - a.averageLoss),
         games: metrics,
         criticalPositions,
+        clockCoverage,
+        timeManagement,
     };
 }

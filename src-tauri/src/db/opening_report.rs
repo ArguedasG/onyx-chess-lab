@@ -6,7 +6,7 @@ use super::{
         canonical_query, open_index, preempt_background_searches, read_page, snapshot_for,
         MatchRecord, PositionGameMetadata, PositionSummary, Snapshot,
     },
-    search::begin_position_search,
+    search::{begin_position_search, PositionStats},
     search_index::{GameResult, MmapSearchIndex, SearchGameEntryRef},
     PositionQueryJs,
 };
@@ -16,7 +16,7 @@ use shakmaty::{fen::Fen, san::SanPlus, CastlingMode, Chess, EnPassantMode, Move,
 use specta::Type;
 use std::{
     cmp::{Ordering as CmpOrdering, Reverse},
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet},
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
@@ -28,6 +28,7 @@ const MAX_DEPTH: u32 = 16;
 const MAX_INITIAL_PLY: u32 = 512;
 const MAX_REPORT_PLAYERS: usize = 2_000_000;
 const PLAYER_TABLE_SIZE: usize = 20;
+const MODEL_GAME_TABLE_SIZE: usize = 20;
 const ELO_BANDS: &[(i32, i32)] = &[
     (1, 1599),
     (1600, 1799),
@@ -49,6 +50,10 @@ pub struct OpeningReportOptions {
     pub theory_games: u32,
     pub max_lines: u32,
     pub display_fen: String,
+    #[specta(optional)]
+    pub event: Option<String>,
+    #[specta(optional)]
+    pub time_control: Option<String>,
 }
 
 #[derive(Clone, Default, Serialize, Type)]
@@ -132,6 +137,10 @@ pub struct ReportFilters {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub result: Option<String>,
+    #[specta(optional)]
+    pub event: Option<String>,
+    #[specta(optional)]
+    pub time_control: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -238,6 +247,25 @@ pub struct ReportLine {
 
 #[derive(Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct ReportModelGame {
+    pub relevance_score: f64,
+    pub rating_component: f64,
+    pub recency_component: f64,
+    pub continuation_component: f64,
+    pub mean_elo: Option<f64>,
+    pub year: Option<u32>,
+    pub continuation_plies: u32,
+    pub example_offset: u32,
+    pub example: PositionGameMetadata,
+    pub deviation_ply: Option<u32>,
+    pub deviation_move: Option<String>,
+    pub deviation_position_fen: Option<String>,
+    pub deviation_cutoff: Option<String>,
+    pub deviation_baseline_games: u32,
+}
+
+#[derive(Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportMoveOrder {
     pub start_fen: String,
     pub moves: Vec<String>,
@@ -286,6 +314,8 @@ pub struct OpeningReport {
     pub theory: Vec<ReportLine>,
     pub theory_line_count: u32,
     pub displayed_theory_games: u32,
+    pub model_games: Vec<ReportModelGame>,
+    pub model_game_count: u32,
     pub move_orders: Vec<ReportMoveOrder>,
     pub move_order_count: u32,
     pub transpositions: Vec<ReportTransposition>,
@@ -299,6 +329,24 @@ struct Candidate {
     rank: (i32, u32, Reverse<i32>),
     record: MatchRecord,
     offset: u32,
+}
+
+struct ModelGameCandidate {
+    relevance_score: f64,
+    rating_component: f64,
+    recency_component: f64,
+    continuation_component: f64,
+    mean_elo: Option<f64>,
+    year: Option<u32>,
+    continuation_plies: u32,
+    example_offset: u32,
+    game_id: i32,
+    date: Option<String>,
+    move_keys: Vec<(String, u8, String)>,
+    deviation_ply: Option<u32>,
+    deviation_move: Option<String>,
+    deviation_position_fen: Option<String>,
+    deviation_baseline_games: u32,
 }
 impl PartialEq for Candidate {
     fn eq(&self, other: &Self) -> bool {
@@ -349,6 +397,29 @@ fn position_fen(chess: &Chess) -> String {
     setup.halfmoves = 0;
     setup.fullmoves = std::num::NonZeroU32::new(1).unwrap();
     Fen::from_setup(setup).to_string()
+}
+
+fn model_game_score(
+    entry: &SearchGameEntryRef<'_>,
+    year: Option<u32>,
+    continuation_plies: u32,
+    requested_depth: u32,
+) -> (f64, f64, f64, f64, Option<f64>) {
+    let mean_elo = (entry.white_elo > 0 && entry.black_elo > 0)
+        .then(|| (entry.white_elo as f64 + entry.black_elo as f64) / 2.0);
+    let rating = mean_elo.map_or(0.0, |elo| (elo.clamp(0.0, 3000.0) / 3000.0) * 70.0);
+    let recency = year.map_or(0.0, |value| {
+        (value.saturating_sub(1900).min(200) as f64 / 200.0) * 20.0
+    });
+    let continuation =
+        (continuation_plies.min(requested_depth) as f64 / requested_depth.max(1) as f64) * 10.0;
+    (
+        rating + recency + continuation,
+        rating,
+        recency,
+        continuation,
+        mean_elo,
+    )
 }
 
 fn chess_from_fen(fen: Option<&str>) -> Result<Chess, Error> {
@@ -427,6 +498,17 @@ fn validate_options(snapshot: &Snapshot, options: &OpeningReportOptions) -> Resu
     {
         return Err(invalid("Invalid opening report limits"));
     }
+    if options
+        .event
+        .as_ref()
+        .is_some_and(|value| value.len() > 200)
+        || options
+            .time_control
+            .as_ref()
+            .is_some_and(|value| value.len() > 100)
+    {
+        return Err(invalid("Opening report metadata filter is too long"));
+    }
     if snapshot
         .query
         .position
@@ -444,6 +526,93 @@ fn validate_options(snapshot: &Snapshot, options: &OpeningReportOptions) -> Resu
         return Err(invalid("Opening report position changed"));
     }
     Ok(())
+}
+
+fn metadata_filter(value: &Option<String>) -> Option<&str> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+fn metadata_matches(
+    connection: &rusqlite::Connection,
+    records: &[MatchRecord],
+    options: &OpeningReportOptions,
+) -> Result<Option<HashSet<i32>>, Error> {
+    let event = metadata_filter(&options.event);
+    let time_control = metadata_filter(&options.time_control);
+    if event.is_none() && time_control.is_none() {
+        return Ok(None);
+    }
+    if records.is_empty() {
+        return Ok(Some(HashSet::new()));
+    }
+    let ids = records
+        .iter()
+        .map(|record| record.id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut sql = format!(
+        "SELECT g.ID FROM Games g LEFT JOIN Events e ON e.ID=g.EventID WHERE g.ID IN ({ids})"
+    );
+    if event.is_some() {
+        sql.push_str(" AND COALESCE(e.Name,'') LIKE ?1 ESCAPE '\\' COLLATE NOCASE");
+    }
+    if time_control.is_some() {
+        sql.push_str(if event.is_some() {
+            " AND COALESCE(g.TimeControl,'')=?2"
+        } else {
+            " AND COALESCE(g.TimeControl,'')=?1"
+        });
+    }
+    let event_pattern = event.map(|value| format!("%{}%", escape_like(value)));
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = match (event_pattern.as_deref(), time_control) {
+        (Some(event), Some(time_control)) => {
+            statement.query(rusqlite::params![event, time_control])?
+        }
+        (Some(event), None) => statement.query(rusqlite::params![event])?,
+        (None, Some(time_control)) => statement.query(rusqlite::params![time_control])?,
+        (None, None) => unreachable!(),
+    };
+    let mut matches = HashSet::with_capacity(records.len());
+    while let Some(row) = rows.next()? {
+        matches.insert(row.get(0)?);
+    }
+    Ok(Some(matches))
+}
+
+fn continuation_after_match(
+    entry: &SearchGameEntryRef<'_>,
+    record: &MatchRecord,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<String, Error> {
+    let mut chess = chess_from_fen(entry.fen)?;
+    let mut iterator = iter_mainline_move_bytes(entry.moves);
+    for ply in 0..record.ply {
+        if ply % 64 == 0 && cancelled() {
+            return Err(Error::SearchCancelled);
+        }
+        let byte = iterator
+            .next()
+            .ok_or_else(|| invalid("Truncated report game"))?;
+        let movement = decode_move(byte, &chess).ok_or_else(|| invalid("Invalid report move"))?;
+        chess.play_unchecked(&movement);
+    }
+    let Some(byte) = iterator.next() else {
+        return Ok("*".to_string());
+    };
+    let movement =
+        decode_move(byte, &chess).ok_or_else(|| invalid("Invalid report continuation"))?;
+    Ok(SanPlus::from_move(chess, &movement).to_string())
 }
 
 fn build_report(
@@ -473,13 +642,37 @@ fn build_report(
     let mut unknown_elo_games = 0;
     let mut players: HashMap<i32, PlayerAggregate> = HashMap::new();
     let mut selected: BinaryHeap<Reverse<Candidate>> = BinaryHeap::new();
+    let has_metadata_filters = metadata_filter(&options.event).is_some()
+        || metadata_filter(&options.time_control).is_some();
+    let mut filtered_openings: BTreeMap<String, ReportResults> = BTreeMap::new();
+    let mut matching_games = 0_u32;
+    let connection = rusqlite::Connection::open_with_flags(
+        &snapshot.database,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )?;
+    connection.busy_timeout(Duration::from_millis(500))?;
     for offset in (0..snapshot.summary.total).step_by(BATCH as usize) {
         check()?;
-        for (i, record) in snapshot.records(offset, BATCH)?.into_iter().enumerate() {
+        let records = snapshot.records(offset, BATCH)?;
+        let metadata_matches = metadata_matches(&connection, &records, &options)?;
+        for (i, record) in records.into_iter().enumerate() {
+            if metadata_matches
+                .as_ref()
+                .is_some_and(|matches| !matches.contains(&record.id))
+            {
+                continue;
+            }
             let entry = index
                 .get_entry_ref(record.index_offset as usize)
                 .filter(|entry| entry.id == record.id)
                 .ok_or_else(|| invalid("Position query expired"))?;
+            matching_games += 1;
+            if has_metadata_filters {
+                filtered_openings
+                    .entry(continuation_after_match(&entry, &record, cancelled)?)
+                    .or_default()
+                    .add(entry.result);
+            }
             statistics.add(&entry);
             if entry.white_id != 0 {
                 players.entry(entry.white_id).or_default().add(&entry, true);
@@ -557,11 +750,6 @@ fn build_report(
         .chain(&strongest_ids)
         .copied()
         .collect();
-    let connection = rusqlite::Connection::open_with_flags(
-        &snapshot.database,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
-    connection.busy_timeout(Duration::from_millis(500))?;
     let mut names = HashMap::new();
     let mut name_statement =
         connection.prepare("SELECT COALESCE(Name,'?') FROM Players WHERE ID=?1")?;
@@ -594,6 +782,7 @@ fn build_report(
     drop(names);
     let mut cohort = Statistics::default();
     let mut excluded = 0;
+    let mut model_candidates = Vec::new();
     let mut nodes = vec![TheoryNode::new(
         0,
         0,
@@ -618,6 +807,19 @@ fn build_report(
         if position_fen(&line.root) != snapshot.summary.fen {
             return Err(invalid("Position query expired"));
         }
+        let continuation_plies = line.moves.len() as u32;
+        let year = entry
+            .date
+            .and_then(|date| date.get(..4))
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| (1..=9999).contains(value));
+        let (
+            relevance_score,
+            rating_component,
+            recency_component,
+            continuation_component,
+            mean_elo,
+        ) = model_game_score(&entry, year, continuation_plies, options.depth);
         cohort.add(&entry);
         nodes[0].statistics.add(&entry);
         orders
@@ -627,7 +829,10 @@ fn build_report(
             .add(&entry);
         let mut current = 0;
         let mut before = line.root;
+        let mut move_keys = Vec::with_capacity(continuation_plies as usize);
         for (byte, movement, after) in line.moves {
+            let san = SanPlus::from_move(before.clone(), &movement).to_string();
+            move_keys.push((position_fen(&before), byte, san.clone()));
             let child = if let Some(child) = nodes[current].children.get(&byte) {
                 *child
             } else {
@@ -635,7 +840,7 @@ fn build_report(
                 nodes.push(TheoryNode::new(
                     current,
                     nodes[current].depth + 1,
-                    SanPlus::from_move(before, &movement).to_string(),
+                    san,
                     position_fen(&after),
                     candidate.offset,
                 ));
@@ -646,6 +851,23 @@ fn build_report(
             current = child;
             before = after;
         }
+        model_candidates.push(ModelGameCandidate {
+            relevance_score,
+            rating_component,
+            recency_component,
+            continuation_component,
+            mean_elo,
+            year,
+            continuation_plies,
+            example_offset: candidate.offset,
+            game_id: candidate.record.id,
+            date: year.and_then(|_| entry.date.map(str::to_string)),
+            move_keys,
+            deviation_ply: None,
+            deviation_move: None,
+            deviation_position_fen: None,
+            deviation_baseline_games: 0,
+        });
         if nodes[current].terminal.results.total() == 0 {
             nodes[current].terminal_example = candidate.offset;
         }
@@ -694,6 +916,97 @@ fn build_report(
         .iter()
         .map(|line| line.statistics.results.total())
         .sum();
+    // A deviation is relative to this report's filtered, bounded cohort. Games
+    // sharing a date are compared only with strictly earlier dates, never with
+    // an arbitrary same-day game-id order.
+    let mut chronological: Vec<usize> = model_candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| candidate.date.as_ref().map(|date| (index, date)))
+        .map(|(index, _)| index)
+        .collect();
+    chronological.sort_by(|left, right| {
+        model_candidates[*left]
+            .date
+            .cmp(&model_candidates[*right].date)
+            .then_with(|| {
+                model_candidates[*left]
+                    .game_id
+                    .cmp(&model_candidates[*right].game_id)
+            })
+    });
+    let mut known_moves: HashMap<String, HashSet<u8>> = HashMap::new();
+    let mut earlier_games = 0_u32;
+    let mut start = 0;
+    while start < chronological.len() {
+        let cutoff = model_candidates[chronological[start]].date.clone();
+        let mut end = start + 1;
+        while end < chronological.len() && model_candidates[chronological[end]].date == cutoff {
+            end += 1;
+        }
+        if earlier_games > 0 {
+            for index in &chronological[start..end] {
+                let deviation = model_candidates[*index]
+                    .move_keys
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (fen, byte, _))| {
+                        !known_moves
+                            .get(fen)
+                            .is_some_and(|moves| moves.contains(byte))
+                    })
+                    .map(|(ply, (fen, _, san))| (ply as u32, fen.clone(), san.clone()));
+                if let Some((ply, fen, san)) = deviation {
+                    model_candidates[*index].deviation_ply = Some(ply);
+                    model_candidates[*index].deviation_position_fen = Some(fen);
+                    model_candidates[*index].deviation_move = Some(san);
+                    model_candidates[*index].deviation_baseline_games = earlier_games;
+                }
+            }
+        }
+        for index in &chronological[start..end] {
+            for (fen, byte, _) in &model_candidates[*index].move_keys {
+                known_moves.entry(fen.clone()).or_default().insert(*byte);
+            }
+        }
+        earlier_games = earlier_games.saturating_add((end - start) as u32);
+        start = end;
+    }
+    model_candidates.sort_by(|left, right| {
+        right
+            .relevance_score
+            .total_cmp(&left.relevance_score)
+            .then_with(|| left.game_id.cmp(&right.game_id))
+    });
+    let model_game_count = model_candidates.len() as u32;
+    let mut model_games = Vec::new();
+    for candidate in model_candidates.into_iter().take(MODEL_GAME_TABLE_SIZE) {
+        let example = if let Some(example) = metadata.get(&candidate.example_offset) {
+            example.clone()
+        } else {
+            let example = read_page(snapshot, candidate.example_offset, 1)?
+                .pop()
+                .ok_or_else(|| invalid("Missing model game"))?;
+            metadata.insert(candidate.example_offset, example.clone());
+            example
+        };
+        model_games.push(ReportModelGame {
+            relevance_score: candidate.relevance_score,
+            rating_component: candidate.rating_component,
+            recency_component: candidate.recency_component,
+            continuation_component: candidate.continuation_component,
+            mean_elo: candidate.mean_elo,
+            year: candidate.year,
+            continuation_plies: candidate.continuation_plies,
+            example_offset: candidate.example_offset,
+            example,
+            deviation_ply: candidate.deviation_ply,
+            deviation_move: candidate.deviation_move,
+            deviation_position_fen: candidate.deviation_position_fen,
+            deviation_cutoff: candidate.date,
+            deviation_baseline_games: candidate.deviation_baseline_games,
+        });
+    }
     let move_order_count = orders.len() as u32;
     let mut orders: Vec<_> = orders.into_iter().collect();
     orders.sort_by(|a, b| {
@@ -782,8 +1095,24 @@ fn build_report(
     check()?;
     snapshot.check_revision()?;
     let query = &snapshot.query;
+    let mut position = snapshot.summary.clone();
+    if has_metadata_filters {
+        position.total = matching_games;
+        position.openings = filtered_openings
+            .into_iter()
+            .map(|(move_, results)| PositionStats {
+                move_,
+                white: results.white.try_into().unwrap_or(i32::MAX),
+                draw: results.draw.try_into().unwrap_or(i32::MAX),
+                black: results.black.try_into().unwrap_or(i32::MAX),
+                unknown: results.unknown.try_into().unwrap_or(i32::MAX),
+            })
+            .collect();
+    }
+    let report_event = metadata_filter(&options.event).map(str::to_string);
+    let report_time_control = metadata_filter(&options.time_control).map(str::to_string);
     Ok(OpeningReport {
-        version: 2,
+        version: 3,
         generated_at: chrono::Utc::now().to_rfc3339(),
         database_name: snapshot
             .database
@@ -792,7 +1121,7 @@ fn build_report(
             .to_string_lossy()
             .into_owned(),
         database_games: index.len() as u32,
-        position: snapshot.summary.clone(),
+        position,
         options,
         filters: ReportFilters {
             white_player: query.player1,
@@ -803,6 +1132,8 @@ fn build_report(
             start_date: query.start_date.clone(),
             end_date: query.end_date.clone(),
             result: query.wanted_result.clone(),
+            event: report_event,
+            time_control: report_time_control,
         },
         statistics: statistics.finish(),
         years: years
@@ -828,6 +1159,8 @@ fn build_report(
         theory,
         theory_line_count,
         displayed_theory_games,
+        model_games,
+        model_game_count,
         move_orders,
         move_order_count,
         transpositions,
@@ -951,6 +1284,8 @@ mod tests {
             theory_games: 3,
             max_lines: 64,
             display_fen: fen.into(),
+            event: None,
+            time_control: None,
         }
     }
     fn run(
@@ -975,6 +1310,16 @@ mod tests {
         assert_eq!(report.cohort.results.unknown, 0);
         assert_eq!(report.theory_line_count, 3);
         assert_eq!(report.displayed_theory_games, 3);
+        assert_eq!(report.model_game_count, 3);
+        assert_eq!(report.model_games[0].example.id, 2);
+        assert!(report.model_games[0].relevance_score > report.model_games[1].relevance_score);
+        assert_eq!(report.model_games[0].deviation_ply, Some(0));
+        assert_eq!(report.model_games[0].deviation_move.as_deref(), Some("Nf3"));
+        assert_eq!(
+            report.model_games[0].deviation_cutoff.as_deref(),
+            Some("2024.??.??")
+        );
+        assert_eq!(report.model_games[0].deviation_baseline_games, 1);
         assert_eq!(report.unknown_year_games, 2);
         assert_eq!(report.player_count, 6);
         let ana = &report.most_played_players[0];
@@ -1049,6 +1394,45 @@ mod tests {
             run(&path, &state, query(&fen), limits).theory[0].example.id,
             2
         );
+    }
+
+    #[test]
+    fn report_metadata_filters_recompute_denominators_and_continuations() {
+        let (_dir, path, state) = fixture();
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute(
+            "INSERT INTO Events (ID,Name) VALUES (1,'Candidates 2024')",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "UPDATE Games SET EventID=1,TimeControl='600+5' WHERE ID IN (1,2)",
+            [],
+        )
+        .unwrap();
+        db.execute("UPDATE Games SET TimeControl='180+2' WHERE ID=3", [])
+            .unwrap();
+        drop(db);
+
+        let fen = Fen::default().to_string();
+        let mut filtered = options(&fen);
+        filtered.event = Some("candidates".into());
+        filtered.time_control = Some("600+5".into());
+        let report = run(&path, &state, query(&fen), filtered);
+
+        assert_eq!(report.position.total, 2);
+        assert_eq!(report.statistics.results.total(), 2);
+        assert_eq!(
+            report
+                .position
+                .openings
+                .iter()
+                .map(|item| item.white + item.draw + item.black + item.unknown)
+                .sum::<i32>(),
+            2
+        );
+        assert_eq!(report.filters.event.as_deref(), Some("candidates"));
+        assert_eq!(report.filters.time_control.as_deref(), Some("600+5"));
     }
 
     #[test]

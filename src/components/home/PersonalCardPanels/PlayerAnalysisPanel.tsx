@@ -4,6 +4,7 @@ import {
   Button,
   Divider,
   Group,
+  Menu,
   Modal,
   MultiSelect,
   NumberInput,
@@ -23,6 +24,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   IconChartDots,
+  IconDownload,
   IconPlayerPause,
   IconPlayerPlay,
   IconRefresh,
@@ -32,8 +34,13 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useAtom, useSetAtom } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { EngineOption, GoMode, NormalizedGame } from "@/bindings";
+import type { AnalysisArtifactDocument, EngineOption, GameMetadata, GoMode } from "@/bindings";
 import { commands } from "@/bindings";
+import { PlayerSearchInput } from "@/components/databases/PlayerSearchInput";
+import AnalysisLibraryModal from "@/components/analysis/AnalysisLibraryModal";
+import PlayerPeriodComparison from "./PlayerPeriodComparison";
+import PlayerVerifiableInsights from "./PlayerVerifiableInsights";
+import PlayerVersionComparison from "./PlayerVersionComparison";
 import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
 import {
   playerAnalysisAtom,
@@ -66,6 +73,7 @@ import {
   type PlayerAnalysisSource,
   type PlayerAnalysisTimeControl,
 } from "@/utils/playerAnalysis";
+import { savePlayerAnalysisExport } from "@/utils/playerAnalysisExport";
 import { createTab } from "@/utils/tabs";
 import {
   addTacticsExerciseToSet,
@@ -79,6 +87,8 @@ const PAGE_SIZE = 250;
 const PLAYER_GAMES_CACHE_LIMIT = 3;
 const playerGamesCache = new Map<string, PlayerAnalysisGame[]>();
 const playerGamesLoads = new Map<string, Promise<PlayerAnalysisGame[]>>();
+const sourceGamesCache = new Map<string, PlayerAnalysisGame[]>();
+const SOURCE_GAMES_CACHE_LIMIT = 6;
 
 function cachePlayerGames(profileId: string, games: PlayerAnalysisGame[]) {
   playerGamesCache.delete(profileId);
@@ -163,33 +173,47 @@ function timeControlLabel(
 }
 
 async function loadSourceGames(source: PlayerAnalysisSource): Promise<PlayerAnalysisGame[]> {
-  const games: NormalizedGame[] = [];
+  const sourceKey = `${source.databasePath}:${source.playerId}`;
+  const cached = sourceGamesCache.get(sourceKey) ?? [];
+  const checkpoint = cached.reduce((maximum, item) => Math.max(maximum, item.game.id), 0);
+  const games: GameMetadata[] = [];
   let page = 1;
   let total = Number.POSITIVE_INFINITY;
   while (games.length < total) {
     const response = unwrap(
-      await commands.getGames(source.databasePath, {
+      await commands.getGameMetadata(source.databasePath, {
         player1: source.playerId,
         sides: "Any",
+        after_game_id: cached.length ? checkpoint : undefined,
         options: {
           page,
           pageSize: PAGE_SIZE,
-          skipCount: page > 1,
-          sort: "date",
-          direction: "desc",
+          skipCount: cached.length > 0 || page > 1,
+          sort: cached.length > 0 ? "id" : "date",
+          direction: cached.length > 0 ? "asc" : "desc",
         },
       }),
     );
     games.push(...response.data);
-    if (page === 1) total = response.count ?? response.data.length;
+    if (page === 1)
+      total = response.count ?? (cached.length ? Number.POSITIVE_INFINITY : response.data.length);
     if (response.data.length < PAGE_SIZE) break;
     page += 1;
   }
-  return games.map((game) => ({
+  const loaded = games.map((game) => ({
     key: `${source.databasePath}:${game.id}`,
     source,
     game,
   }));
+  const merged = [...new Map([...cached, ...loaded].map((item) => [item.key, item])).values()];
+  sourceGamesCache.delete(sourceKey);
+  sourceGamesCache.set(sourceKey, merged);
+  while (sourceGamesCache.size > SOURCE_GAMES_CACHE_LIMIT) {
+    const oldest = sourceGamesCache.keys().next().value;
+    if (oldest) sourceGamesCache.delete(oldest);
+    else break;
+  }
+  return merged;
 }
 
 async function loadProfileGames(
@@ -310,6 +334,9 @@ export default function PlayerAnalysisPanel({
   const storedCandidate = state.profiles[profileId];
   const stored =
     storedCandidate?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION ? storedCandidate : null;
+  const [analysisSources, setAnalysisSources] = useState<PlayerAnalysisSource[]>(
+    () => stored?.metadata.sources ?? sources,
+  );
   const [games, setGames] = useState<PlayerAnalysisGame[]>([]);
   const [filters, setFilters] = useState<PlayerAnalysisFilters>(
     stored?.metadata.filters ?? DEFAULT_PLAYER_ANALYSIS_FILTERS,
@@ -324,6 +351,14 @@ export default function PlayerAnalysisPanel({
     () => stored?.engine?.timeControls ?? [...PLAYER_ANALYSIS_TIME_CONTROLS],
   );
   const [engineLoading, setEngineLoading] = useState(false);
+  const [versionSaving, setVersionSaving] = useState(false);
+  const [aliasesOpened, setAliasesOpened] = useState(false);
+  const [libraryOpened, setLibraryOpened] = useState(false);
+  const [comparisonDocument, setComparisonDocument] = useState<AnalysisArtifactDocument | null>(
+    null,
+  );
+  const [aliasDatabasePath, setAliasDatabasePath] = useState(sources[0]?.databasePath ?? "");
+  const [aliasPlayerId, setAliasPlayerId] = useState<number | undefined>();
   const [engineProgress, setEngineProgress] = useState(0);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [pendingCritical, setPendingCritical] = useState<PlayerAnalysisCriticalPosition | null>(
@@ -332,8 +367,12 @@ export default function PlayerAnalysisPanel({
   const cancelled = useRef(false);
   const activeAnalysisId = useRef<string | null>(null);
   const loadRequestId = useRef(0);
-  const profileSnapshot = useRef({ sources, filters: stored?.metadata.filters, t });
-  profileSnapshot.current = { sources, filters: stored?.metadata.filters, t };
+  const profileSnapshot = useRef({
+    sources: analysisSources,
+    filters: stored?.metadata.filters,
+    t,
+  });
+  profileSnapshot.current = { sources: analysisSources, filters: stored?.metadata.filters, t };
   const hasStoredProfile = stored !== null;
 
   useEffect(() => {
@@ -458,6 +497,7 @@ export default function PlayerAnalysisPanel({
       ),
     [engineTimeControls, games, stored?.metadata.filters],
   );
+  const engine = stored?.engine ?? null;
 
   const saveProfile = useCallback(
     (profile: StoredPlayerAnalysis) => {
@@ -475,13 +515,13 @@ export default function PlayerAnalysisPanel({
     setLoading(true);
     setLoadingProgress(0);
     try {
-      const unique = await loadProfileGames(sources, (progress) => {
+      const unique = await loadProfileGames(analysisSources, (progress) => {
         if (loadRequestId.current === requestId) setLoadingProgress(progress);
       });
       if (loadRequestId.current !== requestId) return;
       cachePlayerGames(profileId, unique);
       setGames(unique);
-      const metadata = analyzePlayerGames(playerName, unique, sources, filters);
+      const metadata = analyzePlayerGames(playerName, unique, analysisSources, filters);
       saveProfile({
         schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
         profileId,
@@ -500,7 +540,56 @@ export default function PlayerAnalysisPanel({
     } finally {
       if (loadRequestId.current === requestId) setLoading(false);
     }
-  }, [filters, playerName, profileId, saveProfile, sources, t]);
+  }, [analysisSources, filters, playerName, profileId, saveProfile, t]);
+
+  const saveVersion = useCallback(async () => {
+    if (!stored) return;
+    setVersionSaving(true);
+    try {
+      const document = unwrap(
+        await commands.saveAnalysisArtifact(
+          "playerProfile",
+          stored.artifactId ?? null,
+          playerName,
+          analysisSources.map((source) => source.databaseTitle).join(" · "),
+          JSON.stringify(stored),
+        ),
+      );
+      saveProfile({ ...stored, artifactId: document.summary.id });
+      notifications.show({
+        color: "green",
+        message: t("PlayerAnalysis.VersionSaved", "Profile version saved."),
+      });
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setVersionSaving(false);
+    }
+  }, [analysisSources, playerName, saveProfile, stored, t]);
+
+  const exportProfile = useCallback(
+    async (format: "json" | "html") => {
+      if (!stored) return;
+      try {
+        const saved = await savePlayerAnalysisExport(stored, format);
+        if (saved) {
+          notifications.show({
+            color: "green",
+            message: t("PlayerAnalysis.Exported", "Profile exported."),
+          });
+        }
+      } catch (error) {
+        notifications.show({
+          color: "red",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [stored, t],
+  );
 
   const openReference = useCallback(
     async (reference: PlayerAnalysisReference) => {
@@ -581,7 +670,21 @@ export default function PlayerAnalysisPanel({
         const analysisId = `player-analysis-${profileId}-${item.game.id}`;
         activeAnalysisId.current = analysisId;
         try {
-          const tree = await parsePGN(item.game.moves, item.game.fen);
+          const gameResponse = unwrap(
+            await commands.getGames(item.source.databasePath, {
+              game_id: item.game.id,
+              options: {
+                page: 1,
+                pageSize: 1,
+                skipCount: true,
+                sort: "id",
+                direction: "asc",
+              },
+            }),
+          );
+          const hydratedGame = gameResponse.data[0];
+          if (!hydratedGame) throw new Error("Game not found");
+          const tree = await parsePGN(hydratedGame.moves, hydratedGame.fen);
           const uciMoves = getMainLine(tree.root);
           const nodes = [...treeIteratorMainLine(tree.root)].map((entry) => entry.node);
           const preMoveFens = nodes.slice(0, uciMoves.length + 1).map((node) => node.fen);
@@ -592,7 +695,7 @@ export default function PlayerAnalysisPanel({
             engine.args ?? [],
             goMode,
             {
-              fen: item.game.fen,
+              fen: hydratedGame.fen,
               moves: uciMoves,
               annotateNovelties: false,
               referenceDb: null,
@@ -602,7 +705,16 @@ export default function PlayerAnalysisPanel({
           );
           if (response.status === "error") throw new Error(response.error);
           const result = response.data;
-          analyzed.push(buildEngineGameMetrics({ item, uciMoves, preMoveFens, analysis: result }));
+          analyzed.push(
+            buildEngineGameMetrics({
+              item,
+              uciMoves,
+              preMoveFens,
+              analysis: result,
+              hasClockData: nodes.some((node) => node.clock !== undefined),
+              clockSeconds: nodes.slice(1, uciMoves.length + 1).map((node) => node.clock ?? null),
+            }),
+          );
         } catch (error) {
           if (cancelled.current) break;
           skipped += 1;
@@ -712,6 +824,47 @@ export default function PlayerAnalysisPanel({
     [selectedSetId, setTrainingAreas, t],
   );
 
+  const canonicalSourceKeys = useMemo(
+    () => new Set(sources.map((source) => `${source.databasePath}:${source.playerId}`)),
+    [sources],
+  );
+  const sourceDatabaseOptions = useMemo(
+    () =>
+      [...new Map(sources.map((source) => [source.databasePath, source])).values()].map(
+        (source) => ({ value: source.databasePath, label: source.databaseTitle }),
+      ),
+    [sources],
+  );
+  const addAlias = useCallback(async () => {
+    if (!aliasDatabasePath || aliasPlayerId == null) return;
+    const template = sources.find((source) => source.databasePath === aliasDatabasePath);
+    if (!template) return;
+    try {
+      const player = unwrap(await commands.getPlayer(aliasDatabasePath, aliasPlayerId));
+      if (!player?.name) throw new Error("Player not found");
+      const alias: PlayerAnalysisSource = {
+        ...template,
+        playerId: player.id,
+        playerName: player.name,
+      };
+      setAnalysisSources((previous) =>
+        previous.some(
+          (source) =>
+            source.databasePath === alias.databasePath && source.playerId === alias.playerId,
+        )
+          ? previous
+          : [...previous, alias],
+      );
+      setAliasPlayerId(undefined);
+      setAliasesOpened(false);
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [aliasDatabasePath, aliasPlayerId, sources]);
+
   if (!state.enabled) {
     return (
       <Stack p="sm">
@@ -726,11 +879,113 @@ export default function PlayerAnalysisPanel({
   }
 
   const metadata = stored?.metadata;
-  const engine = stored?.engine;
   const timeControls = [...new Set(games.map((game) => game.game.time_control || "unknown"))];
 
   return (
     <Stack h="100%" gap="sm" style={{ minHeight: 0 }}>
+      <AnalysisLibraryModal
+        opened={libraryOpened}
+        onClose={() => setLibraryOpened(false)}
+        onRestore={(document) => {
+          try {
+            const latest = document.versions.at(-1);
+            if (!latest) throw new Error("Saved profile has no versions");
+            const profile = JSON.parse(latest.payloadJson) as StoredPlayerAnalysis;
+            if (
+              profile.schemaVersion !== PLAYER_ANALYSIS_SCHEMA_VERSION ||
+              profile.profileId !== profileId
+            ) {
+              throw new Error("This saved profile belongs to another player or schema version");
+            }
+            saveProfile({ ...profile, artifactId: document.summary.id });
+            setAnalysisSources(profile.metadata.sources);
+            setLibraryOpened(false);
+          } catch (error) {
+            notifications.show({
+              color: "red",
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }}
+        onCompare={(document) => {
+          setComparisonDocument(document);
+          setLibraryOpened(false);
+        }}
+      />
+      <Modal
+        opened={comparisonDocument !== null}
+        onClose={() => setComparisonDocument(null)}
+        title={t("PlayerAnalysis.VersionComparison", "Saved version comparison")}
+        size="xl"
+        centered
+      >
+        {comparisonDocument && (
+          <PlayerVersionComparison document={comparisonDocument} profileId={profileId} />
+        )}
+      </Modal>
+      <Modal
+        opened={aliasesOpened}
+        onClose={() => setAliasesOpened(false)}
+        title={t("PlayerAnalysis.Aliases", "Manual aliases")}
+        centered
+      >
+        <Stack>
+          <Alert color="blue">
+            {t(
+              "PlayerAnalysis.AliasScope",
+              "Aliases only join player records you select inside a local database. Onyx never guesses identities or links online accounts to real names.",
+            )}
+          </Alert>
+          <Select
+            label={t("PlayerAnalysis.AliasDatabase", "Database")}
+            data={sourceDatabaseOptions}
+            value={aliasDatabasePath}
+            allowDeselect={false}
+            onChange={(value) => {
+              setAliasDatabasePath(value ?? "");
+              setAliasPlayerId(undefined);
+            }}
+          />
+          {aliasDatabasePath && (
+            <PlayerSearchInput
+              label={t("PlayerAnalysis.AliasPlayer", "Search player")}
+              file={aliasDatabasePath}
+              value={aliasPlayerId}
+              setValue={setAliasPlayerId}
+            />
+          )}
+          <Button disabled={aliasPlayerId == null} onClick={() => void addAlias()}>
+            {t("PlayerAnalysis.AddAlias", "Add selected alias")}
+          </Button>
+          {analysisSources.map((source) => {
+            const key = `${source.databasePath}:${source.playerId}`;
+            const canonical = canonicalSourceKeys.has(key);
+            return (
+              <Group key={key} justify="space-between" wrap="nowrap">
+                <Text size="sm">
+                  {source.playerName} · {source.databaseTitle}
+                </Text>
+                {!canonical && (
+                  <Button
+                    size="compact-xs"
+                    color="red"
+                    variant="subtle"
+                    onClick={() =>
+                      setAnalysisSources((previous) =>
+                        previous.filter(
+                          (candidate) => `${candidate.databasePath}:${candidate.playerId}` !== key,
+                        ),
+                      )
+                    }
+                  >
+                    {t("Common.Remove", "Remove")}
+                  </Button>
+                )}
+              </Group>
+            );
+          })}
+        </Stack>
+      </Modal>
       <Modal
         opened={pendingCritical !== null}
         onClose={() => setPendingCritical(null)}
@@ -797,6 +1052,12 @@ export default function PlayerAnalysisPanel({
           </Text>
         </div>
         <Group gap="xs">
+          <Button size="xs" variant="subtle" onClick={() => setLibraryOpened(true)}>
+            {t("AnalysisLibrary.Title", "Analysis library")}
+          </Button>
+          <Button size="xs" variant="subtle" onClick={() => setAliasesOpened(true)}>
+            {t("PlayerAnalysis.Aliases", "Manual aliases")}
+          </Button>
           <Switch
             checked={state.enabled}
             label={t("PlayerAnalysis.LocalProfile", "Local profile")}
@@ -821,6 +1082,29 @@ export default function PlayerAnalysisPanel({
           >
             {t("PlayerAnalysis.Delete", "Delete profile")}
           </Button>
+          {stored && (
+            <Button
+              variant="default"
+              loading={versionSaving}
+              disabled={loading || engineLoading}
+              onClick={() => void saveVersion()}
+            >
+              {t("PlayerAnalysis.SaveVersion", "Save version")}
+            </Button>
+          )}
+          {stored && (
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}>
+                  {t("PlayerAnalysis.Export", "Export")}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item onClick={() => void exportProfile("json")}>JSON</Menu.Item>
+                <Menu.Item onClick={() => void exportProfile("html")}>HTML</Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
         </Group>
       </Group>
 
@@ -896,7 +1180,7 @@ export default function PlayerAnalysisPanel({
           <Button
             leftSection={stored ? <IconRefresh size={16} /> : <IconChartDots size={16} />}
             loading={loading}
-            disabled={sources.length === 0 || engineLoading}
+            disabled={analysisSources.length === 0 || engineLoading}
             onClick={generate}
           >
             {stored
@@ -904,7 +1188,7 @@ export default function PlayerAnalysisPanel({
               : t("PlayerAnalysis.Generate", "Generate analysis")}
           </Button>
           <Text size="xs" c="dimmed">
-            {sources.length} {t("PlayerAnalysis.Sources", "local source(s)")}
+            {analysisSources.length} {t("PlayerAnalysis.Sources", "local source(s)")}
             {metadata && ` · ${new Date(metadata.generatedAt).toLocaleString()}`}
           </Text>
         </Group>
@@ -983,6 +1267,7 @@ export default function PlayerAnalysisPanel({
                   label={t("PlayerAnalysis.TimeControl", "Time control")}
                   onOpen={openReference}
                 />
+                <PlayerPeriodComparison rows={metadata.byYear} />
               </Stack>
             </ScrollArea>
           </Tabs.Panel>
@@ -1203,6 +1488,57 @@ export default function PlayerAnalysisPanel({
                         </Badge>
                       ))}
                     </Group>
+                    {engine.clockCoverage && (
+                      <Alert
+                        color={engine.clockCoverage.level === "insufficient" ? "yellow" : "blue"}
+                      >
+                        {t("PlayerAnalysis.ClockCoverage", "Clock coverage")}:{" "}
+                        {engine.clockCoverage.gamesWithClock}/{engine.clockCoverage.selectedGames} (
+                        {engine.clockCoverage.percent.toFixed(1)}%) ·{" "}
+                        {t(
+                          `PlayerAnalysis.ClockCoverage.${engine.clockCoverage.level}`,
+                          {
+                            insufficient: "Insufficient",
+                            exploratory: "Exploratory",
+                            adequate: "Adequate",
+                            high: "High",
+                          }[engine.clockCoverage.level],
+                        )}
+                        .{" "}
+                        {t(
+                          "PlayerAnalysis.ClockCoverageScope",
+                          "Coverage describes the selected engine sample; Onyx does not publish aggregate time-management conclusions when it is insufficient.",
+                        )}
+                      </Alert>
+                    )}
+                    {engine.timeManagement && (
+                      <>
+                        <Title order={5}>
+                          {t("PlayerAnalysis.TimeManagement", "Time management")}
+                        </Title>
+                        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+                          <Metric
+                            label={t("PlayerAnalysis.MeasuredDecisions", "Measured decisions")}
+                            value={`${engine.timeManagement.measuredDecisions}`}
+                          />
+                          <Metric
+                            label={t("PlayerAnalysis.AverageDecisionTime", "Average decision time")}
+                            value={`${engine.timeManagement.averageDecisionSeconds.toFixed(1)} s`}
+                          />
+                          <Metric
+                            label={t("PlayerAnalysis.LowTimeMoves", "Moves with 30 s or less")}
+                            value={`${engine.timeManagement.lowTimeMoves}`}
+                          />
+                        </SimpleGrid>
+                        <Text size="xs" c="dimmed">
+                          {t(
+                            "PlayerAnalysis.TimeManagementScope",
+                            "Decision time is reconstructed only for consecutive player clocks with a simple base+increment time control. {{errors}} critical errors occurred with 30 seconds or less. These figures are descriptive, not causal.",
+                            { errors: engine.timeManagement.criticalErrorsInLowTime },
+                          )}
+                        </Text>
+                      </>
+                    )}
                     <SimpleGrid cols={{ base: 2, sm: 6 }}>
                       <Metric
                         label={t("PlayerAnalysis.AnalyzedGames", "Analyzed games")}
@@ -1247,13 +1583,18 @@ export default function PlayerAnalysisPanel({
                         ))}
                       </Table.Tbody>
                     </Table>
+                    <PlayerVerifiableInsights
+                      engine={engine}
+                      training={trainingAreas}
+                      onOpen={openReference}
+                    />
                     {engine.recurringErrors.length > 0 && (
                       <>
                         <Title order={5}>{t("PlayerAnalysis.Recurring", "Recurring errors")}</Title>
                         <Text size="xs" c="dimmed">
                           {t(
                             "PlayerAnalysis.RecurringExplanation",
-                            "Errors are grouped when the same opening, game phase and severity occur at least twice. This identifies patterns; open the evidence to inspect the concrete positions.",
+                            "Errors are grouped only when the same normalized position, played move and severity occur at least twice. Open the evidence to inspect each occurrence.",
                           )}
                         </Text>
                         <Table withTableBorder striped>
@@ -1262,6 +1603,7 @@ export default function PlayerAnalysisPanel({
                               <Table.Th>{t("PlayerAnalysis.Opening", "Opening")}</Table.Th>
                               <Table.Th>{t("PlayerAnalysis.Phase", "Phase")}</Table.Th>
                               <Table.Th>{t("PlayerAnalysis.Type", "Type")}</Table.Th>
+                              <Table.Th>{t("PlayerAnalysis.PlayedMove", "Played move")}</Table.Th>
                               <Table.Th ta="right">{t("PlayerAnalysis.Count", "Count")}</Table.Th>
                               <Table.Th ta="right">
                                 {t("PlayerAnalysis.AverageLoss", "Average loss")}
@@ -1275,6 +1617,11 @@ export default function PlayerAnalysisPanel({
                                 <Table.Td>{error.opening}</Table.Td>
                                 <Table.Td>{phaseLabel(error.phase, t)}</Table.Td>
                                 <Table.Td>{classificationLabel(error.classification, t)}</Table.Td>
+                                <Table.Td>
+                                  <Text size="sm" title={error.fen}>
+                                    {error.playedMove ?? "—"}
+                                  </Text>
+                                </Table.Td>
                                 <Table.Td ta="right">{error.count}</Table.Td>
                                 <Table.Td ta="right">{error.averageLoss.toFixed(0)} cp</Table.Td>
                                 <Table.Td ta="right">

@@ -26,6 +26,7 @@ import {
 } from "@/utils/lichess/explorer";
 import { countMainPly } from "@/utils/treeReducer";
 import { getDatabasesDir } from "../directories";
+import { lichessNdjsonRequest, lichessRequest } from "./request";
 
 const baseURL = "https://lichess.org/api";
 const explorerURL = "https://explorer.lichess.org";
@@ -43,7 +44,7 @@ export type TablebaseCategory =
   | "maybe-loss"
   | "loss";
 
-type TablebaseData = {
+export type TablebaseData = {
   checkmate: boolean;
   stalemate: boolean;
   variant_win: boolean;
@@ -165,10 +166,13 @@ type PositionGames = {
   month: string;
 }[];
 
-export async function convertToNormalized(data: PositionGames): Promise<NormalizedGame[]> {
+export async function convertToNormalized(
+  data: PositionGames,
+  signal?: AbortSignal,
+): Promise<NormalizedGame[]> {
   const results = await Promise.allSettled(
     data.map(async (game, i) => {
-      const pgn = await getLichessGame(game.id);
+      const pgn = await getLichessGame(game.id, signal);
       const { headers, root } = await parsePGN(pgn);
       const normalized: NormalizedGame = {
         ...headers,
@@ -189,7 +193,7 @@ export async function convertToNormalized(data: PositionGames): Promise<Normaliz
     .map((r) => (r as PromiseFulfilledResult<NormalizedGame>).value);
 }
 
-type PositionData = {
+export type RemoteOpeningData = {
   white: number;
   black: number;
   draws: number;
@@ -203,6 +207,12 @@ type PositionData = {
   }[];
   recentGames?: PositionGames;
   topGames?: PositionGames;
+  history?: Array<{
+    month: string;
+    white: number;
+    draws: number;
+    black: number;
+  }>;
 };
 
 export async function getLichessAccount({
@@ -323,14 +333,16 @@ export async function getLichessGames(
   fen: string,
   options: LichessGamesOptions,
   token?: string,
-): Promise<PositionData> {
+  signal?: AbortSignal,
+): Promise<RemoteOpeningData> {
   const url = match(options.player)
     .with(
       P.union(undefined, ""),
       () => `${explorerURL}/lichess?${getLichessGamesQueryParams(fen, options)}`,
     )
     .otherwise(() => `${explorerURL}/player?${getLichessGamesQueryParams(fen, options)}`);
-  const res = await fetch(url, {
+  const isPlayerRequest = Boolean(options.player);
+  const request = {
     headers: apiHeaders(
       token
         ? {
@@ -338,48 +350,63 @@ export async function getLichessGames(
           }
         : undefined,
     ),
-  });
+  };
+  if (isPlayerRequest) {
+    return lichessNdjsonRequest<RemoteOpeningData>(url, request, signal);
+  }
+  const res = await lichessRequest(url, request, { cacheKey: url, signal });
   if (!res.ok) {
     throw new Error(`Failed to fetch Lichess games: ${res.status} ${res.statusText}`);
   }
-  return await res.json();
+  return res.json();
 }
 
 export async function getMasterGames(
   fen: string,
   options: MasterGamesOptions,
   token?: string,
-): Promise<PositionData> {
+  signal?: AbortSignal,
+): Promise<RemoteOpeningData> {
   const url = `${explorerURL}/masters?${getMasterGamesQueryParams(fen, options)}`;
-  const res = await fetch(url, {
-    headers: apiHeaders(
-      token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    ),
-  });
+  const res = await lichessRequest(
+    url,
+    {
+      headers: apiHeaders(
+        token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
+      ),
+    },
+    { cacheKey: url, signal },
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch master games: ${res.status} ${res.statusText}`);
   }
   return await res.json();
 }
 
-export async function getPlayerGames(fen: string, player: string, color: Color, token?: string) {
-  const res = await fetch(`${explorerURL}/player?fen=${fen}&player=${player}&color=${color}`, {
-    headers: apiHeaders(
-      token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    ),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch player games: ${res.status} ${res.statusText}`);
-  }
-  return await res.json();
+export async function getPlayerGames(
+  fen: string,
+  player: string,
+  color: Color,
+  token?: string,
+  signal?: AbortSignal,
+) {
+  return lichessNdjsonRequest<RemoteOpeningData>(
+    `${explorerURL}/player?fen=${fen}&player=${player}&color=${color}`,
+    {
+      headers: apiHeaders(
+        token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
+      ),
+    },
+    signal,
+  );
 }
 
 export async function downloadLichess(
@@ -405,8 +432,9 @@ export async function downloadLichess(
   );
 }
 
-export async function getLichessGame(gameId: string): Promise<string> {
-  const response = await fetch(`https://lichess.org/game/export/${gameId.slice(0, 8)}`);
+export async function getLichessGame(gameId: string, signal?: AbortSignal): Promise<string> {
+  const url = `https://lichess.org/game/export/${gameId.slice(0, 8)}`;
+  const response = await lichessRequest(url, {}, { cacheKey: url, signal });
   if (!response.ok) {
     throw new Error(`Failed to load lichess game ${gameId} - ${response.statusText}`);
   }
@@ -414,9 +442,8 @@ export async function getLichessGame(gameId: string): Promise<string> {
 }
 
 export async function getTablebaseInfo(fen: string): Promise<TablebaseData> {
-  const res = await fetch(`${tablebaseURL}/standard?fen=${fen}`, {
-    headers: apiHeaders(),
-  });
+  const url = `${tablebaseURL}/standard?fen=${encodeURIComponent(fen)}`;
+  const res = await lichessRequest(url, { headers: apiHeaders() }, { cacheKey: url });
   if (!res.ok) {
     throw new Error(`Failed to load tablebase info for ${fen}.`);
   }

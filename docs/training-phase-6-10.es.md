@@ -1,5 +1,7 @@
 # Fase 6.10 — Estadísticas de sets tácticos
 
+Estado vigente: **cerrada y validada manualmente** como parte de la Fase 6.
+
 ## Objetivo
 
 Cada set táctico ofrece una lectura clara de su historial sin crear otra sesión ni cambiar el formato
@@ -58,8 +60,9 @@ Las pruebas de cálculo cubren:
 - separación entre ciclo actual e historial completado;
 - ausencia de un porcentaje inventado cuando no existe ninguna decisión evaluable.
 
-La validación manual pendiente consiste en abrir un set guiado y uno Woodpecker con historial, revisar
-la vista en español e inglés y confirmar que los valores coinciden con una sesión corta conocida.
+La matriz manual de cierre consistió en abrir un set guiado y uno Woodpecker con historial, revisar
+la vista en español e inglés y confirmar que los valores coincidieran con una sesión corta conocida.
+La Fase 6 se declaró posteriormente cerrada y validada manualmente.
 
 La validación automática del cierre pasa 175 pruebas frontend en 31 archivos, typecheck, lint de los
 archivos modificados, auditoría de 1.762 claves en cada catálogo de referencia y build web de

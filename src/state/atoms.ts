@@ -492,7 +492,7 @@ export const currentDbTabAtom = tabValue(dbTabFamily);
 
 export const openingReportReopenFamily = atomFamily((_tab: string) => atom(0));
 export const openingReportCacheFamily = atomFamily((_tab: string) =>
-    atom<{ token: string; report: OpeningReport } | null>(null),
+    atom<{ token: string; report: OpeningReport; artifactId?: string } | null>(null),
 );
 export const positionGamesViewFamily = atomFamily((_tab: string) =>
     atom<{

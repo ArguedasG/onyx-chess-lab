@@ -177,3 +177,38 @@ pub struct NormalizedGame {
     pub ply_count: Option<i32>,
     pub moves: String,
 }
+
+// Lightweight representation for lists and aggregate analysis. Consumers that
+// need movetext fetch the selected game by id with `get_games`.
+#[derive(Serialize, Deserialize, Clone, Type)]
+pub struct GameMetadata {
+    pub id: i32,
+    pub fen: String,
+    pub event: String,
+    pub event_id: i32,
+    pub site: String,
+    pub site_id: i32,
+    #[specta(optional)]
+    pub date: Option<String>,
+    #[specta(optional)]
+    pub time: Option<String>,
+    #[specta(optional)]
+    pub round: Option<String>,
+    pub white: String,
+    pub white_id: i32,
+    #[specta(optional)]
+    pub white_elo: Option<i32>,
+    pub black: String,
+    pub black_id: i32,
+    #[specta(optional)]
+    pub black_elo: Option<i32>,
+    pub result: Outcome,
+    #[specta(optional)]
+    pub time_control: Option<String>,
+    #[specta(optional)]
+    pub eco: Option<String>,
+    #[specta(optional)]
+    pub opening: Option<String>,
+    #[specta(optional)]
+    pub ply_count: Option<i32>,
+}

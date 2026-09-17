@@ -32,13 +32,19 @@ import {
 import { getDatabases, isTransientPositionError, type Opening, queryPosition } from "@/utils/db";
 import PositionGamesTable from "./PositionGamesTable";
 import { formatNumber } from "@/utils/format";
-import { convertToNormalized, getLichessGames, getMasterGames } from "@/utils/lichess/api";
+import {
+  convertToNormalized,
+  getLichessGames,
+  getMasterGames,
+  type RemoteOpeningData,
+} from "@/utils/lichess/api";
 import type { LichessGamesOptions, MasterGamesOptions } from "@/utils/lichess/explorer";
 import DatabaseLoader from "./DatabaseLoader";
 import GamesTable from "./GamesTable";
 import NoDatabaseWarning from "./NoDatabaseWarning";
 import OpeningsTable from "./OpeningsTable";
 import OpeningReportPanel from "./OpeningReportPanel";
+import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
 import LichessOptionsPanel from "./options/LichessOptionsPanel";
 import LocalOptionsPanel from "./options/LocalOptionsPanel";
 import MasterOptionsPanel from "./options/MastersOptionsPanel";
@@ -86,10 +92,15 @@ async function fetchOpening(
   db: DBType,
   tab: string,
   signal?: AbortSignal,
-): Promise<{ openings: Opening[]; games: NormalizedGame[]; snapshot?: PositionSummary }> {
+): Promise<{
+  openings: Opening[];
+  games: NormalizedGame[];
+  snapshot?: PositionSummary;
+  remote?: RemoteOpeningData;
+}> {
   return match(db)
     .with({ type: "lch_all" }, async ({ fen, options, token }) => {
-      const data = await getLichessGames(fen, options, token);
+      const data = await getLichessGames(fen, { ...options, history: true }, token, signal);
       return {
         openings: data.moves.map((move) => ({
           move: move.san,
@@ -97,11 +108,12 @@ async function fetchOpening(
           black: move.black,
           draw: move.draws,
         })),
-        games: await convertToNormalized(data.topGames || data.recentGames || []),
+        games: await convertToNormalized(data.topGames || data.recentGames || [], signal),
+        remote: data,
       };
     })
     .with({ type: "lch_master" }, async ({ fen, options, token }) => {
-      const data = await getMasterGames(fen, options, token);
+      const data = await getMasterGames(fen, options, token, signal);
       return {
         openings: data.moves.map((move) => ({
           move: move.san,
@@ -109,7 +121,8 @@ async function fetchOpening(
           black: move.black,
           draw: move.draws,
         })),
-        games: await convertToNormalized(data.topGames || data.recentGames || []),
+        games: await convertToNormalized(data.topGames || data.recentGames || [], signal),
+        remote: data,
       };
     })
     .with({ type: "local" }, async ({ options }) => {
@@ -193,10 +206,10 @@ function DatabasePanel() {
     const active = activeQuery.current;
     // Also cancel when SWR already has the new position cached and does not run its fetcher.
     // A fetcher for this render may have run already; never cancel that new controller.
-    if (active && (active.key !== queryKey || tabType === "options" || db !== "local")) {
+    if (active && (active.key !== queryKey || tabType === "options")) {
       active.controller.abort();
     }
-  }, [db, queryKey, tabType]);
+  }, [queryKey, tabType]);
 
   const {
     data: openingData,
@@ -311,7 +324,7 @@ function DatabasePanel() {
           <Tabs.Tab value="games">{t("Board.Database.Games")}</Tabs.Tab>
           <Tabs.Tab
             value="report"
-            disabled={dbType.type !== "local" || dbType.options.type !== "exact"}
+            disabled={dbType.type === "local" && dbType.options.type !== "exact"}
           >
             {t("OpeningReport.Tab")}
           </Tabs.Tab>
@@ -358,27 +371,46 @@ function DatabasePanel() {
           header={header}
           missingExplorerToken={missingExplorerToken}
         >
-          {tabType === "report" &&
-          dbType.type === "local" &&
-          dbType.options.type === "exact" &&
-          openingData?.snapshot &&
-          !isLoading ? (
-            <OpeningReportPanel
-              key={`${openingData.snapshot.token}:${dbType.options.fen}`}
-              snapshot={openingData.snapshot}
-              displayFen={dbType.options.fen}
-              databasePath={dbType.options.path!}
-              owner={tabId ?? ""}
-              onGames={() => setTabType("games")}
-              onExpired={() => {
-                void mutate();
-              }}
-            />
-          ) : (
-            <Text p="sm" c="dimmed">
-              {t("OpeningReport.WaitForQuery")}
-            </Text>
-          )}
+          <ScrollArea
+            data-testid="opening-report-scroll-area"
+            flex={1}
+            mih={0}
+            offsetScrollbars
+            type="auto"
+          >
+            {tabType === "report" &&
+            dbType.type !== "local" &&
+            openingData?.remote &&
+            !isLoading ? (
+              <RemoteOpeningReportPanel
+                key={`${dbType.type}:${dbType.fen}:${JSON.stringify(dbType.options)}`}
+                data={openingData.remote}
+                fen={dbType.fen}
+                source={dbType.type === "lch_all" ? "Lichess" : "Lichess Masters"}
+                onGames={() => setTabType("games")}
+              />
+            ) : tabType === "report" &&
+              dbType.type === "local" &&
+              dbType.options.type === "exact" &&
+              openingData?.snapshot &&
+              !isLoading ? (
+              <OpeningReportPanel
+                key={`${openingData.snapshot.token}:${dbType.options.fen}`}
+                snapshot={openingData.snapshot}
+                displayFen={dbType.options.fen}
+                databasePath={dbType.options.path!}
+                owner={tabId ?? ""}
+                onGames={() => setTabType("games")}
+                onExpired={() => {
+                  void mutate();
+                }}
+              />
+            ) : (
+              <Text p="sm" c="dimmed">
+                {t("OpeningReport.WaitForQuery")}
+              </Text>
+            )}
+          </ScrollArea>
         </PanelWithError>
         <PanelWithError
           value="options"

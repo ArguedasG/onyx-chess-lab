@@ -64,6 +64,9 @@ export function reportFilterText(report: OpeningReport, t: TFunction): string {
             `${t("Board.Database.Local.Result")}: ${labels[filters.result] ?? filters.result}`,
         );
     }
+    if (filters.event) parts.push(`${t("Board.Database.Event")}: ${filters.event}`);
+    if (filters.timeControl)
+        parts.push(`${t("Board.Database.TimeControl")}: ${filters.timeControl}`);
     return parts.join(" · ") || t("OpeningReport.NoFilters");
 }
 
@@ -140,6 +143,8 @@ export const escapeReportHtml = (value: unknown) =>
 
 export function openingReportHtml(report: OpeningReport, t: TFunction) {
     const escape = escapeReportHtml;
+    // Historical library snapshots predate this additive section.
+    const modelGames = report.modelGames ?? [];
     const label = (key: string) => escape(t(`OpeningReport.${key}`));
     const count = reportGames;
     const score = (results: ReportResults) => {
@@ -186,6 +191,12 @@ export function openingReportHtml(report: OpeningReport, t: TFunction) {
             return `<tr><th>${i + 1}</th>${Array.from({ length: report.options.depth }, (_, ply) => `<td title="${escape(line.moves[ply])}">${ply < common ? "…" : escape(line.moves[ply] ?? "—")}</td>`).join("")}<td>${count(line.statistics.results)}</td><td>${score(line.statistics.results)}</td><td>${escape(`${line.example.white} – ${line.example.black}`)}<br>${escape(line.example.date)} · #${line.example.id}</td></tr>`;
         })
         .join("");
+    const modelRows = modelGames
+        .map(
+            (model) =>
+                `<tr><td>${escape(`${model.example.white} – ${model.example.black}`)}</td><td>${model.year ?? "—"}</td><td>${model.meanElo?.toFixed(0) ?? "—"}</td><td>${model.relevanceScore.toFixed(1)}</td><td>${model.ratingComponent.toFixed(1)} / ${model.recencyComponent.toFixed(1)} / ${model.continuationComponent.toFixed(1)}</td><td>${model.deviationMove ? `${escape(model.deviationMove)} · ${escape(t("OpeningReport.Ply", "ply"))} ${(model.deviationPly ?? 0) + 1}<br><small>${escape(t("OpeningReport.DeviationBaseline", "{{games}} strictly earlier cohort games · cutoff {{cutoff}}", { games: model.deviationBaselineGames, cutoff: model.deviationCutoff ?? "—" }))}</small>` : "—"}</td></tr>`,
+        )
+        .join("");
     const board = parseFen(report.options.displayFen).unwrap().board;
     const symbols = {
         white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
@@ -208,6 +219,7 @@ ${report.position.skippedGames ? `<aside>${escape(t("Board.Database.SkippedGames
 <h2>${label("FrequentPlayers")}</h2><p>${escape(t("OpeningReport.PlayersScope", { count: report.playerCount }))}</p>${playerTable(report.mostPlayedPlayers)}
 <h2>${label("StrongestPlayers")}</h2><p>${label("StrongestPlayersScope")}</p>${playerTable(report.strongestPlayers)}
 <h2>${label("Theory")}</h2><aside>${escape(t("OpeningReport.Cohort", { selected: count(report.cohort.results), total: report.position.total }))}<br>${label("Selection")}<br>${escape(t("OpeningReport.LinesShown", { shown: report.theory.length, total: report.theoryLineCount, games: report.displayedTheoryGames }))}<br>${label("ExcludedTheory")}: ${report.excludedTheoryGames}</aside><p>${label("CommonPrefix")}</p><div class="scroll"><table><thead><tr><th>#</th>${Array.from({ length: report.options.depth }, (_, ply) => `<th>${escape(reportMoveLabel(report.options.displayFen, ply))}</th>`).join("")}<th>${label("Games")}</th><th>${label("WhiteScore")}</th><th>${label("Reference")}</th></tr></thead><tbody>${rows}</tbody></table></div>
+<h2>${escape(t("OpeningReport.ModelGames", "Model games"))}</h2><aside>${escape(t("OpeningReport.ModelGameMethod", "Relevance is a transparent 0–100 heuristic: up to 70 points for mean Elo (capped at 3000), 20 for year (1900–2100), and 10 for continuation coverage. It ranks references; it is not an engine quality score."))}</aside><table><thead><tr><th>${label("Game")}</th><th>${label("Period")}</th><th>${label("AverageElo")}</th><th>${escape(t("OpeningReport.Relevance", "Relevance"))}</th><th>${escape(t("OpeningReport.Components", "Elo / recency / coverage"))}</th><th>${escape(t("OpeningReport.FirstDeviation", "First deviation"))}</th></tr></thead><tbody>${modelRows}</tbody></table><small>${escape(t("OpeningReport.DeviationScope", "A deviation is the first move not seen from the same position in a strictly earlier dated game of the filtered report cohort. It is cohort-relative, limited by the selected theory-game cap, and is not a claim of historical novelty."))}</small>
 <h2>${label("MoveOrders")}</h2><p>${label("CohortOnly")} ${escape(t("OpeningReport.OrdersShown", { shown: report.moveOrders.length, total: report.moveOrderCount }))}</p><ol>${report.moveOrders.map((order) => `<li><p>${escape(reportNotation(order.moves, order.startFen) || t("OpeningReport.StartsHere"))} · ${count(order.statistics.results)} ${label("Games")}</p><small>FEN: ${escape(order.startFen)}</small></li>`).join("")}</ol>
 <h2>${label("Transpositions")}</h2><p>${label("TranspositionScope")} ${escape(t("OpeningReport.TranspositionsShown", { shown: report.transpositions.length, total: report.transpositionCount }))}</p>${report.transpositions.map((group, i) => `<section id="transposition-${i}"><h3>${group.ply}: ${group.games} ${label("Games")}</h3><code>${escape(group.fen)}</code><ul>${group.routes.map((route) => `<li>${escape(reportNotation(route.moves, report.options.displayFen))} · ${count(route.results)}</li>`).join("")}</ul><small>${escape(t("OpeningReport.RoutesShown", { shown: group.routes.length, total: group.routeCount }))}</small></section>`).join("") || `<p>${label("NoTranspositions")}</p>`}
 <footer><h2>${label("Provenance")}</h2><p>${label("Method")}</p><p>${label("Version")}: ${report.version} · ${report.elapsedMs.toFixed(0)} ms</p><code>${escape(report.position.fingerprint)}</code></footer></main></body></html>`;

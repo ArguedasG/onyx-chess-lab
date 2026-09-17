@@ -44,7 +44,7 @@ export function openingReportFixture(): OpeningReport {
         };
     });
     return {
-        version: 2,
+        version: 3,
         generatedAt: "2026-08-28T12:00:00Z",
         databaseName: "Local test.db3",
         databaseGames: 4,
@@ -124,6 +124,23 @@ export function openingReportFixture(): OpeningReport {
         theory,
         theoryLineCount: 3,
         displayedTheoryGames: 3,
+        modelGames: [theory[1], theory[0], theory[2]].map((line, index) => ({
+            relevanceScore: 83 - index * 4,
+            ratingComponent: 60 - index * 2,
+            recencyComponent: line.example.date ? 13 : 0,
+            continuationComponent: 10,
+            meanElo: 2500 - index * 50,
+            year: line.example.date ? Number(line.example.date.slice(0, 4)) : null,
+            continuationPlies: line.moves.length,
+            exampleOffset: line.exampleOffset,
+            example: line.example,
+            deviationPly: index === 0 ? 2 : null,
+            deviationMove: index === 0 ? line.moves[2] : null,
+            deviationPositionFen: index === 0 ? fen : null,
+            deviationCutoff: index === 0 ? line.example.date : null,
+            deviationBaselineGames: index === 0 ? 12 : 0,
+        })),
+        modelGameCount: 3,
         moveOrders: [
             { startFen: fen, moves: [], statistics: statistics(results), exampleOffset: 1 },
         ],

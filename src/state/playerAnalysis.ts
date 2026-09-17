@@ -13,6 +13,7 @@ export type StoredPlayerAnalysis = {
     updatedAt: string;
     metadata: PlayerMetadataAnalysis;
     engine: PlayerEngineAnalysis | null;
+    artifactId?: string;
 };
 
 export type PlayerAnalysisState = {

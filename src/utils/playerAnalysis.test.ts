@@ -7,11 +7,22 @@ import {
     criticalPositionForPerspective,
     DEFAULT_PLAYER_ANALYSIS_FILTERS,
     getPlayerAnalysisTimeControl,
+    playerClockCoverage,
     playerAnalysisTimeControlCounts,
     selectPlayerEngineGames,
     type PlayerAnalysisGame,
     type PlayerAnalysisSource,
 } from "./playerAnalysis";
+
+describe("clock coverage levels", () => {
+    it("requires both the agreed sample and coverage thresholds", () => {
+        expect(playerClockCoverage(9, 10).level).toBe("insufficient");
+        expect(playerClockCoverage(10, 20).level).toBe("exploratory");
+        expect(playerClockCoverage(20, 28).level).toBe("adequate");
+        expect(playerClockCoverage(50, 58).level).toBe("high");
+        expect(playerClockCoverage(49, 50).level).toBe("adequate");
+    });
+});
 
 const source: PlayerAnalysisSource = {
     databasePath: "lichess.db3",
@@ -244,11 +255,20 @@ describe("player engine analysis", () => {
                 moveAnalysis({ type: "cp", value: 20 }, "g1f3"),
                 moveAnalysis({ type: "cp", value: -100 }),
             ],
+            hasClockData: true,
+            clockSeconds: [590, null, 20],
         });
         expect(metrics.moves).toBe(2);
         expect(metrics.blunders).toBe(1);
         expect(metrics.mistakes).toBe(1);
         expect(metrics.criticalPositions).toHaveLength(2);
+        expect(metrics.clock).toMatchObject({
+            clockedMoves: 2,
+            measuredDecisions: 2,
+            averageDecisionSeconds: 290,
+            lowTimeMoves: 1,
+            criticalErrorsInLowTime: 1,
+        });
         expect(metrics.criticalPositions[0]).toMatchObject({
             gameId: 1,
             ply: 0,
@@ -301,5 +321,21 @@ describe("player engine analysis", () => {
         expect(aggregate.criticalPositions).toHaveLength(2);
         expect(aggregate.advantageGames).toBe(1);
         expect(aggregate.conversionRate).toBe(0);
+        expect(aggregate.clockCoverage?.level).toBe("insufficient");
+        expect(aggregate.timeManagement).toBeUndefined();
+
+        const covered = aggregateEngineAnalysis({
+            engine: aggregate.engine,
+            requestedGames: 10,
+            skippedGames: 0,
+            games: Array.from({ length: 10 }, () => metrics),
+        });
+        expect(covered.clockCoverage?.level).toBe("exploratory");
+        expect(covered.timeManagement).toEqual({
+            measuredDecisions: 20,
+            averageDecisionSeconds: 290,
+            lowTimeMoves: 10,
+            criticalErrorsInLowTime: 10,
+        });
     });
 });

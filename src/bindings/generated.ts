@@ -342,6 +342,14 @@ async getDbInfo(file: string) : Promise<Result<DatabaseInfo, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async getGameMetadata(file: string, query: GameQuery) : Promise<Result<QueryResponse<GameMetadata[]>, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_game_metadata", { file, query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getGames(file: string, query: GameQuery) : Promise<Result<QueryResponse<NormalizedGame[]>, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_games", { file, query }) };
@@ -793,6 +801,46 @@ async getSoundServerPort() : Promise<Result<number, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async listAnalysisArtifacts() : Promise<Result<AnalysisArtifactSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_analysis_artifacts") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async readAnalysisArtifact(kind: AnalysisArtifactKind, artifactId: string) : Promise<Result<AnalysisArtifactDocument, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("read_analysis_artifact", { kind, artifactId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveAnalysisArtifact(kind: AnalysisArtifactKind, artifactId: string | null, title: string, sourceLabel: string, payloadJson: string) : Promise<Result<AnalysisArtifactDocument, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_analysis_artifact", { kind, artifactId, title, sourceLabel, payloadJson }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteAnalysisArtifact(kind: AnalysisArtifactKind, artifactId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_analysis_artifact", { kind, artifactId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportAnalysisArtifact(kind: AnalysisArtifactKind, artifactId: string, destination: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_analysis_artifact", { kind, artifactId, destination }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -825,6 +873,10 @@ progressEvent: "progress-event"
 
 /** user-defined types **/
 
+export type AnalysisArtifactDocument = { summary: AnalysisArtifactSummary; versions: AnalysisArtifactVersion[] }
+export type AnalysisArtifactKind = "openingReport" | "playerProfile"
+export type AnalysisArtifactSummary = { id: string; kind: AnalysisArtifactKind; title: string; sourceLabel: string; createdAt: string; updatedAt: string; schemaVersion: number; versionCount: number }
+export type AnalysisArtifactVersion = { version: number; savedAt: string; payloadJson: string }
 export type AnalysisOptions = { fen: string; moves: string[]; annotateNovelties: boolean; referenceDb: string | null; reversed: boolean }
 export type BestMoves = { nodes: number; depth: number; score: Score; uciMoves: string[]; sanMoves: string[]; multipv: number; nps: number }
 export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: string; fen: string; moves: string[]; progress: number }
@@ -867,12 +919,13 @@ export type FileMetadata = { last_modified: number }
 export type GameConfig = { white: PlayerConfig; black: PlayerConfig; whiteTimeControl: TimeControl | null; blackTimeControl: TimeControl | null; initialFen: string | null; initialMoves?: string[]; openingBook: OpeningBookConfig | null }
 export type GameEndReason = "checkmate" | "timeout" | "resignation" | "abandonment"
 export type GameManifest = { schemaVersion: number; applicationVersion: string; gameId: string; startedAt: string; exportedAt: string; hardware: ManifestHardware; initialFen: string; initialMoves: string[]; white: PlayerConfig; black: PlayerConfig; whiteEngineLaunch: EngineLaunchMetadata | null; blackEngineLaunch: EngineLaunchMetadata | null; whiteTimeControl: TimeControl | null; blackTimeControl: TimeControl | null; openingBook: OpeningBookConfig | null; status: GameStatus; result: GameResult | null; moves: GameMove[]; currentFen: string }
+export type GameMetadata = { id: number; fen: string; event: string; event_id: number; site: string; site_id: number; date?: string | null; time?: string | null; round?: string | null; white: string; white_id: number; white_elo?: number | null; black: string; black_id: number; black_elo?: number | null; result: Outcome; time_control?: string | null; eco?: string | null; opening?: string | null; ply_count?: number | null }
 export type GameMove = { uci: string; san: string; fenAfter: string; clock: bigint | null; whiteTime: bigint | null; blackTime: bigint | null; color: string; source: GameMoveSource; thinkTimeMs: bigint | null }
 export type GameMoveEvent = { gameId: string; moves: GameMove[]; fen: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type GameMoveSource = "human" | "engine" | "profileRepertoire" | "polyglot" | "initial"
 export type GameOutcome = "Won" | "Drawn" | "Lost"
 export type GameOverEvent = { gameId: string; result: GameResult; moves: GameMove[] }
-export type GameQuery = { options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
+export type GameQuery = { options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; after_game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
 export type GameResult = { type: "whiteWins"; reason: GameEndReason } | { type: "blackWins"; reason: GameEndReason } | { type: "draw"; reason: DrawReason }
 export type GameSort = "id" | "date" | "whiteElo" | "blackElo" | "ply_count"
 export type GameState = { gameId: string; status: GameStatus; initialFen: string; moves: GameMove[]; currentFen: string; ply: number; turn: string; whiteTime: bigint | null; blackTime: bigint | null; whitePlayer: string; blackPlayer: string }
@@ -900,8 +953,8 @@ export type OpeningBookConfig = { path: string; maxPly?: bigint }
 export type OpeningLineSide = "white" | "black" | "both"
 export type OpeningRepertoireConfig = { id: string; version?: number; mode?: OpeningRepertoireMode; maxPly?: number; lines?: WeightedOpeningLine[] }
 export type OpeningRepertoireMode = "weighted" | "forcedLine" | "none"
-export type OpeningReport = { version: number; generatedAt: string; databaseName: string; databaseGames: number; position: PositionSummary; options: OpeningReportOptions; filters: ReportFilters; statistics: ReportStatistics; years: ReportYear[]; unknownYearGames: number; eloBands: ReportEloBand[]; unknownEloGames: number; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
-export type OpeningReportOptions = { depth: number; theoryGames: number; maxLines: number; displayFen: string }
+export type OpeningReport = { version: number; generatedAt: string; databaseName: string; databaseGames: number; position: PositionSummary; options: OpeningReportOptions; filters: ReportFilters; statistics: ReportStatistics; years: ReportYear[]; unknownYearGames: number; eloBands: ReportEloBand[]; unknownEloGames: number; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; modelGames: ReportModelGame[]; modelGameCount: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
+export type OpeningReportOptions = { depth: number; theoryGames: number; maxLines: number; displayFen: string; event?: string | null; timeControl?: string | null }
 export type OutOpening = { name: string; fen: string }
 export type Outcome = "1-0" | "0-1" | "1/2-1/2" | "*"
 export type Player = { id: number; name: string | null; elo: number | null }
@@ -924,8 +977,9 @@ export type PuzzleDatabaseInfo = { title: string; description: string; puzzleCou
 export type QueryOptions<SortT> = { skipCount: boolean; page?: number | null; pageSize?: number | null; sort: SortT; direction: SortDirection }
 export type QueryResponse<T> = { data: T; count: number | null }
 export type ReportEloBand = { minElo: number; maxElo: number; results: ReportResults }
-export type ReportFilters = { whitePlayer: number | null; blackPlayer: number | null; anyPlayer: number | null; whiteElo: [number, number] | null; blackElo: [number, number] | null; startDate: string | null; endDate: string | null; result: string | null }
+export type ReportFilters = { whitePlayer: number | null; blackPlayer: number | null; anyPlayer: number | null; whiteElo: [number, number] | null; blackElo: [number, number] | null; startDate: string | null; endDate: string | null; result: string | null; event?: string | null; timeControl?: string | null }
 export type ReportLine = { moves: string[]; fen: string; statistics: ReportStatistics; exampleOffset: number; example: PositionGameMetadata }
+export type ReportModelGame = { relevanceScore: number; ratingComponent: number; recencyComponent: number; continuationComponent: number; meanElo: number | null; year: number | null; continuationPlies: number; exampleOffset: number; example: PositionGameMetadata; deviationPly: number | null; deviationMove: string | null; deviationPositionFen: string | null; deviationCutoff: string | null; deviationBaselineGames: number }
 export type ReportMoveOrder = { startFen: string; moves: string[]; statistics: ReportStatistics; exampleOffset: number }
 export type ReportPlayer = { id: number; name: string; games: number; whiteGames: number; blackGames: number; wins: number; draws: number; losses: number; unknown: number; averageElo: number | null; peakElo: number | null }
 export type ReportResults = { white: number; draw: number; black: number; unknown: number }

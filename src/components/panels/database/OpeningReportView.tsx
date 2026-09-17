@@ -30,6 +30,7 @@ type Props = {
   onGame: (offset: number, extraPly?: number) => void;
   onPlayer: (id: number, name: string) => void;
   busy?: boolean;
+  readOnly?: boolean;
 };
 
 const scoreText = (results: ReportResults) => {
@@ -51,6 +52,7 @@ export default function OpeningReportView({
   onGame,
   onPlayer,
   busy = false,
+  readOnly = false,
 }: Props) {
   const { t } = useTranslation();
   const count = (value: number) => value.toLocaleString();
@@ -60,6 +62,11 @@ export default function OpeningReportView({
   );
   const all = report.statistics.results;
   const years = report.years.slice(-20).reverse();
+  // Additive report fields stay optional at runtime so snapshots saved by an
+  // earlier Onyx version remain readable after the schema grows.
+  const modelGames = report.modelGames ?? [];
+  const modelGameCount = report.modelGameCount ?? modelGames.length;
+  const hasReportOnlyFilters = Boolean(report.filters.event || report.filters.timeControl);
   const playerRate = (player: ReportPlayer, score: boolean) => {
     const known = player.wins + player.draws + player.losses;
     if (!known) return "—";
@@ -84,7 +91,15 @@ export default function OpeningReportView({
             <Table.Tr key={player.id}>
               <Table.Td>
                 <Button
-                  disabled={busy}
+                  disabled={busy || readOnly || hasReportOnlyFilters}
+                  title={
+                    hasReportOnlyFilters
+                      ? t(
+                          "OpeningReport.ReportOnlyFilters",
+                          "Event and time-control filters apply only inside this report, so broader player drilldowns are disabled.",
+                        )
+                      : undefined
+                  }
                   variant="subtle"
                   size="compact-sm"
                   onClick={() => onPlayer(player.id, player.name)}
@@ -211,6 +226,7 @@ export default function OpeningReportView({
                     t("OpeningReport.End")
                   ) : (
                     <Button
+                      disabled={readOnly}
                       size="compact-xs"
                       variant="subtle"
                       onClick={() => onVariant([move.move])}
@@ -305,6 +321,14 @@ export default function OpeningReportView({
       </Text>
 
       <Title order={3}>{t("OpeningReport.FrequentPlayers")}</Title>
+      {hasReportOnlyFilters && (
+        <Alert color="gray">
+          {t(
+            "OpeningReport.ReportOnlyFilters",
+            "Event and time-control filters apply only inside this report, so broader player drilldowns are disabled.",
+          )}
+        </Alert>
+      )}
       <Text size="sm" c="dimmed">
         {t("OpeningReport.PlayersScope", { count: report.playerCount })}
       </Text>
@@ -360,6 +384,7 @@ export default function OpeningReportView({
                     <Table.Td key={ply}>
                       {line.moves[ply] ? (
                         <Button
+                          disabled={readOnly}
                           variant="subtle"
                           size="compact-xs"
                           title={reportNotation(
@@ -380,7 +405,7 @@ export default function OpeningReportView({
                   <Table.Td>{scoreText(line.statistics.results)}</Table.Td>
                   <Table.Td>
                     <Button
-                      disabled={busy}
+                      disabled={busy || readOnly}
                       size="compact-xs"
                       variant="light"
                       onClick={() => onGame(line.exampleOffset, line.moves.length)}
@@ -399,6 +424,89 @@ export default function OpeningReportView({
       </Table.ScrollContainer>
       {!report.theory.length && <Text c="dimmed">{t("OpeningReport.NoTheory")}</Text>}
 
+      <Title order={3}>{t("OpeningReport.ModelGames", "Model games")}</Title>
+      <Alert color="blue">
+        {t(
+          "OpeningReport.ModelGameMethod",
+          "Relevance is a transparent 0–100 heuristic: up to 70 points for mean Elo (capped at 3000), 20 for year (1900–2100), and 10 for continuation coverage. It ranks references; it is not an engine quality score.",
+        )}
+      </Alert>
+      <Text size="sm" c="dimmed">
+        {t("OpeningReport.ModelGamesShown", "Showing {{shown}} of {{total}} candidates", {
+          shown: modelGames.length,
+          total: modelGameCount,
+        })}
+      </Text>
+      <Table.ScrollContainer minWidth={960}>
+        <Table striped withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>{t("OpeningReport.Game")}</Table.Th>
+              <Table.Th>{t("OpeningReport.Period")}</Table.Th>
+              <Table.Th>{t("OpeningReport.AverageElo")}</Table.Th>
+              <Table.Th>{t("OpeningReport.Relevance", "Relevance")}</Table.Th>
+              <Table.Th>{t("OpeningReport.Components", "Elo / recency / coverage")}</Table.Th>
+              <Table.Th>{t("OpeningReport.FirstDeviation", "First deviation")}</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {modelGames.map((model) => (
+              <Table.Tr key={`${model.example.id}:${model.exampleOffset}`}>
+                <Table.Td>
+                  <Button
+                    disabled={busy || readOnly}
+                    size="compact-xs"
+                    variant="light"
+                    onClick={() => onGame(model.exampleOffset)}
+                  >
+                    {model.example.white} – {model.example.black}
+                  </Button>
+                </Table.Td>
+                <Table.Td>{model.year ?? "—"}</Table.Td>
+                <Table.Td>{model.meanElo?.toFixed(0) ?? "—"}</Table.Td>
+                <Table.Td>{model.relevanceScore.toFixed(1)}</Table.Td>
+                <Table.Td>
+                  {model.ratingComponent.toFixed(1)} / {model.recencyComponent.toFixed(1)} /{" "}
+                  {model.continuationComponent.toFixed(1)}
+                </Table.Td>
+                <Table.Td>
+                  {model.deviationMove ? (
+                    <Text size="sm" title={model.deviationPositionFen ?? undefined}>
+                      {model.deviationMove} · {t("OpeningReport.Ply", "ply")}{" "}
+                      {(model.deviationPly ?? 0) + 1}
+                      <br />
+                      <Text component="span" size="xs" c="dimmed">
+                        {t(
+                          "OpeningReport.DeviationBaseline",
+                          "{{games}} strictly earlier cohort games · cutoff {{cutoff}}",
+                          {
+                            games: model.deviationBaselineGames,
+                            cutoff: model.deviationCutoff ?? "—",
+                          },
+                        )}
+                      </Text>
+                    </Text>
+                  ) : (
+                    "—"
+                  )}
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+      {!modelGames.length && (
+        <Text c="dimmed">{t("OpeningReport.NoModelGames", "No eligible model games.")}</Text>
+      )}
+      {!!modelGames.length && (
+        <Text size="xs" c="dimmed">
+          {t(
+            "OpeningReport.DeviationScope",
+            "A deviation is the first move not seen from the same position in a strictly earlier dated game of the filtered report cohort. It is cohort-relative, limited by the selected theory-game cap, and is not a claim of historical novelty.",
+          )}
+        </Text>
+      )}
+
       <Title order={3}>{t("OpeningReport.MoveOrders")}</Title>
       <Text size="sm" c="dimmed">
         {t("OpeningReport.CohortOnly")}{" "}
@@ -411,6 +519,7 @@ export default function OpeningReportView({
         <Card key={i} withBorder padding="sm">
           <Group justify="space-between" wrap="nowrap">
             <Button
+              disabled={readOnly}
               variant="subtle"
               h="auto"
               styles={{ label: { whiteSpace: "normal", textAlign: "left" } }}
@@ -420,7 +529,7 @@ export default function OpeningReportView({
             </Button>
             <Badge>{count(reportGames(order.statistics.results))}</Badge>
             <Button
-              disabled={busy}
+              disabled={busy || readOnly}
               size="compact-xs"
               variant="light"
               onClick={() => onGame(order.exampleOffset)}
@@ -454,6 +563,7 @@ export default function OpeningReportView({
             {group.routes.map((route, j) => (
               <Group key={`${i}-${j}`} wrap="nowrap">
                 <Button
+                  disabled={readOnly}
                   variant="subtle"
                   h="auto"
                   styles={{ label: { whiteSpace: "normal", textAlign: "left" } }}
@@ -463,7 +573,7 @@ export default function OpeningReportView({
                 </Button>
                 <Text size="sm">{count(reportGames(route.results))}</Text>
                 <Button
-                  disabled={busy}
+                  disabled={busy || readOnly}
                   variant="light"
                   size="compact-xs"
                   onClick={() => onGame(route.exampleOffset, route.moves.length)}

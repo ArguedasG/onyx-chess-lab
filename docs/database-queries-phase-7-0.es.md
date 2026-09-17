@@ -1,5 +1,8 @@
 # Fase 7.0 — Consultas compartidas por posición
 
+Estado vigente: **cerrada y validada manualmente**. Las notas de comprobación pendientes que se
+conservan al final pertenecen al momento de la entrega original y sirven como referencia histórica.
+
 Fecha: 2026-08-28. Alcance: primera parte de la Fase 7, autorizada después de la revisión de
 preparación. No incluye todavía Opening Reports ni Player Analysis.
 
@@ -177,14 +180,14 @@ $env:CHESS_LAB_BENCH_DB = 'RUTA_LOCAL_A_LA_BASE.db3'
 cargo test --offline --manifest-path src-tauri/Cargo.toml benchmark_position_snapshot -- --ignored --nocapture
 ```
 
-## Siguiente etapa y comprobación manual
+## Siguiente etapa y matriz manual histórica
 
 7.1: informes locales con estadísticas, tabla de teoría y transposiciones; acceso a su evidencia
 mediante Games. HTML del informe y PGN de partidas/variantes son deseables, no bloqueantes.
 Temas estratégicos, planes, finales típicos y fuentes Lichess quedan explícitamente diferidos.
 
-Antes de la alpha, comprobar en Tauri y build empaquetada: navegación rápida/cierre durante escaneo
+La matriz previa a la validación pedía comprobar en Tauri y build empaquetada: navegación rápida/cierre durante escaneo
 e indexación, prioridad frente a cobertura, actualización de una base consultada desde dos pestañas,
 recuperación de errores, primera apertura de v4, regeneración de v5, apertura en nodo correcto,
-tablas en ventana estrecha y limpieza de temporales. También siguen pendientes los objetivos
-incluidos de Finales y la matriz de entrenamiento de 6.8, según el corte acordado con el usuario.
+tablas en ventana estrecha y limpieza de temporales. La Fase 7.0 fue cerrada posteriormente mediante
+validación manual del producto; los pendientes nuevos se gestionan como mantenimiento.

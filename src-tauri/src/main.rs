@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod analysis_library;
 mod bot_league;
 mod chess;
 mod db;
@@ -55,6 +56,10 @@ use sysinfo::SystemExt;
 use tauri::{Manager, Window};
 use tauri_plugin_log::{Target, TargetKind};
 
+use crate::analysis_library::{
+    delete_analysis_artifact, export_analysis_artifact, list_analysis_artifacts,
+    read_analysis_artifact, save_analysis_artifact,
+};
 use crate::bot_league::{
     cancel_bot_league, cancel_bot_leagues_for_owner, delete_bot_league, dismiss_bot_league,
     export_bot_league, get_bot_league, get_bot_league_detail, list_bot_leagues, pause_bot_league,
@@ -90,8 +95,8 @@ use crate::sound::get_sound_server_port;
 use crate::{
     chess::get_best_moves,
     db::{
-        delete_duplicated_games, edit_db_info, get_db_info, get_games, get_players, merge_players,
-        write_db_game,
+        delete_duplicated_games, edit_db_info, get_db_info, get_game_metadata, get_games,
+        get_players, merge_players, write_db_game,
     },
     fs::{download_file, file_exists, get_file_metadata},
     opening::{
@@ -191,6 +196,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             download_file,
             get_tournaments,
             get_db_info,
+            get_game_metadata,
             get_games,
             search_position,
             query_position,
@@ -249,7 +255,12 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             install_managed_maia,
             cancel_managed_maia_install,
             uninstall_managed_maia,
-            get_sound_server_port
+            get_sound_server_port,
+            list_analysis_artifacts,
+            read_analysis_artifact,
+            save_analysis_artifact,
+            delete_analysis_artifact,
+            export_analysis_artifact
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,
