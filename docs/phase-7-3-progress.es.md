@@ -36,7 +36,7 @@ Validación realizada:
 - el build de producción de Vite termina correctamente;
 - la auditoría de traducciones pasa con 1.856 claves coincidentes en inglés y español, sin claves
   usadas ausentes ni diferencias de placeholders;
-- Vitest y Vite necesitaron durante la verificación un *shim* temporal, no incorporado al proyecto,
+- Vitest y Vite necesitaron durante la verificación un _shim_ temporal, no incorporado al proyecto,
   porque `os.userInfo()` falla con `ENOMEM` en este host antes de cargar la configuración;
 - `tauri build --no-bundle` no llegó a ejecutar el empaquetado porque su `beforeBuildCommand` intentó
   consultar el registro de pnpm y después rechazó purgar `node_modules` sin TTY. La compilación Rust y

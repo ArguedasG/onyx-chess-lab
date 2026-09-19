@@ -29,6 +29,7 @@ import {
   IconFileImport,
   IconHistory,
   IconNotebook,
+  IconClipboardText,
   IconPlayerPlay,
   IconPlus,
   IconRestore,
@@ -69,6 +70,7 @@ import { createTab } from "@/utils/tabs";
 import { getGameName } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import StudyTrainingCopyModal from "./StudyTrainingCopyModal";
+import { parseStudyPgnText, StudyPgnImportError } from "@/utils/studyImport";
 
 type EditTarget =
   | { kind: "study"; id: string; name: string; description: string }
@@ -91,6 +93,9 @@ export default function StudiesPage() {
   const [trashOpened, setTrashOpened] = useState(false);
   const [historyChapter, setHistoryChapter] = useState<StudyChapter | null>(null);
   const [copyOpened, setCopyOpened] = useState(false);
+  const [pasteOpened, setPasteOpened] = useState(false);
+  const [pastedPgn, setPastedPgn] = useState("");
+  const [pasteError, setPasteError] = useState("");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState<{ text: string; color: string } | null>(null);
 
@@ -229,7 +234,8 @@ export default function StudiesPage() {
         chapters.reduce(
           (result, chapter) =>
             addStudyChapter(result, selectedStudy.id, {
-              ...chapter,
+              title: chapter.title,
+              pgn: chapter.pgn,
               source: { kind: "file", label: selected },
             }),
           current,
@@ -242,6 +248,55 @@ export default function StudiesPage() {
       });
     } catch (error) {
       setMessage({ color: "red", text: String(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importPastedPgn() {
+    if (!selectedStudy) return;
+    setBusy(true);
+    setPasteError("");
+    try {
+      const chapters = await parseStudyPgnText(pastedPgn);
+      const next = await updateStudyLibrary((current) =>
+        chapters.reduce(
+          (result, chapter, index) =>
+            addStudyChapter(result, selectedStudy.id, {
+              pgn: chapter.pgn,
+              title: chapter.generatedTitle
+                ? `${t("Studies.Chapter", "Chapter")} ${index + 1}`
+                : chapter.title,
+              source: { kind: "file", label: t("Studies.PastedPgn", "Pasted PGN") },
+            }),
+          current,
+        ),
+      );
+      setLibrary(next);
+      setPastedPgn("");
+      setPasteOpened(false);
+      setMessage({
+        color: "green",
+        text: t("Studies.Imported", "Imported {{count}} chapters.", { count: chapters.length }),
+      });
+    } catch (error) {
+      if (error instanceof StudyPgnImportError) {
+        const key = {
+          empty: "Studies.PasteEmpty",
+          tooLarge: "Studies.PasteTooLarge",
+          tooMany: "Studies.PasteTooMany",
+          invalid: "Studies.PasteInvalid",
+        }[error.code];
+        const fallback = {
+          empty: "Paste at least one PGN game.",
+          tooLarge: "The pasted PGN is too large. Import it as a file instead.",
+          tooMany: "The text contains too many games. Import it as a file instead.",
+          invalid: "Game {{number}} is not valid PGN or contains no moves.",
+        }[error.code];
+        setPasteError(t(key, fallback, { number: error.recordNumber ?? 1 }));
+      } else {
+        setPasteError(t("Studies.PasteFailed", "The PGN text could not be imported."));
+      }
     } finally {
       setBusy(false);
     }
@@ -488,6 +543,17 @@ export default function StudiesPage() {
                   >
                     {t("Studies.ImportPgn", "Import PGN")}
                   </Button>
+                  <Button
+                    size="xs"
+                    variant="default"
+                    leftSection={<IconClipboardText size={14} />}
+                    onClick={() => {
+                      setPasteError("");
+                      setPasteOpened(true);
+                    }}
+                  >
+                    {t("Studies.PastePgn", "Paste PGN")}
+                  </Button>
                 </Group>
               )}
               <ScrollArea flex={1} offsetScrollbars>
@@ -641,6 +707,43 @@ export default function StudiesPage() {
           </Paper>
         </SimpleGrid>
       </Stack>
+
+      <Modal
+        opened={pasteOpened}
+        onClose={() => !busy && setPasteOpened(false)}
+        title={t("Studies.PastePgn", "Paste PGN")}
+        size="lg"
+      >
+        <Stack>
+          <Text c="dimmed" size="sm">
+            {t(
+              "Studies.PastePgnHint",
+              "Paste one or more complete PGN games. Each game becomes a chapter in the selected study.",
+            )}
+          </Text>
+          {pasteError && <Alert color="red">{pasteError}</Alert>}
+          <Textarea
+            value={pastedPgn}
+            onChange={(event) => {
+              setPastedPgn(event.currentTarget.value);
+              if (pasteError) setPasteError("");
+            }}
+            autosize
+            minRows={12}
+            maxRows={24}
+            placeholder={'[Event "Casual game"]\n...\n\n1. e4 e5 2. Nf3 *'}
+            data-autofocus
+          />
+          <Group justify="flex-end">
+            <Button variant="default" disabled={busy} onClick={() => setPasteOpened(false)}>
+              {t("Common.Cancel", "Cancel")}
+            </Button>
+            <Button loading={busy} disabled={!pastedPgn.trim()} onClick={importPastedPgn}>
+              {t("Studies.ImportPastedPgn", "Import pasted PGN")}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={createOpened}
