@@ -20,6 +20,13 @@ export type EndgameOutcomeGuess = z.infer<typeof endgameOutcomeGuessSchema>;
 const sourceSchema = z.object({
     label: z.string().optional(),
     pgn: z.string().optional(),
+    study: z
+        .object({
+            studyId: z.string(),
+            chapterId: z.string(),
+            path: z.array(z.number().int().nonnegative()),
+        })
+        .optional(),
     playerAnalysis: z
         .object({
             databasePath: z.string(),
@@ -236,6 +243,13 @@ const endgamePositionSchema = z.object({
     category: z.string().optional(),
     theme: z.enum(["pawn", "rook", "minorPiece", "queen", "mixed", "other"]),
     sourcePgn: z.string().optional(),
+    studySource: z
+        .object({
+            studyId: z.string(),
+            chapterId: z.string(),
+            path: z.array(z.number().int().nonnegative()),
+        })
+        .optional(),
     progress: z.object({
         attempts: z.number().int().nonnegative(),
         successes: z.number().int().nonnegative(),
@@ -694,6 +708,7 @@ export type ParsedTrainingRecord = {
     title: string;
     sourcePgn?: string;
     playerAnalysis?: TacticsExercise["source"]["playerAnalysis"];
+    studySource?: NonNullable<TacticsExercise["source"]["study"]>;
     endgameObjective?: TrainingObjective;
     endgameStudentColor?: EndgameStudentColor;
     hasExplicitFen: boolean;
@@ -853,6 +868,7 @@ export function addTacticsSet(
     name: string,
     description: string,
     records: ParsedTrainingRecord[],
+    options: { config?: Partial<TacticsSet["config"]> } = {},
 ): TacticsState {
     const setId = areaId("tactics-set");
     const createdAt = timestamp();
@@ -869,6 +885,7 @@ export function addTacticsSet(
                 label: record.title,
                 pgn: record.sourcePgn,
                 playerAnalysis: record.playerAnalysis,
+                study: record.studySource,
             },
             createdAt,
         };
@@ -900,6 +917,7 @@ export function addTacticsSet(
                     startingActor: "student",
                     variationPolicy: "mainline",
                     validationMode: "auto",
+                    ...options.config,
                 },
                 createdAt,
                 updatedAt: createdAt,
@@ -920,13 +938,24 @@ export function addTacticsExerciseToSet(
         const exercise = state.exercises[exerciseId];
         const existing = exercise?.source.playerAnalysis;
         const incoming = record.playerAnalysis;
+        const existingStudy = exercise?.source.study;
+        const incomingStudy = record.studySource;
         return (
-            existing &&
-            incoming &&
-            existing.databasePath === incoming.databasePath &&
-            existing.gameId === incoming.gameId &&
-            existing.ply === incoming.ply &&
-            existing.mode === incoming.mode
+            Boolean(
+                existing &&
+                incoming &&
+                existing.databasePath === incoming.databasePath &&
+                existing.gameId === incoming.gameId &&
+                existing.ply === incoming.ply &&
+                existing.mode === incoming.mode,
+            ) ||
+            Boolean(
+                existingStudy &&
+                incomingStudy &&
+                existingStudy.studyId === incomingStudy.studyId &&
+                existingStudy.chapterId === incomingStudy.chapterId &&
+                existingStudy.path.join(",") === incomingStudy.path.join(","),
+            )
         );
     });
     if (duplicate) return state;
@@ -947,6 +976,7 @@ export function addTacticsExerciseToSet(
                     label: record.title,
                     pgn: record.sourcePgn,
                     playerAnalysis: record.playerAnalysis,
+                    study: record.studySource,
                 },
                 createdAt,
             },
@@ -1840,6 +1870,7 @@ export function addEndgameSet(
             objectiveSource: record.endgameObjective ? "manual" : "pending",
             theme: inferEndgameTheme(record.title, record.fen),
             sourcePgn: record.sourcePgn,
+            studySource: record.studySource,
             progress: {
                 attempts: 0,
                 successes: 0,
@@ -1874,6 +1905,72 @@ export function addEndgameSet(
                 positionIds,
                 origin: options.origin ?? "user",
                 createdAt,
+                updatedAt: createdAt,
+            },
+        },
+    };
+}
+
+export function addEndgamePositionToSet(
+    state: EndgamesState,
+    setId: string,
+    record: ParsedTrainingRecord,
+): EndgamesState {
+    const set = state.sets[setId];
+    if (!set || set.origin !== "user") return state;
+    const duplicate = set.positionIds.some((positionId) => {
+        const source = state.positions[positionId]?.studySource;
+        return (
+            source &&
+            record.studySource &&
+            source.studyId === record.studySource.studyId &&
+            source.chapterId === record.studySource.chapterId &&
+            source.path.join(",") === record.studySource.path.join(",")
+        );
+    });
+    if (duplicate) return state;
+
+    const createdAt = timestamp();
+    const id = areaId("endgame");
+    return {
+        ...state,
+        positions: {
+            ...state.positions,
+            [id]: {
+                id,
+                title: record.title,
+                fen: record.fen,
+                objective: record.endgameObjective ?? "unknown",
+                studentColor: record.endgameStudentColor ?? inferEndgameStudentColor(record.fen),
+                objectiveSource: record.endgameObjective ? "manual" : "pending",
+                theme: inferEndgameTheme(record.title, record.fen),
+                sourcePgn: record.sourcePgn,
+                studySource: record.studySource,
+                progress: {
+                    attempts: 0,
+                    successes: 0,
+                    completed: false,
+                    totalTimeMs: 0,
+                    lastOutcome: null,
+                    lastPlayedAt: null,
+                    recognition: {
+                        attempts: 0,
+                        successes: 0,
+                        failures: 0,
+                        totalTimeMs: 0,
+                        lastGuess: null,
+                        lastCorrect: null,
+                        lastAnsweredAt: null,
+                    },
+                },
+                createdAt,
+            },
+        },
+        sets: {
+            ...state.sets,
+            [setId]: {
+                ...set,
+                positionIds: [...set.positionIds, id],
                 updatedAt: createdAt,
             },
         },

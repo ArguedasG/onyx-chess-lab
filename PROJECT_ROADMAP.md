@@ -76,8 +76,8 @@ prueban y comunican problemas.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Actualizador: canal propio y firmado de Onyx operativo.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
-- Fase activa: **7.3 — Mejoras de inteligencia de aperturas y jugadores**, con implementación
-  terminada y validación manual nativa pendiente.
+- Fase activa: **8 — Serious Preparation Tools**. Las entregas 8.0 y 8.1 están implementadas y
+  esperan validación manual antes de iniciar 8.2.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
@@ -104,22 +104,22 @@ su gravedad lo justifica.
 
 ## 4. Estado de las fases
 
-| Fase | Estado vigente | Resultado o continuación |
-| --- | --- | --- |
-| 0 — Base de bots humanos | Cerrada y validada | Bots humanos, mediciones e historial operativo. |
-| 1 — Motores e infraestructura experimental | Cerrada y validada | Auditoría UCI, presets y manifiestos reproducibles. |
-| 2 — Model Game Generator | Cerrada y validada | Generación individual, lotes y experimentos persistentes. |
-| 3 — Experiment Analysis | Cerrada para su alcance | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio. |
-| 4 — Beta de bots y torneos | Cerrada | Sus ampliaciones avanzadas se concentran en Fase 10. |
-| 5 — Identidad y distribución inicial | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 9. |
-| 6 — Táctica, Aperturas y Finales | Cerrada y validada manualmente | Tres experiencias especializadas con persistencia, práctica y estadísticas. |
-| 7.0 — Base escalable de consultas | Cerrada y validada manualmente | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real. |
-| 7.1 — Opening Reports | Cerrada y validada manualmente | Informe local por posición, teoría, transposiciones, jugadores y exportación. |
-| 7.2 — Player Analysis | Cerrada y validada manualmente | Perfil local, motor, evidencia y posiciones entrenables. |
-| 7.3 — Inteligencia de aperturas y jugadores | Implementada | 7.3.1–7.3.4 terminadas y validadas automáticamente; falta validación manual nativa para cerrarla. |
-| 8 — Serious Preparation Tools | Pendiente | Biblioteca de estudios y preparación individual/equipo. |
-| 9 — Consolidación pública y MLOps | Pendiente | Producto, multiplataforma, datos, automatización y evidencia reproducible. |
-| 10 — Expansión avanzada | Pendiente | Amplía fases cerradas, especialmente bots, torneos e interpretación estratégica. |
+| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                         |
+| ------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                  |
+| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                              |
+| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                        |
+| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                              |
+| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 10.                                                             |
+| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 9. |
+| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                      |
+| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                    |
+| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                    |
+| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                         |
+| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.       |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas y pendientes de validación manual; 8.2 será la siguiente entrega.                        |
+| 9 — Consolidación pública y MLOps           | Pendiente                                | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                       |
+| 10 — Expansión avanzada                     | Pendiente                                | Amplía fases cerradas, especialmente bots, torneos e interpretación estratégica.                                 |
 
 ### Documentación de fases cerradas
 
@@ -141,8 +141,6 @@ su gravedad lo justifica.
 ```text
 Producto público + mantenimiento continuo
         ↓
-7.3 — Inteligencia de aperturas y jugadores
-        ↓
 8 — Serious Preparation Tools
         ↓
 9 — Consolidación pública, multiplataforma y MLOps
@@ -158,12 +156,11 @@ no altera por sí solo el estado de una fase cerrada.
 
 ## 6. Fase 7.3 — Mejoras de inteligencia de aperturas y jugadores
 
-**Estado: Implementación terminada; pendiente de validación manual nativa.**
+**Estado: Cerrada para su alcance; ampliaciones posteriores pasan a Fase 10.**
 
 Progreso vigente:
 
-- **7.3.1:** implementada y validada automáticamente; queda validación manual en la aplicación
-  nativa.
+- **7.3.1:** implementada, validada automáticamente y aceptada antes de avanzar a Fase 8.
 - **7.3.2:** implementada: informe remoto compacto para Lichess todo y Masters, filtros locales de
   evento y control de tiempo, relevancia y partidas modelo, y primera desviación relativa al cohorte
   filtrado y fechado del informe.
@@ -174,12 +171,12 @@ Progreso vigente:
 - **7.3.4:** implementada con agrupación reproducible, catálogo táctico acotado, cobertura,
   familias de finales, tablebase bajo demanda y relación observacional con entrenamiento.
 
-7.3 amplía 7.1 y 7.2 sin reabrir sus núcleos. Se divide en cuatro entregas suficientemente grandes
-para producir valor, pero separadas para controlar riesgo, persistencia y consumo de recursos.
+  7.3 amplía 7.1 y 7.2 sin reabrir sus núcleos. Se divide en cuatro entregas suficientemente grandes
+  para producir valor, pero separadas para controlar riesgo, persistencia y consumo de recursos.
 
 ### 7.3.1. Fundamentos de datos y persistencia
 
-**Estado: Implementada; pendiente de validación manual nativa.**
+**Estado: Cerrada para su alcance.**
 
 Objetivo: eliminar cuellos de botella conocidos y crear una base durable antes de añadir inteligencia.
 
@@ -200,7 +197,7 @@ actualiza la vista actual, pero no genera silenciosamente historial durable.
 
 ### 7.3.2. Opening Reports ampliados
 
-**Estado: Implementada; pendiente de validación manual nativa.**
+**Estado: Cerrada para su alcance.**
 
 Objetivo: ampliar el informe local y añadir informes remotos deliberadamente compactos.
 
@@ -236,7 +233,7 @@ como novedad histórica mundial ni como búsqueda exhaustiva de toda la base.
 
 ### 7.3.3. Player Analysis escalable
 
-**Estado: Implementada; pendiente de validación manual nativa.**
+**Estado: Cerrada para su alcance.**
 
 Objetivo: mejorar escala, identidad explícita, sincronización y análisis temporal.
 
@@ -264,7 +261,7 @@ cobertura, no garantizan por sí solos validez estadística.
 
 ### 7.3.4. Inteligencia verificable y evolución
 
-**Estado: Implementada; pendiente de validación manual nativa.**
+**Estado: Cerrada para su alcance.**
 
 Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar motivos.
 
@@ -301,21 +298,43 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: Pendiente; siguiente después de 7.3.**
+**Estado: En curso. 8.0 y 8.1 implementadas; pendientes de validación manual antes de iniciar 8.2.**
 
 ### 8.0. Biblioteca personal de estudios
 
-Crear una biblioteca local de estudios o carpetas que agrupe partidas y análisis propios, incluidos
-los realizados contra bots. Debe permitir crear, renombrar, ordenar, editar, exportar, respaldar y
-recuperar partidas PGN.
+**Estado: Implementada; validación automática completa y validación manual en curso.**
+
+- biblioteca local de estudios con capítulos PGN ordenables y editables en el tablero existente;
+- creación desde cero, importación PGN por lotes y acción para copiar la partida o análisis actual;
+- guardado explícito o autoguardado según la preferencia global, con hasta 20 revisiones por capítulo;
+- papelera recuperable, copia automática del manifiesto y respaldo/restauración JSON explícitos;
+- exportación PGN por capítulo o estudio con `StudyName`, `ChapterName` e ids de procedencia;
+- copia entrenable —sin modificar el estudio— hacia sets tácticos y de finales nuevos o existentes;
+- revisión obligatoria de posición y solución/variantes para Táctica, y de posición, color y objetivo
+  para Finales;
+- copia de árboles PGN completos hacia un repertorio nuevo o importación con vista previa en uno
+  existente;
+- archivos fuente privados e inmutables para las copias de repertorio y procedencia conservada en
+  ejercicios embebidos.
+
+Contrato y validación técnica: `docs/studies-phase-8-0.es.md`.
 
 ### 8.1. Acciones de posición desde el tablero
 
-- buscar la posición actual en repertorios locales;
-- explicar coincidencias exactas y transposiciones;
-- añadir una posición a un set táctico mediante solución comprobable;
-- añadirla a un set de finales con objetivo y color explícitos;
-- reutilizar formatos de Entrenamiento en lugar de crear colecciones paralelas.
+**Estado: Implementada; validación automática completa y validación manual pendiente.**
+
+- acción unificada sobre la posición visible del tablero, sin crear una biblioteca paralela;
+- búsqueda en todas las líneas entrenables de los repertorios locales;
+- separación demostrable entre coincidencia exacta —misma posición inicial y orden de jugadas— y
+  transposición —misma posición legal mediante una ruta diferente—;
+- ruta y continuación del repertorio visibles para explicar cada coincidencia;
+- copia hacia un set táctico nuevo o embebido existente, con selección y confirmación obligatorias
+  de una solución ya preparada en el árbol del tablero;
+- conservación de las variantes analizadas y uso de la política de aceptación del set de Táctica;
+- copia hacia un set de Finales nuevo o existente, con color del estudiante y objetivo explícitos;
+- navegación directa desde un capítulo abierto hacia su estudio de origen.
+
+Contrato y validación técnica: `docs/position-actions-phase-8-1.es.md`.
 
 ### 8.2. Preparación individual y de equipo
 

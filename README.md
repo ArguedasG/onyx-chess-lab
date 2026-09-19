@@ -27,6 +27,10 @@ declared production-ready.
 - Opening reports with statistics, theory, move orders, transpositions and HTML/PGN export.
 - Player Analysis with filters, evidence, engine metrics and trainable critical positions.
 - Dedicated training experiences for tactics, opening repertoires and endgames.
+- Local studies with editable PGN chapters, recovery history, complete PGN export and reviewed
+  copies into tactics, opening repertoires or endgame training.
+- Current-position actions that distinguish exact repertoire routes from transpositions and create
+  reviewed training copies for tactics or endgames.
 - Human-like Maia-based bots with local history and measurements.
 - Reproducible model-game generation, batches, experiments and analysis.
 - UCI engine support, including guided installation of the managed Maia 3 package on Windows x64.

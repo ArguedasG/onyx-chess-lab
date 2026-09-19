@@ -7,6 +7,7 @@ import {
   IconDatabase,
   IconEdit,
   IconFlask,
+  IconNotebook,
   IconPuzzle,
   IconTarget,
   IconX,
@@ -45,7 +46,7 @@ export function BoardTab({
   const navigate = useNavigate();
   const atomStore = useStore();
   const tabs = useAtomValue(tabsAtom);
-  const returnPath = tab.returnPath;
+  const returnPath = tab.returnPath ?? (tab.gameOrigin.kind === "study" ? "/studies" : undefined);
   const returnTabId = tab.returnTabId;
   const canReturnToTab = returnTabId && tabs.some((candidate) => candidate.value === returnTabId);
   const [open, toggleOpen] = useToggle();
@@ -88,7 +89,9 @@ export function BoardTab({
                   aria-label={
                     canReturnToTab
                       ? t("OpeningReport.ReturnToReport", "Return to opening report")
-                      : t("PlayerAnalysis.ReturnToAnalysis", "Return to Player Analysis")
+                      : returnPath === "/studies"
+                        ? t("Studies.Return", "Return to studies")
+                        : t("PlayerAnalysis.ReturnToAnalysis", "Return to Player Analysis")
                   }
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -194,6 +197,9 @@ function TabIcon({ tab, tabType }: { tab: Tab; tabType: string }) {
   }
   if (tab.gameOrigin.kind === "database") {
     return <IconDatabase size="0.875rem" />;
+  }
+  if (tab.gameOrigin.kind === "study") {
+    return <IconNotebook size="0.875rem" />;
   }
   if (tab.gameOrigin.kind === "file" || tab.gameOrigin.kind === "temp_file") {
     return <FileIcon type={tab.gameOrigin.file.metadata.type} size="0.875rem" />;

@@ -10,6 +10,7 @@ import {
 import { addBlankOpeningVariant, updateOpeningVariant, type OpeningsState } from "./trainingAreas";
 import type { TreeNode, TreeState } from "./treeReducer";
 import type { GameOrigin } from "./tabs";
+import { loadStudyLibrary } from "./studies";
 import { unwrap } from "./unwrap";
 
 export type AdditionMode = "theory" | "modelGame";
@@ -84,6 +85,10 @@ export async function recoverRepertoireSourceTree(
         const raw = unwrap(
             await commands.readGames(origin.file.path, origin.gameNumber, origin.gameNumber),
         )[0];
+        if (raw) recovered = await parsePGN(raw);
+    } else if (origin.kind === "study") {
+        const { library } = await loadStudyLibrary();
+        const raw = library.studies[origin.studyId]?.chapters[origin.chapterId]?.pgn;
         if (raw) recovered = await parsePGN(raw);
     }
 

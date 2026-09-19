@@ -13,6 +13,8 @@ import {
   IconZoomCheck,
   IconDots,
   IconBook2,
+  IconNotebook,
+  IconTarget,
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -33,10 +35,13 @@ import {
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { buildModelGameSourcePgn } from "@/utils/modelGame";
+import { getPGN } from "@/utils/chess";
 import { recoverRepertoireSourceTree } from "@/utils/repertoireAddition";
 import { createTab, getTabFile, getTabGameNumber, saveToFile } from "@/utils/tabs";
 import type { TreeState } from "@/utils/treeReducer";
 import RepertoireAdditionModal from "../training/RepertoireAdditionModal";
+import AddToStudyModal from "../studies/AddToStudyModal";
+import PositionActionsModal from "./PositionActionsModal";
 
 interface BoardControlsProps {
   editingMode: boolean;
@@ -81,6 +86,15 @@ function BoardControls({
     source: { label: string; recordIndexes: number[] };
   } | null>(null);
   const [additionLoading, setAdditionLoading] = useState(false);
+  const [studyAddition, setStudyAddition] = useState<{
+    pgn: string;
+    title: string;
+    sourceLabel: string;
+  } | null>(null);
+  const [positionActions, setPositionActions] = useState<{
+    tree: TreeState;
+    sourceLabel: string;
+  } | null>(null);
   const file = getTabFile(currentTab);
   const trainingAreas = useAtomValue(trainingAreasAtom);
 
@@ -181,6 +195,22 @@ function BoardControls({
           onClose={() => setAddition(null)}
         />
       )}
+      {studyAddition && (
+        <AddToStudyModal
+          opened
+          onClose={() => setStudyAddition(null)}
+          pgn={studyAddition.pgn}
+          suggestedTitle={studyAddition.title}
+          sourceLabel={studyAddition.sourceLabel}
+        />
+      )}
+      {positionActions && (
+        <PositionActionsModal
+          tree={positionActions.tree}
+          sourceLabel={positionActions.sourceLabel}
+          onClose={() => setPositionActions(null)}
+        />
+      )}
       <Menu position="right-start" withinPortal>
         <Menu.Target>
           <ActionIcon aria-label={t("Pgn.Actions", "PGN and repertoire actions")}>
@@ -193,7 +223,9 @@ function BoardControls({
               ? `${file.path} · ${getTabGameNumber(currentTab) + 1}/${file.numGames}`
               : currentTab?.gameOrigin.kind === "database"
                 ? currentTab.gameOrigin.database
-                : t("Pgn.Unsaved", "Not saved to a file")}
+                : currentTab?.gameOrigin.kind === "study"
+                  ? t("Studies.StoredChapter", "Study chapter")
+                  : t("Pgn.Unsaved", "Not saved to a file")}
           </Menu.Label>
           <Menu.Item onClick={() => void savePgn("save")}>
             {t("Pgn.Save", "Save current game")}
@@ -211,6 +243,47 @@ function BoardControls({
             )}
           </Menu.Label>
           <Menu.Divider />
+          <Menu.Item
+            leftSection={<IconTarget size={16} />}
+            onClick={() => {
+              const state = store.getState();
+              setPositionActions({
+                tree: structuredClone({
+                  root: state.root,
+                  headers: state.headers,
+                  position: state.position,
+                  dirty: state.dirty,
+                  report: state.report,
+                }),
+                sourceLabel: currentTab?.name ?? t("PositionActions.DefaultName", "Board position"),
+              });
+            }}
+          >
+            {t("PositionActions.Open", "Current-position actions")}
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconNotebook size={16} />}
+            onClick={() => {
+              const state = store.getState();
+              setStudyAddition({
+                pgn: getPGN(state.root, {
+                  headers: state.headers,
+                  comments: true,
+                  extraMarkups: true,
+                  glyphs: true,
+                  variations: true,
+                }),
+                title: currentTab?.name ?? t("Studies.Chapter", "Chapter"),
+                sourceLabel:
+                  file?.path ??
+                  (currentTab?.gameOrigin.kind === "database"
+                    ? `${currentTab.gameOrigin.database} #${currentTab.gameOrigin.gameId}`
+                    : (currentTab?.name ?? t("Repertoire.AnalysisSource", "Analysis board"))),
+              });
+            }}
+          >
+            {t("Studies.AddCurrent", "Add current game to a study")}
+          </Menu.Item>
           <Menu.Item
             leftSection={<IconBook2 size={16} />}
             disabled={additionLoading}

@@ -155,10 +155,15 @@ export async function loadTacticsFileExercise(
     return parseTacticsPgnRecord(records[0], recordIndex, set.config);
 }
 
-export function loadEmbeddedTacticsExercise(
+export async function loadEmbeddedTacticsExercise(
     exercise: TacticsExercise,
+    config: Pick<TacticsSet["config"], "startingActor" | "variationPolicy">,
     recordIndex: number,
-): TacticsLoadedExercise {
+): Promise<TacticsLoadedExercise> {
+    if (exercise.source.study && exercise.source.pgn) {
+        const parsed = await parseTacticsPgnRecord(exercise.source.pgn, recordIndex, config);
+        return { ...parsed, id: exercise.id, title: exercise.title };
+    }
     return {
         id: exercise.id,
         recordIndex,
@@ -179,5 +184,5 @@ export async function loadTacticsExercise(
     const exerciseId = set.exerciseIds[recordIndex];
     const exercise = exercises[exerciseId];
     if (!exercise) throw new Error(`No se pudo leer el ejercicio ${recordIndex + 1}.`);
-    return loadEmbeddedTacticsExercise(exercise, recordIndex);
+    return loadEmbeddedTacticsExercise(exercise, set.config, recordIndex);
 }

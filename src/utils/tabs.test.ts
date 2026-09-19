@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tab } from "./tabs";
-import { createOrReuseBoardTab, createTab, isEmptyAnalysisTab } from "./tabs";
+import { createOrReuseBoardTab, createTab, isEmptyAnalysisTab, tabSchema } from "./tabs";
 import { createDebouncedSessionStorage } from "@/state/store/debouncedStorage";
 import { commands } from "@/bindings";
 import { createTreeStore } from "@/state/store/tree";
@@ -18,6 +18,19 @@ function analysisTab(value = "analysis-tab"): Tab {
 
 describe("board shell tab reuse", () => {
     beforeEach(() => sessionStorage.clear());
+
+    it("persists a study chapter as a first-class analysis origin", () => {
+        expect(
+            tabSchema.parse({
+                ...analysisTab("study-tab"),
+                returnPath: "/studies",
+                gameOrigin: { kind: "study", studyId: "study-1", chapterId: "chapter-1" },
+            }),
+        ).toMatchObject({
+            returnPath: "/studies",
+            gameOrigin: { kind: "study", studyId: "study-1", chapterId: "chapter-1" },
+        });
+    });
 
     it("opens the selected repertoire branch in a fresh play tab with its own state and no file origin", async () => {
         const source = createTreeStore();

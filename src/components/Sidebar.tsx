@@ -13,6 +13,7 @@ import {
   IconPlayerPlay,
   IconSettings,
   IconTarget,
+  IconNotebook,
   IconUser,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
@@ -117,6 +118,12 @@ export function SideBar() {
             icon={IconTarget}
             label={t("SideBar.Training", "Training")}
             url="/training"
+            expanded={expanded}
+          />
+          <NavbarLink
+            icon={IconNotebook}
+            label={t("SideBar.Studies", "Studies")}
+            url="/studies"
             expanded={expanded}
           />
           <Divider my={4} />

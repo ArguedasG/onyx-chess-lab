@@ -46,12 +46,14 @@ export default function RepertoireAdditionModal({
   treeSource,
   initialRepertoireId = "",
   initialVariantId = "",
+  initialPath = "",
 }: {
   onClose: () => void;
   tree?: TreeState;
   treeSource?: AdditionSource;
   initialRepertoireId?: string;
   initialVariantId?: string;
+  initialPath?: string;
 }) {
   const { t } = useTranslation();
   const areas = useAtomValue(trainingAreasAtom);
@@ -60,7 +62,7 @@ export default function RepertoireAdditionModal({
   const [variantId, setVariantId] = useState(initialVariantId);
   const [mode, setMode] = useState<AdditionMode>("theory");
   const [scope, setScope] = useState<"line" | "subtree">("line");
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState(initialPath);
   const [selection, setSelection] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);

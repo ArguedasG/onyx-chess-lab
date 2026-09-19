@@ -9,6 +9,7 @@ import { type FileMetadata, fileMetadataSchema } from "@/components/files/file";
 import type { TreeStoreState } from "@/state/store/tree";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
 import { getPGN, parsePGN } from "./chess";
+import { saveStudyChapterPgn } from "./studies";
 import { type GameHeaders, getGameName } from "./treeReducer";
 import { unwrap } from "./unwrap";
 
@@ -56,6 +57,11 @@ const gameOriginSchema = z.discriminatedUnion("kind", [
         database: z.string(),
         gameId: z.number(),
     }),
+    z.object({
+        kind: z.literal("study"),
+        studyId: z.string(),
+        chapterId: z.string(),
+    }),
 ]);
 
 export const tabSchema = z.object({
@@ -67,7 +73,7 @@ export const tabSchema = z.object({
         .string()
         .regex(/^\/training(?:\/[^?#]*)?$/)
         .optional(),
-    returnPath: z.enum(["/accounts", "/databases"]).optional(),
+    returnPath: z.enum(["/accounts", "/databases", "/studies"]).optional(),
     returnPlayerAnalysis: z
         .object({
             profileId: z.string(),
@@ -228,6 +234,7 @@ export async function saveToFile({
             ? currentOrigin
             : undefined;
     const databaseOrigin = currentOrigin?.kind === "database" ? currentOrigin : undefined;
+    const studyOrigin = currentOrigin?.kind === "study" ? currentOrigin : undefined;
     const isTempFile = currentOrigin?.kind === "temp_file";
     const pgn = `${getPGN(store.getState().root, {
         headers: store.getState().headers,
@@ -296,6 +303,12 @@ export async function saveToFile({
 
     if (databaseOrigin) {
         unwrap(await commands.writeDbGame(databaseOrigin.database, databaseOrigin.gameId, pgn));
+        store.getState().save();
+        return true;
+    }
+
+    if (studyOrigin) {
+        await saveStudyChapterPgn(studyOrigin.studyId, studyOrigin.chapterId, pgn);
         store.getState().save();
         return true;
     }
