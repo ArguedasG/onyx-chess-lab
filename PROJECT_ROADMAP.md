@@ -72,7 +72,7 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión actual del repositorio: **0.15.5**.
+- Versión preparada para publicación: **0.16.0**.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Actualizador: canal propio y firmado de Onyx operativo.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
