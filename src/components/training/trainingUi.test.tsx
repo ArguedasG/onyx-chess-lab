@@ -1,11 +1,12 @@
 import { MantineProvider } from "@mantine/core";
 import i18n from "i18next";
-import { act, type ComponentProps, type ReactNode } from "react";
+import { act, type ComponentProps, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/translation/en-US.json";
 import es from "@/translation/es-ES.json";
+import { useInitialOpponentMove } from "@/hooks/useInitialOpponentMove";
 import TacticsAdvanceControl from "./TacticsAdvanceControl";
 import TrainingHubPage from "./TrainingHubPage";
 
@@ -112,6 +113,36 @@ describe("tactics completion control", () => {
     await render(null);
     await act(async () => vi.advanceTimersByTime(1000));
     expect(props.onNext).not.toHaveBeenCalled();
+  });
+});
+
+function InitialOpponentMoveHarness({
+  startingActor,
+  onMove,
+}: {
+  startingActor: "student" | "opponent";
+  onMove: () => void;
+}) {
+  const [, forceRender] = useState(0);
+  const playOpponent = async () => {
+    onMove();
+    forceRender((value) => value + 1);
+  };
+  useInitialOpponentMove(startingActor, playOpponent);
+  return null;
+}
+
+describe("initial tactics turn", () => {
+  it("requests exactly one opponent move even when that move causes a rerender", async () => {
+    const onMove = vi.fn();
+    await render(<InitialOpponentMoveHarness startingActor="opponent" onMove={onMove} />);
+    expect(onMove).toHaveBeenCalledOnce();
+  });
+
+  it("does not move automatically when the student starts", async () => {
+    const onMove = vi.fn();
+    await render(<InitialOpponentMoveHarness startingActor="student" onMove={onMove} />);
+    expect(onMove).not.toHaveBeenCalled();
   });
 });
 

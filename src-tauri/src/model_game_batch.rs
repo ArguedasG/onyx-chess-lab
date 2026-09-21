@@ -369,10 +369,11 @@ fn player_seed(player: &PlayerConfig) -> Option<u32> {
 }
 
 fn increment_player_seed(player: &mut PlayerConfig, increment: u32) {
-    if let PlayerConfig::Engine { seed, .. } = player {
-        if let Some(value) = seed {
-            *value = value.wrapping_add(increment);
-        }
+    if let PlayerConfig::Engine {
+        seed: Some(value), ..
+    } = player
+    {
+        *value = value.wrapping_add(increment);
     }
 }
 

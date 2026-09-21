@@ -20,9 +20,8 @@ import {
   getTacticsSetStatistics,
   type TacticsAttemptStatistics,
   type TacticsCycleStatistics,
-  type TacticsSet,
-  type TacticsState,
-} from "@/utils/trainingAreas";
+} from "@/utils/tacticsStatistics";
+import { type TacticsSet, type TacticsState } from "@/utils/trainingAreas";
 
 type Props = {
   opened: boolean;

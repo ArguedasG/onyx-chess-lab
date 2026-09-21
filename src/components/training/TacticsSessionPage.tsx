@@ -29,6 +29,7 @@ import Board from "@/components/boards/Board";
 import { TreeStateContext, TreeStateProvider } from "@/components/common/TreeStateContext";
 import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { useInitialOpponentMove } from "@/hooks/useInitialOpponentMove";
 import { getBestMoves, killEngine, type LocalEngine } from "@/utils/engines";
 import { formatTime } from "@/utils/format";
 import { isMaiaEngine } from "@/utils/humanBots";
@@ -610,9 +611,10 @@ function GuidedTacticsBoardInner({
   const ply = useRef(0);
   const [autoMoving, setAutoMoving] = useState(false);
   const completed = useRef(false);
+  const opponentMoveInFlight = useRef(false);
 
   const playOpponent = useCallback(async () => {
-    if (completed.current || disabled) return;
+    if (completed.current || disabled || opponentMoveInFlight.current) return;
     const replies = Array.from(
       new Set(candidates.current.map((line) => line[ply.current]).filter(Boolean)),
     );
@@ -624,21 +626,24 @@ function GuidedTacticsBoardInner({
     const reply = replies[variationSeed % replies.length];
     const move = parseUci(reply);
     if (!move) return;
+    opponentMoveInFlight.current = true;
     setAutoMoving(true);
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    candidates.current = candidates.current.filter((line) => line[ply.current] === reply);
-    makeMove({ payload: move, mainline: true, changeHeaders: false });
-    ply.current += 1;
-    setAutoMoving(false);
-    if (candidates.current.some((line) => line.length === ply.current)) {
-      completed.current = true;
-      onCorrect(reply);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      candidates.current = candidates.current.filter((line) => line[ply.current] === reply);
+      makeMove({ payload: move, mainline: true, changeHeaders: false });
+      ply.current += 1;
+      if (candidates.current.some((line) => line.length === ply.current)) {
+        completed.current = true;
+        onCorrect(reply);
+      }
+    } finally {
+      opponentMoveInFlight.current = false;
+      setAutoMoving(false);
     }
   }, [disabled, makeMove, onCorrect, variationSeed]);
 
-  useEffect(() => {
-    if (startingActor === "opponent") void playOpponent();
-  }, [playOpponent, startingActor]);
+  useInitialOpponentMove(startingActor, playOpponent);
 
   function handleMove(uci: string) {
     if (completed.current || disabled || autoMoving) return;

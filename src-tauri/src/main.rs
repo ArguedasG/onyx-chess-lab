@@ -21,6 +21,7 @@ mod opening;
 mod pgn;
 mod progress;
 mod puzzle;
+mod secure_tokens;
 mod sound;
 
 use std::path::PathBuf;
@@ -90,6 +91,9 @@ use crate::pgn::{count_pgn_games, delete_game, read_games, write_game};
 use crate::puzzle::{
     delete_puzzle_database, get_puzzle, get_puzzle_db_info, get_puzzle_themes,
     get_themes_for_puzzle,
+};
+use crate::secure_tokens::{
+    delete_lichess_token, get_lichess_token, secure_token_storage_available, store_lichess_token,
 };
 use crate::sound::get_sound_server_port;
 use crate::{
@@ -260,7 +264,11 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             read_analysis_artifact,
             save_analysis_artifact,
             delete_analysis_artifact,
-            export_analysis_artifact
+            export_analysis_artifact,
+            secure_token_storage_available,
+            store_lichess_token,
+            get_lichess_token,
+            delete_lichess_token
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,

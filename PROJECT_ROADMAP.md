@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-16.
+> Última actualización: 2026-09-19.
 
 ## 1. Cómo utilizar este documento
 
@@ -76,15 +76,15 @@ prueban y comunican problemas.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Actualizador: canal propio y firmado de Onyx operativo.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
-- Fase activa: **8 — Serious Preparation Tools**. Las entregas 8.0 y 8.1 están implementadas y
-  esperan validación manual antes de iniciar 8.2.
+- Fase activa: **8 — Serious Preparation Tools**. Las entregas 8.0 y 8.1 están implementadas; 8.2
+  queda reservada para la próxima versión. El trabajo actual es mantenimiento de seguridad y calidad.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
 originó una función: se registra como mantenimiento P0–P3 y puede interrumpir el orden del roadmap si
 su gravedad lo justifica.
 
-### Mantenimiento conocido no bloqueante para 7.3
+### Mantenimiento conocido
 
 - repetir de forma explícita las pruebas del actualizador con red caída y artefacto alterado, porque
   no existe certeza suficiente sobre la profundidad de las pruebas anteriores;
@@ -117,7 +117,7 @@ su gravedad lo justifica.
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                    |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                         |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.       |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas y pendientes de validación manual; 8.2 será la siguiente entrega.                        |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; 8.2 está reservada para la próxima versión.                                             |
 | 9 — Consolidación pública y MLOps           | Pendiente                                | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                       |
 | 10 — Expansión avanzada                     | Pendiente                                | Amplía fases cerradas, especialmente bots, torneos e interpretación estratégica.                                 |
 
@@ -298,7 +298,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0 y 8.1 implementadas; pendientes de validación manual antes de iniciar 8.2.**
+**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 queda para la próxima versión.**
 
 ### 8.0. Biblioteca personal de estudios
 
@@ -503,3 +503,26 @@ en la documentación de la fase.
   tablebase estándar se habilita bajo demanda solo con siete piezas o menos.
 - La comparación con entrenamiento enlaza posiciones exactas añadidas manualmente y se presenta
   únicamente como observación descriptiva.
+
+### 2026-09-19 — Endurecimiento de seguridad y calidad
+
+- La Fase 8.2 se reserva para la próxima versión; esta entrega no amplía su alcance funcional.
+- Los comentarios PGN dejan de interpretar HTML crudo y la aplicación adopta una CSP explícita.
+- Los tokens persistentes de Lichess se migran en Windows a almacenamiento cifrado con DPAPI sin
+  eliminar la compatibilidad si el almacén seguro no está disponible.
+- OAuth utiliza CSRF y PKCE nuevos por intento, un listener ya reservado, expiración y cierre tras
+  un único callback válido.
+- Las descargas exigen transporte seguro, aíslan el token de Lichess y limitan redirecciones, tamaño
+  y extracción de archivos.
+- CI incorpora formato, Clippy y pruebas Rust en Windows; las acciones externas quedan fijadas por
+  hash de commit.
+- Detalle y validación manual: `docs/security-hardening.es.md`.
+
+### 2026-09-21 — Correcciones de autenticación y turno táctico
+
+- La sesión OAuth de Lichess conserva el token necesario para el explorador aunque la copia cifrada
+  con DPAPI no esté disponible o falle; el almacenamiento seguro pasa a ser complementario y nunca
+  bloquea el uso de la base remota.
+- Los sets tácticos configurados para que empiece el rival solicitan exactamente una jugada inicial.
+  Se impiden ejecuciones automáticas simultáneas para que el segundo movimiento corresponda siempre
+  al estudiante.

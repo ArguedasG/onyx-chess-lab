@@ -14,7 +14,7 @@ export const fileStorage: AsyncStringStorage = {
     async getItem(key) {
         try {
             return await readTextFile(key, options);
-        } catch (error) {
+        } catch {
             return null;
         }
     },
@@ -43,8 +43,10 @@ export function createZodStorage<Input, Value>(
                     this.setItem(key, parsedValue);
                 }
                 return parsedValue;
-            } catch {
-                warn(`Invalid value for ${key}: ${storedValue}`);
+            } catch (error) {
+                const backupKey = `${key}.invalid-${Date.now()}`;
+                storage.setItem(backupKey, storedValue);
+                warn(`Invalid value for ${key}; preserved as ${backupKey}: ${error}`);
                 this.setItem(key, initialValue);
                 return initialValue;
             }
@@ -77,7 +79,9 @@ export function createAsyncZodStorage<Input, Output>(
                     }
                     return res.data;
                 }
-                warn(`Invalid value for ${key}: ${storedValue}\n${res.error}`);
+                const backupKey = `${key}.invalid-${Date.now()}`;
+                await storage.setItem(backupKey, storedValue);
+                warn(`Invalid value for ${key}; preserved as ${backupKey}: ${res.error}`);
                 await this.setItem(key, initialValue);
                 return initialValue;
             } catch (error) {

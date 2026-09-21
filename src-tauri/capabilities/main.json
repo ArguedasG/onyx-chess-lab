@@ -29,7 +29,12 @@
         "updater:default",
         "log:default",
         "fs:default",
-        "fs:write-all",
+        "fs:allow-mkdir",
+        "fs:allow-copy-file",
+        "fs:allow-remove",
+        "fs:allow-rename",
+        "fs:allow-write-file",
+        "fs:allow-write-text-file",
         "window-state:default",
         {
             "identifier": "fs:scope-appdata-recursive",

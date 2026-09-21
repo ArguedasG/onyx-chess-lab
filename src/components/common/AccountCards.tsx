@@ -1,13 +1,4 @@
-import {
-  ActionIcon,
-  Divider,
-  Group,
-  ScrollArea,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { ActionIcon, Divider, Group, ScrollArea, Stack, Text, TextInput } from "@mantine/core";
 import { IconCheck, IconEdit, IconX } from "@tabler/icons-react";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +6,7 @@ import type { DatabaseInfo } from "@/bindings";
 import { sessionsAtom } from "@/state/atoms";
 import { getChessComAccount, getStats } from "@/utils/chess.com/api";
 import { getLichessAccount } from "@/utils/lichess/api";
+import { deletePersistedLichessToken } from "@/utils/secureLichessTokens";
 import type { Session } from "@/utils/session";
 import { AccountCard } from "../home/AccountCard";
 import { EmptyAccounts } from "../home/EmptyAccounts";
@@ -220,7 +212,8 @@ function LichessOrChessCom({
         title={account.username}
         updatedAt={session.updatedAt}
         total={totalGames}
-        logout={() => {
+        logout={async () => {
+          await deletePersistedLichessToken(lichessSession.username);
           setSessions((sessions) => sessions.filter((s) => s.lichess?.account.id !== account.id));
         }}
         setDatabases={setDatabases}

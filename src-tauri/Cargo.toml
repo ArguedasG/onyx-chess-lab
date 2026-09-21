@@ -71,6 +71,12 @@ rkyv = { version = "0.8", features = ["bytecheck"] }
 polyglot-book-rs = "0.1.0"
 tauri-plugin-updater = "2.10.0"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+] }
+
 [features]
 # by default Tauri runs in production mode
 # when `tauri dev` runs it is executed with `cargo run --no-default-features` if `devPath` is an URL

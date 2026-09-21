@@ -73,7 +73,7 @@ pub(super) fn canonical_query(mut query: GameQuery) -> Result<GameQuery, Error> 
         .position
         .as_mut()
         .ok_or_else(|| invalid("Missing position"))?;
-    let parsed = convert_position_query(position.clone())?;
+    convert_position_query(position.clone())?;
     let mut setup = Fen::from_ascii(position.fen.as_bytes())?.into_setup();
     if position.type_ == "exact" {
         let mode = shakmaty::CastlingMode::detect(&setup);
@@ -83,7 +83,6 @@ pub(super) fn canonical_query(mut query: GameQuery) -> Result<GameQuery, Error> 
     setup.halfmoves = 0;
     setup.fullmoves = std::num::NonZeroU32::new(1).unwrap();
     position.fen = Fen::from_setup(setup).to_string();
-    drop(parsed);
     if !matches!(
         query.wanted_result.as_deref(),
         None | Some("any" | "whitewon" | "blackwon" | "draw" | "unknown")

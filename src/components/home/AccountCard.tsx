@@ -46,7 +46,7 @@ interface AccountCardProps {
     label: string;
     diff?: number;
   }[];
-  logout: () => void;
+  logout: () => void | Promise<void>;
   reload: () => void;
   setDatabases: (databases: DatabaseInfo[]) => void;
   token?: string;
@@ -250,7 +250,7 @@ export function AccountCard({
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t("Home.Accounts.RemoveAccount")}>
-              <ActionIcon variant="subtle" color="red" onClick={() => logout()}>
+              <ActionIcon variant="subtle" color="red" onClick={() => void logout()}>
                 <IconTrash size="1rem" />
               </ActionIcon>
             </Tooltip>

@@ -268,7 +268,7 @@ fn write_game_at(file_path: String, n: i32, pgn: String, state: &AppState) -> Re
     file_r.seek(SeekFrom::Start(0))?;
     let mut parser = PgnParser::new(file_r.try_clone()?);
 
-    parser.offset_by_index(n as usize, &state, &file.to_string_lossy().to_string())?;
+    parser.offset_by_index(n as usize, state, &file.to_string_lossy().to_string())?;
 
     tmpf.seek(SeekFrom::Start(parser.position()?))?;
     tmpf.write_all(pgn.as_bytes())?;

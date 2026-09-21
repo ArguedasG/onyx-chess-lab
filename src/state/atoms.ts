@@ -215,14 +215,21 @@ export const soundVolumeAtom = atomWithStorage<number>("sound-volume", 0.8, unde
 export const pieceSetAtom = atomWithStorage<string>("piece-set", "maestro");
 export const boardImageAtom = atomWithStorage<string>("board-image", "gray.svg");
 export const primaryColorAtom = atomWithStorage<MantineColor>("mantine-primary-color", "blue");
-export const sessionsAtom = atomWithStorage<Session[]>("sessions", []);
+export const sessionsAtom = atomWithStorage<Session[]>("sessions", [], undefined, {
+    getOnInit: true,
+});
 export const nativeBarAtom = atomWithStorage<boolean>("native-bar", false);
 export const reuseEmptyAnalysisTabAtom = atomWithStorage<boolean>("reuse-empty-analysis-tab", true);
 export const sidebarExpandedAtom = atomWithStorage<boolean>("sidebar-expanded", false);
 export const importModalOpenAtom = atom(false);
-export const telemetryEnabledAtom = atomWithStorage<boolean>("telemetry-enabled", true, undefined, {
-    getOnInit: true,
-});
+export const telemetryEnabledAtom = atomWithStorage<boolean>(
+    "telemetry-enabled",
+    false,
+    undefined,
+    {
+        getOnInit: true,
+    },
+);
 
 // Recent Files
 

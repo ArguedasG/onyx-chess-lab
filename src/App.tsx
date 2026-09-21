@@ -16,7 +16,6 @@ import { listen } from "@tauri-apps/api/event";
 import { attachConsole, info, warn } from "@tauri-apps/plugin-log";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { ContextMenuProvider } from "mantine-contextmenu";
-import posthog from "posthog-js";
 import { useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -27,6 +26,7 @@ import {
   pieceSetAtom,
   primaryColorAtom,
   referenceDbAtom,
+  sessionsAtom,
   spellCheckAtom,
   storedDatabasesDirAtom,
   storedDocumentDirAtom,
@@ -52,16 +52,18 @@ import "@/styles/global.css";
 
 import { commands } from "./bindings";
 import { openFile } from "./utils/files";
+import { migrateAndHydrateLichessTokens, persistLichessToken } from "./utils/secureLichessTokens";
+import { enableTelemetry } from "./utils/telemetry";
 
 const colorSchemeManager = localStorageColorSchemeManager({
   key: "mantine-color-scheme",
 });
 
-import { getVersion } from "@tauri-apps/api/app";
 import AppUpdater from "@/components/AppUpdater";
 import ErrorComponent from "@/components/ErrorComponent";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
+import { getLichessAccount } from "@/utils/lichess/api";
 import { routeTree } from "./routeTree.gen";
 
 export type Dirs = {
@@ -142,18 +144,16 @@ function useAppStartup() {
       info("React app started successfully");
 
       const store = getDefaultStore();
+      try {
+        const sessions = store.get(sessionsAtom);
+        store.set(sessionsAtom, await migrateAndHydrateLichessTokens(sessions));
+      } catch (error) {
+        warn(`Could not migrate Lichess credentials to secure storage: ${error}`);
+      }
       const telemetryEnabled = store.get(telemetryEnabledAtom);
 
-      posthog.init("phc_kgEBtifs0EgWlrl4ROYEbnsQ1b7BS2W5BKLNyXe7f8z", {
-        api_host: "https://app.posthog.com",
-        autocapture: false,
-        capture_pageview: false,
-        capture_pageleave: false,
-        disable_session_recording: true,
-      });
-
       if (telemetryEnabled) {
-        posthog.capture("app_started", { version: await getVersion() });
+        await enableTelemetry();
       }
       try {
         const matches = await getMatches();
@@ -184,7 +184,56 @@ function useAppStartup() {
   }, [setTabs, setActiveTab]);
 }
 
+function useLichessOAuthSessionListener() {
+  useEffect(() => {
+    const store = getDefaultStore();
+    let disposed = false;
+    let stopListening: (() => void) | undefined;
+
+    void listen<string>("access_token", (event) => {
+      void (async () => {
+        try {
+          const token = event.payload;
+          const account = await getLichessAccount({ token });
+          if (!account) {
+            warn("Lichess OAuth completed, but the account could not be loaded");
+            return;
+          }
+
+          const alias = sessionStorage.getItem("lichess_player_alias") || account.username;
+          sessionStorage.removeItem("lichess_player_alias");
+          const normalizedUsername = account.username.toLowerCase();
+          store.set(sessionsAtom, (sessions) => [
+            ...sessions.filter(
+              (session) => session.lichess?.username.toLowerCase() !== normalizedUsername,
+            ),
+            {
+              lichess: { accessToken: token, username: account.username, account },
+              player: alias,
+              updatedAt: Date.now(),
+            },
+          ]);
+          void persistLichessToken(account.username, token);
+        } catch (error) {
+          warn(`Could not finish Lichess OAuth authentication: ${error}`);
+        }
+      })();
+    })
+      .then((unlisten) => {
+        if (disposed) unlisten();
+        else stopListening = unlisten;
+      })
+      .catch((error) => warn(`Could not listen for Lichess OAuth completion: ${error}`));
+
+    return () => {
+      disposed = true;
+      stopListening?.();
+    };
+  }, []);
+}
+
 export default function App() {
+  useLichessOAuthSessionListener();
   const primaryColor = useAtomValue(primaryColorAtom);
   const pieceSet = useAtomValue(pieceSetAtom);
   const fontSize = useAtomValue(fontSizeAtom);

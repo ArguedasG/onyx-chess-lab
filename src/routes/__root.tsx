@@ -262,7 +262,7 @@ function RootLayout() {
           {
             label: t("Menu.Help.Documentation"),
             id: "documentation",
-            action: () => openUrl("https://encroissant.org/docs/"),
+            action: () => openUrl("https://github.com/ArguedasG/onyx-chess-lab#readme"),
           },
           {
             label: t("Menu.Help.ClearSavedData"),

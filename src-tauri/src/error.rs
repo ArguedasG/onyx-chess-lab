@@ -137,6 +137,15 @@ pub enum Error {
 
     #[error("Managed engine error: {0}")]
     ManagedEngine(String),
+
+    #[error("Secure storage error: {0}")]
+    SecureStorage(String),
+
+    #[error("OAuth error: {0}")]
+    OAuth(String),
+
+    #[error("Download error: {0}")]
+    Download(String),
 }
 
 impl From<std::io::Error> for Error {

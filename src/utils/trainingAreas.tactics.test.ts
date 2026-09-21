@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getTacticsSetStatistics, type TacticsSet, type TacticsState } from "./trainingAreas";
+import { getTacticsSetStatistics } from "./tacticsStatistics";
+import { type TacticsSet, type TacticsState } from "./trainingAreas";
 
 const set: TacticsSet = {
     id: "set-1",

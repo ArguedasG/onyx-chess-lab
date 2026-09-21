@@ -841,6 +841,33 @@ async exportAnalysisArtifact(kind: AnalysisArtifactKind, artifactId: string, des
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async secureTokenStorageAvailable() : Promise<boolean> {
+    return await TAURI_INVOKE("secure_token_storage_available");
+},
+async storeLichessToken(username: string, token: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("store_lichess_token", { username, token }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getLichessToken(username: string) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_lichess_token", { username }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteLichessToken(username: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_lichess_token", { username }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
