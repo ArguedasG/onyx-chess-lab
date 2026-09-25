@@ -55,6 +55,12 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --all -- --check
 
+      - name: Prepare frontend placeholder for Tauri checks
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Set-Content -Path dist/index.html -Value '<!doctype html><title>CI placeholder</title>'
+
       - name: Run Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets
