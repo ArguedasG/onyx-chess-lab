@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import OpeningDashboardPage from "@/components/training/OpeningDashboardPage";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/training/openings")({
-  component: OpeningDashboardPage,
+  component: Outlet,
   loader: ({ context: { loadDirs } }) => loadDirs(),
 });

@@ -52,6 +52,11 @@ import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import classes from "@/styles/Chessboard.module.css";
 import { ANNOTATION_INFO, isBasicAnnotation } from "@/utils/annotation";
+import {
+  getVariationArrowShapes,
+  MAIN_VARIATION_BRUSH,
+  SECONDARY_VARIATION_BRUSH,
+} from "@/utils/boardShapes";
 import { getVariationLine } from "@/utils/chess";
 import { chessopsError, forceEnPassant, positionFromFen } from "@/utils/chessops";
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
@@ -386,7 +391,9 @@ function Board({
     }
   }
 
-  let shapes: DrawShape[] = [];
+  // Prepared PGN continuations take visual priority over matching engine arrows.
+  let shapes: DrawShape[] =
+    !practicing && showVariationArrows ? getVariationArrowShapes(currentNode) : [];
   if (!practicing && showArrows && evalOpen && arrows.size > 0 && pos) {
     const entries = Array.from(arrows.entries()).sort((a, b) => a[0] - b[0]);
     for (const [i, moves] of entries) {
@@ -435,27 +442,6 @@ function Board({
               }
             }
           }
-        }
-      }
-    }
-  }
-
-  // Variation arrows: show all children moves when there are alternatives
-  if (!practicing && showVariationArrows && currentNode.children.length > 1) {
-    for (const child of currentNode.children) {
-      if (child.move) {
-        const m = child.move as NormalMove;
-        const from = makeSquare(m.from);
-        const to = makeSquare(m.to);
-        if (from && to && !shapes.find((s) => s.orig === from && s.dest === to)) {
-          shapes.push({
-            orig: from,
-            dest: to,
-            brush: "variation",
-            modifiers: {
-              lineWidth: MEDIUM_BRUSH,
-            },
-          });
         }
       }
     }
@@ -740,16 +726,24 @@ function Board({
                   defaultSnapToValidMove: snapArrows,
                   autoShapes: shapes,
                   brushes: {
-                    variation: {
+                    [MAIN_VARIATION_BRUSH]: {
                       key: "v",
-                      color: "#9b59b6",
-                      opacity: 0.8,
+                      color: "#2383e2",
+                      opacity: 0.9,
                       lineWidth: 10,
                     },
+                    [SECONDARY_VARIATION_BRUSH]: {
+                      key: "w",
+                      color: "#63a9e8",
+                      opacity: 0.58,
+                      lineWidth: 5.5,
+                    },
                   } as unknown as DrawBrushes,
-                  onChange: (shapes) => {
-                    setShapes(shapes);
-                  },
+                  onChange: practicing
+                    ? undefined
+                    : (shapes) => {
+                        setShapes(shapes);
+                      },
                 }}
               />
             </Box>

@@ -18,12 +18,12 @@ import {
   Switch,
   Text,
   TextInput,
+  Tooltip,
   Title,
 } from "@mantine/core";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { resolve } from "@tauri-apps/api/path";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
-import { copyFile, exists, writeTextFile } from "@tauri-apps/plugin-fs";
+import { open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArrowLeft,
   IconBook2,
@@ -37,9 +37,9 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { Link, useLoaderData, useNavigate } from "@tanstack/react-router";
+import { Link, useLoaderData, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAtom } from "jotai";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   activeTabAtom,
   openingExpandedFamily,
@@ -55,6 +55,8 @@ import { unwrap } from "@/utils/unwrap";
 import {
   inspectOpeningPgn,
   buildOpeningTrainingPgn,
+  consolidateOpeningSections,
+  getOpeningImportGroupPreviews,
   prepareOpeningImport,
   type OpeningImportConfig,
   type OpeningPgnInspection,
@@ -64,6 +66,7 @@ import {
   addOpeningRepertoire,
   addOpeningVariantFolder,
   deleteOpeningLine,
+  deleteOpeningRepertoire,
   getOpeningLineMetrics,
   getOpeningRepertoireMetrics,
   getOpeningVariantMetrics,
@@ -81,7 +84,10 @@ import { createFile, openFile } from "@/utils/files";
 import { headersToPGN } from "@/utils/chess";
 import { INITIAL_FEN } from "chessops/fen";
 import { useTranslation } from "react-i18next";
+import { useOpeningScrollRestoration } from "@/hooks/useOpeningScrollRestoration";
 import RepertoireAdditionModal from "./RepertoireAdditionModal";
+import OpeningExportModal from "./OpeningExportModal";
+import OpeningConsolidationModal from "./OpeningConsolidationModal";
 
 function filename(path: string, trainingT: typeof i18n.t = i18n.t): string {
   return (
@@ -95,6 +101,7 @@ function filename(path: string, trainingT: typeof i18n.t = i18n.t): string {
 const defaultConfig: OpeningImportConfig = {
   color: "white",
   subvariationPolicy: "all",
+  groupingMode: "smart",
 };
 
 export default function OpeningDashboardPage() {
@@ -103,7 +110,12 @@ export default function OpeningDashboardPage() {
     repertoireId: string;
     variantId?: string;
   } | null>(null);
+  const [exportingRepertoireId, setExportingRepertoireId] = useState<string | null>(null);
+  const [consolidatingRepertoireId, setConsolidatingRepertoireId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const locationHash = useLocation({ select: (location) => location.hash });
+  const importCardRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useOpeningScrollRestoration("manage", locationHash !== "import");
   const { documentDir } = useLoaderData({ from: "/training/openings" });
   const [areas, setAreas] = useAtom(trainingAreasAtom);
   const [, setTabs] = useAtom(tabsAtom);
@@ -136,10 +148,20 @@ export default function OpeningDashboardPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineDraftName, setLineDraftName] = useState("");
   const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
+  const [deletingRepertoireId, setDeletingRepertoireId] = useState<string | null>(null);
   const repertoires = useMemo(
     () => Object.values(areas.openings.repertoires),
     [areas.openings.repertoires],
   );
+
+  useEffect(() => {
+    if (locationHash !== "import") return;
+    setExpandedRepertoires([]);
+    const frame = requestAnimationFrame(() => {
+      importCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [locationHash, setExpandedRepertoires]);
 
   async function createRepertoireFromScratch() {
     const repertoireName = createName.trim();
@@ -231,9 +253,7 @@ export default function OpeningDashboardPage() {
     try {
       const nextInspection = await inspectOpeningPgn(selected, config);
       if (nextInspection.recordCount === 0)
-        throw new Error(
-          t("Training.Copy.ThePGNcontainsnochapters.5d1c6941", "The PGN contains no chapters."),
-        );
+        throw new Error(t("OpeningManage.NoPgnRecords", "The PGN contains no valid records."));
       setInspection(nextInspection);
       if (!name.trim()) setName(filename(selected, t));
     } catch (error) {
@@ -267,18 +287,17 @@ export default function OpeningDashboardPage() {
       setVariantName("");
       setVariantRepertoireId(null);
       setFeedback({
-        text: t(
-          "Training.Copy.Variationv0addedtov1.bbb30522",
-          "Variation “{{v0}}” added to {{v1}}.",
-          { v0: name, v1: repertoire.name },
-        ),
+        text: t("OpeningManage.SectionAdded", "Section “{{section}}” added to {{repertoire}}.", {
+          section: name,
+          repertoire: repertoire.name,
+        }),
       });
     } catch (error) {
       setFeedback({
         text:
           error instanceof Error
             ? error.message
-            : t("Training.Copy.Couldnotaddthevariation.9e48a0e7", "Could not add the variation."),
+            : t("OpeningManage.AddSectionFailed", "Could not add the section."),
         color: "red",
       });
     } finally {
@@ -369,6 +388,25 @@ export default function OpeningDashboardPage() {
     }
   }
 
+  function confirmDeleteRepertoire() {
+    if (!deletingRepertoireId) return;
+    const repertoire = areas.openings.repertoires[deletingRepertoireId];
+    if (!repertoire) return;
+    setAreas((current) => ({
+      ...current,
+      openings: deleteOpeningRepertoire(current.openings, repertoire.id),
+    }));
+    setExpandedRepertoires((current) => current.filter((id) => id !== repertoire.id));
+    setDeletingRepertoireId(null);
+    setFeedback({
+      text: t(
+        "OpeningManage.RepertoireDeleted",
+        "Repertoire “{{name}}” was removed from opening training. Its editable PGN was kept on disk.",
+        { name: repertoire.name },
+      ),
+    });
+  }
+
   async function confirmImport() {
     if (!inspection) return;
     setBusy(true);
@@ -376,10 +414,7 @@ export default function OpeningDashboardPage() {
       const prepared = await prepareOpeningImport(inspection, config);
       if (prepared.variants.length === 0) {
         throw new Error(
-          t(
-            "Training.Copy.Couldnotprepareanyvalid.d3cbba1a",
-            "Could not prepare any valid chapters.",
-          ),
+          t("OpeningManage.NoValidSections", "Could not prepare any valid sections."),
         );
       }
       const repertoireName = name.trim() || filename(inspection.path, t);
@@ -399,7 +434,7 @@ export default function OpeningDashboardPage() {
           description: description.trim(),
           path: created.value.path,
           sourcePath: inspection.path,
-          recordCount: inspection.recordCount,
+          recordCount: prepared.variants.length,
           subvariationPolicy: config.subvariationPolicy,
           variants: prepared.variants,
         }),
@@ -410,13 +445,17 @@ export default function OpeningDashboardPage() {
       setConfig(defaultConfig);
       setFeedback({
         text: t(
-          "Training.Copy.Repertoirev0importedwithv1.109a9e0f",
-          "Repertoire “{{v0}}” imported with {{v1}} variations{{v2}}.",
+          "OpeningImport.Imported",
+          "Repertoire “{{name}}” imported with {{sections}} sections{{skipped}}.",
           {
-            v0: repertoireName,
-            v1: prepared.variants.length,
-            v2:
-              prepared.skippedRecords > 0 ? `; ${prepared.skippedRecords} registros omitidos` : "",
+            name: repertoireName,
+            sections: prepared.variants.length,
+            skipped:
+              prepared.skippedRecords > 0
+                ? t("OpeningImport.SkippedSuffix", "; {{count}} invalid records skipped", {
+                    count: prepared.skippedRecords,
+                  })
+                : "",
           },
         ),
       });
@@ -542,6 +581,7 @@ export default function OpeningDashboardPage() {
           repertoireId: repertoire.id,
           variantIds: lineIds.map(() => variant.id),
           lineIds,
+          returnTarget: { view: "manage" },
         });
       }
       if (mode === "build") setPracticeTab("build");
@@ -590,56 +630,8 @@ export default function OpeningDashboardPage() {
       repertoireId: repertoire.id,
       variantIds: entries.map(({ variant }) => variant.id),
       lineIds: entries.map(({ lineId }) => lineId),
+      returnTarget: { view: "manage" },
     });
-  }
-
-  async function exportWorkingCopy(repertoire: OpeningRepertoire) {
-    try {
-      const defaultPath = await resolve(documentDir, `${repertoire.name} - editable.pgn`);
-      const target = await save({
-        defaultPath,
-        filters: [{ name: "Portable Game Notation", extensions: ["pgn"] }],
-      });
-      if (!target) return;
-      const outputPath = target.toLowerCase().endsWith(".pgn") ? target : `${target}.pgn`;
-      const normalizePath = (path: string) => path.replace(/\\/g, "/").toLowerCase();
-      if (
-        [repertoire.path, repertoire.sourcePath].some(
-          (path) => path && normalizePath(path) === normalizePath(outputPath),
-        )
-      ) {
-        throw new Error(
-          t("Pgn.DifferentPath", "Choose a different file to preserve the source PGN."),
-        );
-      }
-      if (
-        (await exists(outputPath)) &&
-        !(await ask(
-          t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", { path: outputPath }),
-          { kind: "warning" },
-        ))
-      )
-        return;
-      await copyFile(repertoire.path, outputPath);
-      setFeedback({
-        text: t(
-          "Training.Copy.Editablecopyofv0exported.88b7891b",
-          "Editable copy of “{{v0}}” exported.",
-          { v0: repertoire.name },
-        ),
-      });
-    } catch (error) {
-      setFeedback({
-        text:
-          error instanceof Error
-            ? error.message
-            : t(
-                "Training.Copy.Couldnotexporttheeditable.e7a8ab0a",
-                "Could not export the editable copy.",
-              ),
-        color: "red",
-      });
-    }
   }
 
   async function openLinePractice(
@@ -655,6 +647,7 @@ export default function OpeningDashboardPage() {
       repertoireId: repertoire.id,
       variantIds: [variant.id],
       lineIds: [lineId],
+      returnTarget: { view: "manage" },
     });
   }
 
@@ -663,9 +656,12 @@ export default function OpeningDashboardPage() {
   const sampleComments =
     inspection?.samples.reduce((sum, sample) => sum + sample.commentCount, 0) ?? 0;
   const sampleErrors = inspection?.samples.filter((sample) => sample.error).length ?? 0;
+  const importGroups = inspection
+    ? getOpeningImportGroupPreviews(inspection, config.groupingMode)
+    : [];
 
   return (
-    <Container size="xl" py="md">
+    <Container ref={scrollRef} size="xl" py="md">
       {additionTarget && (
         <RepertoireAdditionModal
           initialRepertoireId={additionTarget.repertoireId}
@@ -673,27 +669,49 @@ export default function OpeningDashboardPage() {
           onClose={() => setAdditionTarget(null)}
         />
       )}
+      {exportingRepertoireId && (
+        <OpeningExportModal
+          repertoireId={exportingRepertoireId}
+          documentDir={documentDir}
+          onClose={() => setExportingRepertoireId(null)}
+          onExported={(text) => setFeedback({ text })}
+        />
+      )}
+      {consolidatingRepertoireId && (
+        <OpeningConsolidationModal
+          repertoireId={consolidatingRepertoireId}
+          onClose={() => setConsolidatingRepertoireId(null)}
+          onConfirm={async (groupKeys) => {
+            const openings = consolidateOpeningSections(
+              areas.openings,
+              consolidatingRepertoireId,
+              groupKeys,
+            );
+            await persistOpeningOrganization(openings, consolidatingRepertoireId);
+            setFeedback({
+              text: t("OpeningConsolidation.Success", "The selected sections were consolidated."),
+            });
+          }}
+        />
+      )}
       <Stack gap="lg">
         <Group align="flex-start">
           <Button
             component={Link}
-            to="/training"
+            to="/training/openings"
             variant="subtle"
             p="xs"
-            aria-label={t("Training.Copy.Backtotraining.f928bfe5", "Back to training")}
+            aria-label={t("OpeningBrowser.BackToLibrary", "Back to repertoires")}
           >
             <IconArrowLeft size={20} />
           </Button>
           <div>
-            <Title order={2}>
-              {t("Training.Copy.Openingtraining.268bdba9", "Opening training")}
-            </Title>
+            <Title order={2}>{t("OpeningManage.Title", "Manage repertoires")}</Title>
             <Text c="dimmed" mt={4} maw={820}>
-              {" "}
               {t(
-                "Training.Copy.Createimportandpracticeyour.23a91199",
-                "Create, import, and practice your opening repertoires.",
-              )}{" "}
+                "OpeningManage.Description",
+                "Manage repertoire sections and lines, import new content, choose what is trained, and open any line on the board for editing.",
+              )}
             </Text>
           </div>
         </Group>
@@ -722,8 +740,8 @@ export default function OpeningDashboardPage() {
                 <Text size="sm" c="dimmed">
                   {" "}
                   {t(
-                    "Training.Copy.Settherepertoiresname.7c1c5551",
-                    "Set the repertoire's name and color, then add variations and build them on the board.",
+                    "OpeningManage.CreateDescription",
+                    "Set the repertoire's name and color, then add sections and build their lines on the board.",
                   )}{" "}
                 </Text>
               </div>
@@ -766,7 +784,7 @@ export default function OpeningDashboardPage() {
           </Stack>
         </Card>
 
-        <Card withBorder style={{ order: 3 }}>
+        <Card ref={importCardRef} withBorder style={{ order: 3 }}>
           <Stack>
             <Group>
               <IconUpload size={26} color="var(--mantine-color-blue-6)" />
@@ -910,9 +928,11 @@ export default function OpeningDashboardPage() {
                         <div>
                           <Text fw={600}>{repertoire.name}</Text>
                           <Text size="sm" c="dimmed">
-                            {theoryVariants.length}{" "}
-                            {t("Training.Copy.variations.ca95a410", "variations ·")} {lineCount}{" "}
-                            {t("Training.Copy.lineseditablecopy.f156ce59", "lines · editable copy")}{" "}
+                            {t(
+                              "OpeningManage.SectionAndLineCounts",
+                              "{{sections}} sections · {{lines}} lines · editable copy",
+                              { sections: theoryVariants.length, lines: lineCount },
+                            )}{" "}
                             {modelGameCount > 0
                               ? t("Training.Copy.v0modelgames.f637b000", " · {{v0}} model games", {
                                   v0: modelGameCount,
@@ -964,6 +984,23 @@ export default function OpeningDashboardPage() {
                           >
                             {t("Repertoire.ImportInto", "Import into repertoire")}
                           </Button>
+                          <Tooltip
+                            multiline
+                            maw={340}
+                            label={t(
+                              "OpeningConsolidation.ButtonHint",
+                              "Combine related imported sections into fewer sections with multiple lines, preserving matching progress.",
+                            )}
+                          >
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBook2 size={14} />}
+                              onClick={() => setConsolidatingRepertoireId(repertoire.id)}
+                            >
+                              {t("OpeningConsolidation.Action", "Consolidate sections")}
+                            </Button>
+                          </Tooltip>
                           <Button
                             size="xs"
                             color="blue"
@@ -981,7 +1018,7 @@ export default function OpeningDashboardPage() {
                             size="xs"
                             variant="default"
                             leftSection={<IconDownload size={14} />}
-                            onClick={() => void exportWorkingCopy(repertoire)}
+                            onClick={() => setExportingRepertoireId(repertoire.id)}
                           >
                             {" "}
                             {t("Training.Copy.Exportcopy.ee83b2cd", "Export copy")}{" "}
@@ -997,12 +1034,21 @@ export default function OpeningDashboardPage() {
                           </Button>
                           <Button
                             size="xs"
+                            color="red"
+                            variant="subtle"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={() => setDeletingRepertoireId(repertoire.id)}
+                          >
+                            {t("OpeningManage.DeleteRepertoire", "Delete repertoire")}
+                          </Button>
+                          <Button
+                            size="xs"
                             variant="light"
                             leftSection={<IconPlus size={14} />}
                             onClick={() => setVariantRepertoireId(repertoire.id)}
                           >
                             {" "}
-                            {t("Training.Copy.Addvariation.610970ab", "Add variation")}{" "}
+                            {t("OpeningManage.AddSection", "Add section")}{" "}
                           </Button>
                         </Group>
                       </Group>
@@ -1068,8 +1114,8 @@ export default function OpeningDashboardPage() {
                                               variant="subtle"
                                               color="gray"
                                               aria-label={t(
-                                                "Training.Copy.Dragvariation.c1e796c2",
-                                                "Drag variation",
+                                                "OpeningManage.DragSection",
+                                                "Drag section",
                                               )}
                                               {...variantDrag.dragHandleProps}
                                             >
@@ -1105,7 +1151,10 @@ export default function OpeningDashboardPage() {
                                                   { v0: lines.length, v1: variant.commentCount },
                                                 )}
                                                 {variant.hasVariations
-                                                  ? " · contiene subvariantes"
+                                                  ? t(
+                                                      "OpeningManage.ContainsSubvariations",
+                                                      " · contains subvariations",
+                                                    )
                                                   : ""}
                                               </Text>
                                             </div>
@@ -1113,7 +1162,7 @@ export default function OpeningDashboardPage() {
                                               <ActionIcon
                                                 aria-label={t(
                                                   "Repertoire.ImportIntoVariant",
-                                                  "Import PGN into this variant",
+                                                  "Import PGN into this section",
                                                 )}
                                                 onClick={() =>
                                                   setAdditionTarget({
@@ -1128,8 +1177,8 @@ export default function OpeningDashboardPage() {
                                                 size="lg"
                                                 variant="subtle"
                                                 aria-label={t(
-                                                  "Training.Copy.Configurevariation.1b5508d9",
-                                                  "Configure variation",
+                                                  "OpeningManage.ConfigureSection",
+                                                  "Configure section",
                                                 )}
                                                 onClick={() => openVariantSettings(variant)}
                                               >
@@ -1359,8 +1408,8 @@ export default function OpeningDashboardPage() {
                                                   <Text size="xs" c="dimmed" ta="center" py={4}>
                                                     {" "}
                                                     {t(
-                                                      "Training.Copy.Buildalineonthe.a1944881",
-                                                      "Build a line on the board or drop a line from another variation here.",
+                                                      "OpeningManage.BuildLineHint",
+                                                      "Build a line on the board or drop a line from another section here.",
                                                     )}{" "}
                                                   </Text>
                                                 )}
@@ -1451,8 +1500,8 @@ export default function OpeningDashboardPage() {
               <Text fw={600}>{inspection.filename}</Text>
               <Text size="sm">
                 {inspection.recordCount}{" "}
-                {t("Training.Copy.chaptersInthesample.15719b24", "chapters. In the sample:")}{" "}
-                {sampleLineCount} {t("Training.Copy.lines.cee668b8", "lines,")} {sampleComments}{" "}
+                {t("OpeningImport.RecordsDetected", "PGN records detected.")} {sampleLineCount}{" "}
+                {t("Training.Copy.lines.cee668b8", "lines,")} {sampleComments}{" "}
                 {t("Training.Copy.commentsand.d6c6e99a", "comments and")} {sampleErrors}{" "}
                 {t("Training.Copy.invalidrecords.4f5f4305", "invalid records.")}{" "}
               </Text>
@@ -1465,36 +1514,61 @@ export default function OpeningDashboardPage() {
                 "This policy only determines which lines are initially selected for training. The editable copy keeps every branch and the original file is unchanged.",
               )}{" "}
             </Text>
+            <Alert color="teal" variant="light">
+              {t(
+                "OpeningImport.GroupPreview",
+                "The editable copy will contain {{groups}} sections. Review how the PGN records will be grouped before importing.",
+                { groups: importGroups.length },
+              )}
+            </Alert>
             <ScrollArea h={260} type="auto" offsetScrollbars>
               <Stack gap="xs" pr="sm">
-                {inspection.samples.map((sample) => (
-                  <Card key={sample.index} withBorder padding="xs">
+                {importGroups.map((group, index) => (
+                  <Card key={group.key} withBorder padding="sm">
                     <Group justify="space-between" wrap="nowrap">
                       <div style={{ minWidth: 0 }}>
-                        <Text size="sm" fw={500} truncate>
-                          {sample.index + 1}. {sample.name}
+                        <Text size="sm" fw={600} style={{ overflowWrap: "anywhere" }}>
+                          {index + 1}. {group.name}
                         </Text>
-                        <Text size="xs" c={sample.error ? "red" : "dimmed"}>
-                          {sample.error ||
-                            t(
-                              "Training.Copy.v0linesv1commentsv2.c1095dd0",
-                              "{{v0}} lines · {{v1}} comments{{v2}}",
-                              {
-                                v0: sample.lineCount,
-                                v1: sample.commentCount,
-                                v2: sample.hasVariations ? " · subvariantes" : "",
-                              },
-                            )}
+                        <Text size="xs" c="dimmed">
+                          {t(
+                            "OpeningImport.GroupCounts",
+                            "{{records}} records · {{lines}} lines · {{comments}} comments",
+                            {
+                              records: group.recordIndexes.length,
+                              lines: group.lineCount,
+                              comments: group.commentCount,
+                            },
+                          )}
                         </Text>
                       </div>
-                      {sample.contentType === "modelGame" && (
-                        <Badge color="violet">
-                          {t("Training.Copy.Modelgame.f131746e", "Model game")}
-                        </Badge>
-                      )}
+                      <Group gap="xs">
+                        {group.recordIndexes.length > 1 && (
+                          <Badge color="teal" variant="light">
+                            {t("OpeningImport.Merged", "Grouped")}
+                          </Badge>
+                        )}
+                        {group.contentType === "modelGame" && (
+                          <Badge color="violet">
+                            {t("Training.Copy.Modelgame.f131746e", "Model game")}
+                          </Badge>
+                        )}
+                      </Group>
                     </Group>
                   </Card>
                 ))}
+                {inspection.samples
+                  .filter((sample) => sample.error)
+                  .map((sample) => (
+                    <Card key={`error:${sample.index}`} withBorder padding="xs">
+                      <Text size="sm" fw={500}>
+                        {sample.index + 1}. {sample.name}
+                      </Text>
+                      <Text size="xs" c="red">
+                        {sample.error}
+                      </Text>
+                    </Card>
+                  ))}
               </Stack>
             </ScrollArea>
             <Group justify="flex-end">
@@ -1518,12 +1592,12 @@ export default function OpeningDashboardPage() {
           setVariantRepertoireId(null);
           setVariantName("");
         }}
-        title={t("Training.Copy.Addvariation.610970ab", "Add variation")}
+        title={t("OpeningManage.AddSection", "Add section")}
         size="sm"
       >
         <Stack>
           <TextInput
-            label={t("Training.Copy.Variationname.1ac1e564", "Variation name")}
+            label={t("OpeningManage.SectionName", "Section name")}
             placeholder={t("Training.Copy.egNajdorfSicilian.c9d54c5c", "e.g. Najdorf Sicilian")}
             value={variantName}
             onChange={(event) => setVariantName(event.currentTarget.value)}
@@ -1532,8 +1606,8 @@ export default function OpeningDashboardPage() {
           <Text size="xs" c="dimmed">
             {" "}
             {t(
-              "Training.Copy.Anemptychapterwillbe.d1b4f5fb",
-              "An empty chapter will be created in the editable copy. Build its lines on the board or move existing lines into it.",
+              "OpeningManage.EmptySectionDescription",
+              "An empty section will be created in the editable copy. Build its lines on the board or move existing lines into it.",
             )}{" "}
           </Text>
           <Group justify="flex-end">
@@ -1548,7 +1622,7 @@ export default function OpeningDashboardPage() {
               onClick={addVariantFromScratch}
             >
               {" "}
-              {t("Training.Copy.Addvariation.610970ab", "Add variation")}{" "}
+              {t("OpeningManage.AddSection", "Add section")}{" "}
             </Button>
           </Group>
         </Stack>
@@ -1618,6 +1692,33 @@ export default function OpeningDashboardPage() {
       </Modal>
 
       <Modal
+        opened={deletingRepertoireId !== null}
+        onClose={() => setDeletingRepertoireId(null)}
+        title={t("OpeningManage.DeleteRepertoireTitle", "Delete repertoire?")}
+        size="sm"
+      >
+        <Stack>
+          <Alert color="red" variant="light">
+            {t(
+              "OpeningManage.DeleteRepertoireWarning",
+              "This removes the repertoire, all its sections, and its training progress from Onyx. The editable PGN and the original imported file remain on disk.",
+            )}
+          </Alert>
+          <Text size="sm" fw={600}>
+            {deletingRepertoireId ? areas.openings.repertoires[deletingRepertoireId]?.name : ""}
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeletingRepertoireId(null)}>
+              {t("Common.Cancel", "Cancel")}
+            </Button>
+            <Button color="red" onClick={confirmDeleteRepertoire}>
+              {t("OpeningManage.ConfirmDeleteRepertoire", "Delete repertoire")}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={editingRepertoireId !== null}
         onClose={() => !busy && setEditingRepertoireId(null)}
         title={t("Training.Copy.Editrepertoire.c2627a86", "Edit repertoire")}
@@ -1651,7 +1752,7 @@ export default function OpeningDashboardPage() {
       <Modal
         opened={editingVariantId !== null}
         onClose={() => !busy && setEditingVariantId(null)}
-        title={t("Training.Copy.Configurevariation.1b5508d9", "Configure variation")}
+        title={t("OpeningManage.ConfigureSection", "Configure section")}
         size="lg"
       >
         {editingVariantId && areas.openings.variants[editingVariantId] && (
@@ -1799,7 +1900,38 @@ function OpeningConfigFields({
           })
         }
       />
+      {!compact && (
+        <Select
+          label={trainingT("OpeningImport.Grouping", "Section grouping")}
+          description={trainingT(
+            "OpeningImport.GroupingDescription",
+            "Controls how PGN records become repertoire sections.",
+          )}
+          value={config.groupingMode}
+          data={[
+            {
+              value: "smart",
+              label: trainingT("OpeningImport.GroupingSmart", "Smart grouping (recommended)"),
+            },
+            {
+              value: "records",
+              label: trainingT("OpeningImport.GroupingRecords", "One section per PGN record"),
+            },
+            {
+              value: "single",
+              label: trainingT("OpeningImport.GroupingSingle", "One combined section"),
+            },
+          ]}
+          onChange={(value) =>
+            value &&
+            onChange({
+              ...config,
+              groupingMode: value as OpeningImportConfig["groupingMode"],
+            })
+          }
+        />
+      )}
     </>
   );
-  return compact ? fields : <SimpleGrid cols={{ base: 1, sm: 2 }}>{fields}</SimpleGrid>;
+  return compact ? fields : <SimpleGrid cols={{ base: 1, sm: 3 }}>{fields}</SimpleGrid>;
 }

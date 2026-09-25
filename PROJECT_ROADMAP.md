@@ -336,6 +336,20 @@ Contrato y validación técnica: `docs/studies-phase-8-0.es.md`.
 
 Contrato y validación técnica: `docs/position-actions-phase-8-1.es.md`.
 
+### Ajustes transversales previos a 8.2
+
+**Estado: Implementados y validados automáticamente; validación manual nativa pendiente.**
+
+- el tablero muestra las continuaciones PGN cuando una posición tiene alternativas, diferenciando la
+  línea principal con una flecha azul más intensa y las variantes con flechas más claras y finas;
+- las flechas de variantes conservan un interruptor global, nacen activadas para perfiles nuevos y
+  tienen prioridad visual sobre una flecha de motor coincidente;
+- la práctica táctica permite solicitar **Ver la solución** mediante confirmación explícita;
+- revelar una solución registra un intento fallido —incluidos los contadores Woodpecker—, reproduce
+  la línea principal y obliga a resolver después el ejercicio;
+- los ejercicios sin solución PGN consultan un motor local objetivo y no registran el fallo si el
+  motor no está disponible o no devuelve una línea.
+
 ### 8.2. Preparación individual y de equipo
 
 - preparación de rival y repertorio probable por color;

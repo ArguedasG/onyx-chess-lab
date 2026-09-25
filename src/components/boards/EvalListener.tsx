@@ -30,7 +30,7 @@ import { getBestMoves as lichessGetBestMoves } from "@/utils/lichess/api";
 import { useThrottledEffect } from "@/utils/misc";
 import { TreeStateContext } from "../common/TreeStateContext";
 
-function EvalListener() {
+function EvalListener({ persistScore = true }: { persistScore?: boolean }) {
   const [engines] = useAtom(enginesAtom);
   const threat = useAtomValue(currentThreatAtom);
   const store = useContext(TreeStateContext)!;
@@ -92,6 +92,7 @@ function EvalListener() {
         fen={fen}
         moves={moves}
         threat={threat}
+        persistScore={persistScore}
       />
     ));
 }
@@ -106,6 +107,7 @@ function EngineListener({
   fen,
   moves,
   threat,
+  persistScore,
 }: {
   engine: Engine;
   firstEngineWithLines: string | null;
@@ -116,6 +118,7 @@ function EngineListener({
   fen: string;
   moves: string[];
   threat: boolean;
+  persistScore: boolean;
 }) {
   const store = useContext(TreeStateContext)!;
   const setScore = useStore(store, (s) => s.setScore);
@@ -160,7 +163,7 @@ function EngineListener({
             engine.type !== "local" || !isMaiaEngine(engine)
               ? firstEngineWithLines === engine.id || firstEngineWithLines === null
               : false;
-          if (shouldSetScore) {
+          if (shouldSetScore && persistScore) {
             setScore(ev[0].score);
           }
         });
@@ -179,6 +182,7 @@ function EngineListener({
     engine.id,
     setEngineVariation,
     firstEngineWithLines,
+    persistScore,
   ]);
 
   const getBestMoves = useMemo(

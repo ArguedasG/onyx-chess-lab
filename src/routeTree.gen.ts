@@ -24,7 +24,12 @@ import { Route as TrainingLibraryRouteImport } from './routes/training/library'
 import { Route as TrainingEndgamesRouteImport } from './routes/training/endgames'
 import { Route as DatabasesDatabaseIdRouteImport } from './routes/databases/$databaseId'
 import { Route as TrainingTacticsIndexRouteImport } from './routes/training/tactics/index'
+import { Route as TrainingOpeningsIndexRouteImport } from './routes/training/openings/index'
+import { Route as TrainingOpeningsManageRouteImport } from './routes/training/openings/manage'
+import { Route as TrainingOpeningsRepertoireIdRouteImport } from './routes/training/openings/$repertoireId'
+import { Route as TrainingOpeningsRepertoireIdIndexRouteImport } from './routes/training/openings/$repertoireId/index'
 import { Route as TrainingTacticsPracticeSetIdRouteImport } from './routes/training/tactics/practice/$setId'
+import { Route as TrainingOpeningsRepertoireIdVariantIdRouteImport } from './routes/training/openings/$repertoireId/$variantId'
 
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
@@ -101,11 +106,39 @@ const TrainingTacticsIndexRoute = TrainingTacticsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => TrainingTacticsRoute,
 } as any)
+const TrainingOpeningsIndexRoute = TrainingOpeningsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TrainingOpeningsRoute,
+} as any)
+const TrainingOpeningsManageRoute = TrainingOpeningsManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
+  getParentRoute: () => TrainingOpeningsRoute,
+} as any)
+const TrainingOpeningsRepertoireIdRoute =
+  TrainingOpeningsRepertoireIdRouteImport.update({
+    id: '/$repertoireId',
+    path: '/$repertoireId',
+    getParentRoute: () => TrainingOpeningsRoute,
+  } as any)
+const TrainingOpeningsRepertoireIdIndexRoute =
+  TrainingOpeningsRepertoireIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => TrainingOpeningsRepertoireIdRoute,
+  } as any)
 const TrainingTacticsPracticeSetIdRoute =
   TrainingTacticsPracticeSetIdRouteImport.update({
     id: '/practice/$setId',
     path: '/practice/$setId',
     getParentRoute: () => TrainingTacticsRoute,
+  } as any)
+const TrainingOpeningsRepertoireIdVariantIdRoute =
+  TrainingOpeningsRepertoireIdVariantIdRouteImport.update({
+    id: '/$variantId',
+    path: '/$variantId',
+    getParentRoute: () => TrainingOpeningsRepertoireIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -119,12 +152,17 @@ export interface FileRoutesByFullPath {
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
   '/training/library': typeof TrainingLibraryRoute
-  '/training/openings': typeof TrainingOpeningsRoute
+  '/training/openings': typeof TrainingOpeningsRouteWithChildren
   '/training/tactics': typeof TrainingTacticsRouteWithChildren
   '/databases/': typeof DatabasesIndexRoute
   '/training/': typeof TrainingIndexRoute
+  '/training/openings/$repertoireId': typeof TrainingOpeningsRepertoireIdRouteWithChildren
+  '/training/openings/manage': typeof TrainingOpeningsManageRoute
+  '/training/openings/': typeof TrainingOpeningsIndexRoute
   '/training/tactics/': typeof TrainingTacticsIndexRoute
+  '/training/openings/$repertoireId/$variantId': typeof TrainingOpeningsRepertoireIdVariantIdRoute
   '/training/tactics/practice/$setId': typeof TrainingTacticsPracticeSetIdRoute
+  '/training/openings/$repertoireId/': typeof TrainingOpeningsRepertoireIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -136,11 +174,14 @@ export interface FileRoutesByTo {
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
   '/training/library': typeof TrainingLibraryRoute
-  '/training/openings': typeof TrainingOpeningsRoute
   '/databases': typeof DatabasesIndexRoute
   '/training': typeof TrainingIndexRoute
+  '/training/openings/manage': typeof TrainingOpeningsManageRoute
+  '/training/openings': typeof TrainingOpeningsIndexRoute
   '/training/tactics': typeof TrainingTacticsIndexRoute
+  '/training/openings/$repertoireId/$variantId': typeof TrainingOpeningsRepertoireIdVariantIdRoute
   '/training/tactics/practice/$setId': typeof TrainingTacticsPracticeSetIdRoute
+  '/training/openings/$repertoireId': typeof TrainingOpeningsRepertoireIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,12 +195,17 @@ export interface FileRoutesById {
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
   '/training/library': typeof TrainingLibraryRoute
-  '/training/openings': typeof TrainingOpeningsRoute
+  '/training/openings': typeof TrainingOpeningsRouteWithChildren
   '/training/tactics': typeof TrainingTacticsRouteWithChildren
   '/databases/': typeof DatabasesIndexRoute
   '/training/': typeof TrainingIndexRoute
+  '/training/openings/$repertoireId': typeof TrainingOpeningsRepertoireIdRouteWithChildren
+  '/training/openings/manage': typeof TrainingOpeningsManageRoute
+  '/training/openings/': typeof TrainingOpeningsIndexRoute
   '/training/tactics/': typeof TrainingTacticsIndexRoute
+  '/training/openings/$repertoireId/$variantId': typeof TrainingOpeningsRepertoireIdVariantIdRoute
   '/training/tactics/practice/$setId': typeof TrainingTacticsPracticeSetIdRoute
+  '/training/openings/$repertoireId/': typeof TrainingOpeningsRepertoireIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -178,8 +224,13 @@ export interface FileRouteTypes {
     | '/training/tactics'
     | '/databases/'
     | '/training/'
+    | '/training/openings/$repertoireId'
+    | '/training/openings/manage'
+    | '/training/openings/'
     | '/training/tactics/'
+    | '/training/openings/$repertoireId/$variantId'
     | '/training/tactics/practice/$setId'
+    | '/training/openings/$repertoireId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -191,11 +242,14 @@ export interface FileRouteTypes {
     | '/databases/$databaseId'
     | '/training/endgames'
     | '/training/library'
-    | '/training/openings'
     | '/databases'
     | '/training'
+    | '/training/openings/manage'
+    | '/training/openings'
     | '/training/tactics'
+    | '/training/openings/$repertoireId/$variantId'
     | '/training/tactics/practice/$setId'
+    | '/training/openings/$repertoireId'
   id:
     | '__root__'
     | '/'
@@ -212,8 +266,13 @@ export interface FileRouteTypes {
     | '/training/tactics'
     | '/databases/'
     | '/training/'
+    | '/training/openings/$repertoireId'
+    | '/training/openings/manage'
+    | '/training/openings/'
     | '/training/tactics/'
+    | '/training/openings/$repertoireId/$variantId'
     | '/training/tactics/practice/$setId'
+    | '/training/openings/$repertoireId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -335,6 +394,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrainingTacticsIndexRouteImport
       parentRoute: typeof TrainingTacticsRoute
     }
+    '/training/openings/': {
+      id: '/training/openings/'
+      path: '/'
+      fullPath: '/training/openings/'
+      preLoaderRoute: typeof TrainingOpeningsIndexRouteImport
+      parentRoute: typeof TrainingOpeningsRoute
+    }
+    '/training/openings/manage': {
+      id: '/training/openings/manage'
+      path: '/manage'
+      fullPath: '/training/openings/manage'
+      preLoaderRoute: typeof TrainingOpeningsManageRouteImport
+      parentRoute: typeof TrainingOpeningsRoute
+    }
+    '/training/openings/$repertoireId': {
+      id: '/training/openings/$repertoireId'
+      path: '/$repertoireId'
+      fullPath: '/training/openings/$repertoireId'
+      preLoaderRoute: typeof TrainingOpeningsRepertoireIdRouteImport
+      parentRoute: typeof TrainingOpeningsRoute
+    }
+    '/training/openings/$repertoireId/': {
+      id: '/training/openings/$repertoireId/'
+      path: '/'
+      fullPath: '/training/openings/$repertoireId/'
+      preLoaderRoute: typeof TrainingOpeningsRepertoireIdIndexRouteImport
+      parentRoute: typeof TrainingOpeningsRepertoireIdRoute
+    }
     '/training/tactics/practice/$setId': {
       id: '/training/tactics/practice/$setId'
       path: '/practice/$setId'
@@ -342,8 +429,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrainingTacticsPracticeSetIdRouteImport
       parentRoute: typeof TrainingTacticsRoute
     }
+    '/training/openings/$repertoireId/$variantId': {
+      id: '/training/openings/$repertoireId/$variantId'
+      path: '/$variantId'
+      fullPath: '/training/openings/$repertoireId/$variantId'
+      preLoaderRoute: typeof TrainingOpeningsRepertoireIdVariantIdRouteImport
+      parentRoute: typeof TrainingOpeningsRepertoireIdRoute
+    }
   }
 }
+
+interface TrainingOpeningsRepertoireIdRouteChildren {
+  TrainingOpeningsRepertoireIdVariantIdRoute: typeof TrainingOpeningsRepertoireIdVariantIdRoute
+  TrainingOpeningsRepertoireIdIndexRoute: typeof TrainingOpeningsRepertoireIdIndexRoute
+}
+
+const TrainingOpeningsRepertoireIdRouteChildren: TrainingOpeningsRepertoireIdRouteChildren =
+  {
+    TrainingOpeningsRepertoireIdVariantIdRoute:
+      TrainingOpeningsRepertoireIdVariantIdRoute,
+    TrainingOpeningsRepertoireIdIndexRoute:
+      TrainingOpeningsRepertoireIdIndexRoute,
+  }
+
+const TrainingOpeningsRepertoireIdRouteWithChildren =
+  TrainingOpeningsRepertoireIdRoute._addFileChildren(
+    TrainingOpeningsRepertoireIdRouteChildren,
+  )
+
+interface TrainingOpeningsRouteChildren {
+  TrainingOpeningsRepertoireIdRoute: typeof TrainingOpeningsRepertoireIdRouteWithChildren
+  TrainingOpeningsManageRoute: typeof TrainingOpeningsManageRoute
+  TrainingOpeningsIndexRoute: typeof TrainingOpeningsIndexRoute
+}
+
+const TrainingOpeningsRouteChildren: TrainingOpeningsRouteChildren = {
+  TrainingOpeningsRepertoireIdRoute:
+    TrainingOpeningsRepertoireIdRouteWithChildren,
+  TrainingOpeningsManageRoute: TrainingOpeningsManageRoute,
+  TrainingOpeningsIndexRoute: TrainingOpeningsIndexRoute,
+}
+
+const TrainingOpeningsRouteWithChildren =
+  TrainingOpeningsRoute._addFileChildren(TrainingOpeningsRouteChildren)
 
 interface TrainingTacticsRouteChildren {
   TrainingTacticsIndexRoute: typeof TrainingTacticsIndexRoute
@@ -362,7 +490,7 @@ const TrainingTacticsRouteWithChildren = TrainingTacticsRoute._addFileChildren(
 interface TrainingRouteChildren {
   TrainingEndgamesRoute: typeof TrainingEndgamesRoute
   TrainingLibraryRoute: typeof TrainingLibraryRoute
-  TrainingOpeningsRoute: typeof TrainingOpeningsRoute
+  TrainingOpeningsRoute: typeof TrainingOpeningsRouteWithChildren
   TrainingTacticsRoute: typeof TrainingTacticsRouteWithChildren
   TrainingIndexRoute: typeof TrainingIndexRoute
 }
@@ -370,7 +498,7 @@ interface TrainingRouteChildren {
 const TrainingRouteChildren: TrainingRouteChildren = {
   TrainingEndgamesRoute: TrainingEndgamesRoute,
   TrainingLibraryRoute: TrainingLibraryRoute,
-  TrainingOpeningsRoute: TrainingOpeningsRoute,
+  TrainingOpeningsRoute: TrainingOpeningsRouteWithChildren,
   TrainingTacticsRoute: TrainingTacticsRouteWithChildren,
   TrainingIndexRoute: TrainingIndexRoute,
 }

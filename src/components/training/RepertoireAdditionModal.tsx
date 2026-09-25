@@ -284,7 +284,7 @@ export default function RepertoireAdditionModal({
         />
         {mode === "theory" ? (
           <Select
-            label={t("Repertoire.Variant", "Variant / folder")}
+            label={t("Repertoire.Variant", "Section")}
             value={variantId}
             disabled={busy || !!preview}
             data={variants.map((item) => ({ value: item.id, label: item.name }))}

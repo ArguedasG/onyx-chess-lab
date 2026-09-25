@@ -1708,6 +1708,22 @@ export function deleteOpeningVariant(state: OpeningsState, variantId: string): O
     return normalizeOpeningVariantOrder(next, repertoire.id);
 }
 
+export function deleteOpeningRepertoire(state: OpeningsState, repertoireId: string): OpeningsState {
+    if (!state.repertoires[repertoireId]) return state;
+    const repertoires = { ...state.repertoires };
+    const variants = { ...state.variants };
+    const lines = { ...state.lines };
+    delete repertoires[repertoireId];
+
+    for (const variant of Object.values(state.variants)) {
+        if (variant.repertoireId !== repertoireId) continue;
+        delete variants[variant.id];
+        for (const lineId of variant.lineIds) delete lines[lineId];
+    }
+
+    return { ...state, repertoires, variants, lines };
+}
+
 export function updateOpeningPracticeSettings(
     state: OpeningsState,
     settings: Partial<OpeningsState["settings"]>,

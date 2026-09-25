@@ -1,6 +1,7 @@
 import {
   Alert,
   Badge,
+  Button,
   Card,
   Code,
   Group,
@@ -10,6 +11,8 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
+import { IconExternalLink } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -107,6 +110,24 @@ export default function PositionActionsModal({
                         {t("PositionActions.Continuation", "Continuation")}:{" "}
                         {match.continuationSan.join(" ") || "—"}
                       </Text>
+                      <Group justify="flex-end">
+                        <Link
+                          to="/training/openings/$repertoireId/$variantId"
+                          params={{ repertoireId: match.repertoireId, variantId: match.variantId }}
+                          hash={`line-${match.lineId}`}
+                          onClick={onClose}
+                          style={{ textDecoration: "none" }}
+                        >
+                          <Button
+                            component="span"
+                            size="xs"
+                            variant="light"
+                            rightSection={<IconExternalLink size={14} />}
+                          >
+                            {t("PositionActions.ViewRepertoireLine", "View line in repertoire")}
+                          </Button>
+                        </Link>
+                      </Group>
                     </Stack>
                   </Card>
                 ))}

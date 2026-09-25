@@ -22,6 +22,7 @@ import {
   dbTabFamily,
   importModalOpenAtom,
   openingExpandedFamily,
+  openingScrollFamily,
   openingReportCacheFamily,
   openingReportReopenFamily,
   playRunFamily,
@@ -158,6 +159,7 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         openingReportReopenFamily.remove(value);
         positionGamesViewFamily.remove(value);
         openingExpandedFamily.remove(value);
+        openingScrollFamily.remove(value);
         playRunFamily.remove(value);
         if (tabs.length === 1) {
           await createTab({
@@ -354,7 +356,9 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
             </Droppable>
           </DragDropContext>
         </ScrollArea>
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>{children}</div>
+        <div data-workspace-content style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          {children}
+        </div>
       </Tabs>
     </TabCloseContext.Provider>
   );

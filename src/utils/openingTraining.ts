@@ -2,7 +2,7 @@ import { commands, type BestMoves, type ScoreValue } from "@/bindings";
 import { getPGN, parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { areaId, type OpeningRepertoire, type OpeningsState } from "@/utils/trainingAreas";
-import { createNode, type GameHeaders, type TreeNode } from "@/utils/treeReducer";
+import { createNode, defaultTree, type GameHeaders, type TreeNode } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import { makeUci, parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
@@ -11,7 +11,10 @@ import { makeSan } from "chessops/san";
 export type OpeningImportConfig = {
     color: OpeningRepertoire["color"];
     subvariationPolicy: OpeningRepertoire["subvariationPolicy"];
+    groupingMode: OpeningGroupingMode;
 };
+
+export type OpeningGroupingMode = "smart" | "records" | "single";
 
 export type OpeningImportLine = {
     name: string;
@@ -35,6 +38,10 @@ export type OpeningImportVariant = {
 export type OpeningPgnSample = {
     index: number;
     name: string;
+    startingFen: string;
+    chapterName?: string;
+    chessableGroupName?: string;
+    eventName?: string;
     lineCount: number;
     commentCount: number;
     hasVariations: boolean;
@@ -47,6 +54,22 @@ export type OpeningPgnInspection = {
     filename: string;
     recordCount: number;
     samples: OpeningPgnSample[];
+};
+
+export type OpeningImportGroupPreview = {
+    key: string;
+    name: string;
+    recordIndexes: number[];
+    lineCount: number;
+    commentCount: number;
+    contentType: "theory" | "modelGame";
+};
+
+export type OpeningConsolidationGroup = {
+    key: string;
+    name: string;
+    variantIds: string[];
+    lineCount: number;
 };
 
 export type PreparedOpeningImport = {
@@ -280,6 +303,56 @@ export async function buildOpeningTrainingPgn(
     return trainingRecords.join("\n\n\n");
 }
 
+export function buildOpeningFlatPgn(state: OpeningsState, repertoireId: string): string {
+    const repertoire = state.repertoires[repertoireId];
+    if (!repertoire) throw new Error("No se encontró el repertorio.");
+    const records: string[] = [];
+
+    for (const variantId of repertoire.variantIds) {
+        const variant = state.variants[variantId];
+        if (!variant || variant.contentType !== "theory") continue;
+        for (const lineId of variant.lineIds) {
+            const line = state.lines[lineId];
+            if (!line?.trainable || line.moves.length === 0) continue;
+            const root = defaultTree(line.fen).root;
+            appendOpeningMoves(root, line.moves);
+            const orientation = repertoire.color === "both" ? "white" : repertoire.color;
+            records.push(
+                getPGN(root, {
+                    headers: {
+                        id: records.length,
+                        fen: line.fen,
+                        event: repertoire.name,
+                        site: "Onyx Chess Lab",
+                        white: variant.name,
+                        black: line.name,
+                        result: "*",
+                        orientation,
+                        other: {
+                            RepertoireName: repertoire.name,
+                            ChapterName: variant.name,
+                            LineName: line.name,
+                            OnyxTrainable: "1",
+                            ChessLabRepertoireId: repertoire.id,
+                            ChessLabVariantId: variant.id,
+                            ChessLabLineId: line.id,
+                        },
+                    },
+                    glyphs: true,
+                    comments: false,
+                    variations: false,
+                    extraMarkups: false,
+                }),
+            );
+        }
+    }
+
+    if (records.length === 0) {
+        throw new Error("El repertorio no contiene líneas entrenables para exportar.");
+    }
+    return records.join("\n\n\n");
+}
+
 export function syncOpeningVariantTree(
     state: OpeningsState,
     workingPath: string,
@@ -383,20 +456,344 @@ export function syncOpeningVariantTree(
     };
 }
 
+export type OpeningTrainingSyncPreview = {
+    openings: OpeningsState;
+    structural: boolean;
+    addedLines: number;
+    changedLines: number;
+    removedLines: number;
+};
+
+export function previewOpeningTrainingSync(
+    state: OpeningsState,
+    workingPath: string,
+    recordIndex: number,
+    root: TreeNode,
+    headers: GameHeaders,
+): OpeningTrainingSyncPreview {
+    const beforeRepertoire = Object.values(state.repertoires).find(
+        (candidate) => candidate.path === workingPath,
+    );
+    const beforeVariant = beforeRepertoire?.variantIds
+        .map((id) => state.variants[id])
+        .find((variant) => variant?.trainingRecordIndex === recordIndex);
+    const openings = syncOpeningVariantTree(state, workingPath, recordIndex, root, headers);
+    const afterRepertoire = beforeRepertoire
+        ? openings.repertoires[beforeRepertoire.id]
+        : undefined;
+    const afterVariant = afterRepertoire?.variantIds
+        .map((id) => openings.variants[id])
+        .find((variant) => variant?.trainingRecordIndex === recordIndex);
+
+    const beforeLines = new Map(
+        (beforeVariant?.lineIds ?? []).flatMap((id) => {
+            const line = state.lines[id];
+            return line ? [[id, line.moves.join(" ")] as const] : [];
+        }),
+    );
+    const afterLines = new Map(
+        (afterVariant?.lineIds ?? []).flatMap((id) => {
+            const line = openings.lines[id];
+            return line ? [[id, line.moves.join(" ")] as const] : [];
+        }),
+    );
+    const addedLines = [...afterLines.keys()].filter((id) => !beforeLines.has(id)).length;
+    const removedLines = [...beforeLines.keys()].filter((id) => !afterLines.has(id)).length;
+    const changedLines = [...afterLines.entries()].filter(
+        ([id, moves]) => beforeLines.has(id) && beforeLines.get(id) !== moves,
+    ).length;
+
+    return {
+        openings,
+        structural: addedLines + changedLines + removedLines > 0,
+        addedLines,
+        changedLines,
+        removedLines,
+    };
+}
+
 function filename(path: string): string {
     return path.split(/[\\/]/).pop() || "Repertorio.pgn";
 }
 
-function openingName(headers: GameHeaders, index: number): string {
-    const chapter = headers.other?.ChapterName?.trim();
-    if (chapter) return chapter;
-    if (headers.white && headers.white !== "?" && headers.black && headers.black !== "?") {
-        return `${headers.white} — ${headers.black}`;
+function meaningfulHeader(value: string | undefined): string | undefined {
+    const normalized = value?.trim();
+    return normalized && normalized !== "?" && normalized !== "-" ? normalized : undefined;
+}
+
+function normalizedGroupKey(value: string): string {
+    return value
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLocaleLowerCase("en-US");
+}
+
+function chessableGroupName(headers: GameHeaders): string | undefined {
+    const candidates = [meaningfulHeader(headers.white), meaningfulHeader(headers.black)];
+    for (const candidate of candidates) {
+        if (!candidate || !/^\s*\d+(?:\.\d+)*\s*[.)]\s*/.test(candidate)) continue;
+        const withoutOrder = candidate.replace(/^\s*\d+(?:\.\d+)*\s*[.)]\s*/, "").trim();
+        const beforeVersus = withoutOrder.split(/\s+(?:vs\.?|versus)\s+/i)[0]?.trim();
+        if (beforeVersus) return beforeVersus;
     }
-    if (headers.white && headers.white !== "?") return headers.white;
-    if (headers.black && headers.black !== "?") return headers.black;
-    if (headers.event && headers.event !== "?") return headers.event;
-    return `Variante ${index + 1}`;
+    return undefined;
+}
+
+function importGroupingHints(headers: GameHeaders) {
+    return {
+        chapterName: meaningfulHeader(headers.other?.ChapterName),
+        chessableGroupName: chessableGroupName(headers),
+        eventName: meaningfulHeader(headers.event),
+    };
+}
+
+function openingName(headers: GameHeaders, index: number): string {
+    const explicitLine = meaningfulHeader(
+        headers.other?.LineName ?? headers.other?.ChessLabLineName,
+    );
+    if (explicitLine) return explicitLine;
+    const chapter = meaningfulHeader(headers.other?.ChapterName);
+    if (chapter) return chapter;
+    const white = meaningfulHeader(headers.white);
+    const black = meaningfulHeader(headers.black);
+    if (white && black) return `${white} — ${black}`;
+    if (white) return `${white} — Black`;
+    if (black) return `White — ${black}`;
+    const event = meaningfulHeader(headers.event);
+    if (event) return event;
+    return `Línea ${index + 1}`;
+}
+
+function lineName(headers: GameHeaders, fallback: string, sectionName?: string): string {
+    const explicit = meaningfulHeader(headers.other?.LineName ?? headers.other?.ChessLabLineName);
+    if (explicit) return explicit;
+    const chapter = meaningfulHeader(headers.other?.ChapterName);
+    if (chapter && chapter !== sectionName) return chapter;
+    const white = meaningfulHeader(headers.white);
+    const black = meaningfulHeader(headers.black);
+    if (white && black) return `${white} — ${black}`;
+    if (white) return `${white} — Black`;
+    if (black) return `White — ${black}`;
+    const event = meaningfulHeader(headers.event);
+    if (event && event !== sectionName) return event;
+    return fallback || "Línea";
+}
+
+export function getOpeningImportGroupPreviews(
+    inspection: Pick<OpeningPgnInspection, "filename" | "samples">,
+    mode: OpeningGroupingMode,
+): OpeningImportGroupPreview[] {
+    const valid = inspection.samples.filter((sample) => !sample.error);
+    const eventCounts = new Map<string, number>();
+    for (const sample of valid) {
+        if (!sample.eventName) continue;
+        const key = normalizedGroupKey(sample.eventName);
+        eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
+    }
+
+    const groups = new Map<string, OpeningImportGroupPreview>();
+    for (const sample of valid) {
+        let name = sample.name;
+        let identity = `record:${sample.index}`;
+        if (mode === "single" && sample.contentType === "theory") {
+            name = inspection.filename.replace(/\.pgn$/i, "") || "Imported lines";
+            identity = "single";
+        } else if (mode === "smart" && sample.contentType === "theory") {
+            const eventRepeats = sample.eventName
+                ? (eventCounts.get(normalizedGroupKey(sample.eventName)) ?? 0) > 1
+                : false;
+            const suggested =
+                sample.chapterName ??
+                sample.chessableGroupName ??
+                (eventRepeats ? sample.eventName : undefined);
+            if (suggested) {
+                name = suggested;
+                identity = `smart:${normalizedGroupKey(suggested)}`;
+            }
+        }
+
+        const key = `${sample.contentType}|${sample.startingFen}|${identity}`;
+        const existing = groups.get(key);
+        if (existing) {
+            existing.recordIndexes.push(sample.index);
+            existing.lineCount += sample.lineCount;
+            existing.commentCount += sample.commentCount;
+        } else {
+            groups.set(key, {
+                key,
+                name,
+                recordIndexes: [sample.index],
+                lineCount: sample.lineCount,
+                commentCount: sample.commentCount,
+                contentType: sample.contentType,
+            });
+        }
+    }
+    const usedNames = new Map<string, number>();
+    return [...groups.values()].map((group) => {
+        const normalized = normalizedGroupKey(group.name);
+        const occurrence = (usedNames.get(normalized) ?? 0) + 1;
+        usedNames.set(normalized, occurrence);
+        return occurrence === 1 ? group : { ...group, name: `${group.name} (${occurrence})` };
+    });
+}
+
+function consolidationName(value: string): string | null {
+    const match = /^\s*\d+(?:\.\d+)*\s*[.)]\s*(.+)$/.exec(value);
+    if (!match) return null;
+    const withoutOrder = match[1].trim();
+    const base = withoutOrder.split(/\s+(?:vs\.?|versus)\s+|\s+[—–]\s+/i)[0]?.trim();
+    return base || null;
+}
+
+export function getOpeningConsolidationGroups(
+    state: OpeningsState,
+    repertoireId: string,
+): OpeningConsolidationGroup[] {
+    const repertoire = state.repertoires[repertoireId];
+    if (!repertoire) return [];
+    const groups = new Map<string, OpeningConsolidationGroup>();
+    for (const variantId of repertoire.variantIds) {
+        const variant = state.variants[variantId];
+        if (!variant || variant.contentType !== "theory" || variant.lineIds.length === 0) continue;
+        const name = consolidationName(variant.name);
+        if (!name) continue;
+        const startingFens = new Set(
+            variant.lineIds.map((lineId) => state.lines[lineId]?.fen).filter(Boolean),
+        );
+        if (startingFens.size !== 1) continue;
+        const startingFen = [...startingFens][0];
+        const key = `${normalizedGroupKey(name)}|${startingFen}`;
+        const existing = groups.get(key);
+        if (existing) {
+            existing.variantIds.push(variant.id);
+            existing.lineCount += variant.lineIds.length;
+        } else {
+            groups.set(key, {
+                key,
+                name,
+                variantIds: [variant.id],
+                lineCount: variant.lineIds.length,
+            });
+        }
+    }
+    return [...groups.values()].filter((group) => group.variantIds.length > 1);
+}
+
+export function consolidateOpeningSections(
+    state: OpeningsState,
+    repertoireId: string,
+    selectedGroupKeys: readonly string[],
+): OpeningsState {
+    const repertoire = state.repertoires[repertoireId];
+    if (!repertoire || selectedGroupKeys.length === 0) return state;
+    const selected = new Set(selectedGroupKeys);
+    const groups = getOpeningConsolidationGroups(state, repertoireId).filter((group) =>
+        selected.has(group.key),
+    );
+    if (groups.length === 0) return state;
+
+    const variants = { ...state.variants };
+    const lines = { ...state.lines };
+    const removedVariantIds = new Set<string>();
+
+    for (const group of groups) {
+        const targetId = group.variantIds[0];
+        const target = variants[targetId];
+        if (!target) continue;
+        const lineIds: string[] = [];
+        const lineByMoves = new Map<string, string>();
+        let commentCount = 0;
+        let hasVariations = false;
+
+        for (const variantId of group.variantIds) {
+            const variant = variants[variantId];
+            if (!variant) continue;
+            commentCount += variant.commentCount;
+            hasVariations ||= variant.hasVariations;
+            for (const lineId of variant.lineIds) {
+                const line = lines[lineId];
+                if (!line) continue;
+                const key = lineKey(line.moves);
+                const duplicateId = lineByMoves.get(key);
+                if (!duplicateId) {
+                    lineByMoves.set(key, lineId);
+                    lineIds.push(lineId);
+                    lines[lineId] = { ...line, variantId: targetId };
+                    continue;
+                }
+                const duplicate = lines[duplicateId];
+                const moveProgress = { ...duplicate.moveProgress };
+                for (const [moveKey, progress] of Object.entries(line.moveProgress)) {
+                    const current = moveProgress[moveKey];
+                    moveProgress[moveKey] = current
+                        ? {
+                              attempts: current.attempts + progress.attempts,
+                              successes: current.successes + progress.successes,
+                              failures: current.failures + progress.failures,
+                              totalTimeMs: current.totalTimeMs + progress.totalTimeMs,
+                              lastAttemptAt:
+                                  current.lastAttemptAt > progress.lastAttemptAt
+                                      ? current.lastAttemptAt
+                                      : progress.lastAttemptAt,
+                          }
+                        : progress;
+                }
+                lines[duplicateId] = {
+                    ...duplicate,
+                    trainable: duplicate.trainable || line.trainable,
+                    moveProgress,
+                    session: {
+                        attempts: duplicate.session.attempts + line.session.attempts,
+                        completions: duplicate.session.completions + line.session.completions,
+                        flawless: duplicate.session.flawless + line.session.flawless,
+                        totalTimeMs: duplicate.session.totalTimeMs + line.session.totalTimeMs,
+                        lastAttemptAt:
+                            !duplicate.session.lastAttemptAt ||
+                            (line.session.lastAttemptAt &&
+                                line.session.lastAttemptAt > duplicate.session.lastAttemptAt)
+                                ? line.session.lastAttemptAt
+                                : duplicate.session.lastAttemptAt,
+                    },
+                };
+                delete lines[lineId];
+            }
+            if (variantId !== targetId) {
+                removedVariantIds.add(variantId);
+                delete variants[variantId];
+            }
+        }
+
+        variants[targetId] = {
+            ...target,
+            name: group.name,
+            lineIds,
+            commentCount,
+            hasVariations: hasVariations || lineIds.length > 1,
+        };
+    }
+
+    const variantIds = repertoire.variantIds.filter((id) => !removedVariantIds.has(id));
+    variantIds.forEach((id, trainingRecordIndex) => {
+        const variant = variants[id];
+        if (variant) variants[id] = { ...variant, trainingRecordIndex };
+    });
+    return {
+        ...state,
+        variants,
+        lines,
+        repertoires: {
+            ...state.repertoires,
+            [repertoireId]: {
+                ...repertoire,
+                variantIds,
+                recordCount: variantIds.length,
+                updatedAt: new Date().toISOString(),
+            },
+        },
+    };
 }
 
 export function isModelGame(headers: GameHeaders): boolean {
@@ -491,6 +888,7 @@ async function parseOpeningRecord(
     });
 
     return {
+        tree,
         trainingPgn,
         variant: {
             name: openingName(tree.headers, sourceRecordIndex),
@@ -507,19 +905,21 @@ async function parseOpeningRecord(
 export async function inspectOpeningPgn(
     path: string,
     config: OpeningImportConfig,
-    sampleSize = 12,
 ): Promise<OpeningPgnInspection> {
     const recordCount = unwrap(await commands.countPgnGames(path));
-    const end = Math.min(recordCount, sampleSize) - 1;
+    const end = recordCount - 1;
     const records = end >= 0 ? unwrap(await commands.readGames(path, 0, end)) : [];
     const samples: OpeningPgnSample[] = [];
 
     for (const [index, raw] of records.entries()) {
         try {
             const parsed = await parseOpeningRecord(raw, index, index, config);
+            const hints = importGroupingHints(parsed.tree.headers);
             samples.push({
                 index,
                 name: parsed.variant.name,
+                startingFen: parsed.tree.root.fen,
+                ...hints,
                 lineCount: parsed.variant.lines.length,
                 commentCount: parsed.variant.commentCount,
                 hasVariations: parsed.variant.hasVariations,
@@ -529,6 +929,7 @@ export async function inspectOpeningPgn(
             samples.push({
                 index,
                 name: `Registro ${index + 1}`,
+                startingFen: "invalid",
                 lineCount: 0,
                 commentCount: 0,
                 hasVariations: false,
@@ -549,8 +950,7 @@ export async function prepareOpeningImport(
         inspection.recordCount > 0
             ? unwrap(await commands.readGames(inspection.path, 0, inspection.recordCount - 1))
             : [];
-    const variants: OpeningImportVariant[] = [];
-    const trainingRecords: string[] = [];
+    const parsedRecords: Array<Awaited<ReturnType<typeof parseOpeningRecord>>> = [];
     let skippedRecords = 0;
 
     for (const [sourceRecordIndex, raw] of records.entries()) {
@@ -558,14 +958,91 @@ export async function prepareOpeningImport(
             const parsed = await parseOpeningRecord(
                 raw,
                 sourceRecordIndex,
-                trainingRecords.length,
+                parsedRecords.length,
                 config,
             );
-            variants.push(parsed.variant);
-            trainingRecords.push(parsed.trainingPgn);
+            parsedRecords.push(parsed);
         } catch {
             skippedRecords += 1;
         }
+    }
+
+    const parsedBySourceIndex = new Map(
+        parsedRecords.map((parsed) => [parsed.variant.sourceRecordIndex, parsed]),
+    );
+    const previews = getOpeningImportGroupPreviews(inspection, config.groupingMode);
+    const variants: OpeningImportVariant[] = [];
+    const trainingRecords: string[] = [];
+
+    for (const preview of previews) {
+        const entries = preview.recordIndexes.flatMap((index) => {
+            const parsed = parsedBySourceIndex.get(index);
+            return parsed ? [parsed] : [];
+        });
+        if (entries.length === 0) continue;
+
+        const first = entries[0];
+        let root = structuredClone(first.tree.root);
+        const selectedLineKeys = new Set<string>();
+        const lineNames = new Map<string, string>();
+        const importedLines = new Map<string, OpeningImportLine>();
+        for (const entry of entries) {
+            if (entry !== first) root = mergeImportedOpeningTrees(root, entry.tree.root);
+            for (const line of entry.variant.lines) {
+                const key = lineKey(line.moves);
+                if (line.trainable) selectedLineKeys.add(key);
+                if (!importedLines.has(key)) importedLines.set(key, line);
+                if (!lineNames.has(key)) {
+                    lineNames.set(key, lineName(entry.tree.headers, line.name, preview.name));
+                }
+            }
+        }
+
+        const usedLineNames = new Map<string, number>();
+        const lines = [...importedLines.entries()].map(([key, line]) => {
+            const baseName = lineNames.get(key) ?? line.name;
+            const normalized = normalizedGroupKey(baseName);
+            const occurrence = (usedLineNames.get(normalized) ?? 0) + 1;
+            usedLineNames.set(normalized, occurrence);
+            return {
+                ...line,
+                path: openingPathForMoves(root, line.moves) ?? line.path,
+                name: occurrence === 1 ? baseName : `${baseName} — ${line.name}`,
+                trainable: preview.contentType === "theory" && selectedLineKeys.has(key),
+            };
+        });
+        const stats = treeStats(root);
+        const trainingRecordIndex = trainingRecords.length;
+        const orientation =
+            config.color === "both" ? (first.tree.headers.orientation ?? "white") : config.color;
+        const headers: GameHeaders = {
+            ...first.tree.headers,
+            event: preview.name,
+            orientation,
+            other: {
+                ...first.tree.headers.other,
+                ChapterName: preview.name,
+                ChessLabContentType: preview.contentType,
+            },
+        };
+        trainingRecords.push(
+            getPGN(root, {
+                headers,
+                glyphs: true,
+                comments: true,
+                variations: true,
+                extraMarkups: true,
+            }),
+        );
+        variants.push({
+            name: preview.name,
+            sourceRecordIndex: first.variant.sourceRecordIndex,
+            trainingRecordIndex,
+            contentType: preview.contentType,
+            commentCount: stats.commentCount,
+            hasVariations: stats.hasVariations,
+            lines,
+        });
     }
 
     return {
@@ -573,4 +1050,35 @@ export async function prepareOpeningImport(
         variants,
         skippedRecords,
     };
+}
+
+export function mergeImportedOpeningTrees(target: TreeNode, source: TreeNode): TreeNode {
+    if (target.fen !== source.fen) {
+        throw new Error("Las posiciones iniciales de las líneas agrupadas son incompatibles.");
+    }
+
+    function merge(left: TreeNode, right: TreeNode): TreeNode {
+        const node = structuredClone(left);
+        const comment = right.comment.trim();
+        if (comment && !node.comment.includes(comment)) {
+            node.comment = [node.comment.trim(), comment].filter(Boolean).join("\n\n");
+        }
+        node.annotations = [...new Set([...node.annotations, ...right.annotations])];
+        for (const shape of right.shapes) {
+            if (
+                !node.shapes.some((existing) => JSON.stringify(existing) === JSON.stringify(shape))
+            ) {
+                node.shapes.push(structuredClone(shape));
+            }
+        }
+        for (const child of right.children) {
+            const key = moveKey(child);
+            const index = node.children.findIndex((candidate) => moveKey(candidate) === key);
+            if (index < 0) node.children.push(structuredClone(child));
+            else node.children[index] = merge(node.children[index], child);
+        }
+        return node;
+    }
+
+    return merge(target, source);
 }

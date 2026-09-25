@@ -184,7 +184,7 @@ export const moveHighlightAtom = atomWithStorage<boolean>("move-highlight", true
 export const snapArrowsAtom = atomWithStorage<boolean>("snap-dests", true);
 export const showArrowsAtom = atomWithStorage<boolean>("show-arrows", true);
 export const showConsecutiveArrowsAtom = atomWithStorage<boolean>("show-consecutive-arrows", false);
-export const showVariationArrowsAtom = atomWithStorage<boolean>("show-variation-arrows", false);
+export const showVariationArrowsAtom = atomWithStorage<boolean>("show-variation-arrows", true);
 export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>("erase-drawables-on-click", true);
 export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", false);
 export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
@@ -515,6 +515,7 @@ export const positionGamesViewFamily = atomFamily((_tab: string) =>
     }),
 );
 export const openingExpandedFamily = atomFamily((_tab: string) => atom<string[]>([]));
+export const openingScrollFamily = atomFamily((_tab: string) => atom<Record<string, number>>({}));
 
 const analysisTabFamily = atomFamily((_tab: string) => atom("engines"));
 export const currentAnalysisTabAtom = tabValue(analysisTabFamily);
@@ -531,6 +532,11 @@ export type OpeningPracticeQueue = {
     repertoireId?: string;
     variantIds?: string[];
     lineIds?: string[];
+    returnTarget?:
+        | { view: "library" }
+        | { view: "manage" }
+        | { view: "repertoire"; repertoireId: string }
+        | { view: "section"; repertoireId: string; variantId: string };
 };
 const openingPracticeQueueFamily = atomFamily((_tab: string) =>
     atom<OpeningPracticeQueue | null>(null),

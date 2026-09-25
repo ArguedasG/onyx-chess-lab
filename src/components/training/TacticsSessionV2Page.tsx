@@ -1,5 +1,6 @@
 import { useTranslation as useTrainingTranslation } from "react-i18next";
 import TacticsAdvanceControl from "./TacticsAdvanceControl";
+import TacticsSolutionModal from "./TacticsSolutionModal";
 import {
   ActionIcon,
   Alert,
@@ -26,6 +27,7 @@ import {
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
+  IconEye,
   IconRefresh,
   IconSearch,
   IconSettings,
@@ -156,6 +158,7 @@ export default function TacticsSessionV2Page() {
     "id" | "completedAt"
   > | null>(null);
   const [earlyFinishOpen, setEarlyFinishOpen] = useState(false);
+  const [solutionOpen, setSolutionOpen] = useState(false);
   const startedAt = useRef(Date.now());
   const cycleRunStartedAt = useRef(Date.now());
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -356,6 +359,37 @@ export default function TacticsSessionV2Page() {
     setResult(outcome);
     setMessage(feedback);
     persistAttempt(outcome, playedMove, timeMs, isWoodpecker ? activeCycleSnapshot() : undefined);
+  }
+
+  function recordSolutionReveal() {
+    if (!exercise || !set || result || retrying) return;
+    const timeMs = Date.now() - startedAt.current;
+    const nextFailures = failures + 1;
+    const nextFailed = failedIndexes.includes(activeIndex)
+      ? failedIndexes
+      : [...failedIndexes, activeIndex];
+    setFailures(nextFailures);
+    setFailedIndexes(nextFailed);
+    setMessage(
+      trainingT(
+        "Training.Tactics.Solution.RetryMessage",
+        "Solution shown and counted as a mistake. Reproduce the line to complete the puzzle.",
+      ),
+    );
+    persistAttempt(
+      "incorrect",
+      null,
+      timeMs,
+      isWoodpecker
+        ? activeCycleSnapshot({ failedIndexes: nextFailed, failures: nextFailures })
+        : undefined,
+    );
+  }
+
+  function closeSolution() {
+    setSolutionOpen(false);
+    setBoardAttempt((value) => value + 1);
+    startedAt.current = Date.now();
   }
 
   function resetExerciseState() {
@@ -737,6 +771,15 @@ export default function TacticsSessionV2Page() {
                   {" "}
                   {trainingT("Training.Copy.Analyzeposition.7cd475fb", "Analyze position")}{" "}
                 </Button>
+                <Button
+                  variant="light"
+                  color="orange"
+                  leftSection={<IconEye size={16} />}
+                  disabled={result !== null || retrying}
+                  onClick={() => setSolutionOpen(true)}
+                >
+                  {trainingT("Training.Tactics.Solution.Title", "View solution")}
+                </Button>
                 {result === "unsupported" && (
                   <Button
                     variant="light"
@@ -926,6 +969,15 @@ export default function TacticsSessionV2Page() {
             </Group>
           </Stack>
         </Modal>
+        {exercise && (
+          <TacticsSolutionModal
+            opened={solutionOpen}
+            exercise={exercise}
+            set={set}
+            onClose={closeSolution}
+            onReveal={recordSolutionReveal}
+          />
+        )}
       </Stack>
     </Container>
   );

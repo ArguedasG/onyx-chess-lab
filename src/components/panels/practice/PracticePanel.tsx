@@ -23,6 +23,7 @@ import {
   IconArrowBack,
   IconArrowLeft,
   IconArrowRight,
+  IconAlertTriangle,
   IconBook,
   IconCheck,
   IconFlame,
@@ -550,7 +551,12 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   }
 
   function showExpectedOpeningMove() {
-    if (practiceUnit !== "line" || practiceState.phase !== "waiting") return;
+    if (
+      practiceUnit !== "line" ||
+      (practiceState.phase !== "waiting" && practiceState.phase !== "incorrect")
+    )
+      return;
+    const alreadyIncorrect = practiceState.phase === "incorrect";
     const linePath = practiceState.linePath;
     if (!linePath || position.length >= linePath.length) return;
     const orientation = headers.orientation || "white";
@@ -571,7 +577,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       ]),
     );
     const timeTaken = Date.now() - (practiceState.moveStartedAt ?? Date.now());
-    if (practiceState.openingLineId) {
+    if (practiceState.openingLineId && !alreadyIncorrect) {
       const lineId = practiceState.openingLineId;
       setTrainingAreas((previous) => ({
         ...previous,
@@ -591,8 +597,8 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       answer: expectedSan,
       positionIndex: positionIndex >= 0 ? positionIndex : previous.positionIndex,
       linePositionIndices,
-      mistakes: (previous.mistakes ?? 0) + 1,
-      timeTaken,
+      mistakes: (previous.mistakes ?? 0) + (alreadyIncorrect ? 0 : 1),
+      timeTaken: alreadyIncorrect ? previous.timeTaken : timeTaken,
     }));
     goToMove([...currentPath, expectedChildIndex]);
     if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
@@ -625,6 +631,34 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       newPractice({ remainingPositions });
     } else {
       newPractice();
+    }
+  }
+
+  function retryOpeningMove() {
+    setPracticeState((previous) => ({
+      ...previous,
+      phase: "waiting",
+      feedback: undefined,
+      moveStartedAt: Date.now(),
+    }));
+  }
+
+  function returnToOpenings() {
+    const target = openingQueue?.returnTarget;
+    if (target?.view === "manage") {
+      void navigate({ to: "/training/openings/manage" });
+    } else if (target?.view === "section") {
+      void navigate({
+        to: "/training/openings/$repertoireId/$variantId",
+        params: { repertoireId: target.repertoireId, variantId: target.variantId },
+      });
+    } else if (target?.view === "repertoire") {
+      void navigate({
+        to: "/training/openings/$repertoireId",
+        params: { repertoireId: target.repertoireId },
+      });
+    } else {
+      void navigate({ to: "/training/openings" });
     }
   }
 
@@ -740,7 +774,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                       variant="subtle"
                       size="xs"
                       leftSection={<IconArrowLeft size={14} />}
-                      onClick={() => void navigate({ to: "/training/openings" })}
+                      onClick={returnToOpenings}
                     >
                       {" "}
                       {t("Training.Copy.Backtoopenings.3aa15245", "Back to openings")}{" "}
@@ -1157,9 +1191,11 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                           practiceState.feedback === "engine-unavailable" ? (
                             <IconInfoCircle size={16} />
                           ) : (
-                            <IconX size={16} />
+                            <IconAlertTriangle size={16} />
                           )
                         }
+                        withCloseButton
+                        onClose={retryOpeningMove}
                         title={
                           practiceState.feedback === "engine-unavailable"
                             ? t(
@@ -1169,23 +1205,40 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                             : t("Training.Copy.Incorrectmove.54828596", "Incorrect move")
                         }
                       >
-                        {practiceState.feedback === "engine-unavailable"
-                          ? t(
-                              "Training.Copy.Couldnotcheckwhetherv0.9faa3ff4",
-                              "Could not check whether {{v0}} is a good alternative. Practice is still active; try a repertoire move.",
-                              { v0: practiceState.playedMove },
-                            )
-                          : practiceState.feedback === "strict"
-                            ? t(
-                                "Training.Copy.v0isoutsidethisline.94a44046",
-                                "{{v0}} is outside this line. Alternative evaluation is disabled; try a repertoire move.",
-                                { v0: practiceState.playedMove },
-                              )
-                            : t(
-                                "Training.Copy.v0isoutsidethisline.6936860e",
-                                "{{v0}} is outside this line and does not maintain an equivalent evaluation. Try again.",
-                                { v0: practiceState.playedMove },
-                              )}
+                        <Stack gap="xs">
+                          <Text size="sm">
+                            {practiceState.feedback === "engine-unavailable"
+                              ? t(
+                                  "Training.Copy.Couldnotcheckwhetherv0.9faa3ff4",
+                                  "Could not check whether {{v0}} is a good alternative. Practice is still active; try a repertoire move.",
+                                  { v0: practiceState.playedMove },
+                                )
+                              : practiceState.feedback === "strict"
+                                ? t(
+                                    "Training.Copy.v0isoutsidethisline.94a44046",
+                                    "{{v0}} is outside this line. Alternative evaluation is disabled; try a repertoire move.",
+                                    { v0: practiceState.playedMove },
+                                  )
+                                : t(
+                                    "Training.Copy.v0isoutsidethisline.6936860e",
+                                    "{{v0}} is outside this line and does not maintain an equivalent evaluation. Try again.",
+                                    { v0: practiceState.playedMove },
+                                  )}
+                          </Text>
+                          <Group gap="xs">
+                            <Button
+                              variant="light"
+                              size="compact-xs"
+                              leftSection={<IconEye size={14} />}
+                              onClick={showExpectedOpeningMove}
+                            >
+                              {t("Training.Copy.Showmove.940e6364", "Show move")}
+                            </Button>
+                            <Button variant="subtle" size="compact-xs" onClick={retryOpeningMove}>
+                              {t("Training.Copy.Retry.a9254c5f", "Retry")}
+                            </Button>
+                          </Group>
+                        </Stack>
                       </Alert>
                     ) : (
                       <Paper p="sm" withBorder>

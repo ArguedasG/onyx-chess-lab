@@ -237,4 +237,37 @@ describe("workspace tab navigation and closing", () => {
     expect(store.get(tabsAtom).some((tab) => tab.value === "board")).toBe(true);
     expect(commands.abortGame).toHaveBeenCalledWith("legacy-game");
   });
+
+  it("offers the three repertoire-specific choices before closing a dirty PGN", async () => {
+    const repertoire: Tab = {
+      name: "French repertoire",
+      value: "repertoire",
+      type: "analysis",
+      gameOrigin: {
+        kind: "file",
+        gameNumber: 0,
+        file: {
+          type: "file",
+          name: "French repertoire",
+          path: "C:/test/french.pgn",
+          numGames: 1,
+          lastModified: 0,
+          metadata: { tags: [], type: "repertoire" },
+        },
+      },
+    };
+    sessionStorage.setItem(
+      repertoire.value,
+      JSON.stringify({ version: 0, state: { ...defaultTree(), dirty: true } }),
+    );
+
+    const { store } = await mountWorkspace("/", [board, repertoire]);
+    await click(document.querySelector('[aria-label="Close: French repertoire"]'));
+
+    expect(document.body.textContent).toContain("Unsaved repertoire changes");
+    expect(document.body.textContent).toContain("Discard and close");
+    expect(document.body.textContent).toContain("Save PGN only");
+    expect(document.body.textContent).toContain("Save and update training");
+    expect(store.get(tabsAtom).some((tab) => tab.value === repertoire.value)).toBe(true);
+  });
 });

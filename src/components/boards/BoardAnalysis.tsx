@@ -1,4 +1,4 @@
-import { Paper, Portal, Stack, Tabs } from "@mantine/core";
+import { Alert, Button, Group, Modal, Paper, Portal, Stack, Tabs, Text } from "@mantine/core";
 import { useHotkeys, useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
@@ -15,6 +15,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { commands } from "@/bindings";
 import {
   allEnabledAtom,
   activeTabAtom,
@@ -30,10 +31,14 @@ import {
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
-import { defaultPGN } from "@/utils/chess";
+import { defaultPGN, parsePGN } from "@/utils/chess";
 import { buildModelGameSourcePgn } from "@/utils/modelGame";
-import { syncOpeningVariantTree } from "@/utils/openingTraining";
+import {
+  previewOpeningTrainingSync,
+  type OpeningTrainingSyncPreview,
+} from "@/utils/openingTraining";
 import { createTab, getTabFile, saveToFile } from "@/utils/tabs";
+import { unwrap } from "@/utils/unwrap";
 import DetachedEval from "../common/DetachedEval";
 import GameNotation from "../common/GameNotation";
 import MoveControls from "../common/MoveControls";
@@ -55,6 +60,7 @@ function BoardAnalysis() {
   const [selectedPiece, setSelectedPiece] = useState<Piece | null>(null);
   const [currentTab, setCurrentTab] = useAtom(currentTabAtom);
   const tabFile = getTabFile(currentTab);
+  const isRepertoire = tabFile?.metadata.type === "repertoire";
   const hasPersistentOrigin = currentTab?.gameOrigin.kind !== "none";
   const autoSave = useAtomValue(autoSaveAtom);
   const { documentDir } = useLoaderData({ from: "/" });
@@ -68,38 +74,126 @@ function BoardAnalysis() {
   const position = useStore(store, (s) => s.position);
   const [, setTabs] = useAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
-  const setTrainingAreas = useSetAtom(trainingAreasAtom);
+  const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
+  const [pendingTrainingSync, setPendingTrainingSync] = useState<OpeningTrainingSyncPreview | null>(
+    null,
+  );
+  const [savingRepertoire, setSavingRepertoire] = useState(false);
 
   const reset = useStore(store, (s) => s.reset);
   const clearShapes = useStore(store, (s) => s.clearShapes);
   const setAnnotation = useStore(store, (s) => s.setAnnotation);
 
+  const getRepertoirePreview = useCallback(() => {
+    if (!isRepertoire || !currentTab || !tabFile) return null;
+    const gameNumber =
+      currentTab.gameOrigin.kind === "file" || currentTab.gameOrigin.kind === "temp_file"
+        ? currentTab.gameOrigin.gameNumber
+        : 0;
+    const state = store.getState();
+    return previewOpeningTrainingSync(
+      trainingAreas.openings,
+      tabFile.path,
+      gameNumber,
+      state.root,
+      state.headers,
+    );
+  }, [currentTab, isRepertoire, store, tabFile, trainingAreas.openings]);
+
   const saveFile = useCallback(async () => {
-    const saved = await saveToFile({
+    await saveToFile({
       dir: documentDir,
       setCurrentTab,
       tab: currentTab,
       store,
     });
-    if (saved && tabFile?.metadata.type === "repertoire" && currentTab) {
+  }, [setCurrentTab, currentTab, documentDir, store]);
+
+  const saveRepertoirePgnOnly = useCallback(async () => {
+    setSavingRepertoire(true);
+    try {
+      const saved = await saveToFile({
+        dir: documentDir,
+        setCurrentTab,
+        tab: currentTab,
+        store,
+        isUserSave: true,
+      });
+      if (!saved) return false;
+      notifications.show({
+        color: "blue",
+        message: t(
+          "OpeningEdit.TrainingUnchanged",
+          "The PGN was saved and training was left unchanged.",
+        ),
+      });
+      return true;
+    } catch (error) {
+      notifications.show({ color: "red", message: String(error) });
+      return false;
+    } finally {
+      setSavingRepertoire(false);
+    }
+  }, [currentTab, documentDir, setCurrentTab, store, t]);
+
+  const saveRepertoireAndTraining = useCallback(
+    async (preview = getRepertoirePreview()) => {
+      if (!preview) return false;
+      setSavingRepertoire(true);
+      try {
+        const saved = await saveToFile({
+          dir: documentDir,
+          setCurrentTab,
+          tab: currentTab,
+          store,
+          isUserSave: true,
+        });
+        if (!saved) return false;
+        setTrainingAreas((current) => ({ ...current, openings: preview.openings }));
+        notifications.show({
+          color: "green",
+          message: t("OpeningEdit.TrainingUpdated", "The repertoire training lines were updated."),
+        });
+        return true;
+      } catch (error) {
+        notifications.show({ color: "red", message: String(error) });
+        return false;
+      } finally {
+        setSavingRepertoire(false);
+      }
+    },
+    [currentTab, documentDir, getRepertoirePreview, setCurrentTab, setTrainingAreas, store, t],
+  );
+
+  const discardRepertoireChanges = useCallback(async () => {
+    if (!tabFile || !currentTab) return;
+    setSavingRepertoire(true);
+    try {
       const gameNumber =
         currentTab.gameOrigin.kind === "file" || currentTab.gameOrigin.kind === "temp_file"
           ? currentTab.gameOrigin.gameNumber
           : 0;
-      const state = store.getState();
-      setTrainingAreas((previous) => {
-        const openings = syncOpeningVariantTree(
-          previous.openings,
-          tabFile.path,
-          gameNumber,
-          state.root,
-          state.headers,
-        );
-        return openings === previous.openings ? previous : { ...previous, openings };
+      const records = unwrap(await commands.readGames(tabFile.path, gameNumber, gameNumber));
+      if (!records[0]) throw new Error(t("OpeningEdit.ReloadFailed", "Could not reload the PGN."));
+      store.getState().setState(await parsePGN(records[0]));
+      setPendingTrainingSync(null);
+      notifications.show({
+        color: "gray",
+        message: t("OpeningEdit.ChangesDiscarded", "The unsaved changes were discarded."),
       });
+    } catch (error) {
+      notifications.show({ color: "red", message: String(error) });
+    } finally {
+      setSavingRepertoire(false);
     }
-  }, [setCurrentTab, currentTab, documentDir, store, tabFile, setTrainingAreas]);
+  }, [currentTab, store, t, tabFile]);
+
   const userSaveFile = useCallback(async () => {
+    if (isRepertoire) {
+      const preview = getRepertoirePreview();
+      if (preview) setPendingTrainingSync(preview);
+      return;
+    }
     try {
       const saved = await saveToFile({
         dir: documentDir,
@@ -109,28 +203,11 @@ function BoardAnalysis() {
         isUserSave: true,
       });
       if (!saved) return;
-      if (tabFile?.metadata.type === "repertoire" && currentTab) {
-        const gameNumber =
-          currentTab.gameOrigin.kind === "file" || currentTab.gameOrigin.kind === "temp_file"
-            ? currentTab.gameOrigin.gameNumber
-            : 0;
-        const state = store.getState();
-        setTrainingAreas((previous) => {
-          const openings = syncOpeningVariantTree(
-            previous.openings,
-            tabFile.path,
-            gameNumber,
-            state.root,
-            state.headers,
-          );
-          return openings === previous.openings ? previous : { ...previous, openings };
-        });
-      }
       notifications.show({ color: "green", message: t("Pgn.SaveSuccess") });
     } catch (error) {
       notifications.show({ color: "red", message: String(error) });
     }
-  }, [setCurrentTab, currentTab, documentDir, store, tabFile, setTrainingAreas, t]);
+  }, [isRepertoire, getRepertoirePreview, setCurrentTab, currentTab, documentDir, store, t]);
 
   const generateModelGameFromPosition = useCallback(async () => {
     const pgn = buildModelGameSourcePgn(root, headers, position);
@@ -145,10 +222,10 @@ function BoardAnalysis() {
     });
   }, [headers, position, root, setActiveTab, setTabs, t]);
   useEffect(() => {
-    if (hasPersistentOrigin && autoSave && dirty) {
+    if (hasPersistentOrigin && autoSave && dirty && !isRepertoire) {
       saveFile();
     }
-  }, [hasPersistentOrigin, saveFile, autoSave, dirty]);
+  }, [hasPersistentOrigin, saveFile, autoSave, dirty, isRepertoire]);
 
   const addGame = useCallback(() => {
     if (!tabFile) return;
@@ -183,7 +260,6 @@ function BoardAnalysis() {
   const [currentTabSelected, setCurrentTabSelected] = useAtom(currentTabSelectedAtom);
   const [, setReportModalOpen] = useAtom(currentReportModalOpenAtom);
   const practiceTabSelected = useAtomValue(currentPracticeTabAtom);
-  const isRepertoire = tabFile?.metadata.type === "repertoire";
   const practicing = currentTabSelected === "practice" && practiceTabSelected === "train";
   const practiceState = useAtomValue(practiceStateAtom);
   const isPracticeRating = practicing && practiceState.phase === "correct";
@@ -236,7 +312,89 @@ function BoardAnalysis() {
 
   return (
     <>
-      <EvalListener />
+      <Modal
+        opened={pendingTrainingSync !== null}
+        onClose={() => !savingRepertoire && setPendingTrainingSync(null)}
+        closeOnClickOutside={!savingRepertoire}
+        closeOnEscape={!savingRepertoire}
+        title={t("OpeningEdit.SaveDecisionTitle", "How do you want to save these changes?")}
+        size="lg"
+      >
+        {pendingTrainingSync && (
+          <Stack>
+            <Alert color="blue" variant="light">
+              {t(
+                "OpeningEdit.SaveDecisionDescription",
+                "Nothing has been saved yet. You can update only the editable PGN, update both the PGN and its training lines, or discard the changes.",
+              )}
+            </Alert>
+            <Group grow>
+              <Paper withBorder p="md">
+                <Text size="xs" c="dimmed">
+                  {t("OpeningEdit.Added", "Added")}
+                </Text>
+                <Text fw={700} size="xl">
+                  {pendingTrainingSync.addedLines}
+                </Text>
+              </Paper>
+              <Paper withBorder p="md">
+                <Text size="xs" c="dimmed">
+                  {t("OpeningEdit.Changed", "Changed")}
+                </Text>
+                <Text fw={700} size="xl">
+                  {pendingTrainingSync.changedLines}
+                </Text>
+              </Paper>
+              <Paper withBorder p="md">
+                <Text size="xs" c="dimmed">
+                  {t("OpeningEdit.Removed", "Removed")}
+                </Text>
+                <Text fw={700} size="xl">
+                  {pendingTrainingSync.removedLines}
+                </Text>
+              </Paper>
+            </Group>
+            <Text size="sm" c="dimmed">
+              {t(
+                "OpeningEdit.ProgressPolicy",
+                "Progress is preserved for matching lines. New lines start without progress; removed lines leave the training queue.",
+              )}
+            </Text>
+            <Group justify="space-between" align="flex-end">
+              <Button
+                variant="default"
+                color="gray"
+                disabled={savingRepertoire}
+                onClick={() => void discardRepertoireChanges()}
+              >
+                {t("OpeningEdit.DiscardChanges", "Discard changes")}
+              </Button>
+              <Group>
+                <Button
+                  variant="default"
+                  loading={savingRepertoire}
+                  onClick={async () => {
+                    if (await saveRepertoirePgnOnly()) setPendingTrainingSync(null);
+                  }}
+                >
+                  {t("OpeningEdit.SavePgnOnly", "Save PGN only")}
+                </Button>
+                <Button
+                  loading={savingRepertoire}
+                  onClick={async () => {
+                    if (await saveRepertoireAndTraining(pendingTrainingSync)) {
+                      setPendingTrainingSync(null);
+                    }
+                  }}
+                >
+                  {t("OpeningEdit.SaveAndUpdateTraining", "Save and update training")}
+                </Button>
+              </Group>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+      <EvalListener persistScore={!practicing} />
       <Portal target="#left" style={{ height: "100%" }}>
         <Board
           practicing={practicing}
@@ -324,6 +482,48 @@ function BoardAnalysis() {
           />
         ) : (
           <Stack h="100%" gap="xs">
+            {isRepertoire && dirty && !practicing && (
+              <Paper withBorder p="xs">
+                <Stack gap="xs">
+                  <div>
+                    <Text size="sm" fw={600}>
+                      {t("OpeningEdit.UnsavedRepertoireChanges", "Unsaved repertoire changes")}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {t(
+                        "OpeningEdit.ExplicitSaveHelp",
+                        "Choose whether to change only the PGN or also rebuild the training lines.",
+                      )}
+                    </Text>
+                  </div>
+                  <Group gap="xs" wrap="wrap">
+                    <Button
+                      size="compact-xs"
+                      variant="default"
+                      disabled={savingRepertoire}
+                      onClick={() => void discardRepertoireChanges()}
+                    >
+                      {t("OpeningEdit.Discard", "Discard")}
+                    </Button>
+                    <Button
+                      size="compact-xs"
+                      variant="default"
+                      loading={savingRepertoire}
+                      onClick={() => void saveRepertoirePgnOnly()}
+                    >
+                      {t("OpeningEdit.SavePgnOnly", "Save PGN only")}
+                    </Button>
+                    <Button
+                      size="compact-xs"
+                      loading={savingRepertoire}
+                      onClick={() => void saveRepertoireAndTraining()}
+                    >
+                      {t("OpeningEdit.SaveAndUpdateTraining", "Save and update training")}
+                    </Button>
+                  </Group>
+                </Stack>
+              </Paper>
+            )}
             <DetachedEval />
             <GameNotation
               topBar

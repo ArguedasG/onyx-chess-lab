@@ -79,6 +79,8 @@ export default function StudyTrainingCopyModal({
   const [startingActor, setStartingActor] = useState<TacticsStartingActor>("student");
   const [openingColor, setOpeningColor] = useState<"white" | "black" | "both">("both");
   const [openingPolicy, setOpeningPolicy] = useState<"mainline" | "all">("all");
+  const [openingStructure, setOpeningStructure] = useState<"chapters" | "section">("chapters");
+  const [openingSectionName, setOpeningSectionName] = useState(study.name);
   const [existingOpeningPath, setExistingOpeningPath] = useState("");
 
   useEffect(() => {
@@ -119,6 +121,8 @@ export default function StudyTrainingCopyModal({
   useEffect(() => {
     setTarget(NEW_TARGET);
     setName(study.name);
+    setOpeningStructure("chapters");
+    setOpeningSectionName(study.name);
     setError("");
   }, [kind, study.name]);
 
@@ -234,9 +238,18 @@ export default function StudyTrainingCopyModal({
         setExistingOpeningPath(sourcePath);
         return;
       }
-      const config = { color: openingColor, subvariationPolicy: openingPolicy } as const;
-      const inspection = await inspectOpeningPgn(sourcePath, config, chapters.length);
-      const prepared = await prepareOpeningImport(inspection, config);
+      const config = {
+        color: openingColor,
+        subvariationPolicy: openingPolicy,
+        groupingMode: openingStructure === "chapters" ? "records" : "single",
+      } as const;
+      const inspection = await inspectOpeningPgn(sourcePath, config);
+      const prepared = await prepareOpeningImport(
+        openingStructure === "section"
+          ? { ...inspection, filename: openingSectionName.trim() || study.name }
+          : inspection,
+        config,
+      );
       if (prepared.variants.length === 0) throw new Error("No se encontró ningún capítulo válido.");
       const repertoireName = name.trim() || study.name;
       const created = await createFile({
@@ -258,7 +271,7 @@ export default function StudyTrainingCopyModal({
           ),
           path: created.value.path,
           sourcePath,
-          recordCount: inspection.recordCount,
+          recordCount: prepared.variants.length,
           subvariationPolicy: openingPolicy,
           variants: prepared.variants,
         }),
@@ -349,7 +362,43 @@ export default function StudyTrainingCopyModal({
                     { value: "mainline", label: t("Studies.MainLine", "Main line only") },
                   ]}
                 />
+                <Select
+                  label={t("Studies.OpeningStructure", "Repertoire organization")}
+                  description={t(
+                    "Studies.OpeningStructureDescription",
+                    "Choose whether chapters become sections or training lines.",
+                  )}
+                  value={openingStructure}
+                  onChange={(value) =>
+                    setOpeningStructure((value as typeof openingStructure) ?? "chapters")
+                  }
+                  data={[
+                    {
+                      value: "chapters",
+                      label: t("Studies.ChaptersAsSections", "One section per chapter"),
+                    },
+                    {
+                      value: "section",
+                      label: t("Studies.ChaptersAsLines", "All chapters as lines in one section"),
+                    },
+                  ]}
+                />
+                {openingStructure === "section" && (
+                  <TextInput
+                    label={t("Studies.OpeningSectionName", "Section name")}
+                    value={openingSectionName}
+                    onChange={(event) => setOpeningSectionName(event.currentTarget.value)}
+                  />
+                )}
               </>
+            )}
+            {target !== NEW_TARGET && (
+              <Text size="sm" c="dimmed">
+                {t(
+                  "Studies.ExistingOpeningSectionHint",
+                  "The next step will ask which existing section should receive the chapters. Every terminal branch becomes a training line.",
+                )}
+              </Text>
             )}
           </>
         ) : (
