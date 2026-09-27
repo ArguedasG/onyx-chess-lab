@@ -80,10 +80,10 @@ These steps are only needed after the first installation; later updates are inst
 
 ### Running on Linux
 
-- **AppImage:** make it executable (`chmod +x Onyx.Chess.Lab_*.AppImage`) and run it. This format
+- **AppImage:** make it executable (`chmod +x Onyx.Chess.Lab_*_amd64.AppImage`) and run it. This format
   can update itself from the app.
 - **.deb** (Debian, Ubuntu and derivatives): install it with
-  `sudo apt install ./onyx-chess-lab_*.deb`. New versions must be downloaded and installed manually.
+  `sudo apt install ./Onyx.Chess.Lab_*_amd64.deb`. New versions must be downloaded and installed manually.
 
 Because the application is still in an early public stage, keeping backups of important PGN files
 and application data is recommended. Bugs and reproducible problems can be reported through
