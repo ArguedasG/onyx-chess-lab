@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-26.
+> Última actualización: 2026-09-27.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,11 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.17.0** (2026-09-25), con el rediseño del módulo de aperturas.
+- Versión en preparación: **0.18.0** (modo Aprender, repaso espaciado e importación editable).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
+- Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
+  previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
+  notarizado por Apple.
 - Actualizador: canal propio y firmado de Onyx operativo.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
 - Usuarios: estudiantes y miembros de un grupo de ajedrez; es probable que pronto la utilicen un
@@ -567,8 +570,9 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 
 ## 11. Preguntas abiertas reales
 
-- ¿Qué plataformas usan el profesor y el grupo de ajedrez? La respuesta decide si macOS o Linux se
-  adelantan a 8.2.
+- ¿Funcionan las vistas previas de Linux y macOS en equipos reales? Las pruebas de amigos con Mac y
+  la prueba propia en Linux decidirán si pasan a plataformas validadas y si conviene pagar la cuenta
+  de desarrollador de Apple para firmar y notarizar.
 - ¿Qué tamaño de lote por defecto y qué criterio de “aprendida” resultan cómodos en el modo
   Aprender? Se ajustarán con el uso real.
 - ¿Qué ventanas y tamaños de muestra se usarán para comparaciones temporales?
@@ -654,3 +658,12 @@ en la documentación de la fase.
 - Los errores y nombres generados de aperturas, estudios, táctica, finales e importación pasan a
   i18n.
 - La regla de 1.000 líneas se aclara como guía flexible aplicada al modificar archivos grandes.
+
+### 2026-09-27 — Preparación de 0.18.0 y vistas previas multiplataforma
+
+- La release 0.18.0 agrupa el modo Aprender, el repaso espaciado, la importación editable y las
+  correcciones de práctica (las flechas del PGN ya no se borran al hacer clic durante la práctica).
+- El workflow de release añade Linux x64 y macOS (Apple Silicon e Intel) como vista previa sin
+  probar; Windows x64 sigue siendo el canal validado y la auditoría de actualización exige que siga
+  presente.
+- El README documenta las advertencias y cómo abrir la aplicación sin firma en macOS.

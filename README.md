@@ -17,8 +17,8 @@ and running reproducible experiments with engines and human-like bots. It is a f
 
 The project is currently an **early public alpha/beta**. The repository and GitHub releases are
 public, while active testing is still being carried out with a small group of users. Windows x64 is
-the currently validated distribution target; macOS and Linux support is planned but is not yet
-declared production-ready.
+the currently validated distribution target; Linux and macOS builds are published as **untested
+previews**.
 
 ## Highlights
 
@@ -43,8 +43,47 @@ The current status, limitations and implementation order are documented in
 
 ## Downloads
 
-Windows x64 builds and signed updater artifacts are published through
+All builds are published through
 [GitHub Releases](https://github.com/ArguedasG/onyx-chess-lab/releases).
+
+| Platform                          | File                                 | Status           |
+| --------------------------------- | ------------------------------------ | ---------------- |
+| Windows x64                       | `Onyx.Chess.Lab_X.Y.Z_x64-setup.exe` | Validated        |
+| macOS Apple Silicon (M1 or newer) | `Onyx.Chess.Lab_X.Y.Z_aarch64.dmg`   | Untested preview |
+| macOS Intel                       | `Onyx.Chess.Lab_X.Y.Z_x64.dmg`       | Untested preview |
+| Linux x64                         | `.AppImage` (recommended) or `.deb`  | Untested preview |
+
+> [!WARNING]
+> The Linux and macOS builds are generated automatically but have **not been tested yet**. They may
+> fail to start or have features that do not work. Please report any problem through
+> [GitHub Issues](https://github.com/ArguedasG/onyx-chess-lab/issues), mentioning your system and
+> version. The guided installation of the managed Maia 3 engine is currently available only on
+> Windows x64; on other systems, engines can still be added manually.
+
+### Opening the app on macOS
+
+The macOS builds are not signed with an Apple Developer certificate, so macOS blocks them the first
+time they are opened. This is expected and does not mean the file is damaged.
+
+1. Open the `.dmg` that matches your Mac (Apple Silicon or Intel; see Apple menu → About This Mac) and drag
+   **Onyx Chess Lab** into **Applications**.
+2. Open **Terminal** and remove the download quarantine flag:
+
+   ```bash
+   xattr -cr "/Applications/Onyx Chess Lab.app"
+   ```
+
+3. Open the app from **Applications**. If macOS still refuses, go to **System Settings → Privacy &
+   Security**, scroll down and click **Open Anyway**, then confirm.
+
+These steps are only needed after the first installation; later updates are installed from the app.
+
+### Running on Linux
+
+- **AppImage:** make it executable (`chmod +x Onyx.Chess.Lab_*.AppImage`) and run it. This format
+  can update itself from the app.
+- **.deb** (Debian, Ubuntu and derivatives): install it with
+  `sudo apt install ./onyx-chess-lab_*.deb`. New versions must be downloaded and installed manually.
 
 Because the application is still in an early public stage, keeping backups of important PGN files
 and application data is recommended. Bugs and reproducible problems can be reported through

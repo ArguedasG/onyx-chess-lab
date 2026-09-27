@@ -64,8 +64,9 @@ if (updater?.windows?.installMode !== "passive") {
 }
 
 const workflow = contents.find(([file]) => file === ".github/workflows/release.yml")?.[1] ?? "";
-if (workflow.includes("macos-latest") || workflow.includes("ubuntu-")) {
-  violations.push("the first updater release workflow must remain Windows x64 only");
+// Windows x64 is the validated channel; Linux and macOS may be added as previews but never replace it.
+if (!workflow.includes("platform: 'windows-latest'") || !workflow.includes("--bundles nsis")) {
+  violations.push("the release workflow must keep building the Windows x64 NSIS installer");
 }
 if (!workflow.includes("releaseDraft: true") || !workflow.includes("prerelease: false")) {
   violations.push("the stable release must remain a manually approved draft before publication");

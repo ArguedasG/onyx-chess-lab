@@ -14,6 +14,13 @@ jobs:
         include:
           - platform: 'windows-latest'
             args: '--bundles nsis'
+          # Linux and macOS builds are published as untested previews (see README).
+          - platform: 'ubuntu-22.04'
+            args: '--bundles appimage,deb'
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
@@ -21,6 +28,14 @@ jobs:
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Rust cache
         uses: swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
@@ -67,7 +82,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "v__VERSION__"
-          releaseBody: "Signed Onyx Chess Lab update for Windows x64. See the release page for details."
+          releaseBody: "Signed Onyx Chess Lab update. Windows x64 is the validated platform; Linux and macOS builds are untested previews. See the release page for details."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
