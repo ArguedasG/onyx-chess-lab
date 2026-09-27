@@ -888,7 +888,9 @@ export default function TacticsDashboardV2Page() {
                               trainingT("Training.Copy.Puzzlev0.c9ca2375", "Puzzle {{v0}}", {
                                 v0: problemIndex + 1,
                               })}
-                            {completed ? " · completado" : ""}
+                            {completed
+                              ? ` · ${trainingT("Training.CompletedLower", "completed")}`
+                              : ""}
                           </Text>
                         </Button>
                       );

@@ -1,6 +1,7 @@
 import { parseUci } from "chessops";
 import { describe, expect, it } from "vitest";
 import {
+    getExpectedMoveShape,
     getVariationArrowShapes,
     MAIN_VARIATION_BRUSH,
     SECONDARY_VARIATION_BRUSH,
@@ -39,5 +40,20 @@ describe("variation arrows", () => {
                 modifiers: { lineWidth: 5.5 },
             },
         ]);
+    });
+});
+
+describe("expected move arrow", () => {
+    it("points at the requested continuation", () => {
+        expect(getExpectedMoveShape(nodeWithMoves("e2e4", "d2d4"), 1)).toEqual({
+            orig: "d2",
+            dest: "d4",
+            brush: "green",
+            modifiers: { lineWidth: 12 },
+        });
+    });
+
+    it("returns nothing when the continuation does not exist", () => {
+        expect(getExpectedMoveShape(nodeWithMoves("e2e4"), 3)).toBeNull();
     });
 });

@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-19.
+> Última actualización: 2026-09-26.
 
 ## 1. Cómo utilizar este documento
 
@@ -15,8 +15,14 @@ Antes de planificar o implementar una funcionalidad relevante se debe leer:
 2. la documentación específica enlazada desde la fase activa;
 3. el código actual relacionado con la tarea.
 
-El roadmap expresa intención y orden, pero no autoriza automáticamente a implementar fases futuras.
-Solo se trabaja en la funcionalidad solicitada por el usuario.
+El roadmap funciona como una **lista detallada de tareas y decisiones**, no como un calendario
+obligatorio. Expresa intención y un orden orientativo, pero no autoriza automáticamente a implementar
+fases futuras: solo se trabaja en la funcionalidad solicitada por el autor.
+
+Las prioridades se mueven según las personas que usan o están por usar Onyx. Una necesidad concreta
+de un usuario real —por ejemplo, que un profesor o miembros del grupo de ajedrez utilicen macOS o
+Linux— puede adelantar tareas de fases posteriores sin que eso invalide el resto del documento. Los
+cambios de prioridad se registran en el registro operativo.
 
 Los estados significan:
 
@@ -72,12 +78,14 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión preparada para publicación: **0.16.0**.
+- Última versión publicada: **0.17.0** (2026-09-25), con el rediseño del módulo de aperturas.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Actualizador: canal propio y firmado de Onyx operativo.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
-- Fase activa: **8 — Serious Preparation Tools**. Las entregas 8.0 y 8.1 están implementadas; 8.2
-  queda reservada para la próxima versión. El trabajo actual es mantenimiento de seguridad y calidad.
+- Usuarios: estudiantes y miembros de un grupo de ajedrez; es probable que pronto la utilicen un
+  profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
+- Trabajo actual: **consolidación del entrenamiento de aperturas** (importación editable y modo
+  Aprender; ver sección 7.A). La Fase 8 conserva 8.0 y 8.1 implementadas y 8.2 pendiente.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
@@ -96,6 +104,12 @@ su gravedad lo justifica.
   manera aislada;
 - terminar la limpieza pública de `CONTRIBUTING.md`, plantillas de issues y otros textos heredados de
   En Croissant;
+- completar la internacionalización de textos fijos: los errores y nombres generados de aperturas,
+  estudios, táctica, finales e importación ya usan i18n; quedan mensajes técnicos en inglés de
+  bases, Lichess, Player Analysis y exportaciones HTML;
+- dividir gradualmente archivos grandes cuando se modifiquen de forma sustancial, empezando por
+  `OpeningDashboardPage.tsx` (`PracticePanel.tsx` ya se dividió en componentes para el modo
+  Aprender);
 - atender con prioridad cualquier regresión de instalación, actualización, migración o pérdida de
   datos comunicada por usuarios;
 - conservar documentación de release, licencias y recuperación junto con cada versión pública.
@@ -113,11 +127,12 @@ su gravedad lo justifica.
 | 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 10.                                                             |
 | 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 9. |
 | 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                      |
+| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.               |
 | 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                    |
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                    |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                         |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.       |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; 8.2 está reservada para la próxima versión.                                             |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; 8.2 pendiente y sujeta a la demanda de usuarios.                                        |
 | 9 — Consolidación pública y MLOps           | Pendiente                                | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                       |
 | 10 — Expansión avanzada                     | Pendiente                                | Amplía fases cerradas, especialmente bots, torneos e interpretación estratégica.                                 |
 
@@ -136,21 +151,31 @@ su gravedad lo justifica.
 
 ---
 
-## 5. Orden vigente de desarrollo
+## 5. Prioridades y orden orientativo
 
 ```text
 Producto público + mantenimiento continuo
         ↓
-8 — Serious Preparation Tools
+Necesidades de usuarios reales (entrenamiento diario, plataformas, bugs)
+        ↓
+8.2 — Preparación individual y de equipo
         ↓
 9 — Consolidación pública, multiplataforma y MLOps
         ↓
 10 — Expansión avanzada de fases anteriores
 ```
 
-Este es el orden normal. Solo defectos críticos, riesgos de datos, seguridad de actualización o
-mantenimiento urgente pueden interrumpirlo. El trabajo correctivo se registra como mantenimiento y
-no altera por sí solo el estado de una fase cerrada.
+El orden es orientativo. Las prioridades se deciden así:
+
+1. defectos críticos, riesgos de datos y seguridad de actualización;
+2. lo que bloquea a personas que ya usan o van a usar Onyx: por ejemplo, un instalador de macOS o
+   Linux se adelanta a 8.2 si un profesor o el grupo lo necesita;
+3. mejoras en las experiencias de uso frecuente, especialmente el entrenamiento;
+4. el resto de fases en el orden listado.
+
+Un rediseño no planificado puede justificarse cuando una parte de la aplicación no se usa por su
+diseño, como ocurrió con Aperturas en 0.17.0. Se registra como ampliación de la fase original sin
+reabrir su cierre. El trabajo correctivo se registra como mantenimiento.
 
 ---
 
@@ -298,7 +323,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 queda para la próxima versión.**
+**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 pendiente y sujeta a la demanda de usuarios.**
 
 ### 8.0. Biblioteca personal de estudios
 
@@ -356,6 +381,73 @@ Contrato y validación técnica: `docs/position-actions-phase-8-1.es.md`.
 - desviaciones recientes, posiciones críticas y partidas modelo;
 - líneas específicas de preparación;
 - paquetes locales exportables antes de cuentas, nube o colaboración en tiempo real.
+
+---
+
+## 7.A. Consolidación del entrenamiento de Aperturas
+
+**Estado: En curso.** Ampliación de la Fase 6 que no estaba planificada: Aperturas era la única
+experiencia de entrenamiento que el autor no utilizaba, por su diseño anterior.
+
+### Publicado en 0.17.0
+
+- biblioteca visual de repertorios y navegación jerárquica repertorio → sección → línea;
+- tramo nuevo de cada línea resaltado respecto de las anteriores y restauración de scroll y origen;
+- importación con agrupación inteligente, por registro o combinada, con vista previa;
+- consolidación de secciones fragmentadas conservando progreso;
+- exportación flexible y edición explícita (solo PGN, PGN y estructura, o descartar);
+- flechas de continuaciones PGN, reintento y jugada esperada sin contar dos veces el error.
+
+Detalle: `docs/release-notes-0.17.0.es.md`.
+
+### Importación editable
+
+**Estado: Implementada y validada automáticamente; validación manual nativa pendiente con un curso
+real exportado de Chessable.**
+
+- la vista previa de agrupación es editable antes de importar: mover registros entre secciones
+  mediante arrastrar y soltar, reordenar registros y secciones, crear secciones nuevas, renombrar
+  secciones y líneas, fusionar secciones y excluir registros con restauración;
+- cada sección puede marcarse como teoría entrenable o partidas modelo, aunque la detección
+  automática haya elegido otro tipo;
+- solo pueden compartir sección registros con la misma posición inicial; la interfaz impide lo
+  contrario durante el arrastre;
+- la unidad movible es el registro PGN; separar subvariantes internas de un registro queda fuera de
+  alcance;
+- cambiar la estrategia automática de agrupación reinicia las ediciones;
+- la importación reutiliza los árboles analizados durante la inspección en lugar de leer y analizar
+  el PGN dos veces.
+
+### Modo Aprender
+
+**Estado: Pasos 1–6 implementados y validados automáticamente; validación manual nativa pendiente.**
+
+Objetivo: permitir conocer una línea antes de practicarla, sin acumular fallos por jugadas que el
+estudiante todavía no vio.
+
+1. **Preparación técnica:** dividir `PracticePanel.tsx` por responsabilidades antes de ampliarlo.
+2. **Datos:** estado de aprendizaje por línea (nueva / aprendida y fecha), opcional en el esquema y
+   con migración compatible: una línea ya completada alguna vez se considera aprendida.
+3. **Sesión Aprender:** el tablero muestra la jugada esperada con flecha y los comentarios PGN; el
+   estudiante ejecuta la jugada mostrada y el rival responde automáticamente. Al terminar, la línea
+   se repite una vez sin ayudas; si se completa, queda aprendida. Los errores en este modo no alteran
+   las estadísticas por jugada.
+4. **Aprovechar lo ya aprendido:** el tramo compartido con líneas aprendidas se reproduce
+   automáticamente y la enseñanza empieza en la divergencia.
+5. **Interfaz:** acción “Aprender” por repertorio, sección o línea con lotes de N líneas nuevas
+   (configurable, 5 por defecto), progreso aprendidas/total y estado Nueva/Aprendida por línea. La
+   práctica de repertorio o sección usa solo líneas aprendidas; una línea individual siempre puede
+   entrenarse y la vista de administración conserva la práctica de todas las líneas entrenables.
+6. **Repaso espaciado:** cada línea guarda su propia tarjeta FSRS dentro de los datos de
+   entrenamiento, por lo que sobrevive a reorganizaciones de secciones, copias de seguridad y
+   exportaciones. Aprender una línea programa el primer repaso; cada práctica completada lo
+   reprograma con la calificación manual o automática. La acción “Repasar” por repertorio o sección
+   entrena solo las líneas vencidas, empezando por las más atrasadas, y cada línea muestra si su
+   repaso está pendiente o cuándo toca. Las líneas aprendidas antes de existir el repaso quedan
+   pendientes de inmediato. El deck heredado de práctica por posición se conserva sin cambios.
+
+No se busca copiar Chessable: se toma el flujo aprender → practicar → repasar y se aprovechan
+capacidades propias, como el tramo nuevo y las transposiciones.
 
 ---
 
@@ -427,9 +519,9 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 
 - Onyx es local-first; los servicios remotos complementan, no sustituyen, los datos locales.
 - Las funcionalidades nuevas deben mantener privacidad, procedencia, exportación y borrado.
-- Se evitarán nuevos componentes o módulos gigantes. Como regla práctica, un archivo que se acerque
-  a 1.000 líneas debe revisarse y dividirse por responsabilidades antes de seguir creciendo, sin
-  fragmentarlo artificialmente.
+- Se evitarán nuevos componentes o módulos gigantes. Como guía flexible y reciente, un archivo que
+  supere unas 1.000 líneas se divide por responsabilidades cuando vaya a recibir cambios
+  sustanciales, sin fragmentarlo artificialmente ni dividir archivos estables solo por su tamaño.
 - Las ediciones distribuibles comparten código y commit; no se mantienen ramas de producto largas.
 - Los bugs de usuarios se priorizan por impacto y no alteran automáticamente el orden de fases.
 
@@ -475,10 +567,11 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 
 ## 11. Preguntas abiertas reales
 
-Estas preguntas pertenecen a fases futuras y no bloquean el inicio de 7.3:
-
+- ¿Qué plataformas usan el profesor y el grupo de ajedrez? La respuesta decide si macOS o Linux se
+  adelantan a 8.2.
+- ¿Qué tamaño de lote por defecto y qué criterio de “aprendida” resultan cómodos en el modo
+  Aprender? Se ajustarán con el uso real.
 - ¿Qué ventanas y tamaños de muestra se usarán para comparaciones temporales?
-- ¿Qué plataformas se soportarán oficialmente durante Fase 9 y en qué orden?
 - ¿Qué estrategia de migración conservará los datos existentes al sustituir el bundle identifier
   heredado y los metadatos de publisher?
 - ¿Qué pregunta medible se convertirá en el caso de estudio reproducible de MLOps?
@@ -540,3 +633,24 @@ en la documentación de la fase.
 - Los sets tácticos configurados para que empiece el rival solicitan exactamente una jugada inicial.
   Se impiden ejecuciones automáticas simultáneas para que el segundo movimiento corresponda siempre
   al estudiante.
+
+### 2026-09-25 — Release 0.17.0
+
+- Se publica el rediseño del módulo de aperturas, no previsto en el roadmap, como ampliación 6.A de
+  la Fase 6.
+- Se incorporan los ajustes transversales previos a 8.2: flechas de variantes y **Ver la solución**
+  en táctica.
+
+### 2026-09-26 — Prioridades orientadas a usuarios y consolidación de Aperturas
+
+- El roadmap se declara lista detallada de tareas con orden orientativo; las necesidades de usuarios
+  reales, incluidas sus plataformas, pueden adelantar tareas de fases posteriores.
+- Se implementa la importación editable de repertorios con arrastrar y soltar y se elimina la doble
+  lectura y análisis del PGN al importar.
+- Se implementa el modo Aprender: división de `PracticePanel` en componentes, estado de aprendizaje
+  por línea compatible con el progreso existente, sesión guiada con flecha y comentarios seguida de
+  repetición de memoria, reutilización del tramo ya aprendido e interfaz en el explorador.
+- Se implementa el repaso espaciado por línea completa con FSRS y la acción “Repasar”.
+- Los errores y nombres generados de aperturas, estudios, táctica, finales e importación pasan a
+  i18n.
+- La regla de 1.000 líneas se aclara como guía flexible aplicada al modificar archivos grandes.

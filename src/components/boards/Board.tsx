@@ -27,6 +27,7 @@ import {
   autoPromoteAtom,
   bestMovesFamily,
   currentEvalOpenAtom,
+  currentOpeningPracticeQueueAtom,
   enginesAtom,
   currentPracticeUnitAtom,
   currentShowCommentsAtom,
@@ -53,6 +54,7 @@ import { trainingAreasAtom } from "@/state/trainingAreas";
 import classes from "@/styles/Chessboard.module.css";
 import { ANNOTATION_INFO, isBasicAnnotation } from "@/utils/annotation";
 import {
+  getExpectedMoveShape,
   getVariationArrowShapes,
   MAIN_VARIATION_BRUSH,
   SECONDARY_VARIATION_BRUSH,
@@ -190,6 +192,8 @@ function Board({
   const [practiceState, setPracticeState] = useAtom(practiceStateFamily(practiceTabId));
   const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
   const practiceUnit = useAtomValue(currentPracticeUnitAtom);
+  const openingQueue = useAtomValue(currentOpeningPracticeQueueAtom);
+  const learning = practiceUnit === "line" && openingQueue?.mode === "learn";
   const [sessionStats, setSessionStats] = useAtom(practiceSessionStatsAtom);
   const cardStartTime = useAtomValue(practiceCardStartTimeAtom);
 
@@ -213,6 +217,44 @@ function Board({
         const linePositionIndices = Array.from(
           new Set([...(practiceState.linePositionIndices ?? []), i]),
         );
+
+        // Learn mode never evaluates deviations nor touches the per-move statistics.
+        if (learning) {
+          setPendingMove(null);
+          if (san !== expectedSan) {
+            setPracticeState(
+              practiceState.learnStage === "guided"
+                ? { ...practiceState, feedback: "guided-wrong", playedMove: san }
+                : {
+                    ...practiceState,
+                    phase: "incorrect",
+                    currentFen: currentNode.fen,
+                    answer: expectedSan,
+                    playedMove: san,
+                    positionIndex: i,
+                    linePositionIndices,
+                    mistakes: (practiceState.mistakes ?? 0) + 1,
+                    timeTaken,
+                    moveStartedAt: Date.now(),
+                    feedback: "strict",
+                  },
+            );
+            return;
+          }
+          storeMakeMove({ payload: move });
+          setPracticeState({
+            ...practiceState,
+            phase: "waiting",
+            currentFen: currentNode.fen,
+            answer: expectedSan,
+            playedMove: san,
+            positionIndex: i,
+            linePositionIndices,
+            moveStartedAt: Date.now(),
+            feedback: undefined,
+          });
+          return;
+        }
 
         if (san !== expectedSan) {
           const playedUci = makeUci(move);
@@ -451,6 +493,22 @@ function Board({
     shapes = shapes.concat(currentNode.shapes);
   }
 
+  // Guided Learn stage: show the expected move and the PGN's own arrows on the student's turn.
+  if (
+    practicing &&
+    learning &&
+    practiceState.learnStage === "guided" &&
+    practiceState.phase === "waiting" &&
+    practiceState.linePath &&
+    pos?.turn === orientation
+  ) {
+    const expected = getExpectedMoveShape(
+      currentNode,
+      practiceState.linePath[position.length] ?? -1,
+    );
+    shapes = [...currentNode.shapes, ...(expected ? [expected] : [])];
+  }
+
   const hasClock =
     !!whiteTime ||
     !!blackTime ||
@@ -617,7 +675,8 @@ function Board({
               className={classes.chessboard}
               ref={boardRef}
               onClick={() => {
-                if (eraseDrawablesOnClick) clearShapes();
+                // Practice clicks are moves: never erase (and dirty) the PGN's own arrows.
+                if (eraseDrawablesOnClick && !practicing) clearShapes();
               }}
               onWheel={(e) => {
                 if (enableBoardScroll) {

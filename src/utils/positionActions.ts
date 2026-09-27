@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { makeUci, parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
@@ -185,7 +186,10 @@ export function createPositionTacticsRecord(
 ): ParsedTrainingRecord {
     const root = clonePositionSubtree(tree, preferredChildIndex);
     const moves = getMainLine(root);
-    if (moves.length === 0) throw new Error("The selected position has no prepared solution.");
+    if (moves.length === 0)
+        throw new Error(
+            i18n.t("Errors.PositionNoSolution", "The selected position has no prepared solution."),
+        );
     return {
         fen: root.fen,
         moves,

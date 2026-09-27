@@ -12,6 +12,7 @@ import {
   Text,
   ThemeIcon,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconArrowLeft,
@@ -22,6 +23,8 @@ import {
   IconFolder,
   IconPlayerPlay,
   IconPlus,
+  IconRepeat,
+  IconSchool,
   IconSettings,
 } from "@tabler/icons-react";
 import { Link, useLoaderData, useLocation } from "@tanstack/react-router";
@@ -36,6 +39,14 @@ import {
   getOpeningMoveTokens,
   getOpeningNoveltyStarts,
 } from "@/utils/openingPresentation";
+import {
+  getOpeningLearningSummary,
+  isOpeningLineLearned,
+  openingLearnBatchSize,
+  type OpeningLearningSummary,
+} from "@/utils/openingLearning";
+import { formatReviewInterval } from "@/components/files/opening";
+import { isOpeningLineDue, nextOpeningReviewDate } from "@/utils/openingReview";
 import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
 import OpeningExportModal from "./OpeningExportModal";
 
@@ -76,6 +87,123 @@ function EmptyBrowserState({ children }: { children: React.ReactNode }) {
         </Text>
       </Stack>
     </Card>
+  );
+}
+
+/** Starts a Learn session; the badge shows how many new lines the next session will teach. */
+function LearnButton({
+  summary,
+  batchSize,
+  busy,
+  onClick,
+  fullWidth,
+}: {
+  summary: OpeningLearningSummary;
+  batchSize: number;
+  busy: boolean;
+  onClick: () => void;
+  fullWidth?: boolean;
+}) {
+  const { t } = useTranslation();
+  const pending = summary.pending.length;
+  return (
+    <Button
+      variant="light"
+      color="grape"
+      fullWidth={fullWidth}
+      leftSection={<IconSchool size={16} />}
+      rightSection={
+        pending > 0 ? (
+          <Badge size="xs" color="grape" variant="filled">
+            {Math.min(pending, batchSize)}
+          </Badge>
+        ) : undefined
+      }
+      disabled={pending === 0}
+      loading={busy}
+      onClick={onClick}
+    >
+      {pending === 0
+        ? t("OpeningLearn.AllLearned", "All learned")
+        : t("OpeningLearn.Learn", "Learn")}
+    </Button>
+  );
+}
+
+/** Starts a review of the due lines; when nothing is due it shows when the next review is. */
+function ReviewButton({
+  lines,
+  busy,
+  onClick,
+  fullWidth,
+}: {
+  lines: readonly OpeningLine[];
+  busy: boolean;
+  onClick: () => void;
+  fullWidth?: boolean;
+}) {
+  const { t } = useTranslation();
+  const due = lines.filter((line) => isOpeningLineDue(line)).length;
+  const next = due === 0 ? nextOpeningReviewDate(lines) : null;
+  const button = (
+    <Button
+      variant={due > 0 ? "filled" : "light"}
+      color="orange"
+      fullWidth={fullWidth}
+      leftSection={<IconRepeat size={16} />}
+      rightSection={
+        due > 0 ? (
+          <Badge size="xs" color="orange" variant="white">
+            {due}
+          </Badge>
+        ) : undefined
+      }
+      disabled={due === 0}
+      loading={busy}
+      onClick={onClick}
+    >
+      {due > 0 ? t("OpeningReview.Review", "Review") : t("OpeningReview.UpToDate", "Up to date")}
+    </Button>
+  );
+  return next ? (
+    <Tooltip
+      label={t("OpeningReview.NextIn", "Next review in {{interval}}", {
+        interval: formatReviewInterval(next),
+      })}
+    >
+      <span
+        style={{ display: fullWidth ? "block" : "inline-block", flex: fullWidth ? 1 : undefined }}
+      >
+        {button}
+      </span>
+    </Tooltip>
+  ) : (
+    button
+  );
+}
+
+function LearnedProgress({
+  summary,
+  size = "xs",
+}: {
+  summary: OpeningLearningSummary;
+  size?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack gap={4}>
+      <Text size="sm" c="dimmed">
+        {t("OpeningLearn.LearnedCount", "{{learned}} of {{total}} lines learned", {
+          learned: summary.learned,
+          total: summary.total,
+        })}
+      </Text>
+      <Progress
+        value={summary.total === 0 ? 0 : (summary.learned / summary.total) * 100}
+        color="grape"
+        size={size}
+      />
+    </Stack>
   );
 }
 
@@ -149,9 +277,13 @@ export function OpeningLibraryPage() {
               const modelGames = repertoire.variantIds.filter(
                 (variantId) => areas.openings.variants[variantId]?.contentType === "modelGame",
               ).length;
-              const completion = getOpeningCompletion(
-                getRepertoireLines(repertoire, areas.openings.variants, areas.openings.lines),
+              const repertoireLines = getRepertoireLines(
+                repertoire,
+                areas.openings.variants,
+                areas.openings.lines,
               );
+              const completion = getOpeningCompletion(repertoireLines);
+              const learning = getOpeningLearningSummary(repertoireLines);
               return (
                 <Card key={repertoire.id} withBorder padding="lg" shadow="xs">
                   <Group align="stretch" wrap="nowrap">
@@ -212,6 +344,7 @@ export function OpeningLibraryPage() {
                           : ""}
                       </Text>
                       <Progress value={completion.percent} color="blue" />
+                      <LearnedProgress summary={learning} />
                       <Group justify="flex-end" mt="xs">
                         <Link
                           to="/training/openings/$repertoireId"
@@ -227,9 +360,20 @@ export function OpeningLibraryPage() {
                             {t("OpeningBrowser.Explore", "Explore")}
                           </Button>
                         </Link>
+                        <LearnButton
+                          summary={learning}
+                          batchSize={openingLearnBatchSize(areas.openings)}
+                          busy={launcher.busy}
+                          onClick={() => void launcher.learnRepertoire(repertoire)}
+                        />
+                        <ReviewButton
+                          lines={repertoireLines}
+                          busy={launcher.busy}
+                          onClick={() => void launcher.reviewRepertoire(repertoire)}
+                        />
                         <Button
                           leftSection={<IconPlayerPlay size={16} />}
-                          disabled={completion.total === 0}
+                          disabled={learning.learned === 0}
                           loading={launcher.busy}
                           onClick={() => void launcher.practiceRepertoire(repertoire)}
                         >
@@ -277,6 +421,8 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
   });
   const allLines = getRepertoireLines(repertoire, areas.openings.variants, areas.openings.lines);
   const completion = getOpeningCompletion(allLines);
+  const learning = getOpeningLearningSummary(allLines);
+  const batchSize = openingLearnBatchSize(areas.openings);
 
   return (
     <Container ref={scrollRef} size="xl" py="md">
@@ -328,9 +474,20 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
             >
               {t("OpeningBrowser.ManageRepertoires", "Manage repertoires")}
             </Button>
+            <LearnButton
+              summary={learning}
+              batchSize={batchSize}
+              busy={launcher.busy}
+              onClick={() => void launcher.learnRepertoire(repertoire)}
+            />
+            <ReviewButton
+              lines={allLines}
+              busy={launcher.busy}
+              onClick={() => void launcher.reviewRepertoire(repertoire)}
+            />
             <Button
               leftSection={<IconPlayerPlay size={16} />}
-              disabled={completion.total === 0}
+              disabled={learning.learned === 0}
               loading={launcher.busy}
               onClick={() => void launcher.practiceRepertoire(repertoire)}
             >
@@ -350,6 +507,9 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
             </Text>
           </Group>
           <Progress value={completion.percent} color="blue" size="lg" mt="sm" />
+          <Box mt="md">
+            <LearnedProgress summary={learning} size="lg" />
+          </Box>
         </Card>
 
         <div>
@@ -371,6 +531,7 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
             {variants.map((variant) => {
               const lines = getVariantLines(variant, areas.openings.lines);
               const variantCompletion = getOpeningCompletion(lines);
+              const variantLearning = getOpeningLearningSummary(lines);
               return (
                 <Card key={variant.id} withBorder padding="lg" mih={230}>
                   <Stack h="100%" justify="space-between">
@@ -405,6 +566,9 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                         })}
                       </Text>
                       <Progress value={variantCompletion.percent} mt="sm" />
+                      <Box mt="sm">
+                        <LearnedProgress summary={variantLearning} />
+                      </Box>
                     </div>
                     <Group grow>
                       <Link
@@ -417,9 +581,21 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                           {t("OpeningBrowser.ViewLines", "View lines")}
                         </Button>
                       </Link>
+                      <LearnButton
+                        summary={variantLearning}
+                        batchSize={batchSize}
+                        busy={launcher.busy}
+                        onClick={() => void launcher.learnVariant(repertoire, variant)}
+                      />
+                      <ReviewButton
+                        lines={lines}
+                        busy={launcher.busy}
+                        onClick={() => void launcher.reviewVariant(repertoire, variant)}
+                        fullWidth
+                      />
                       <Button
                         variant="light"
-                        disabled={variantCompletion.total === 0}
+                        disabled={variantLearning.learned === 0}
                         loading={launcher.busy}
                         onClick={() => void launcher.practiceVariant(repertoire, variant)}
                       >
@@ -482,6 +658,7 @@ export function OpeningVariantPage({
   }
 
   const completion = getOpeningCompletion(lines);
+  const learning = getOpeningLearningSummary(lines);
 
   return (
     <Container ref={scrollRef} size="xl" py="md">
@@ -511,6 +688,11 @@ export function OpeningVariantPage({
                   completed: completion.completed,
                   total: completion.total,
                 })}
+                {" · "}
+                {t("OpeningLearn.LearnedCount", "{{learned}} of {{total}} lines learned", {
+                  learned: learning.learned,
+                  total: learning.total,
+                })}
               </Text>
             </div>
           </Group>
@@ -523,9 +705,20 @@ export function OpeningVariantPage({
             >
               {t("OpeningBrowser.EditAnalyze", "Edit and analyze")}
             </Button>
+            <LearnButton
+              summary={learning}
+              batchSize={openingLearnBatchSize(areas.openings)}
+              busy={launcher.busy}
+              onClick={() => void launcher.learnVariant(repertoire, variant)}
+            />
+            <ReviewButton
+              lines={lines}
+              busy={launcher.busy}
+              onClick={() => void launcher.reviewVariant(repertoire, variant)}
+            />
             <Button
               leftSection={<IconPlayerPlay size={16} />}
-              disabled={completion.total === 0}
+              disabled={learning.learned === 0}
               loading={launcher.busy}
               onClick={() => void launcher.practiceVariant(repertoire, variant)}
             >
@@ -571,6 +764,21 @@ export function OpeningVariantPage({
                       <div style={{ minWidth: 0 }}>
                         <Group gap="xs">
                           <Badge variant="light">{index + 1}</Badge>
+                          {line.trainable &&
+                            (isOpeningLineLearned(line) ? (
+                              <Badge color="grape" variant="light">
+                                {t("OpeningLearn.LearnedBadge", "Learned")}
+                              </Badge>
+                            ) : (
+                              <Badge color="gray" variant="light">
+                                {t("OpeningLearn.NewBadge", "New")}
+                              </Badge>
+                            ))}
+                          {isOpeningLineDue(line) && (
+                            <Badge color="orange" variant="light">
+                              {t("OpeningReview.DueBadge", "Review due")}
+                            </Badge>
+                          )}
                           {line.session.completions > 0 && (
                             <Badge color="teal" variant="light">
                               {t("OpeningBrowser.Practiced", "Practiced")}
@@ -617,6 +825,11 @@ export function OpeningVariantPage({
                         {t("OpeningBrowser.PlyCount", "{{count}} plies", {
                           count: line.plyCount,
                         })}
+                        {line.review && !isOpeningLineDue(line)
+                          ? ` · ${t("OpeningReview.NextIn", "Next review in {{interval}}", {
+                              interval: formatReviewInterval(new Date(line.review.due)),
+                            })}`
+                          : ""}
                       </Text>
                       <Group>
                         <Button
@@ -625,6 +838,17 @@ export function OpeningVariantPage({
                         >
                           {t("OpeningBrowser.OpenBoard", "Open board")}
                         </Button>
+                        {line.trainable && !isOpeningLineLearned(line) && (
+                          <Button
+                            variant="light"
+                            color="grape"
+                            leftSection={<IconSchool size={16} />}
+                            loading={launcher.busy}
+                            onClick={() => void launcher.learnLine(repertoire, variant, line.id)}
+                          >
+                            {t("OpeningLearn.LearnLine", "Learn line")}
+                          </Button>
+                        )}
                         <Button
                           leftSection={<IconPlayerPlay size={16} />}
                           disabled={!line.trainable}

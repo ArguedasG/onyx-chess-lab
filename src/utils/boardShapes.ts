@@ -25,3 +25,16 @@ export function getVariationArrowShapes(node: Pick<TreeNode, "children">): DrawS
         ];
     });
 }
+
+/** Arrow for the move a Learn session expects next (a castling move may be encoded king-to-rook). */
+export function getExpectedMoveShape(
+    node: Pick<TreeNode, "children">,
+    childIndex: number,
+): DrawShape | null {
+    const move = node.children[childIndex]?.move as NormalMove | undefined;
+    if (!move || !("from" in move)) return null;
+    const orig = makeSquare(move.from);
+    const dest = makeSquare(move.to);
+    if (!orig || !dest) return null;
+    return { orig, dest, brush: "green", modifiers: { lineWidth: 12 } };
+}

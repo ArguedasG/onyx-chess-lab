@@ -2,8 +2,15 @@ import { commands, type BestMoves, type ScoreValue } from "@/bindings";
 import { getPGN, parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { areaId, type OpeningRepertoire, type OpeningsState } from "@/utils/trainingAreas";
-import { createNode, defaultTree, type GameHeaders, type TreeNode } from "@/utils/treeReducer";
+import {
+    createNode,
+    defaultTree,
+    type GameHeaders,
+    type TreeNode,
+    type TreeState,
+} from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
+import i18n from "i18next";
 import { makeUci, parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
@@ -54,11 +61,17 @@ export type OpeningPgnInspection = {
     filename: string;
     recordCount: number;
     samples: OpeningPgnSample[];
+    /**
+     * Trees parsed during inspection, by source record index (`null` for invalid records). They
+     * let the import reuse the work instead of reading and lexing the whole PGN a second time.
+     */
+    parsedTrees?: Array<TreeState | null>;
 };
 
 export type OpeningImportGroupPreview = {
     key: string;
     name: string;
+    startingFen: string;
     recordIndexes: number[];
     lineCount: number;
     commentCount: number;
@@ -70,6 +83,13 @@ export type OpeningConsolidationGroup = {
     name: string;
     variantIds: string[];
     lineCount: number;
+};
+
+export type OpeningImportOverrides = {
+    /** Sections edited in the import review; replaces the automatic grouping when present. */
+    groups?: OpeningImportGroupPreview[];
+    /** Manual line names by source record index. */
+    recordNames?: Record<number, string>;
 };
 
 export type PreparedOpeningImport = {
@@ -203,7 +223,13 @@ function appendOpeningMoves(root: TreeNode, moves: string[]) {
         const [position] = positionFromFen(node.fen);
         const move = parseUci(uci);
         if (!position || !move || !position.isLegal(move)) {
-            throw new Error(`La secuencia contiene una jugada ilegal: ${uci}.`);
+            throw new Error(
+                i18n.t(
+                    "Errors.IllegalMoveInSequence",
+                    "The sequence contains an illegal move: {{move}}.",
+                    { move: uci },
+                ),
+            );
         }
         const key = makeUci(move);
         let child = node.children.find((candidate) => moveKey(candidate) === key);
@@ -227,7 +253,8 @@ export async function buildOpeningTrainingPgn(
     repertoireId: string,
 ): Promise<string> {
     const repertoire = state.repertoires[repertoireId];
-    if (!repertoire) throw new Error("No se encontró el repertorio.");
+    if (!repertoire)
+        throw new Error(i18n.t("Errors.RepertoireNotFound", "The repertoire could not be found."));
     const variants = repertoire.variantIds
         .map((id) => state.variants[id])
         .filter((variant): variant is NonNullable<typeof variant> => Boolean(variant))
@@ -260,7 +287,11 @@ export async function buildOpeningTrainingPgn(
             .find(Boolean);
         const tree = recordForVariant(variant) ?? firstLineSource ?? parsedRecords[0];
         if (!tree) {
-            throw new Error(`No se pudo crear el capítulo «${variant.name}».`);
+            throw new Error(
+                i18n.t("Errors.ChapterCreateFailed", "Could not create the chapter “{{name}}”.", {
+                    name: variant.name,
+                }),
+            );
         }
         const root = cloneTreeNode(tree.root, [], 0);
         for (const line of selectedLines) {
@@ -269,7 +300,13 @@ export async function buildOpeningTrainingPgn(
                 .find((candidate) => candidate.path !== null);
             if (source?.path) {
                 if (source.record.root.fen !== root.fen) {
-                    throw new Error(`La línea «${line.name}» parte de una posición incompatible.`);
+                    throw new Error(
+                        i18n.t(
+                            "Errors.LineIncompatibleStart",
+                            "The line “{{name}}” starts from an incompatible position.",
+                            { name: line.name },
+                        ),
+                    );
                 }
                 mergeOpeningBranch(root, source.record.root, source.path);
             } else {
@@ -305,7 +342,8 @@ export async function buildOpeningTrainingPgn(
 
 export function buildOpeningFlatPgn(state: OpeningsState, repertoireId: string): string {
     const repertoire = state.repertoires[repertoireId];
-    if (!repertoire) throw new Error("No se encontró el repertorio.");
+    if (!repertoire)
+        throw new Error(i18n.t("Errors.RepertoireNotFound", "The repertoire could not be found."));
     const records: string[] = [];
 
     for (const variantId of repertoire.variantIds) {
@@ -348,7 +386,12 @@ export function buildOpeningFlatPgn(state: OpeningsState, repertoireId: string):
     }
 
     if (records.length === 0) {
-        throw new Error("El repertorio no contiene líneas entrenables para exportar.");
+        throw new Error(
+            i18n.t(
+                "Errors.NoTrainableLinesToExport",
+                "The repertoire has no trainable lines to export.",
+            ),
+        );
     }
     return records.join("\n\n\n");
 }
@@ -563,7 +606,7 @@ function openingName(headers: GameHeaders, index: number): string {
     if (black) return `White — ${black}`;
     const event = meaningfulHeader(headers.event);
     if (event) return event;
-    return `Línea ${index + 1}`;
+    return i18n.t("OpeningImport.LineFallbackName", "Line {{number}}", { number: index + 1 });
 }
 
 function lineName(headers: GameHeaders, fallback: string, sectionName?: string): string {
@@ -578,7 +621,7 @@ function lineName(headers: GameHeaders, fallback: string, sectionName?: string):
     if (black) return `White — ${black}`;
     const event = meaningfulHeader(headers.event);
     if (event && event !== sectionName) return event;
-    return fallback || "Línea";
+    return fallback || i18n.t("OpeningImport.LineFallback", "Line");
 }
 
 export function getOpeningImportGroupPreviews(
@@ -624,6 +667,7 @@ export function getOpeningImportGroupPreviews(
             groups.set(key, {
                 key,
                 name,
+                startingFen: sample.startingFen,
                 recordIndexes: [sample.index],
                 lineCount: sample.lineCount,
                 commentCount: sample.commentCount,
@@ -741,8 +785,20 @@ export function consolidateOpeningSections(
                           }
                         : progress;
                 }
+                const learnedAt = [duplicate.learnedAt, line.learnedAt]
+                    .filter((value): value is string => Boolean(value))
+                    .sort()[0];
+                // Keep the more demanding schedule: the review that is due first.
+                const review =
+                    duplicate.review && line.review
+                        ? duplicate.review.due <= line.review.due
+                            ? duplicate.review
+                            : line.review
+                        : (duplicate.review ?? line.review);
                 lines[duplicateId] = {
                     ...duplicate,
+                    learnedAt,
+                    review,
                     trainable: duplicate.trainable || line.trainable,
                     moveProgress,
                     session: {
@@ -831,7 +887,11 @@ export function extractOpeningImportLines(
         if (children.length === 0) {
             if (moves.length > 0) {
                 lines.push({
-                    name: sans.slice(-4).join(" ") || `Línea ${lines.length + 1}`,
+                    name:
+                        sans.slice(-4).join(" ") ||
+                        i18n.t("OpeningImport.LineFallbackName", "Line {{number}}", {
+                            number: lines.length + 1,
+                        }),
                     fen: root.fen,
                     moves,
                     path,
@@ -859,13 +919,13 @@ export function extractOpeningImportLines(
     return lines;
 }
 
-async function parseOpeningRecord(
-    raw: string,
+/** Config-dependent view of a parsed record; cheap enough to recompute when the config changes. */
+function buildOpeningRecord(
+    tree: TreeState,
     sourceRecordIndex: number,
     trainingRecordIndex: number,
-    config: OpeningImportConfig,
+    config: Pick<OpeningImportConfig, "subvariationPolicy">,
 ) {
-    const tree = await parsePGN(raw);
     const stats = treeStats(tree.root);
     const contentType = isModelGame(tree.headers) ? "modelGame" : "theory";
     const selectedLineKeys = new Set(
@@ -873,23 +933,15 @@ async function parseOpeningRecord(
             lineKey(line.moves),
         ),
     );
+    // The section's content type decides trainability at import time, because the review can
+    // move a record between theory and model-game sections.
     const lines = extractOpeningImportLines(tree.root, "all").map((line) => ({
         ...line,
-        trainable: contentType === "theory" && selectedLineKeys.has(lineKey(line.moves)),
+        trainable: selectedLineKeys.has(lineKey(line.moves)),
     }));
-    const orientation =
-        config.color === "both" ? (tree.headers.orientation ?? "white") : config.color;
-    const trainingPgn = getPGN(tree.root, {
-        headers: { ...tree.headers, orientation },
-        glyphs: true,
-        comments: true,
-        variations: true,
-        extraMarkups: true,
-    });
 
     return {
         tree,
-        trainingPgn,
         variant: {
             name: openingName(tree.headers, sourceRecordIndex),
             sourceRecordIndex,
@@ -902,66 +954,92 @@ async function parseOpeningRecord(
     };
 }
 
+async function readOpeningRecords(path: string, recordCount: number): Promise<string[]> {
+    return recordCount > 0 ? unwrap(await commands.readGames(path, 0, recordCount - 1)) : [];
+}
+
+async function parseOpeningRecords(records: string[]): Promise<Array<TreeState | null>> {
+    const trees: Array<TreeState | null> = [];
+    for (const raw of records) {
+        try {
+            trees.push(await parsePGN(raw));
+        } catch {
+            trees.push(null);
+        }
+    }
+    return trees;
+}
+
 export async function inspectOpeningPgn(
     path: string,
     config: OpeningImportConfig,
 ): Promise<OpeningPgnInspection> {
     const recordCount = unwrap(await commands.countPgnGames(path));
-    const end = recordCount - 1;
-    const records = end >= 0 ? unwrap(await commands.readGames(path, 0, end)) : [];
+    const records = await readOpeningRecords(path, recordCount);
     const samples: OpeningPgnSample[] = [];
+    const parsedTrees: Array<TreeState | null> = [];
 
     for (const [index, raw] of records.entries()) {
         try {
-            const parsed = await parseOpeningRecord(raw, index, index, config);
-            const hints = importGroupingHints(parsed.tree.headers);
+            const tree = await parsePGN(raw);
+            const parsed = buildOpeningRecord(tree, index, index, config);
+            const hints = importGroupingHints(tree.headers);
             samples.push({
                 index,
                 name: parsed.variant.name,
-                startingFen: parsed.tree.root.fen,
+                startingFen: tree.root.fen,
                 ...hints,
                 lineCount: parsed.variant.lines.length,
                 commentCount: parsed.variant.commentCount,
                 hasVariations: parsed.variant.hasVariations,
                 contentType: parsed.variant.contentType,
             });
+            parsedTrees.push(tree);
         } catch (error) {
             samples.push({
                 index,
-                name: `Registro ${index + 1}`,
+                name: i18n.t("OpeningImport.RecordFallbackName", "Record {{number}}", {
+                    number: index + 1,
+                }),
                 startingFen: "invalid",
                 lineCount: 0,
                 commentCount: 0,
                 hasVariations: false,
                 contentType: "theory",
-                error: error instanceof Error ? error.message : "Registro inválido",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : i18n.t("OpeningImport.InvalidRecord", "Invalid record"),
             });
+            parsedTrees.push(null);
         }
     }
 
-    return { path, filename: filename(path), recordCount, samples };
+    return { path, filename: filename(path), recordCount, samples, parsedTrees };
 }
 
 export async function prepareOpeningImport(
     inspection: OpeningPgnInspection,
     config: OpeningImportConfig,
+    overrides: OpeningImportOverrides = {},
 ): Promise<PreparedOpeningImport> {
-    const records =
-        inspection.recordCount > 0
-            ? unwrap(await commands.readGames(inspection.path, 0, inspection.recordCount - 1))
-            : [];
-    const parsedRecords: Array<Awaited<ReturnType<typeof parseOpeningRecord>>> = [];
+    // Reuse the inspection's trees; only fall back to reading the file when they are missing.
+    // Trees are never mutated below (merges clone them), so a failed import can be retried.
+    const trees =
+        inspection.parsedTrees?.length === inspection.recordCount
+            ? inspection.parsedTrees
+            : await parseOpeningRecords(
+                  await readOpeningRecords(inspection.path, inspection.recordCount),
+              );
+    const parsedRecords: Array<ReturnType<typeof buildOpeningRecord>> = [];
     let skippedRecords = 0;
 
-    for (const [sourceRecordIndex, raw] of records.entries()) {
+    for (const [sourceRecordIndex, tree] of trees.entries()) {
         try {
-            const parsed = await parseOpeningRecord(
-                raw,
-                sourceRecordIndex,
-                parsedRecords.length,
-                config,
+            if (!tree) throw new Error("invalid record");
+            parsedRecords.push(
+                buildOpeningRecord(tree, sourceRecordIndex, parsedRecords.length, config),
             );
-            parsedRecords.push(parsed);
         } catch {
             skippedRecords += 1;
         }
@@ -970,7 +1048,8 @@ export async function prepareOpeningImport(
     const parsedBySourceIndex = new Map(
         parsedRecords.map((parsed) => [parsed.variant.sourceRecordIndex, parsed]),
     );
-    const previews = getOpeningImportGroupPreviews(inspection, config.groupingMode);
+    const previews =
+        overrides.groups ?? getOpeningImportGroupPreviews(inspection, config.groupingMode);
     const variants: OpeningImportVariant[] = [];
     const trainingRecords: string[] = [];
 
@@ -993,7 +1072,11 @@ export async function prepareOpeningImport(
                 if (line.trainable) selectedLineKeys.add(key);
                 if (!importedLines.has(key)) importedLines.set(key, line);
                 if (!lineNames.has(key)) {
-                    lineNames.set(key, lineName(entry.tree.headers, line.name, preview.name));
+                    lineNames.set(
+                        key,
+                        overrides.recordNames?.[entry.variant.sourceRecordIndex] ??
+                            lineName(entry.tree.headers, line.name, preview.name),
+                    );
                 }
             }
         }
@@ -1054,7 +1137,12 @@ export async function prepareOpeningImport(
 
 export function mergeImportedOpeningTrees(target: TreeNode, source: TreeNode): TreeNode {
     if (target.fen !== source.fen) {
-        throw new Error("Las posiciones iniciales de las líneas agrupadas son incompatibles.");
+        throw new Error(
+            i18n.t(
+                "Errors.GroupedLinesIncompatible",
+                "The grouped lines start from incompatible positions.",
+            ),
+        );
     }
 
     function merge(left: TreeNode, right: TreeNode): TreeNode {

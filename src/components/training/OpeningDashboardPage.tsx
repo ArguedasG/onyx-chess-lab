@@ -1,4 +1,3 @@
-import { useTranslation as useTrainingTranslation } from "react-i18next";
 import i18n from "i18next";
 import {
   ActionIcon,
@@ -11,6 +10,7 @@ import {
   Container,
   Group,
   Modal,
+  NumberInput,
   ScrollArea,
   Select,
   SimpleGrid,
@@ -56,7 +56,6 @@ import {
   inspectOpeningPgn,
   buildOpeningTrainingPgn,
   consolidateOpeningSections,
-  getOpeningImportGroupPreviews,
   prepareOpeningImport,
   type OpeningImportConfig,
   type OpeningPgnInspection,
@@ -88,6 +87,19 @@ import { useOpeningScrollRestoration } from "@/hooks/useOpeningScrollRestoration
 import RepertoireAdditionModal from "./RepertoireAdditionModal";
 import OpeningExportModal from "./OpeningExportModal";
 import OpeningConsolidationModal from "./OpeningConsolidationModal";
+import OpeningImportEditor from "./OpeningImportEditor";
+import {
+  CreateRepertoireCard,
+  ImportRepertoireCard,
+  OpeningConfigFields,
+  type NewRepertoireInput,
+} from "./OpeningManageForms";
+import { openingLearnBatchSize } from "@/utils/openingLearning";
+import {
+  createOpeningImportDraft,
+  draftToImportGroups,
+  type OpeningImportDraft,
+} from "@/utils/openingImportDraft";
 
 function filename(path: string, trainingT: typeof i18n.t = i18n.t): string {
   return (
@@ -127,13 +139,15 @@ export default function OpeningDashboardPage() {
   const [, setSelectedPanel] = useAtom(currentTabSelectedAtom);
   const [, setPracticeUnit] = useAtom(currentPracticeUnitAtom);
   const [, setOpeningPracticeQueue] = useAtom(currentOpeningPracticeQueueAtom);
-  const [createName, setCreateName] = useState("");
-  const [createDescription, setCreateDescription] = useState("");
-  const [createColor, setCreateColor] = useState<"white" | "black">("white");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  // Import name and description are captured when the file is chosen (see ImportRepertoireCard).
+  const [importMeta, setImportMeta] = useState({ name: "", description: "" });
+  const [importFormVersion, setImportFormVersion] = useState(0);
   const [config, setConfig] = useState<OpeningImportConfig>(defaultConfig);
   const [inspection, setInspection] = useState<OpeningPgnInspection | null>(null);
+  const [importDraft, setImportDraft] = useState<OpeningImportDraft | null>(null);
+  // Remounts the editor (and its expanded state) whenever the draft is regenerated.
+  const [importDraftVersion, setImportDraftVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; color?: string } | null>(null);
   const [variantRepertoireId, setVariantRepertoireId] = useState<string | null>(null);
@@ -154,6 +168,11 @@ export default function OpeningDashboardPage() {
     [areas.openings.repertoires],
   );
 
+  // The banner sits at the top of a long page; bring it into view whenever a new message appears.
+  useEffect(() => {
+    if (feedback) feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [feedback]);
+
   useEffect(() => {
     if (locationHash !== "import") return;
     setExpandedRepertoires([]);
@@ -163,15 +182,11 @@ export default function OpeningDashboardPage() {
     return () => cancelAnimationFrame(frame);
   }, [locationHash, setExpandedRepertoires]);
 
-  async function createRepertoireFromScratch() {
-    const repertoireName = createName.trim();
-    if (!repertoireName) {
-      setFeedback({
-        text: t("Training.Copy.Enteranameforthe.a8416594", "Enter a name for the repertoire."),
-        color: "red",
-      });
-      return;
-    }
+  async function createRepertoireFromScratch({
+    name: repertoireName,
+    description: createDescription,
+    color: createColor,
+  }: NewRepertoireInput): Promise<boolean> {
     setBusy(true);
     setFeedback(null);
     try {
@@ -198,7 +213,7 @@ export default function OpeningDashboardPage() {
         openings: addOpeningRepertoire(previous.openings, {
           name: repertoireName,
           color: createColor,
-          description: createDescription.trim(),
+          description: createDescription,
           path: created.value.path,
           sourcePath: created.value.path,
           recordCount: 1,
@@ -216,13 +231,11 @@ export default function OpeningDashboardPage() {
           ],
         }),
       }));
-      setCreateName("");
-      setCreateDescription("");
-      setCreateColor("white");
       await navigate({ to: "/" });
       await openFile(created.value, setTabs, setActiveTab);
       setPracticeUnit("line");
       setPracticeTab("build");
+      return true;
     } catch (error) {
       setFeedback({
         text:
@@ -234,12 +247,13 @@ export default function OpeningDashboardPage() {
               ),
         color: "red",
       });
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  async function selectImportFile() {
+  async function selectImportFile(meta: { name: string; description: string }) {
     const selected = await open({
       multiple: false,
       filters: [
@@ -255,7 +269,11 @@ export default function OpeningDashboardPage() {
       if (nextInspection.recordCount === 0)
         throw new Error(t("OpeningManage.NoPgnRecords", "The PGN contains no valid records."));
       setInspection(nextInspection);
-      if (!name.trim()) setName(filename(selected, t));
+      resetImportDraft(nextInspection, config.groupingMode);
+      setImportMeta({
+        name: meta.name.trim() || filename(selected, t),
+        description: meta.description,
+      });
     } catch (error) {
       setFeedback({
         text:
@@ -270,6 +288,21 @@ export default function OpeningDashboardPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetImportDraft(
+    nextInspection: OpeningPgnInspection,
+    mode: OpeningImportConfig["groupingMode"],
+  ) {
+    setImportDraft(createOpeningImportDraft(nextInspection, mode));
+    setImportDraftVersion((version) => version + 1);
+  }
+
+  function changeImportConfig(nextConfig: OpeningImportConfig) {
+    if (inspection && nextConfig.groupingMode !== config.groupingMode) {
+      resetImportDraft(inspection, nextConfig.groupingMode);
+    }
+    setConfig(nextConfig);
   }
 
   async function addVariantFromScratch() {
@@ -408,16 +441,19 @@ export default function OpeningDashboardPage() {
   }
 
   async function confirmImport() {
-    if (!inspection) return;
+    if (!inspection || !importDraft) return;
     setBusy(true);
     try {
-      const prepared = await prepareOpeningImport(inspection, config);
+      const prepared = await prepareOpeningImport(inspection, config, {
+        groups: importGroups,
+        recordNames: importDraft.recordNames,
+      });
       if (prepared.variants.length === 0) {
         throw new Error(
           t("OpeningManage.NoValidSections", "Could not prepare any valid sections."),
         );
       }
-      const repertoireName = name.trim() || filename(inspection.path, t);
+      const repertoireName = importMeta.name.trim() || filename(inspection.path, t);
       const created = await createFile({
         filename: `${repertoireName} - Editable`,
         filetype: "repertoire",
@@ -431,7 +467,7 @@ export default function OpeningDashboardPage() {
         openings: addOpeningRepertoire(previous.openings, {
           name: repertoireName,
           color: config.color,
-          description: description.trim(),
+          description: importMeta.description.trim(),
           path: created.value.path,
           sourcePath: inspection.path,
           recordCount: prepared.variants.length,
@@ -440,8 +476,9 @@ export default function OpeningDashboardPage() {
         }),
       }));
       setInspection(null);
-      setName("");
-      setDescription("");
+      setImportDraft(null);
+      setImportMeta({ name: "", description: "" });
+      setImportFormVersion((version) => version + 1);
       setConfig(defaultConfig);
       setFeedback({
         text: t(
@@ -656,9 +693,8 @@ export default function OpeningDashboardPage() {
   const sampleComments =
     inspection?.samples.reduce((sum, sample) => sum + sample.commentCount, 0) ?? 0;
   const sampleErrors = inspection?.samples.filter((sample) => sample.error).length ?? 0;
-  const importGroups = inspection
-    ? getOpeningImportGroupPreviews(inspection, config.groupingMode)
-    : [];
+  const importGroups =
+    inspection && importDraft ? draftToImportGroups(inspection, importDraft) : [];
 
   return (
     <Container ref={scrollRef} size="xl" py="md">
@@ -717,119 +753,28 @@ export default function OpeningDashboardPage() {
         </Group>
 
         {feedback && (
-          <Alert color={feedback.color} withCloseButton onClose={() => setFeedback(null)}>
+          <Alert
+            ref={feedbackRef}
+            color={feedback.color}
+            withCloseButton
+            onClose={() => setFeedback(null)}
+          >
             {feedback.text}
           </Alert>
         )}
 
-        <Card
-          withBorder
-          shadow="sm"
-          style={{ borderColor: "var(--mantine-color-blue-5)", order: 2 }}
-        >
-          <Stack>
-            <Group>
-              <IconPlus size={28} color="var(--mantine-color-blue-6)" />
-              <div>
-                <Text fw={700}>
-                  {t(
-                    "Training.Copy.Createarepertoirefromscratch.7b3b4fef",
-                    "Create a repertoire from scratch",
-                  )}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {" "}
-                  {t(
-                    "OpeningManage.CreateDescription",
-                    "Set the repertoire's name and color, then add sections and build their lines on the board.",
-                  )}{" "}
-                </Text>
-              </div>
-            </Group>
-            <SimpleGrid cols={{ base: 1, md: 3 }}>
-              <TextInput
-                label={t("Training.Copy.Name.562bb157", "Name")}
-                placeholder={t(
-                  "Training.Copy.egMyWhiterepertoire.ba1915a4",
-                  "e.g. My White repertoire",
-                )}
-                value={createName}
-                onChange={(event) => setCreateName(event.currentTarget.value)}
-              />
-              <TextInput
-                label={t("Training.Copy.Description.ee00b96f", "Description")}
-                placeholder={t("Training.Copy.Goalorstyle.59aa131a", "Goal or style")}
-                value={createDescription}
-                onChange={(event) => setCreateDescription(event.currentTarget.value)}
-              />
-              <Select
-                label={t("Training.Copy.Color.6b73191a", "Color")}
-                value={createColor}
-                data={[
-                  { value: "white", label: t("Training.Copy.White.9666a8c0", "White") },
-                  { value: "black", label: t("Training.Copy.Black.ead8fe1f", "Black") },
-                ]}
-                onChange={(value) => value && setCreateColor(value as typeof createColor)}
-              />
-            </SimpleGrid>
-            <Button
-              color="blue"
-              leftSection={<IconPlus size={16} />}
-              loading={busy && inspection === null}
-              onClick={createRepertoireFromScratch}
-            >
-              {" "}
-              {t("Training.Copy.Createandstartbuilding.c91ef9ae", "Create and start building")}{" "}
-            </Button>
-          </Stack>
-        </Card>
-
-        <Card ref={importCardRef} withBorder style={{ order: 3 }}>
-          <Stack>
-            <Group>
-              <IconUpload size={26} color="var(--mantine-color-blue-6)" />
-              <div>
-                <Text fw={600}>
-                  {t("Training.Copy.ImportPGNrepertoire.bc0efff0", "Import PGN repertoire")}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {" "}
-                  {t(
-                    "Training.Copy.Reviewthefileandchoose.d26d10d6",
-                    "Review the file and choose which branches to practice. A complete editable copy will be created; the original file remains untouched.",
-                  )}{" "}
-                </Text>
-              </div>
-            </Group>
-            <SimpleGrid cols={{ base: 1, md: 2, lg: 4 }}>
-              <TextInput
-                label={t("Training.Copy.Name.562bb157", "Name")}
-                placeholder={t(
-                  "Training.Copy.egFrenchDefenseas.0e31cdee",
-                  "e.g. French Defense as Black",
-                )}
-                value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
-              />
-              <TextInput
-                label={t("Training.Copy.Description.ee00b96f", "Description")}
-                placeholder={t("Training.Copy.Goalorsource.c0fc0731", "Goal or source")}
-                value={description}
-                onChange={(event) => setDescription(event.currentTarget.value)}
-              />
-              <OpeningConfigFields config={config} onChange={setConfig} compact />
-            </SimpleGrid>
-            <Button
-              color="blue"
-              leftSection={<IconUpload size={16} />}
-              loading={busy && inspection === null}
-              onClick={selectImportFile}
-            >
-              {" "}
-              {t("Training.Copy.SelectPGNfile.ab7fed1d", "Select PGN file")}{" "}
-            </Button>
-          </Stack>
-        </Card>
+        <CreateRepertoireCard
+          busy={busy && inspection === null}
+          onCreate={createRepertoireFromScratch}
+        />
+        <ImportRepertoireCard
+          key={importFormVersion}
+          cardRef={importCardRef}
+          busy={busy && inspection === null}
+          config={config}
+          onConfigChange={setConfig}
+          onSelectFile={selectImportFile}
+        />
 
         <div style={{ order: 1 }}>
           <Group justify="space-between" align="flex-end" wrap="wrap">
@@ -881,6 +826,25 @@ export default function OpeningDashboardPage() {
                     }),
                   }))
                 }
+              />
+              <NumberInput
+                size="xs"
+                maw={260}
+                min={1}
+                max={30}
+                allowDecimal={false}
+                label={t("OpeningLearn.BatchSize", "New lines per Learn session")}
+                value={openingLearnBatchSize(areas.openings)}
+                onChange={(value) => {
+                  const size = Math.round(Number(value));
+                  if (!Number.isFinite(size) || size < 1) return;
+                  setAreas((previous) => ({
+                    ...previous,
+                    openings: updateOpeningPracticeSettings(previous.openings, {
+                      learnBatchSize: Math.min(30, size),
+                    }),
+                  }));
+                }}
               />
             </Stack>
           </Group>
@@ -1491,10 +1455,12 @@ export default function OpeningDashboardPage() {
         opened={inspection !== null}
         onClose={() => !busy && setInspection(null)}
         title={t("Training.Copy.Reviewopeningimport.bc0fa54e", "Review opening import")}
-        size="xl"
+        size="70rem"
         closeOnClickOutside={!busy}
+        // A transformed ancestor would offset the fixed-position clone used while dragging.
+        transitionProps={{ transition: "fade" }}
       >
-        {inspection && (
+        {inspection && importDraft && (
           <Stack>
             <Alert color={sampleErrors > 0 ? "yellow" : "blue"}>
               <Text fw={600}>{inspection.filename}</Text>
@@ -1506,7 +1472,7 @@ export default function OpeningDashboardPage() {
                 {t("Training.Copy.invalidrecords.4f5f4305", "invalid records.")}{" "}
               </Text>
             </Alert>
-            <OpeningConfigFields config={config} onChange={setConfig} />
+            <OpeningConfigFields config={config} onChange={changeImportConfig} />
             <Text size="xs" c="dimmed">
               {" "}
               {t(
@@ -1517,66 +1483,41 @@ export default function OpeningDashboardPage() {
             <Alert color="teal" variant="light">
               {t(
                 "OpeningImport.GroupPreview",
-                "The editable copy will contain {{groups}} sections. Review how the PGN records will be grouped before importing.",
+                "The editable copy will contain {{groups}} sections. Review and adjust how the PGN records are grouped before importing.",
                 { groups: importGroups.length },
               )}
             </Alert>
-            <ScrollArea h={260} type="auto" offsetScrollbars>
-              <Stack gap="xs" pr="sm">
-                {importGroups.map((group, index) => (
-                  <Card key={group.key} withBorder padding="sm">
-                    <Group justify="space-between" wrap="nowrap">
-                      <div style={{ minWidth: 0 }}>
-                        <Text size="sm" fw={600} style={{ overflowWrap: "anywhere" }}>
-                          {index + 1}. {group.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {t(
-                            "OpeningImport.GroupCounts",
-                            "{{records}} records · {{lines}} lines · {{comments}} comments",
-                            {
-                              records: group.recordIndexes.length,
-                              lines: group.lineCount,
-                              comments: group.commentCount,
-                            },
-                          )}
-                        </Text>
-                      </div>
-                      <Group gap="xs">
-                        {group.recordIndexes.length > 1 && (
-                          <Badge color="teal" variant="light">
-                            {t("OpeningImport.Merged", "Grouped")}
-                          </Badge>
-                        )}
-                        {group.contentType === "modelGame" && (
-                          <Badge color="violet">
-                            {t("Training.Copy.Modelgame.f131746e", "Model game")}
-                          </Badge>
-                        )}
-                      </Group>
-                    </Group>
-                  </Card>
-                ))}
-                {inspection.samples
-                  .filter((sample) => sample.error)
-                  .map((sample) => (
-                    <Card key={`error:${sample.index}`} withBorder padding="xs">
-                      <Text size="sm" fw={500}>
-                        {sample.index + 1}. {sample.name}
-                      </Text>
-                      <Text size="xs" c="red">
-                        {sample.error}
-                      </Text>
-                    </Card>
-                  ))}
-              </Stack>
-            </ScrollArea>
+            <OpeningImportEditor
+              key={importDraftVersion}
+              inspection={inspection}
+              draft={importDraft}
+              onChange={setImportDraft}
+              onReset={() => resetImportDraft(inspection, config.groupingMode)}
+              disabled={busy}
+            />
+            {inspection.samples
+              .filter((sample) => sample.error)
+              .map((sample) => (
+                <Card key={`error:${sample.index}`} withBorder padding="xs">
+                  <Text size="sm" fw={500}>
+                    {sample.index + 1}. {sample.name}
+                  </Text>
+                  <Text size="xs" c="red">
+                    {sample.error}
+                  </Text>
+                </Card>
+              ))}
             <Group justify="flex-end">
               <Button variant="default" disabled={busy} onClick={() => setInspection(null)}>
                 {" "}
                 {t("Training.Copy.Cancel.bb9dbb40", "Cancel")}{" "}
               </Button>
-              <Button color="blue" loading={busy} onClick={confirmImport}>
+              <Button
+                color="blue"
+                loading={busy}
+                disabled={importGroups.length === 0}
+                onClick={confirmImport}
+              >
                 {" "}
                 {t("Training.Copy.Importrepertoire.aae3ad98", "Import repertoire")}{" "}
               </Button>
@@ -1852,86 +1793,4 @@ export default function OpeningDashboardPage() {
       </Modal>
     </Container>
   );
-}
-
-function OpeningConfigFields({
-  config,
-  onChange,
-  compact = false,
-}: {
-  config: OpeningImportConfig;
-  onChange: (config: OpeningImportConfig) => void;
-  compact?: boolean;
-}) {
-  const { t: trainingT } = useTrainingTranslation();
-
-  const fields = (
-    <>
-      <Select
-        label={trainingT("Training.Copy.Repertoirecolor.b3145869", "Repertoire color")}
-        value={config.color}
-        data={[
-          { value: "white", label: trainingT("Training.Copy.White.9666a8c0", "White") },
-          { value: "black", label: trainingT("Training.Copy.Black.ead8fe1f", "Black") },
-          { value: "both", label: trainingT("Training.Copy.Bothcolors.c5bf9151", "Both colors") },
-        ]}
-        onChange={(value) =>
-          value && onChange({ ...config, color: value as OpeningImportConfig["color"] })
-        }
-      />
-      <Select
-        label={trainingT("Training.Copy.Trainablebranches.33bbf995", "Trainable branches")}
-        value={config.subvariationPolicy}
-        data={[
-          {
-            value: "mainline",
-            label: trainingT("Training.Copy.Mainlinesonly.92cf9aee", "Main lines only"),
-          },
-          {
-            value: "all",
-            label: trainingT("Training.Copy.Allsubvariations.3d1748e2", "All subvariations"),
-          },
-        ]}
-        onChange={(value) =>
-          value &&
-          onChange({
-            ...config,
-            subvariationPolicy: value as OpeningImportConfig["subvariationPolicy"],
-          })
-        }
-      />
-      {!compact && (
-        <Select
-          label={trainingT("OpeningImport.Grouping", "Section grouping")}
-          description={trainingT(
-            "OpeningImport.GroupingDescription",
-            "Controls how PGN records become repertoire sections.",
-          )}
-          value={config.groupingMode}
-          data={[
-            {
-              value: "smart",
-              label: trainingT("OpeningImport.GroupingSmart", "Smart grouping (recommended)"),
-            },
-            {
-              value: "records",
-              label: trainingT("OpeningImport.GroupingRecords", "One section per PGN record"),
-            },
-            {
-              value: "single",
-              label: trainingT("OpeningImport.GroupingSingle", "One combined section"),
-            },
-          ]}
-          onChange={(value) =>
-            value &&
-            onChange({
-              ...config,
-              groupingMode: value as OpeningImportConfig["groupingMode"],
-            })
-          }
-        />
-      )}
-    </>
-  );
-  return compact ? fields : <SimpleGrid cols={{ base: 1, sm: 3 }}>{fields}</SimpleGrid>;
 }

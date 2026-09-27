@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { getMainLine, getPGN, parsePGN } from "@/utils/chess";
 import type { Study, StudyChapter } from "@/utils/studies";
 import type {
@@ -92,7 +93,11 @@ export async function createStudyTacticsRecord(
     const node = getNodeAtPath(tree.root, path);
     const moves = getMainLine(node);
     if (moves.length === 0)
-        throw new Error(`«${chapter.title}» no tiene solución desde esa posición.`);
+        throw new Error(
+            i18n.t("Errors.ChapterNoSolution", "“{{title}}” has no solution from that position.", {
+                title: chapter.title,
+            }),
+        );
     return {
         fen: node.fen,
         moves,

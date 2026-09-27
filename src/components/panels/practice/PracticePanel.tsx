@@ -1,34 +1,25 @@
 import {
-  ActionIcon,
   Alert,
   Badge,
   Button,
-  Card,
   Divider,
   Group,
-  Loader,
-  Modal,
   Paper,
-  Progress,
   ScrollArea,
-  SimpleGrid,
   Stack,
   Tabs,
   Text,
   ThemeIcon,
-  Tooltip,
 } from "@mantine/core";
 import { useToggle } from "@mantine/hooks";
 import {
   IconArrowBack,
   IconArrowLeft,
-  IconArrowRight,
-  IconAlertTriangle,
   IconBook,
   IconCheck,
-  IconFlame,
   IconEye,
   IconInfoCircle,
+  IconSchool,
   IconTarget,
   IconX,
 } from "@tabler/icons-react";
@@ -38,7 +29,6 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
-import { formatDate } from "ts-fsrs";
 import { formatNumber } from "@/utils/format";
 import { useStore } from "zustand";
 import { commands } from "@/bindings";
@@ -46,14 +36,11 @@ import ConfirmModal from "@/components/common/ConfirmModal";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import {
   buildFromTree,
-  formatReviewInterval,
   getCardForReview,
-  getNextReviewTimes,
   getStats,
   syncDeck,
   updateCardPerformance,
   updateLinePerformance,
-  type Position,
 } from "@/components/files/opening";
 import {
   currentEvalOpenAtom,
@@ -64,7 +51,6 @@ import {
   currentShowCommentsAtom,
   currentTabAtom,
   deckAtomFamily,
-  type PracticeData,
   type PracticeSessionStats,
   practiceCardStartTimeAtom,
   practiceSessionStatsAtom,
@@ -78,50 +64,22 @@ import {
   recordOpeningLineSession,
   recordOpeningMoveAttempt,
 } from "@/utils/trainingAreas";
-import { getVariationLine, parsePGN, uciNormalize } from "@/utils/chess";
-import { positionFromFen } from "@/utils/chessops";
-import { findFen, getNodeAtPath, type TreeNode } from "@/utils/treeReducer";
+import { parsePGN } from "@/utils/chess";
+import { findFen, getNodeAtPath } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
+import {
+  learnedOpeningPrefixLength,
+  markOpeningLineLearned,
+  openingLearnStartPly,
+} from "@/utils/openingLearning";
+import { scheduleOpeningLineReview } from "@/utils/openingReview";
+import OpeningLearnFeedback from "./OpeningLearnFeedback";
+import OpeningLineFeedback from "./OpeningLineFeedback";
+import { LogsModal, PositionsModal } from "./PracticeDeckModals";
+import PracticeProgressSummary from "./PracticeProgressSummary";
+import { findOpeningLinePath, getLineMoves, getLineRepresentativeIndices } from "./practiceLines";
+import QualityRatingPanel from "./QualityRatingPanel";
 import RepertoireInfo from "./RepertoireInfo";
-
-function getLineRepresentativeIndices(root: TreeNode, positions: Position[]): number[] {
-  const positionIndexByFen = new Map(positions.map((position, index) => [position.fen, index]));
-  const representatives = new Set<number>();
-
-  function visit(node: TreeNode, lastPositionIndex: number | null) {
-    const nextIndex = positionIndexByFen.get(node.fen) ?? lastPositionIndex;
-    if (node.children.length === 0) {
-      if (nextIndex !== null) representatives.add(nextIndex);
-      return;
-    }
-    node.children.forEach((child) => visit(child, nextIndex));
-  }
-
-  visit(root, null);
-  return [...representatives];
-}
-
-function getLineMoves(root: TreeNode, path: number[]): string[] {
-  return getVariationLine(root, path, true);
-}
-
-function findOpeningLinePath(root: TreeNode, moves: string[]): number[] | null {
-  const [position] = positionFromFen(root.fen);
-  if (!position) return null;
-  const path: number[] = [];
-  let node = root;
-  for (const expectedMove of moves) {
-    const childIndex = node.children.findIndex(
-      (child) => child.move && uciNormalize(position, child.move) === expectedMove,
-    );
-    if (childIndex < 0) return null;
-    const child = node.children[childIndex];
-    path.push(childIndex);
-    position.play(child.move!);
-    node = child;
-  }
-  return path;
-}
 
 function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   const { t } = useTranslation();
@@ -204,6 +162,9 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   const selectedOpeningLine = selectedOpeningLineId
     ? trainingAreas.openings.lines[selectedOpeningLineId]
     : undefined;
+  const learning = practiceUnit === "line" && openingQueue?.mode === "learn";
+  const [learnFinished, setLearnFinished] = useState(false);
+  const learnHandledRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
@@ -277,7 +238,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
         }
         const configuredStart = headers.start || [];
         const startIsOnLine = configuredStart.every((value, index) => linePath[index] === value);
-        const lineStart = startIsOnLine ? configuredStart : [];
+        let lineStart = startIsOnLine ? configuredStart : [];
         const startedAt = Date.now();
         const openingVariantId = openingQueue?.variantIds?.[openingQueue.currentIndex];
         const lineMoves = getLineMoves(root, linePath);
@@ -293,10 +254,20 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     line.moves.every((move, index) => move === lineMoves[index]),
                 )
             : undefined);
+        if (learning && openingLine) {
+          // Replay what earlier learned lines already cover and start teaching at the divergence.
+          const studentIsWhite = (headers.orientation || "white") === "white";
+          const startPly = openingLearnStartPly(
+            learnedOpeningPrefixLength(trainingAreas.openings, openingLine),
+            linePath.length,
+            (ply) => ((root.halfMoves + ply) % 2 === 0) === studentIsWhite,
+          );
+          if (startPly > lineStart.length) lineStart = linePath.slice(0, startPly);
+        }
         setPracticePath(linePath);
         goToMove(lineStart);
         setInvisible(true);
-        setShowComments(false);
+        setShowComments(learning);
         setEvalOpen(false);
         setCardStartTime(startedAt);
         setPracticeState({
@@ -311,6 +282,8 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
           openingVariantId,
           openingLineId: openingLine?.id,
           mistakes: 0,
+          learnStage: learning ? "guided" : undefined,
+          lineStartPath: lineStart,
         });
         return;
       }
@@ -336,11 +309,31 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       setPracticeState,
       practiceUnit,
       headers.start,
+      headers.orientation,
       openingQueue,
-      trainingAreas.openings.lines,
-      trainingAreas.openings.variants,
+      trainingAreas.openings,
       selectedOpeningLine,
+      learning,
     ],
+  );
+
+  const restartLearnLine = useCallback(
+    (stage: "guided" | "recall") => {
+      const start = practiceState.lineStartPath ?? [];
+      const startedAt = Date.now();
+      goToMove(start);
+      setPracticeState((previous) => ({
+        ...previous,
+        phase: "waiting",
+        learnStage: stage,
+        currentFen: getNodeAtPath(root, start).fen,
+        mistakes: 0,
+        feedback: undefined,
+        lineStartedAt: startedAt,
+        moveStartedAt: startedAt,
+      }));
+    },
+    [goToMove, practiceState.lineStartPath, root, setPracticeState],
   );
 
   useEffect(() => {
@@ -348,6 +341,11 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     const linePath = practiceState.linePath;
     if (!linePath) return;
     if (position.length >= linePath.length) {
+      if (practiceState.learnStage === "guided") {
+        // Let the last guided move be seen, then repeat the same stretch from memory.
+        const timer = setTimeout(() => restartLearnLine("recall"), 700);
+        return () => clearTimeout(timer);
+      }
       setPracticeState((previous) => ({
         ...previous,
         phase: "correct",
@@ -371,8 +369,10 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     headers.orientation,
     position,
     practiceState.linePath,
+    practiceState.learnStage,
     practiceState.phase,
     practiceUnit,
+    restartLearnLine,
     setPracticeState,
   ]);
 
@@ -435,7 +435,11 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
         const lineId = practiceState.openingLineId;
         setTrainingAreas((previous) => ({
           ...previous,
-          openings: recordOpeningLineSession(previous.openings, lineId, mistakes, timeTaken),
+          openings: scheduleOpeningLineReview(
+            recordOpeningLineSession(previous.openings, lineId, mistakes, timeTaken),
+            lineId,
+            grade,
+          ),
         }));
       }
       const remainingPositions =
@@ -475,6 +479,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   useEffect(() => {
     if (
       practiceUnit !== "line" ||
+      learning ||
       practiceState.phase !== "correct" ||
       trainingAreas.openings.settings.askLineDifficulty
     ) {
@@ -492,10 +497,65 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     return () => clearTimeout(timer);
   }, [
     finishOpeningLine,
+    learning,
     practiceState,
     practiceUnit,
     trainingAreas.openings.lines,
     trainingAreas.openings.settings.askLineDifficulty,
+  ]);
+
+  const finishLearnSession = useCallback(() => {
+    setLearnFinished(true);
+    setPracticeState({ phase: "idle" });
+    setPracticePath(null);
+    setInvisible(false);
+    setShowComments(true);
+    setEvalOpen(true);
+  }, [setEvalOpen, setInvisible, setPracticePath, setPracticeState, setShowComments]);
+
+  const moveToNextLearnLine = useCallback(() => {
+    const hasNext = openingQueue && openingQueue.currentIndex + 1 < openingQueue.gameNumbers.length;
+    if (hasNext) void advanceOpeningChapter();
+    else finishLearnSession();
+  }, [advanceOpeningChapter, finishLearnSession, openingQueue]);
+
+  // A flawless recall marks the line as learned and moves on to the next one.
+  useEffect(() => {
+    if (!learning || practiceState.phase !== "correct" || practiceState.learnStage !== "recall") {
+      return;
+    }
+    if ((practiceState.mistakes ?? 0) > 0) return;
+    // Record the result once per attempt, but always (re)schedule the advance: a re-run of this
+    // effect clears the previous timer.
+    const attemptKey = `${practiceState.openingLineId}:${practiceState.lineStartedAt}`;
+    if (learnHandledRef.current !== attemptKey) {
+      learnHandledRef.current = attemptKey;
+      const lineId = practiceState.openingLineId;
+      if (lineId) {
+        setTrainingAreas((previous) => ({
+          ...previous,
+          // The flawless recall counts as the first successful review.
+          openings: scheduleOpeningLineReview(
+            markOpeningLineLearned(previous.openings, lineId),
+            lineId,
+            3,
+          ),
+        }));
+      }
+      setSessionStats((previous) => ({ ...previous, correct: previous.correct + 1 }));
+    }
+    const timer = setTimeout(moveToNextLearnLine, 1200);
+    return () => clearTimeout(timer);
+  }, [
+    learning,
+    moveToNextLearnLine,
+    practiceState.learnStage,
+    practiceState.lineStartedAt,
+    practiceState.mistakes,
+    practiceState.openingLineId,
+    practiceState.phase,
+    setSessionStats,
+    setTrainingAreas,
   ]);
 
   function handleQualityRating(grade: 1 | 2 | 3 | 4) {
@@ -533,6 +593,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   }
 
   function startFullPractice() {
+    setLearnFinished(false);
     const indices = selectedOpeningLine
       ? [0]
       : practiceUnit === "line"
@@ -577,7 +638,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       ]),
     );
     const timeTaken = Date.now() - (practiceState.moveStartedAt ?? Date.now());
-    if (practiceState.openingLineId && !alreadyIncorrect) {
+    if (practiceState.openingLineId && !alreadyIncorrect && !learning) {
       const lineId = practiceState.openingLineId;
       setTrainingAreas((previous) => ({
         ...previous,
@@ -632,6 +693,15 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     } else {
       newPractice();
     }
+  }
+
+  function continueAfterDeviation() {
+    goToNext();
+    setPracticeState((previous) => ({
+      ...previous,
+      phase: "waiting",
+      moveStartedAt: Date.now(),
+    }));
   }
 
   function retryOpeningMove() {
@@ -742,31 +812,41 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
               {stats.total > 0 && (
                 <>
                   {openingQueue && (
-                    <Alert color="blue" variant="light">
-                      {selectedOpeningLine
-                        ? openingQueue && openingQueue.gameNumbers.length > 1
-                          ? t(
-                              "Training.Copy.Repertoiresessionlinev0of.c3a4ec82",
-                              "Repertoire session · line {{v0}} of {{v1}} · {{v2}}.",
+                    <Alert color={learning ? "grape" : "blue"} variant="light">
+                      {learning && selectedOpeningLine
+                        ? t(
+                            "OpeningLearn.SessionHeader",
+                            "Learn session · line {{index}} of {{total}} · {{name}}",
+                            {
+                              index: openingQueue.currentIndex + 1,
+                              total: openingQueue.gameNumbers.length,
+                              name: selectedOpeningLine.name,
+                            },
+                          )
+                        : selectedOpeningLine
+                          ? openingQueue && openingQueue.gameNumbers.length > 1
+                            ? t(
+                                "Training.Copy.Repertoiresessionlinev0of.c3a4ec82",
+                                "Repertoire session · line {{v0}} of {{v1}} · {{v2}}.",
+                                {
+                                  v0: openingQueue.currentIndex + 1,
+                                  v1: openingQueue.gameNumbers.length,
+                                  v2: selectedOpeningLine.name,
+                                },
+                              )
+                            : t(
+                                "Training.Copy.Individualpracticev0Repeatthis.a8750c13",
+                                "Individual practice · {{v0}}. Repeat this line as often as you like.",
+                                { v0: selectedOpeningLine.name },
+                              )
+                          : t(
+                              "Training.Copy.Repertoiresessionchapterv0of.22d7688c",
+                              "Repertoire session · chapter {{v0}} of {{v1}}. Finishing all lines opens the next trainable chapter.",
                               {
                                 v0: openingQueue.currentIndex + 1,
                                 v1: openingQueue.gameNumbers.length,
-                                v2: selectedOpeningLine.name,
                               },
-                            )
-                          : t(
-                              "Training.Copy.Individualpracticev0Repeatthis.a8750c13",
-                              "Individual practice · {{v0}}. Repeat this line as often as you like.",
-                              { v0: selectedOpeningLine.name },
-                            )
-                        : t(
-                            "Training.Copy.Repertoiresessionchapterv0of.22d7688c",
-                            "Repertoire session · chapter {{v0}} of {{v1}}. Finishing all lines opens the next trainable chapter.",
-                            {
-                              v0: openingQueue.currentIndex + 1,
-                              v1: openingQueue.gameNumbers.length,
-                            },
-                          )}
+                            )}
                     </Alert>
                   )}
                   {practiceUnit === "line" && (
@@ -780,149 +860,46 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                       {t("Training.Copy.Backtoopenings.3aa15245", "Back to openings")}{" "}
                     </Button>
                   )}
-                  <Stack gap={4}>
-                    <Group justify="space-between">
-                      <Text fz="xs" fw={500}>
-                        {" "}
-                        {t(
-                          "Training.Copy.Chapterschedulingprogress.18c1fd16",
-                          "Chapter scheduling progress",
-                        )}{" "}
-                      </Text>
-                      <Text fz="xs" c="dimmed">
-                        {Math.round((stats.practiced / stats.total) * 100)}%
-                      </Text>
-                    </Group>
-                    <Progress.Root size="sm">
-                      <Tooltip label={`${t("Board.Practice.Practiced")}: ${stats.practiced}`}>
-                        <Progress.Section
-                          value={(stats.practiced / stats.total) * 100}
-                          color="blue"
-                        />
-                      </Tooltip>
-                      <Tooltip label={`${t("Board.Practice.Due")}: ${stats.due}`}>
-                        <Progress.Section value={(stats.due / stats.total) * 100} color="yellow" />
-                      </Tooltip>
-                      <Tooltip label={`${t("Board.Practice.Unseen")}: ${stats.unseen}`}>
-                        <Progress.Section value={(stats.unseen / stats.total) * 100} color="gray" />
-                      </Tooltip>
-                    </Progress.Root>
-                    <Text fz={10} c="dimmed">
-                      {" "}
-                      {t(
-                        "Training.Copy.PracticedscheduledforlaterDue.36e80822",
-                        "Practiced: scheduled for later · Due: ready now · Unseen: not attempted yet.",
-                      )}{" "}
-                    </Text>
-                  </Stack>
-
-                  <SimpleGrid cols={3} spacing="xs">
-                    <Paper p="xs" withBorder radius="sm">
-                      <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                        {t("Board.Practice.Practiced")}
-                      </Text>
-                      <Text fz="lg" fw={700} c="blue">
-                        {stats.practiced}
-                      </Text>
-                    </Paper>
-                    <Paper p="xs" withBorder radius="sm">
-                      <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                        {t("Board.Practice.Due")}
-                      </Text>
-                      <Text fz="lg" fw={700} c="yellow">
-                        {stats.due}
-                      </Text>
-                    </Paper>
-                    <Paper p="xs" withBorder radius="sm">
-                      <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                        {t("Board.Practice.Unseen")}
-                      </Text>
-                      <Text fz="lg" fw={700} c="dimmed">
-                        {stats.unseen}
-                      </Text>
-                    </Paper>
-                  </SimpleGrid>
-
-                  {(practiceState.phase !== "idle" ||
-                    sessionStats.correct > 0 ||
-                    sessionStats.incorrect > 0) && (
-                    <Stack gap={4}>
-                      <Text fz="xs" fw={500}>
-                        {" "}
-                        {t("Training.Copy.Sessionresults.0ab10548", "Session results")}{" "}
-                      </Text>
-                      <Text fz={10} c="dimmed">
-                        {" "}
-                        {t(
-                          "Training.Copy.Inlinepracticecorrectmeans.7f7dc36c",
-                          "In line practice, correct means completed without mistakes; incorrect means completed with one or more mistakes.",
-                        )}{" "}
-                      </Text>
-                      <SimpleGrid cols={3} spacing="xs">
-                        <Paper p="xs" withBorder radius="sm">
-                          <Group gap={4} wrap="nowrap">
-                            <ThemeIcon size="xs" color="green" variant="transparent">
-                              <IconCheck size={12} />
-                            </ThemeIcon>
-                            <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                              {t("Board.Practice.SessionCorrect")}
-                            </Text>
-                          </Group>
-                          <Text fz="lg" fw={700} c="green">
-                            {sessionStats.correct}
-                          </Text>
-                        </Paper>
-                        <Paper p="xs" withBorder radius="sm">
-                          <Group gap={4} wrap="nowrap">
-                            <ThemeIcon size="xs" color="red" variant="transparent">
-                              <IconX size={12} />
-                            </ThemeIcon>
-                            <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                              {t("Board.Practice.SessionIncorrect")}
-                            </Text>
-                          </Group>
-                          <Text fz="lg" fw={700} c="red">
-                            {sessionStats.incorrect}
-                          </Text>
-                        </Paper>
-                        <Paper p="xs" withBorder radius="sm">
-                          <Group gap={4} wrap="nowrap">
-                            {sessionStats.correct + sessionStats.incorrect > 0 ? (
-                              <ThemeIcon size="xs" color="teal" variant="transparent">
-                                <IconTarget size={12} />
-                              </ThemeIcon>
-                            ) : (
-                              <ThemeIcon size="xs" color="orange" variant="transparent">
-                                <IconFlame size={12} />
-                              </ThemeIcon>
-                            )}
-                            <Text fz={10} tt="uppercase" c="dimmed" fw={600}>
-                              {sessionStats.correct + sessionStats.incorrect > 0
-                                ? t("Board.Practice.Accuracy")
-                                : t("Board.Practice.Streak")}
-                            </Text>
-                          </Group>
-                          <Text
-                            fz="lg"
-                            fw={700}
-                            c={
-                              sessionStats.correct + sessionStats.incorrect > 0 ? "teal" : "orange"
-                            }
-                          >
-                            {sessionStats.correct + sessionStats.incorrect > 0
-                              ? `${Math.round(
-                                  (sessionStats.correct /
-                                    (sessionStats.correct + sessionStats.incorrect)) *
-                                    100,
-                                )}%`
-                              : sessionStats.streak}
-                          </Text>
-                        </Paper>
-                      </SimpleGrid>
-                    </Stack>
+                  {!learning && (
+                    <PracticeProgressSummary
+                      stats={stats}
+                      sessionStats={sessionStats}
+                      showSession={
+                        practiceState.phase !== "idle" ||
+                        sessionStats.correct > 0 ||
+                        sessionStats.incorrect > 0
+                      }
+                    />
                   )}
 
-                  {practiceState.phase === "idle" && (
+                  {practiceState.phase === "idle" &&
+                    learning &&
+                    (learnFinished ? (
+                      <Alert
+                        color="teal"
+                        icon={<IconCheck size={16} />}
+                        title={t("OpeningLearn.SessionDone", "Learn session completed")}
+                      >
+                        {t(
+                          "OpeningLearn.SessionDoneBody",
+                          "Lines learned in this session: {{count}}. They are now included when you train this repertoire.",
+                          { count: sessionStats.correct },
+                        )}
+                      </Alert>
+                    ) : (
+                      <Button
+                        size="md"
+                        variant="light"
+                        color="grape"
+                        fullWidth
+                        onClick={startFullPractice}
+                        leftSection={<IconSchool size={20} />}
+                      >
+                        {t("OpeningLearn.Start", "Start learning")}
+                      </Button>
+                    ))}
+
+                  {practiceState.phase === "idle" && !learning && (
                     <Stack gap="sm">
                       {selectedOpeningLine ? (
                         <Button
@@ -988,21 +965,29 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     </Stack>
                   )}
 
+                  {learning &&
+                  (practiceState.phase === "waiting" || practiceState.phase === "correct") ? (
+                    <OpeningLearnFeedback
+                      practiceState={practiceState}
+                      comment={currentNode.comment}
+                      onRestartGuided={() => restartLearnLine("guided")}
+                      onRestartRecall={() => restartLearnLine("recall")}
+                      onSkip={moveToNextLearnLine}
+                    />
+                  ) : (
+                    practiceUnit === "line" && (
+                      <OpeningLineFeedback
+                        practiceState={practiceState}
+                        askLineDifficulty={trainingAreas.openings.settings.askLineDifficulty}
+                        onShowMove={showExpectedOpeningMove}
+                        onRetry={retryOpeningMove}
+                        onContinueDeviation={continueAfterDeviation}
+                      />
+                    )
+                  )}
+
                   {practiceState.phase === "waiting" && (
                     <Stack gap="xs">
-                      {practiceUnit === "line" && practiceState.feedback === "correct" && (
-                        <Alert
-                          color="teal"
-                          icon={<IconCheck size={16} />}
-                          title={t("Training.Copy.Correctmove.88cf006d", "Correct move")}
-                        >
-                          {practiceState.playedMove}{" "}
-                          {t(
-                            "Training.Copy.belongstothelineContinue.5e381b89",
-                            "belongs to the line. Continue with the next move.",
-                          )}{" "}
-                        </Alert>
-                      )}
                       <Paper p="sm" withBorder>
                         {practiceUnit !== "line" &&
                         practiceState.currentFen &&
@@ -1029,7 +1014,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                               {t("Board.Practice.MakeYourMove")}
                             </Text>
                             <Group gap="xs" justify="center">
-                              {practiceUnit === "line" && (
+                              {practiceUnit === "line" && practiceState.learnStage !== "guided" && (
                                 <Button
                                   variant="light"
                                   size="compact-xs"
@@ -1069,65 +1054,11 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     </Stack>
                   )}
 
-                  {practiceState.phase === "classifying" && practiceUnit === "line" && (
-                    <Alert
-                      color="blue"
-                      icon={<Loader size="sm" />}
-                      title={t(
-                        "Training.Copy.Checkingthedeviation.ed8124df",
-                        "Checking the deviation",
-                      )}
-                    >
-                      {" "}
-                      {t("Training.Copy.Weareevaluating.55aea3a1", "We are evaluating")}{" "}
-                      {practiceState.playedMove}
-                      {t(
-                        "Training.Copy.Thischeckhasashort.7f4b34cf",
-                        ". This check has a short time limit and the board will automatically become active again.",
-                      )}{" "}
-                    </Alert>
-                  )}
-
-                  {practiceState.phase === "revealing" && practiceUnit === "line" && (
-                    <Alert
-                      color="blue"
-                      icon={<IconEye size={16} />}
-                      title={t("Training.Copy.Moverevealed.bca7b705", "Move revealed")}
-                    >
-                      {" "}
-                      {t("Training.Copy.Observe.69a284b3", "Observe")} {practiceState.answer}
-                      {t(
-                        "Training.Copy.Wewillreturntothe.754012fd",
-                        ". We will return to the position for you to play it; this help counts as one mistake in the line.",
-                      )}{" "}
-                    </Alert>
-                  )}
-
                   {practiceState.phase === "correct" &&
                     (practiceUnit === "line" || sessionStats.mode !== "full") && (
                       <Stack gap="xs">
-                        {practiceUnit === "line" && (
-                          <Alert color={(practiceState.mistakes ?? 0) > 0 ? "yellow" : "teal"}>
-                            {" "}
-                            {t(
-                              "Training.Copy.Linecompletedwith.26e3ff6a",
-                              "Line completed with",
-                            )}{" "}
-                            {practiceState.mistakes ?? 0}{" "}
-                            {t("Training.Copy.mistakes.147085ef", "mistakes.")}{" "}
-                            {trainingAreas.openings.settings.askLineDifficulty
-                              ? t(
-                                  "Training.Copy.Rateitoncetoschedule.5fd50ac4",
-                                  "Rate it once to schedule the entire line.",
-                                )
-                              : t(
-                                  "Training.Copy.Difficultywillbecalculatedautomatically.8f496a28",
-                                  "Difficulty will be calculated automatically from mistakes and time.",
-                                )}
-                          </Alert>
-                        )}
                         {(practiceUnit !== "line" ||
-                          trainingAreas.openings.settings.askLineDifficulty) && (
+                          (!learning && trainingAreas.openings.settings.askLineDifficulty)) && (
                           <QualityRatingPanel
                             onRate={handleQualityRating}
                             card={
@@ -1144,124 +1075,28 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                       </Stack>
                     )}
 
-                  {practiceState.phase === "deviation" && (
-                    <Alert
-                      color="blue"
-                      title={t(
-                        "Training.Copy.Goodmoveoutsidetherepertoire.9858d08a",
-                        "Good move outside the repertoire",
-                      )}
-                    >
-                      <Stack gap="xs">
-                        <Text fz="sm">
-                          {practiceState.playedMove}{" "}
-                          {t(
-                            "Training.Copy.keepsanequivalentevaluationbut.dc9f5aca",
-                            "keeps an equivalent evaluation, but the prepared line continues with",
-                          )}{" "}
-                          {practiceState.answer}.
+                  {practiceState.phase === "incorrect" && practiceUnit !== "line" && (
+                    <Paper p="sm" withBorder>
+                      <Stack gap="xs" align="center">
+                        <Group gap="xs">
+                          <ThemeIcon size="md" color="red" variant="light" radius="xl">
+                            <IconX size={16} />
+                          </ThemeIcon>
+                          <Text fw={500} c="red">
+                            {t("Common.Incorrect")}
+                          </Text>
+                        </Group>
+                        <Text fz="sm" c="dimmed">
+                          {t("Board.Practice.CorrectMoveWas", {
+                            move: practiceState.answer,
+                          })}
                         </Text>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          onClick={() => {
-                            goToNext();
-                            setPracticeState((previous) => ({
-                              ...previous,
-                              phase: "waiting",
-                              moveStartedAt: Date.now(),
-                            }));
-                          }}
-                        >
-                          {" "}
-                          {t(
-                            "Training.Copy.Continuewiththepreparedline.d39ce71e",
-                            "Continue with the prepared line",
-                          )}{" "}
+                        <Button variant="light" size="sm" onClick={skipCard}>
+                          {t("Board.Practice.NextPosition")}
                         </Button>
                       </Stack>
-                    </Alert>
+                    </Paper>
                   )}
-
-                  {practiceState.phase === "incorrect" &&
-                    (practiceUnit === "line" ? (
-                      <Alert
-                        color={practiceState.feedback === "engine-unavailable" ? "yellow" : "red"}
-                        icon={
-                          practiceState.feedback === "engine-unavailable" ? (
-                            <IconInfoCircle size={16} />
-                          ) : (
-                            <IconAlertTriangle size={16} />
-                          )
-                        }
-                        withCloseButton
-                        onClose={retryOpeningMove}
-                        title={
-                          practiceState.feedback === "engine-unavailable"
-                            ? t(
-                                "Training.Copy.Couldnotevaluatethedeviation.33721b53",
-                                "Could not evaluate the deviation",
-                              )
-                            : t("Training.Copy.Incorrectmove.54828596", "Incorrect move")
-                        }
-                      >
-                        <Stack gap="xs">
-                          <Text size="sm">
-                            {practiceState.feedback === "engine-unavailable"
-                              ? t(
-                                  "Training.Copy.Couldnotcheckwhetherv0.9faa3ff4",
-                                  "Could not check whether {{v0}} is a good alternative. Practice is still active; try a repertoire move.",
-                                  { v0: practiceState.playedMove },
-                                )
-                              : practiceState.feedback === "strict"
-                                ? t(
-                                    "Training.Copy.v0isoutsidethisline.94a44046",
-                                    "{{v0}} is outside this line. Alternative evaluation is disabled; try a repertoire move.",
-                                    { v0: practiceState.playedMove },
-                                  )
-                                : t(
-                                    "Training.Copy.v0isoutsidethisline.6936860e",
-                                    "{{v0}} is outside this line and does not maintain an equivalent evaluation. Try again.",
-                                    { v0: practiceState.playedMove },
-                                  )}
-                          </Text>
-                          <Group gap="xs">
-                            <Button
-                              variant="light"
-                              size="compact-xs"
-                              leftSection={<IconEye size={14} />}
-                              onClick={showExpectedOpeningMove}
-                            >
-                              {t("Training.Copy.Showmove.940e6364", "Show move")}
-                            </Button>
-                            <Button variant="subtle" size="compact-xs" onClick={retryOpeningMove}>
-                              {t("Training.Copy.Retry.a9254c5f", "Retry")}
-                            </Button>
-                          </Group>
-                        </Stack>
-                      </Alert>
-                    ) : (
-                      <Paper p="sm" withBorder>
-                        <Stack gap="xs" align="center">
-                          <Group gap="xs">
-                            <ThemeIcon size="md" color="red" variant="light" radius="xl">
-                              <IconX size={16} />
-                            </ThemeIcon>
-                            <Text fw={500} c="red">
-                              {t("Common.Incorrect")}
-                            </Text>
-                          </Group>
-                          <Text fz="sm" c="dimmed">
-                            {t("Board.Practice.CorrectMoveWas", {
-                              move: practiceState.answer,
-                            })}
-                          </Text>
-                          <Button variant="light" size="sm" onClick={skipCard}>
-                            {t("Board.Practice.NextPosition")}
-                          </Button>
-                        </Stack>
-                      </Paper>
-                    ))}
 
                   <Divider />
 
@@ -1324,276 +1159,6 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       )}
       <LogsModal open={logsOpen} setOpen={setLogsOpen} logs={deck.logs} />
     </>
-  );
-}
-
-function QualityRatingPanel({
-  onRate,
-  card,
-  timeTaken,
-}: {
-  onRate: (grade: 1 | 2 | 3 | 4) => void;
-  card?: import("ts-fsrs").Card;
-  timeTaken?: number;
-}) {
-  const { t } = useTranslation();
-  const reviewTimes = card ? getNextReviewTimes(card) : null;
-
-  return (
-    <Paper p="sm" withBorder>
-      <Stack gap="sm" align="center">
-        <Group gap="xs">
-          <ThemeIcon size="md" color="green" variant="light" radius="xl">
-            <IconCheck size={16} />
-          </ThemeIcon>
-          <Text fw={500} c="green">
-            {t("Board.Practice.Correct")}
-          </Text>
-          {timeTaken !== undefined && (
-            <Text fz="xs" c="dimmed">
-              ({(timeTaken / 1000).toFixed(1)}s)
-            </Text>
-          )}
-        </Group>
-        <Text fz="sm" c="dimmed">
-          {t("Board.Practice.HowDifficult")}
-        </Text>
-        <SimpleGrid cols={4} spacing="xs" style={{ width: "100%" }}>
-          <Tooltip label={t("Board.Practice.AgainHint")}>
-            <Button
-              color="red"
-              variant="light"
-              size="compact-md"
-              onClick={() => onRate(1)}
-              style={{ height: "auto", padding: "4px 0" }}
-            >
-              <Stack gap={0} align="center">
-                <Text fz="xs" fw={600}>
-                  {t("Board.Practice.Again")}
-                </Text>
-                <Text fz={10} c="dimmed">
-                  {reviewTimes ? formatReviewInterval(reviewTimes[1]) : ""}
-                </Text>
-              </Stack>
-            </Button>
-          </Tooltip>
-          <Tooltip label={t("Board.Practice.HardHint")}>
-            <Button
-              color="orange"
-              variant="light"
-              size="compact-md"
-              onClick={() => onRate(2)}
-              style={{ height: "auto", padding: "4px 0" }}
-            >
-              <Stack gap={0} align="center">
-                <Text fz="xs" fw={600}>
-                  {t("Board.Practice.Hard")}
-                </Text>
-                <Text fz={10} c="dimmed">
-                  {reviewTimes ? formatReviewInterval(reviewTimes[2]) : ""}
-                </Text>
-              </Stack>
-            </Button>
-          </Tooltip>
-          <Tooltip label={t("Board.Practice.GoodHint")}>
-            <Button
-              color="blue"
-              variant="light"
-              size="compact-md"
-              onClick={() => onRate(3)}
-              style={{ height: "auto", padding: "4px 0" }}
-            >
-              <Stack gap={0} align="center">
-                <Text fz="xs" fw={600}>
-                  {t("Board.Practice.Good")}
-                </Text>
-                <Text fz={10} c="dimmed">
-                  {reviewTimes ? formatReviewInterval(reviewTimes[3]) : ""}
-                </Text>
-              </Stack>
-            </Button>
-          </Tooltip>
-          <Tooltip label={t("Board.Practice.EasyHint")}>
-            <Button
-              color="green"
-              variant="light"
-              size="compact-md"
-              onClick={() => onRate(4)}
-              style={{ height: "auto", padding: "4px 0" }}
-            >
-              <Stack gap={0} align="center">
-                <Text fz="xs" fw={600}>
-                  {t("Board.Practice.Easy")}
-                </Text>
-                <Text fz={10} c="dimmed">
-                  {reviewTimes ? formatReviewInterval(reviewTimes[4]) : ""}
-                </Text>
-              </Stack>
-            </Button>
-          </Tooltip>
-        </SimpleGrid>
-        <Text fz={10} c="dimmed">
-          {t("Board.Practice.KeyboardHint")}
-        </Text>
-      </Stack>
-    </Paper>
-  );
-}
-
-function PositionsModal({
-  open,
-  setOpen,
-  deck,
-}: {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  deck: PracticeData;
-}) {
-  const { t } = useTranslation();
-
-  const store = useContext(TreeStateContext)!;
-  const root = useStore(store, (s) => s.root);
-  const goToMove = useStore(store, (s) => s.goToMove);
-  return (
-    <Modal
-      opened={open}
-      onClose={() => setOpen(false)}
-      size="xl"
-      title={<b>{t("Board.Practice.Positions")}</b>}
-    >
-      {deck.positions.length === 0 && <Text>{t("Board.Practice.NoPositionsYet")}</Text>}
-      <SimpleGrid cols={2}>
-        {deck.positions.map((c) => {
-          const position = findFen(c.fen, root);
-          const node = getNodeAtPath(root, position);
-          return (
-            <Card key={c.fen}>
-              <Text>
-                {Math.floor(node.halfMoves / 2) + 1}
-                {node.halfMoves % 2 === 0 ? ". " : "... "}
-                {c.answer}
-              </Text>
-              <Divider my="xs" />
-              <Group justify="space-between">
-                <Stack>
-                  <Text tt="uppercase" fw="bold" fz="sm">
-                    {t("Board.Practice.Status")}
-                  </Text>
-                  <Badge
-                    color={c.card.reps === 0 ? "gray" : c.card.due < new Date() ? "yellow" : "blue"}
-                  >
-                    {c.card.reps === 0
-                      ? t("Board.Practice.Unseen")
-                      : c.card.due < new Date()
-                        ? t("Board.Practice.Due")
-                        : t("Board.Practice.Practiced")}
-                  </Badge>
-                </Stack>
-                <Stack>
-                  <Text tt="uppercase" fw="bold" fz="sm">
-                    {t("Board.Practice.Due")}
-                  </Text>
-                  <Text>{formatDate(c.card.due)}</Text>
-                </Stack>
-                <ActionIcon
-                  variant="subtle"
-                  onClick={() => {
-                    goToMove(position);
-                    setOpen(false);
-                  }}
-                >
-                  <IconArrowRight />
-                </ActionIcon>
-              </Group>
-            </Card>
-          );
-        })}
-      </SimpleGrid>
-    </Modal>
-  );
-}
-
-function LogsModal({
-  open,
-  setOpen,
-  logs,
-}: {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  logs: PracticeData["logs"];
-}) {
-  const { t } = useTranslation();
-  const store = useContext(TreeStateContext)!;
-  const root = useStore(store, (s) => s.root);
-  const goToMove = useStore(store, (s) => s.goToMove);
-  return (
-    <Modal
-      opened={open}
-      onClose={() => setOpen(false)}
-      size="xl"
-      title={<b>{t("Board.Practice.Logs")}</b>}
-    >
-      <SimpleGrid cols={2}>
-        {logs.length === 0 && <Text>{t("Board.Practice.NoLogsYet")}</Text>}
-        {logs.map((log) => {
-          const position = findFen(log.fen, root);
-          const node = getNodeAtPath(root, position);
-
-          return (
-            <Card key={log.fen}>
-              <Text>
-                {Math.floor(node.halfMoves / 2) + 1}
-                {node.halfMoves % 2 === 0 ? ". " : "... "}
-                {node.san}
-              </Text>
-
-              <Divider my="xs" />
-              <Group justify="space-between">
-                <Stack>
-                  <Text tt="uppercase" fw="bold" fz="sm">
-                    {t("Board.Practice.Rating")}
-                  </Text>
-                  <Badge
-                    color={
-                      log.rating === 1
-                        ? "red"
-                        : log.rating === 2
-                          ? "orange"
-                          : log.rating === 3
-                            ? "blue"
-                            : "green"
-                    }
-                  >
-                    {log.rating === 1
-                      ? t("Board.Practice.Again")
-                      : log.rating === 2
-                        ? t("Board.Practice.Hard")
-                        : log.rating === 3
-                          ? t("Board.Practice.Good")
-                          : t("Board.Practice.Easy")}
-                  </Badge>
-                </Stack>
-                <Stack>
-                  <Text tt="uppercase" fw="bold" fz="sm">
-                    {t("Common.Date")}
-                  </Text>
-                  <Text>{formatDate(log.due)}</Text>
-                </Stack>
-                <ActionIcon
-                  variant="subtle"
-                  onClick={() => {
-                    goToMove(position);
-                    setOpen(false);
-                  }}
-                >
-                  <IconArrowRight />
-                </ActionIcon>
-              </Group>
-            </Card>
-          );
-        })}
-      </SimpleGrid>
-    </Modal>
   );
 }
 

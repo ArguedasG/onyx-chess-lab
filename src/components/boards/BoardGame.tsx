@@ -264,11 +264,17 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const headers = useStore(store, (s) => s.headers);
   const trainingReturn =
     headers.other?.ChessLabTrainingArea === "tactics"
-      ? { to: "/training/tactics" as const, label: "Volver a táctica" }
+      ? { to: "/training/tactics" as const, label: t("Training.BackToTactics", "Back to tactics") }
       : headers.other?.ChessLabTrainingArea === "openings"
-        ? { to: "/training/openings" as const, label: "Volver a aperturas" }
+        ? {
+            to: "/training/openings" as const,
+            label: t("Training.BackToOpenings", "Back to openings"),
+          }
         : headers.other?.ChessLabTrainingArea === "endgames"
-          ? { to: "/training/endgames" as const, label: "Volver a finales" }
+          ? {
+              to: "/training/endgames" as const,
+              label: t("Training.BackToEndgames", "Back to endgames"),
+            }
           : null;
   const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
   const endgamePositionId = headers.other?.ChessLabEndgamePositionId;
@@ -1756,33 +1762,42 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                       )}
                       <Text fz="xl" fw={700}>
                         {endgameSuccess === true
-                          ? "Final completado"
+                          ? t("Endgame.Result.Completed", "Endgame completed")
                           : endgameSuccess === false
-                            ? "Objetivo no alcanzado"
-                            : "Partida finalizada"}
+                            ? t("Endgame.Result.Failed", "Objective not reached")
+                            : t("Endgame.Result.Finished", "Game over")}
                       </Text>
                       <Text c="dimmed" maw={430}>
                         {endgameSuccess === true
-                          ? "Has conseguido al menos el resultado esperado para este ejercicio."
+                          ? t(
+                              "Endgame.Result.CompletedDesc",
+                              "You achieved at least the expected result for this exercise.",
+                            )
                           : endgameSuccess === false
-                            ? "No se pudo conseguir el objetivo de este ejercicio. Puedes intentarlo de nuevo cuando quieras."
-                            : "Este final todavía no tiene un objetivo definido, por lo que el resultado no puede marcarse como completado."}
+                            ? t(
+                                "Endgame.Result.FailedDesc",
+                                "The objective of this exercise was not achieved. You can try again whenever you like.",
+                              )
+                            : t(
+                                "Endgame.Result.NoObjectiveDesc",
+                                "This endgame has no defined objective yet, so the result cannot be marked as completed.",
+                              )}
                       </Text>
                       <Paper withBorder p="sm" w="100%" mt="sm">
                         <Group justify="space-between">
-                          <Text size="sm">Objetivo</Text>
+                          <Text size="sm">{t("Endgame.Objective.Label", "Objective")}</Text>
                           <Text size="sm" fw={600}>
                             {endgameObjective === "win"
-                              ? "Ganar"
+                              ? t("Endgame.Objective.Win", "Win")
                               : endgameObjective === "draw"
-                                ? "Mantener tablas"
+                                ? t("Endgame.Objective.Draw", "Hold the draw")
                                 : endgameObjective === "loss"
-                                  ? "Resistir"
-                                  : "Por definir"}
+                                  ? t("Endgame.Objective.Loss", "Resist")
+                                  : t("Endgame.Objective.Undefined", "To be defined")}
                           </Text>
                         </Group>
                         <Group justify="space-between" mt="xs">
-                          <Text size="sm">Resultado</Text>
+                          <Text size="sm">{t("Endgame.Result.Label", "Result")}</Text>
                           <Text size="sm" fw={600}>
                             {headers.result}
                           </Text>
@@ -1792,7 +1807,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                     <Stack>
                       {endgameSuccess === true && (
                         <Button color="teal" leftSection={<IconPlus />} onClick={handleNextEndgame}>
-                          Jugar el siguiente final
+                          {t("Endgame.PlayNext", "Play the next endgame")}
                         </Button>
                       )}
                       <Button
@@ -1800,14 +1815,14 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                         leftSection={<IconRefresh />}
                         onClick={handleRepeatEndgame}
                       >
-                        Intentar de nuevo
+                        {t("Endgame.TryAgain", "Try again")}
                       </Button>
                       <Button
                         variant="default"
                         leftSection={<IconZoomCheck />}
                         onClick={changeToAnalysisMode}
                       >
-                        Analizar la partida
+                        {t("Endgame.AnalyzeGame", "Analyze the game")}
                       </Button>
                       <Button
                         variant="subtle"

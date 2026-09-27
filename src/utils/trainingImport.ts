@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { getGameName, treeIteratorMainLine } from "@/utils/treeReducer";
 import { parsePGN } from "./chess";
 import { positionFromFen } from "./chessops";
@@ -23,7 +24,7 @@ export async function parseTrainingInput({
 }): Promise<TrainingImport> {
     const trimmed = input.trim();
     if (!trimmed) {
-        throw new Error("Escribe una posición FEN o una partida PGN.");
+        throw new Error(i18n.t("Errors.EnterFenOrPgn", "Enter a FEN position or a PGN game."));
     }
 
     const [position] = positionFromFen(trimmed);
@@ -31,7 +32,7 @@ export async function parseTrainingInput({
         return {
             item: createTrainingItem({
                 kind,
-                title: title.trim() || "Posición sin título",
+                title: title.trim() || i18n.t("Training.UntitledPosition", "Untitled position"),
                 fen: trimmed,
                 sideToMove: position.turn,
                 objective: "custom",
@@ -47,7 +48,9 @@ export async function parseTrainingInput({
     const tree = await parsePGN(trimmed);
     const mainline = Array.from(treeIteratorMainLine(tree.root)).slice(1);
     if (mainline.length === 0) {
-        throw new Error("El PGN no contiene jugadas que puedan entrenarse.");
+        throw new Error(
+            i18n.t("Errors.PgnNoTrainableMoves", "The PGN contains no moves that can be trained."),
+        );
     }
 
     return {
@@ -64,6 +67,8 @@ export async function parseTrainingInput({
             notes,
             source: { kind: "pgn", label: title.trim() || getGameName(tree.headers), pgn: trimmed },
         }),
-        sourceDescription: `PGN · ${mainline.length} jugadas`,
+        sourceDescription: i18n.t("Training.PgnMoveCount", "PGN · {{count}} moves", {
+            count: mainline.length,
+        }),
     };
 }

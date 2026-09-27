@@ -527,6 +527,8 @@ const practiceUnitFamily = atomFamily((_tab: string) => atom<"move" | "line">("m
 export const currentPracticeUnitAtom = tabValue(practiceUnitFamily);
 
 export type OpeningPracticeQueue = {
+    /** `learn` guides each line before asking to recall it; defaults to `practice`. */
+    mode?: "practice" | "learn";
     gameNumbers: number[];
     currentIndex: number;
     repertoireId?: string;
@@ -642,7 +644,11 @@ export type PracticeState = {
     openingVariantId?: string;
     openingLineId?: string;
     mistakes?: number;
-    feedback?: "correct" | "incorrect" | "strict" | "engine-unavailable";
+    feedback?: "correct" | "incorrect" | "strict" | "engine-unavailable" | "guided-wrong";
+    /** Learn mode: first the move is shown (`guided`), then the line is repeated unaided. */
+    learnStage?: "guided" | "recall";
+    /** Where the current line attempt starts; Learn mode restarts from here. */
+    lineStartPath?: number[];
 };
 
 export const practiceStateFamily = atomFamily((_tab: string) =>

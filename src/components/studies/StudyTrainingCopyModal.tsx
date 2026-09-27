@@ -156,7 +156,12 @@ export default function StudyTrainingCopyModal({
         if (kind === "tactics") {
           return createStudyTacticsRecord(study, chapter, review.path);
         }
-        if (!review.objective) throw new Error(`Confirma el objetivo de «${chapter.title}».`);
+        if (!review.objective)
+          throw new Error(
+            t("Errors.ConfirmObjective", "Confirm the objective of “{{title}}”.", {
+              title: chapter.title,
+            }),
+          );
         return createStudyEndgameRecord(
           study,
           chapter,
@@ -250,7 +255,8 @@ export default function StudyTrainingCopyModal({
           : inspection,
         config,
       );
-      if (prepared.variants.length === 0) throw new Error("No se encontró ningún capítulo válido.");
+      if (prepared.variants.length === 0)
+        throw new Error(t("Errors.NoValidChapter", "No valid chapter was found."));
       const repertoireName = name.trim() || study.name;
       const created = await createFile({
         filename: `${repertoireName} - Editable`,

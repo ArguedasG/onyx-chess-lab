@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { commands } from "@/bindings";
 import { parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
@@ -37,7 +38,9 @@ export type TacticsPgnInspection = {
 };
 
 function filename(path: string): string {
-    return path.split(/[\\/]/).pop() || "Set de táctica.pgn";
+    return (
+        path.split(/[\\/]/).pop() || `${i18n.t("Training.TacticsSetFallback", "Tactics set")}.pgn`
+    );
 }
 
 function treeHasVariations(node: TreeNode): boolean {
@@ -88,7 +91,7 @@ export async function parseTacticsPgnRecord(
     const tree = await parsePGN(raw);
     const [position] = positionFromFen(tree.headers.fen);
     if (!position) {
-        throw new Error("La posición FEN del registro no es válida.");
+        throw new Error(i18n.t("Errors.RecordInvalidFen", "The record FEN position is not valid."));
     }
 
     return {
@@ -132,7 +135,10 @@ export async function inspectTacticsPgn(
                     moveCount: 0,
                     hasVariations: false,
                     hasSolution: false,
-                    error: error instanceof Error ? error.message : "Registro inválido",
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : i18n.t("OpeningImport.InvalidRecord", "Invalid record"),
                 };
             }
         }),
@@ -146,11 +152,15 @@ export async function loadTacticsFileExercise(
     recordIndex: number,
 ): Promise<TacticsLoadedExercise> {
     if (set.source?.kind !== "pgnFile") {
-        throw new Error("El set no está conectado a un archivo PGN.");
+        throw new Error(i18n.t("Errors.SetNotLinkedToPgn", "The set is not linked to a PGN file."));
     }
     const records = unwrap(await commands.readGames(set.source.path, recordIndex, recordIndex));
     if (!records[0]) {
-        throw new Error(`No se pudo leer el ejercicio ${recordIndex + 1}.`);
+        throw new Error(
+            i18n.t("Errors.ExerciseReadFailed", "Could not read exercise {{number}}.", {
+                number: recordIndex + 1,
+            }),
+        );
     }
     return parseTacticsPgnRecord(records[0], recordIndex, set.config);
 }
@@ -183,6 +193,11 @@ export async function loadTacticsExercise(
     if (set.source?.kind === "pgnFile") return loadTacticsFileExercise(set, recordIndex);
     const exerciseId = set.exerciseIds[recordIndex];
     const exercise = exercises[exerciseId];
-    if (!exercise) throw new Error(`No se pudo leer el ejercicio ${recordIndex + 1}.`);
+    if (!exercise)
+        throw new Error(
+            i18n.t("Errors.ExerciseReadFailed", "Could not read exercise {{number}}.", {
+                number: recordIndex + 1,
+            }),
+        );
     return loadEmbeddedTacticsExercise(exercise, set.config, recordIndex);
 }

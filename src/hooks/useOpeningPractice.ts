@@ -12,7 +12,17 @@ import {
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { openFile } from "@/utils/files";
-import type { OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
+import {
+    getOpeningLearningSummary,
+    isOpeningLineLearned,
+    openingLearnBatchSize,
+    trainableOpeningLines,
+} from "@/utils/openingLearning";
+import { getDueOpeningLines } from "@/utils/openingReview";
+import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
+
+/** `review` is a practice session limited to the lines whose spaced review is due. */
+type SessionMode = "practice" | "learn" | "review";
 
 export function useOpeningPractice() {
     const { t } = useTranslation();
@@ -48,12 +58,50 @@ export function useOpeningPractice() {
         return { view: "library" as const };
     })();
 
+    /** Lines a session starts with: pending lines to learn, or already learned lines to practice. */
+    function sessionLines(variantIds: string[], mode: SessionMode): OpeningLine[] {
+        if (mode === "review") return getDueOpeningLines(areas.openings, variantIds);
+        const lines = trainableOpeningLines(areas.openings, variantIds);
+        return mode === "learn"
+            ? getOpeningLearningSummary(lines).pending.slice(
+                  0,
+                  openingLearnBatchSize(areas.openings),
+              )
+            : lines.filter(isOpeningLineLearned);
+    }
+
+    function reportEmptySession(mode: SessionMode) {
+        setError(
+            mode === "review"
+                ? t("OpeningReview.NothingDue", "There are no reviews due here right now.")
+                : mode === "learn"
+                  ? t(
+                        "OpeningLearn.NothingToLearn",
+                        "Every trainable line here is already learned.",
+                    )
+                  : t(
+                        "OpeningLearn.LearnFirst",
+                        "There are no learned lines here yet. Use “Learn” first; you can still train any single line from its section.",
+                    ),
+        );
+    }
+
     async function openVariant(
         repertoire: OpeningRepertoire,
         variant: OpeningVariant,
-        mode: "analysis" | "practice" | "build",
+        mode: "analysis" | SessionMode | "build",
         selectedLineIds?: string[],
     ): Promise<boolean> {
+        let lineIds: string[] = [];
+        if (mode === "practice" || mode === "learn" || mode === "review") {
+            lineIds = (
+                selectedLineIds ?? sessionLines([variant.id], mode).map((line) => line.id)
+            ).filter((lineId) => areas.openings.lines[lineId]?.trainable);
+            if (lineIds.length === 0) {
+                reportEmptySession(mode);
+                return false;
+            }
+        }
         setBusy(true);
         setError(null);
         try {
@@ -75,12 +123,10 @@ export function useOpeningPractice() {
             if (mode !== "analysis") setPracticeUnit("line");
             if (mode === "analysis") setSelectedPanel("info");
             if (mode === "build") setPracticeTab("build");
-            if (mode === "practice") {
-                const lineIds = (selectedLineIds ?? variant.lineIds).filter(
-                    (lineId) => areas.openings.lines[lineId]?.trainable,
-                );
+            if (mode === "practice" || mode === "learn" || mode === "review") {
                 setPracticeTab("train");
                 setOpeningPracticeQueue({
+                    mode: mode === "learn" ? "learn" : "practice",
                     gameNumbers: lineIds.map(() => variant.trainingRecordIndex),
                     currentIndex: 0,
                     repertoireId: repertoire.id,
@@ -105,28 +151,21 @@ export function useOpeningPractice() {
         }
     }
 
-    async function practiceRepertoire(repertoire: OpeningRepertoire) {
-        const entries = repertoire.variantIds.flatMap((variantId) => {
-            const variant = areas.openings.variants[variantId];
-            if (!variant || variant.contentType !== "theory") return [];
-            return variant.lineIds
-                .filter((lineId) => areas.openings.lines[lineId]?.trainable)
-                .map((lineId) => ({ variant, lineId }));
+    async function startRepertoireSession(repertoire: OpeningRepertoire, mode: SessionMode) {
+        const entries = sessionLines(repertoire.variantIds, mode).flatMap((line) => {
+            const variant = areas.openings.variants[line.variantId];
+            return variant ? [{ variant, lineId: line.id }] : [];
         });
         if (entries.length === 0) {
-            setError(
-                t(
-                    "Training.Copy.Thisrepertoirehasnotrainable.717541d6",
-                    "This repertoire has no trainable lines.",
-                ),
-            );
+            reportEmptySession(mode);
             return;
         }
 
         const first = entries[0];
-        const opened = await openVariant(repertoire, first.variant, "practice", [first.lineId]);
+        const opened = await openVariant(repertoire, first.variant, mode, [first.lineId]);
         if (!opened) return;
         setOpeningPracticeQueue({
+            mode: mode === "learn" ? "learn" : "practice",
             gameNumbers: entries.map(({ variant }) => variant.trainingRecordIndex),
             currentIndex: 0,
             repertoireId: repertoire.id,
@@ -142,9 +181,20 @@ export function useOpeningPractice() {
         clearError: () => setError(null),
         practiceLine: (repertoire: OpeningRepertoire, variant: OpeningVariant, lineId: string) =>
             openVariant(repertoire, variant, "practice", [lineId]),
-        practiceRepertoire,
+        practiceRepertoire: (repertoire: OpeningRepertoire) =>
+            startRepertoireSession(repertoire, "practice"),
         practiceVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
             openVariant(repertoire, variant, "practice"),
+        learnLine: (repertoire: OpeningRepertoire, variant: OpeningVariant, lineId: string) =>
+            openVariant(repertoire, variant, "learn", [lineId]),
+        learnRepertoire: (repertoire: OpeningRepertoire) =>
+            startRepertoireSession(repertoire, "learn"),
+        learnVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
+            openVariant(repertoire, variant, "learn"),
+        reviewRepertoire: (repertoire: OpeningRepertoire) =>
+            startRepertoireSession(repertoire, "review"),
+        reviewVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
+            openVariant(repertoire, variant, "review"),
         analyzeVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
             openVariant(repertoire, variant, "analysis"),
         buildVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>

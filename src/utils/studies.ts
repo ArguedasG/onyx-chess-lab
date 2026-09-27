@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { appDataDir, resolve } from "@tauri-apps/api/path";
 import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { z } from "zod";
@@ -106,7 +107,7 @@ export function createStudy(
     id = studyId("study"),
 ): StudyLibrary {
     const title = name.trim();
-    if (!title) throw new Error("El estudio necesita un nombre.");
+    if (!title) throw new Error(i18n.t("Errors.StudyNeedsName", "The study needs a name."));
     const now = timestamp();
     return touch({
         ...library,
@@ -132,9 +133,9 @@ export function updateStudyDetails(
     input: { name: string; description: string },
 ): StudyLibrary {
     const study = library.studies[id];
-    if (!study) throw new Error("No se encontró el estudio.");
+    if (!study) throw new Error(i18n.t("Errors.StudyNotFound", "The study could not be found."));
     const name = input.name.trim();
-    if (!name) throw new Error("El estudio necesita un nombre.");
+    if (!name) throw new Error(i18n.t("Errors.StudyNeedsName", "The study needs a name."));
     return touch({
         ...library,
         studies: {
@@ -176,10 +177,11 @@ export function addStudyChapter(
     id = studyId("chapter"),
 ): StudyLibrary {
     const study = library.studies[studyKey];
-    if (!study) throw new Error("No se encontró el estudio.");
+    if (!study) throw new Error(i18n.t("Errors.StudyNotFound", "The study could not be found."));
     const title = input.title.trim();
-    if (!title) throw new Error("El capítulo necesita un nombre.");
-    if (!input.pgn.trim()) throw new Error("El capítulo necesita contenido PGN.");
+    if (!title) throw new Error(i18n.t("Errors.ChapterNeedsName", "The chapter needs a name."));
+    if (!input.pgn.trim())
+        throw new Error(i18n.t("Errors.ChapterNeedsPgn", "The chapter needs PGN content."));
     const now = timestamp();
     const chapter: StudyChapter = {
         id,
@@ -212,11 +214,12 @@ export function updateStudyChapter(
 ): StudyLibrary {
     const study = library.studies[studyKey];
     const chapter = study?.chapters[chapterKey];
-    if (!study || !chapter) throw new Error("No se encontró el capítulo.");
+    if (!study || !chapter)
+        throw new Error(i18n.t("Errors.ChapterNotFound", "The chapter could not be found."));
     const title = input.title === undefined ? chapter.title : input.title.trim();
     const pgn = input.pgn === undefined ? chapter.pgn : input.pgn.trim();
-    if (!title) throw new Error("El capítulo necesita un nombre.");
-    if (!pgn) throw new Error("El capítulo necesita contenido PGN.");
+    if (!title) throw new Error(i18n.t("Errors.ChapterNeedsName", "The chapter needs a name."));
+    if (!pgn) throw new Error(i18n.t("Errors.ChapterNeedsPgn", "The chapter needs PGN content."));
     const changedPgn = pgn !== chapter.pgn;
     const revisions = changedPgn
         ? [
@@ -249,7 +252,8 @@ export function restoreStudyChapterRevision(
 ): StudyLibrary {
     const chapter = library.studies[studyKey]?.chapters[chapterKey];
     const revision = chapter?.revisions.find((candidate) => candidate.id === revisionId);
-    if (!chapter || !revision) throw new Error("No se encontró la revisión.");
+    if (!chapter || !revision)
+        throw new Error(i18n.t("Errors.RevisionNotFound", "The revision could not be found."));
     return updateStudyChapter(library, studyKey, chapterKey, { pgn: revision.pgn });
 }
 
@@ -330,7 +334,12 @@ export function restoreStudyTrashEntry(library: StudyLibrary, trashId: string): 
         });
     }
     const study = library.studies[entry.studyId];
-    if (!study) throw new Error(`Restaura primero el estudio «${entry.studyName}».`);
+    if (!study)
+        throw new Error(
+            i18n.t("Errors.RestoreStudyFirst", "Restore the study “{{name}}” first.", {
+                name: entry.studyName,
+            }),
+        );
     let chapter = entry.chapter;
     let chapterId = chapter.id;
     if (study.chapters[chapterId]) {

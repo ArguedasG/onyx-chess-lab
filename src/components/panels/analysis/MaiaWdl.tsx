@@ -1,5 +1,6 @@
 import { Group, Stack, Text } from "@mantine/core";
 import type { Score } from "@/bindings";
+import { useTranslation } from "react-i18next";
 import { getWdlPercentages } from "@/utils/score";
 
 export default function MaiaWdl({
@@ -9,6 +10,7 @@ export default function MaiaWdl({
   wdl: Score["wdl"];
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const percentages = getWdlPercentages(wdl);
   if (!percentages) {
     return (
@@ -21,7 +23,10 @@ export default function MaiaWdl({
   return (
     <Stack
       gap={compact ? 0 : 2}
-      title="Predicción W/D/L de Maia desde la perspectiva de blancas; no es una simulación"
+      title={t(
+        "Analysis.MaiaWdlTitle",
+        "Maia W/D/L prediction from White's perspective; not a simulation",
+      )}
     >
       {!compact && (
         <Text size="0.7rem" tt="uppercase" fw={700} c="dimmed">

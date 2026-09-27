@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { z } from "zod";
 import { getMainLine, parsePGN } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
@@ -165,6 +166,20 @@ const openingLineSessionSchema = z.object({
 });
 export type OpeningLineSession = z.infer<typeof openingLineSessionSchema>;
 
+/** Serialized FSRS card for line-level spaced repetition (see `openingReview.ts`). */
+const openingLineReviewSchema = z.object({
+    due: z.string(),
+    stability: z.number(),
+    difficulty: z.number(),
+    elapsed_days: z.number(),
+    scheduled_days: z.number(),
+    reps: z.number().int().nonnegative(),
+    lapses: z.number().int().nonnegative(),
+    state: z.number().int(),
+    lastReview: z.string().optional(),
+});
+export type OpeningLineReview = z.infer<typeof openingLineReviewSchema>;
+
 const openingLineSchema = z.object({
     id: z.string(),
     variantId: z.string(),
@@ -178,6 +193,9 @@ const openingLineSchema = z.object({
     sourceRecordIndex: z.number().int().nonnegative().nullable(),
     moveProgress: z.record(openingMoveProgressSchema),
     session: openingLineSessionSchema,
+    /** When the line was completed in Learn mode; lines practiced before Learn existed count too. */
+    learnedAt: z.string().optional(),
+    review: openingLineReviewSchema.optional(),
 });
 export type OpeningLine = z.infer<typeof openingLineSchema>;
 
@@ -229,6 +247,8 @@ const openingsStateSchema = z.object({
     settings: z.object({
         askLineDifficulty: z.boolean(),
         evaluateOutsideRepertoire: z.boolean(),
+        /** New lines per Learn session; defaults to `DEFAULT_OPENING_LEARN_BATCH`. */
+        learnBatchSize: z.number().int().positive().optional(),
     }),
 });
 export type OpeningsState = z.infer<typeof openingsStateSchema>;
@@ -812,7 +832,7 @@ export async function parseTrainingRecords(
     options: ParseTrainingRecordsOptions = {},
 ): Promise<ParsedTrainingRecord[]> {
     const trimmed = raw.trim();
-    if (!trimmed) throw new Error("El archivo está vacío.");
+    if (!trimmed) throw new Error(i18n.t("Errors.FileEmpty", "The file is empty."));
 
     const nonEmptyLines = trimmed
         .split(/\r?\n/)
@@ -822,7 +842,9 @@ export async function parseTrainingRecords(
         return nonEmptyLines.map((fen, index) => ({
             fen,
             moves: [],
-            title: `Posición ${index + 1}`,
+            title: i18n.t("Training.PositionFallbackName", "Position {{number}}", {
+                number: index + 1,
+            }),
             hasExplicitFen: true,
         }));
     }
@@ -832,14 +854,26 @@ export async function parseTrainingRecords(
         const explicitFen = /^\s*\[FEN\s+"([^"]*)"\s*\]/im.exec(block)?.[1]?.trim();
         if (options.requireExplicitFen && (!explicitFen || !positionFromFen(explicitFen)[0])) {
             if (options.skipInvalid) continue;
-            throw new Error(`El registro ${index + 1} no contiene una posición FEN válida.`);
+            throw new Error(
+                i18n.t(
+                    "Errors.RecordNoValidFen",
+                    "Record {{number}} does not contain a valid FEN position.",
+                    { number: index + 1 },
+                ),
+            );
         }
 
         try {
             const tree = await parsePGN(block);
             const fen = tree.headers.fen.trim();
             if (!positionFromFen(fen)[0]) {
-                throw new Error(`El registro ${index + 1} no contiene una posición FEN válida.`);
+                throw new Error(
+                    i18n.t(
+                        "Errors.RecordNoValidFen",
+                        "Record {{number}} does not contain a valid FEN position.",
+                        { number: index + 1 },
+                    ),
+                );
             }
             const endgameMetadata = parseEndgameRecordMetadata(block);
 
@@ -849,7 +883,9 @@ export async function parseTrainingRecords(
                 title:
                     tree.headers.other?.ChapterName?.trim() ||
                     getGameName(tree.headers) ||
-                    `Posición ${index + 1}`,
+                    i18n.t("Training.PositionFallbackName", "Position {{number}}", {
+                        number: index + 1,
+                    }),
                 sourcePgn: block,
                 endgameObjective: endgameMetadata.objective,
                 endgameStudentColor: endgameMetadata.studentColor,

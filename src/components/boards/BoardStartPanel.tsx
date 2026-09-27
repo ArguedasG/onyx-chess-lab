@@ -8,7 +8,8 @@ export default function BoardStartPanel() {
   const { startGame, importGame, openTraining } = useBoardShellActions();
 
   return (
-    <Card withBorder radius="md" p="md">
+    // Top margin: the panel is the first item of a clipping scroll area.
+    <Card withBorder radius="md" p="md" mt="sm">
       <Stack gap="sm">
         <Group gap="xs">
           <IconZoomCheck size="1.2rem" />
