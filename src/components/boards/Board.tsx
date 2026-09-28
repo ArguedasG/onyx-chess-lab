@@ -493,15 +493,17 @@ function Board({
     shapes = shapes.concat(currentNode.shapes);
   }
 
-  // Guided Learn stage: show the expected move and the PGN's own arrows on the student's turn.
-  if (
+  // Guided Learn stage: pauses show the PGN's own arrows; the student's turn adds the expected move.
+  const guidedLearnStep =
     practicing &&
     learning &&
     practiceState.learnStage === "guided" &&
-    practiceState.phase === "waiting" &&
-    practiceState.linePath &&
-    pos?.turn === orientation
-  ) {
+    practiceState.phase === "waiting"
+      ? (practiceState.learnStep ?? "play")
+      : null;
+  if (guidedLearnStep && guidedLearnStep !== "play") {
+    shapes = currentNode.shapes;
+  } else if (guidedLearnStep === "play" && practiceState.linePath && pos?.turn === orientation) {
     const expected = getExpectedMoveShape(
       currentNode,
       practiceState.linePath[position.length] ?? -1,
@@ -522,7 +524,8 @@ function Board({
     practiceUnit === "line" &&
     (practiceState.phase === "classifying" ||
       practiceState.phase === "revealing" ||
-      practiceState.phase === "deviation");
+      practiceState.phase === "deviation" ||
+      (guidedLearnStep !== null && guidedLearnStep !== "play"));
 
   const movableColor: "white" | "black" | "both" | undefined = useMemo(() => {
     return practiceLock || practiceInteractionLock

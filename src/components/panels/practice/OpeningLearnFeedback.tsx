@@ -1,29 +1,127 @@
 import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconBulb, IconCheck, IconMessage, IconRepeat, IconSchool } from "@tabler/icons-react";
+import {
+  IconArrowRight,
+  IconBulb,
+  IconCheck,
+  IconFlag,
+  IconMessage,
+  IconRepeat,
+  IconSchool,
+} from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import type { PracticeState } from "@/state/atoms";
 
+function LearnComment({ comment }: { comment: string }) {
+  if (!comment.trim()) return null;
+  return (
+    <Paper withBorder p="sm">
+      <Group gap="xs" wrap="nowrap" align="flex-start">
+        <IconMessage size={16} style={{ flexShrink: 0, marginTop: 3 }} />
+        <Text size="sm" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {comment.trim()}
+        </Text>
+      </Group>
+    </Paper>
+  );
+}
+
+function ContinueButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button fullWidth variant="light" rightSection={<IconArrowRight size={16} />} onClick={onClick}>
+      {label}
+    </Button>
+  );
+}
+
 /**
  * Guidance for Learn mode. Revealed moves and wrong answers during recall reuse the regular line
- * feedback; this component covers the guided stage, the recall prompt and the line result.
+ * feedback; this component covers the guided steps, the recall prompt and the line result.
  */
 export default function OpeningLearnFeedback({
   practiceState,
   comment,
+  move,
+  hasNextLine,
+  onContinue,
+  onNextLine,
   onRestartGuided,
   onRestartRecall,
   onSkip,
 }: {
   practiceState: PracticeState;
-  /** Comment of the current position; shown only while guiding. */
+  /** Comment of the position on the board; shown only while guiding. */
   comment: string;
+  /** SAN of the move that led to the position on the board. */
+  move: string;
+  hasNextLine: boolean;
+  /** Leaves a guided pause (annotated position, demonstrated move or final position). */
+  onContinue: () => void;
+  onNextLine: () => void;
   onRestartGuided: () => void;
   onRestartRecall: () => void;
   onSkip: () => void;
 }) {
   const { t } = useTranslation();
   const guided = practiceState.learnStage === "guided";
+  const step = practiceState.learnStep ?? "play";
   const mistakes = practiceState.mistakes ?? 0;
+
+  if (practiceState.phase === "waiting" && guided && step === "context") {
+    return (
+      <Stack gap="xs">
+        <Alert
+          color="blue"
+          icon={<IconSchool size={16} />}
+          title={t("OpeningLearn.ContextTitle", "Look at the position")}
+        >
+          {t(
+            "OpeningLearn.ContextBody",
+            "Read the comment and the arrows. Next you will see the move of the line.",
+          )}
+        </Alert>
+        <LearnComment comment={comment} />
+        <ContinueButton label={t("OpeningLearn.ShowMove", "Show the move")} onClick={onContinue} />
+      </Stack>
+    );
+  }
+
+  if (practiceState.phase === "waiting" && guided && step === "demo") {
+    return (
+      <Stack gap="xs">
+        <Alert
+          color="blue"
+          icon={<IconSchool size={16} />}
+          title={t("OpeningLearn.DemoTitle", "The line continues with {{move}}", { move })}
+        >
+          {t("OpeningLearn.DemoBody", "Then you will play this move yourself.")}
+        </Alert>
+        <LearnComment comment={comment} />
+        <ContinueButton label={t("OpeningLearn.PlayIt", "Play it")} onClick={onContinue} />
+      </Stack>
+    );
+  }
+
+  if (practiceState.phase === "waiting" && guided && step === "end") {
+    return (
+      <Stack gap="xs">
+        <Alert
+          color="teal"
+          icon={<IconFlag size={16} />}
+          title={t("OpeningLearn.EndTitle", "End of the line")}
+        >
+          {t(
+            "OpeningLearn.EndBody",
+            "Take a look at the final position. When you are ready, repeat the line from memory.",
+          )}
+        </Alert>
+        <LearnComment comment={comment} />
+        <ContinueButton
+          label={t("OpeningLearn.StartRecall", "Repeat from memory")}
+          onClick={onContinue}
+        />
+      </Stack>
+    );
+  }
 
   if (practiceState.phase === "waiting") {
     return (
@@ -35,8 +133,8 @@ export default function OpeningLearnFeedback({
             title={t("OpeningLearn.GuidedTitle", "Learn the line")}
           >
             {t(
-              "OpeningLearn.GuidedBody",
-              "Play the move shown by the arrow; the opponent replies automatically. Afterwards you will repeat the line from memory.",
+              "OpeningLearn.RepeatMoveBody",
+              "Play the move you just saw, marked by the arrow; the opponent replies automatically. Afterwards you will repeat the line from memory.",
             )}
           </Alert>
         ) : (
@@ -62,29 +160,30 @@ export default function OpeningLearnFeedback({
             )}
           </Alert>
         )}
-        {guided && comment.trim() && (
-          <Paper withBorder p="sm">
-            <Group gap="xs" wrap="nowrap" align="flex-start">
-              <IconMessage size={16} style={{ flexShrink: 0, marginTop: 3 }} />
-              <Text size="sm" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                {comment.trim()}
-              </Text>
-            </Group>
-          </Paper>
-        )}
+        {guided && <LearnComment comment={comment} />}
       </Stack>
     );
   }
 
   if (practiceState.phase === "correct" && practiceState.learnStage === "recall") {
     return mistakes === 0 ? (
-      <Alert
-        color="teal"
-        icon={<IconCheck size={16} />}
-        title={t("OpeningLearn.Learned", "Line learned!")}
-      >
-        {t("OpeningLearn.LearnedBody", "It is now part of your practice. Moving on…")}
-      </Alert>
+      <Stack gap="xs">
+        <Alert
+          color="teal"
+          icon={<IconCheck size={16} />}
+          title={t("OpeningLearn.Learned", "Line learned!")}
+        >
+          {t("OpeningLearn.LearnedStays", "It is now part of your practice.")}
+        </Alert>
+        <ContinueButton
+          label={
+            hasNextLine
+              ? t("OpeningLearn.NextLine", "Next line")
+              : t("OpeningLearn.FinishSession", "Finish session")
+          }
+          onClick={onNextLine}
+        />
+      </Stack>
     ) : (
       <Alert
         color="yellow"

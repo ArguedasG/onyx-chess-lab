@@ -647,6 +647,14 @@ export type PracticeState = {
     feedback?: "correct" | "incorrect" | "strict" | "engine-unavailable" | "guided-wrong";
     /** Learn mode: first the move is shown (`guided`), then the line is repeated unaided. */
     learnStage?: "guided" | "recall";
+    /**
+     * Guided Learn step: `context` holds an annotated position before the move is shown, `demo`
+     * shows the line move, `play` waits for the student to repeat it and `end` holds the final
+     * position. Every step except `play` waits until the student continues.
+     */
+    learnStep?: "context" | "demo" | "play" | "end";
+    /** Guided Learn: ply whose line move was already demonstrated. */
+    learnShownPly?: number;
     /** Where the current line attempt starts; Learn mode restarts from here. */
     lineStartPath?: number[];
 };

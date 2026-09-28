@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     getOpeningLearningSummary,
+    hasLearnAnnotations,
     isOpeningLineLearned,
     learnedOpeningPrefixLength,
     markOpeningLineLearned,
@@ -131,5 +132,14 @@ describe("opening learning", () => {
         expect(openingLearnStartPly(5, 6, whiteMoves)).toBe(4);
         expect(openingLearnStartPly(6, 6, whiteMoves)).toBe(4);
         expect(openingLearnStartPly(0, 6, whiteMoves)).toBe(0);
+    });
+
+    it("pauses guided learning only on commented or drawn moves", () => {
+        expect(hasLearnAnnotations({ comment: "", shapes: [] })).toBe(false);
+        expect(hasLearnAnnotations({ comment: "  \n ", shapes: [] })).toBe(false);
+        expect(hasLearnAnnotations({ comment: "Controls d5", shapes: [] })).toBe(true);
+        expect(hasLearnAnnotations({ comment: "", shapes: [{ orig: "e2", brush: "green" }] })).toBe(
+            true,
+        );
     });
 });

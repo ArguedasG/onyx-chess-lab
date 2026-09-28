@@ -68,6 +68,7 @@ import { parsePGN } from "@/utils/chess";
 import { findFen, getNodeAtPath } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import {
+  hasLearnAnnotations,
   learnedOpeningPrefixLength,
   markOpeningLineLearned,
   openingLearnStartPly,
@@ -283,6 +284,8 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
           openingLineId: openingLine?.id,
           mistakes: 0,
           learnStage: learning ? "guided" : undefined,
+          learnStep: learning ? "play" : undefined,
+          learnShownPly: undefined,
           lineStartPath: lineStart,
         });
         return;
@@ -326,6 +329,8 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
         ...previous,
         phase: "waiting",
         learnStage: stage,
+        learnStep: stage === "guided" ? "play" : undefined,
+        learnShownPly: undefined,
         currentFen: getNodeAtPath(root, start).fen,
         mistakes: 0,
         feedback: undefined,
@@ -336,15 +341,79 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     [goToMove, practiceState.lineStartPath, root, setPracticeState],
   );
 
+  // Guided Learn: show the line move on the board, then return so the student repeats it.
+  const startLearnDemo = useCallback(() => {
+    const linePath = practiceState.linePath;
+    const ply = position.length;
+    if (!linePath || ply >= linePath.length) return;
+    setPracticeState((previous) => ({
+      ...previous,
+      learnStep: "demo",
+      learnShownPly: ply,
+      feedback: undefined,
+    }));
+    goToMove(linePath.slice(0, ply + 1));
+  }, [goToMove, position.length, practiceState.linePath, setPracticeState]);
+
+  const finishLearnDemo = useCallback(() => {
+    const linePath = practiceState.linePath;
+    const ply = practiceState.learnShownPly;
+    if (!linePath || ply === undefined) return;
+    goToMove(linePath.slice(0, ply));
+    setPracticeState((previous) => ({
+      ...previous,
+      learnStep: "play",
+      moveStartedAt: Date.now(),
+      feedback: undefined,
+    }));
+  }, [goToMove, practiceState.learnShownPly, practiceState.linePath, setPracticeState]);
+
+  const continueGuidedLearn = useCallback(() => {
+    if (!learning || practiceState.phase !== "waiting") return;
+    if (practiceState.learnStep === "context") startLearnDemo();
+    else if (practiceState.learnStep === "demo") finishLearnDemo();
+    else if (practiceState.learnStep === "end") restartLearnLine("recall");
+  }, [
+    finishLearnDemo,
+    learning,
+    practiceState.learnStep,
+    practiceState.phase,
+    restartLearnLine,
+    startLearnDemo,
+  ]);
+
+  // A demonstrated move without comment or arrows only needs a brief look.
+  useEffect(() => {
+    if (!learning || practiceState.phase !== "waiting" || practiceState.learnStep !== "demo")
+      return;
+    const linePath = practiceState.linePath;
+    const ply = practiceState.learnShownPly;
+    if (!linePath || ply === undefined) return;
+    if (hasLearnAnnotations(getNodeAtPath(root, linePath.slice(0, ply + 1)))) return;
+    const timer = setTimeout(finishLearnDemo, 900);
+    return () => clearTimeout(timer);
+  }, [
+    finishLearnDemo,
+    learning,
+    practiceState.learnShownPly,
+    practiceState.learnStep,
+    practiceState.linePath,
+    practiceState.phase,
+    root,
+  ]);
+
   useEffect(() => {
     if (practiceUnit !== "line" || practiceState.phase !== "waiting") return;
     const linePath = practiceState.linePath;
     if (!linePath) return;
+    const guided = practiceState.learnStage === "guided";
+    // Guided pauses (annotated position, demonstrated move, final position) wait for the student.
+    if (guided && (practiceState.learnStep ?? "play") !== "play") return;
     if (position.length >= linePath.length) {
-      if (practiceState.learnStage === "guided") {
-        // Let the last guided move be seen, then repeat the same stretch from memory.
-        const timer = setTimeout(() => restartLearnLine("recall"), 700);
-        return () => clearTimeout(timer);
+      if (guided) {
+        // Keep the final position until the student chooses to repeat the line from memory.
+        setPracticeState((previous) => ({ ...previous, learnStep: "end" }));
+        return;
       }
       setPracticeState((previous) => ({
         ...previous,
@@ -357,23 +426,35 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     const orientation = headers.orientation || "white";
     const isUserTurn =
       orientation === "white" ? currentNode.halfMoves % 2 === 0 : currentNode.halfMoves % 2 === 1;
-    if (isUserTurn) return;
+    if (isUserTurn) {
+      if (guided && practiceState.learnShownPly !== position.length) {
+        // Let the student read an annotated position before the next move is shown.
+        if (hasLearnAnnotations(currentNode)) {
+          setPracticeState((previous) => ({ ...previous, learnStep: "context" }));
+        } else {
+          startLearnDemo();
+        }
+      }
+      return;
+    }
     const timer = setTimeout(() => {
       goToNext();
       setPracticeState((previous) => ({ ...previous, moveStartedAt: Date.now() }));
     }, 350);
     return () => clearTimeout(timer);
   }, [
-    currentNode.halfMoves,
+    currentNode,
     goToNext,
     headers.orientation,
     position,
     practiceState.linePath,
+    practiceState.learnShownPly,
     practiceState.learnStage,
+    practiceState.learnStep,
     practiceState.phase,
     practiceUnit,
-    restartLearnLine,
     setPracticeState,
+    startLearnDemo,
   ]);
 
   useEffect(() => {
@@ -519,36 +600,30 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     else finishLearnSession();
   }, [advanceOpeningChapter, finishLearnSession, openingQueue]);
 
-  // A flawless recall marks the line as learned and moves on to the next one.
+  // A flawless recall marks the line as learned; the final position stays until the student moves on.
   useEffect(() => {
     if (!learning || practiceState.phase !== "correct" || practiceState.learnStage !== "recall") {
       return;
     }
     if ((practiceState.mistakes ?? 0) > 0) return;
-    // Record the result once per attempt, but always (re)schedule the advance: a re-run of this
-    // effect clears the previous timer.
     const attemptKey = `${practiceState.openingLineId}:${practiceState.lineStartedAt}`;
-    if (learnHandledRef.current !== attemptKey) {
-      learnHandledRef.current = attemptKey;
-      const lineId = practiceState.openingLineId;
-      if (lineId) {
-        setTrainingAreas((previous) => ({
-          ...previous,
-          // The flawless recall counts as the first successful review.
-          openings: scheduleOpeningLineReview(
-            markOpeningLineLearned(previous.openings, lineId),
-            lineId,
-            3,
-          ),
-        }));
-      }
-      setSessionStats((previous) => ({ ...previous, correct: previous.correct + 1 }));
+    if (learnHandledRef.current === attemptKey) return;
+    learnHandledRef.current = attemptKey;
+    const lineId = practiceState.openingLineId;
+    if (lineId) {
+      setTrainingAreas((previous) => ({
+        ...previous,
+        // The flawless recall counts as the first successful review.
+        openings: scheduleOpeningLineReview(
+          markOpeningLineLearned(previous.openings, lineId),
+          lineId,
+          3,
+        ),
+      }));
     }
-    const timer = setTimeout(moveToNextLearnLine, 1200);
-    return () => clearTimeout(timer);
+    setSessionStats((previous) => ({ ...previous, correct: previous.correct + 1 }));
   }, [
     learning,
-    moveToNextLearnLine,
     practiceState.learnStage,
     practiceState.lineStartedAt,
     practiceState.mistakes,
@@ -752,6 +827,25 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       practiceState.phase === "correct" &&
       (practiceUnit !== "line" || trainingAreas.openings.settings.askLineDifficulty),
   });
+  useHotkeys("enter", () => continueGuidedLearn(), {
+    enabled:
+      learning &&
+      practiceState.phase === "waiting" &&
+      practiceState.learnStage === "guided" &&
+      (practiceState.learnStep ?? "play") !== "play",
+    preventDefault: true,
+  });
+  useHotkeys(
+    "enter",
+    () => {
+      if ((practiceState.mistakes ?? 0) === 0) moveToNextLearnLine();
+    },
+    {
+      enabled:
+        learning && practiceState.phase === "correct" && practiceState.learnStage === "recall",
+      preventDefault: true,
+    },
+  );
   useHotkeys("space", () => skipCard(), {
     enabled: practiceState.phase === "incorrect" && practiceUnit !== "line",
   });
@@ -970,6 +1064,13 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     <OpeningLearnFeedback
                       practiceState={practiceState}
                       comment={currentNode.comment}
+                      move={currentNode.san ?? ""}
+                      hasNextLine={
+                        !!openingQueue &&
+                        openingQueue.currentIndex + 1 < openingQueue.gameNumbers.length
+                      }
+                      onContinue={continueGuidedLearn}
+                      onNextLine={moveToNextLearnLine}
                       onRestartGuided={() => restartLearnLine("guided")}
                       onRestartRecall={() => restartLearnLine("recall")}
                       onSkip={moveToNextLearnLine}
@@ -1010,9 +1111,12 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                           </Stack>
                         ) : (
                           <Stack gap="xs" align="center">
-                            <Text ta="center" fz="sm" c="dimmed">
-                              {t("Board.Practice.MakeYourMove")}
-                            </Text>
+                            {(practiceState.learnStage !== "guided" ||
+                              (practiceState.learnStep ?? "play") === "play") && (
+                              <Text ta="center" fz="sm" c="dimmed">
+                                {t("Board.Practice.MakeYourMove")}
+                              </Text>
+                            )}
                             <Group gap="xs" justify="center">
                               {practiceUnit === "line" && practiceState.learnStage !== "guided" && (
                                 <Button

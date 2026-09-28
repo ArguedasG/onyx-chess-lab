@@ -3,6 +3,17 @@ import type { OpeningLine, OpeningsState } from "@/utils/trainingAreas";
 export const DEFAULT_OPENING_LEARN_BATCH = 5;
 
 /**
+ * Guided Learn pauses on a move that carries a PGN comment or drawn arrows/circles, so the student
+ * can read and see them before continuing.
+ */
+export function hasLearnAnnotations(node: {
+    comment: string;
+    shapes: readonly unknown[];
+}): boolean {
+    return node.comment.trim().length > 0 || node.shapes.length > 0;
+}
+
+/**
  * A line counts as learned once it went through Learn mode. Lines completed in practice before
  * Learn existed are treated as learned too, so existing progress is never hidden or lost.
  */
