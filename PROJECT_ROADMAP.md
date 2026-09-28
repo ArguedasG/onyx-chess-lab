@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-27.
+> Última actualización: 2026-09-28.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,7 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.0** (modo Aprender, repaso espaciado e importación editable).
+- Versión en preparación: **0.18.1** (sesión guiada del modo Aprender con pausas en comentarios,
+  flechas y posición final).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -432,7 +433,9 @@ estudiante todavía no vio.
 2. **Datos:** estado de aprendizaje por línea (nueva / aprendida y fecha), opcional en el esquema y
    con migración compatible: una línea ya completada alguna vez se considera aprendida.
 3. **Sesión Aprender:** el tablero muestra la jugada esperada con flecha y los comentarios PGN; el
-   estudiante ejecuta la jugada mostrada y el rival responde automáticamente. Al terminar, la línea
+   estudiante ejecuta la jugada mostrada y el rival responde automáticamente. Desde 0.18.1 cada
+   jugada se demuestra antes de repetirla y la sesión se detiene, hasta que el estudiante continúa,
+   en posiciones o jugadas con comentarios o flechas PGN y en la posición final. Al terminar, la línea
    se repite una vez sin ayudas; si se completa, queda aprendida. Los errores en este modo no alteran
    las estadísticas por jugada.
 4. **Aprovechar lo ya aprendido:** el tramo compartido con líneas aprendidas se reproduce
@@ -667,3 +670,11 @@ en la documentación de la fase.
   probar; Windows x64 sigue siendo el canal validado y la auditoría de actualización exige que siga
   presente.
 - El README documenta las advertencias y cómo abrir la aplicación sin firma en macOS.
+
+### 2026-09-28 — Release 0.18.1
+
+- La sesión guiada del modo Aprender demuestra cada jugada del estudiante antes de que la repita y se
+  detiene en jugadas o posiciones con comentarios o flechas PGN, que antes pasaban sin verse.
+- La posición final de la parte guiada y la de una línea aprendida permanecen en el tablero hasta que
+  el estudiante continúa; ya no hay avance automático.
+- Detalle: `docs/release-notes-0.18.1.es.md`.
