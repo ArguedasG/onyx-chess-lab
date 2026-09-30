@@ -23,9 +23,21 @@ import zh_CN from "./translation/zh-CN.json";
 import zh_TW from "./translation/zh-TW.json";
 import { setAutoFreeze } from "immer";
 import LanguageDetector from "i18next-browser-languagedetector";
+import {
+  browserStorage,
+  prepareLanguageChoice,
+  SYSTEM_LANGUAGE_DETECTOR,
+  systemLanguageDetector,
+} from "./utils/language";
+
+// Must run before i18next caches its first detected language.
+prepareLanguageChoice(browserStorage());
+
+const languageDetector = new LanguageDetector();
+languageDetector.addDetector(systemLanguageDetector);
 
 i18n
-  .use(LanguageDetector)
+  .use(languageDetector)
   .use(initReactI18next)
   .init({
     resources: {
@@ -47,7 +59,7 @@ i18n
       "de-DE": de_DE,
     },
     detection: {
-      order: ["localStorage"],
+      order: ["localStorage", SYSTEM_LANGUAGE_DETECTOR],
       caches: ["localStorage"],
     },
     fallbackLng: "es-ES",

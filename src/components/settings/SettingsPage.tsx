@@ -408,22 +408,22 @@ export default function Page() {
           <Select
             allowDeselect={false}
             data={[
-              { value: "be_BY", label: "Belarusian" },
-              { value: "zh_CN", label: "Chinese (Simplified)" },
-              { value: "zh_TW", label: "Chinese (Traditional)" },
-              { value: "en_GB", label: "English (UK)" },
+              { value: "es_ES", label: "Español" },
               { value: "en_US", label: "English (US)" },
-              { value: "fr_FR", label: "Français" },
-              { value: "pl_PL", label: "Polish" },
-              { value: "nb_NO", label: "Norsk bokmål" },
-              { value: "pt_PT", label: "Portuguese" },
-              { value: "ru_RU", label: "Russian" },
-              { value: "es_ES", label: "Spanish" },
-              { value: "it_IT", label: "Italian" },
-              { value: "uk_UA", label: "Ukrainian" },
-              { value: "tr_TR", label: "Türkçe" },
-              { value: "ko_KR", label: "한국어" },
+              { value: "en_GB", label: "English (UK)" },
+              { value: "be_BY", label: "Беларуская" },
               { value: "de_DE", label: "Deutsch" },
+              { value: "fr_FR", label: "Français" },
+              { value: "it_IT", label: "Italiano" },
+              { value: "nb_NO", label: "Norsk bokmål" },
+              { value: "pl_PL", label: "Polski" },
+              { value: "pt_PT", label: "Português" },
+              { value: "tr_TR", label: "Türkçe" },
+              { value: "ru_RU", label: "Русский" },
+              { value: "uk_UA", label: "Українська" },
+              { value: "ko_KR", label: "한국어" },
+              { value: "zh_CN", label: "简体中文" },
+              { value: "zh_TW", label: "繁體中文" },
             ]}
             value={i18n.language.replace("-", "_")}
             onChange={(val) => {

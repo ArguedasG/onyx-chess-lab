@@ -61,6 +61,7 @@ const colorSchemeManager = localStorageColorSchemeManager({
 
 import AppUpdater from "@/components/AppUpdater";
 import ErrorComponent from "@/components/ErrorComponent";
+import LanguageChoiceModal from "@/components/LanguageChoiceModal";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
 import { getLichessAccount } from "@/utils/lichess/api";
@@ -330,6 +331,7 @@ export default function App() {
       >
         <ContextMenuProvider>
           <Notifications />
+          <LanguageChoiceModal />
           <AppUpdater />
           <RouterProvider router={router} />
         </ContextMenuProvider>
