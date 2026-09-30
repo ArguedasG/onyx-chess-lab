@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-28.
+> Última actualización: 2026-09-29.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.1** (sesión guiada del modo Aprender con pausas en comentarios,
-  flechas y posición final).
+- Versión en preparación: **0.18.2** (elección de idioma en la primera apertura y detección del
+  idioma del sistema).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -678,3 +678,12 @@ en la documentación de la fase.
 - La posición final de la parte guiada y la de una línea aprendida permanecen en el tablero hasta que
   el estudiante continúa; ya no hay avance automático.
 - Detalle: `docs/release-notes-0.18.1.es.md`.
+
+### 2026-09-29 — Release 0.18.2
+
+- Una instalación nueva detecta el idioma del sistema (español o, en cualquier otro caso, inglés) y
+  pregunta el idioma en la primera apertura hasta que el usuario lo confirma. Las instalaciones
+  existentes conservan su idioma sin ver la pregunta.
+- Los idiomas distintos de español e inglés permanecen como traducciones parciales disponibles solo
+  desde Configuración, que ahora muestra cada idioma con su propio nombre.
+- Detalle: `docs/release-notes-0.18.2.es.md`.
