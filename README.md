@@ -57,8 +57,9 @@ All builds are published through
 > The Linux and macOS builds are generated automatically but have **not been tested yet**. They may
 > fail to start or have features that do not work. Please report any problem through
 > [GitHub Issues](https://github.com/ArguedasG/onyx-chess-lab/issues), mentioning your system and
-> version. The guided installation of the managed Maia 3 engine is currently available only on
-> Windows x64; on other systems, engines can still be added manually.
+> version. The guided installation of the managed Maia 3 engine and in-app updates are currently
+> available only on Windows x64; on other systems, engines can still be added manually and new
+> versions must be downloaded from the releases page.
 
 ### Opening the app on macOS
 
@@ -76,14 +77,19 @@ time they are opened. This is expected and does not mean the file is damaged.
 3. Open the app from **Applications**. If macOS still refuses, go to **System Settings → Privacy &
    Security**, scroll down and click **Open Anyway**, then confirm.
 
-These steps are only needed after the first installation; later updates are installed from the app.
+In-app updates are not available on macOS yet. To update, download the new `.dmg`, replace the app in
+**Applications** and repeat these steps.
 
 ### Running on Linux
 
-- **AppImage:** make it executable (`chmod +x Onyx.Chess.Lab_*_amd64.AppImage`) and run it. This format
-  can update itself from the app.
+- **AppImage:** make it executable (`chmod +x Onyx.Chess.Lab_*_amd64.AppImage`) and run it. Some
+  distributions need FUSE 2 first (for example `sudo apt install libfuse2t64`, or `libfuse2` on
+  older releases).
 - **.deb** (Debian, Ubuntu and derivatives): install it with
-  `sudo apt install ./Onyx.Chess.Lab_*_amd64.deb`. New versions must be downloaded and installed manually.
+  `sudo apt install ./Onyx.Chess.Lab_*_amd64.deb`.
+
+In-app updates are not available on Linux yet; new versions must be downloaded and installed
+manually with either format.
 
 Because the application is still in an early public stage, keeping backups of important PGN files
 and application data is recommended. Bugs and reproducible problems can be reported through
