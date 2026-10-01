@@ -23,10 +23,12 @@ import {
 } from "@mantine/core";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { open } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArrowLeft,
   IconBook2,
+  IconChevronDown,
+  IconChevronRight,
   IconDownload,
   IconFileSearch,
   IconGripVertical,
@@ -56,6 +58,7 @@ import {
   inspectOpeningPgn,
   buildOpeningTrainingPgn,
   consolidateOpeningSections,
+  getOpeningImportSuggestedExclusions,
   prepareOpeningImport,
   type OpeningImportConfig,
   type OpeningPgnInspection,
@@ -101,6 +104,9 @@ import {
   type OpeningImportDraft,
 } from "@/utils/openingImportDraft";
 
+/** Repertoires with more lines start with each section's line list collapsed. */
+const MANAGE_LINES_EXPANDED_MAX = 150;
+
 function filename(path: string, trainingT: typeof i18n.t = i18n.t): string {
   return (
     path
@@ -145,6 +151,10 @@ export default function OpeningDashboardPage() {
   const [importFormVersion, setImportFormVersion] = useState(0);
   const [config, setConfig] = useState<OpeningImportConfig>(defaultConfig);
   const [inspection, setInspection] = useState<OpeningPgnInspection | null>(null);
+  // Shown inside the review modal; the page feedback would stay hidden behind it.
+  const [importError, setImportError] = useState<string | null>(null);
+  // Sections whose line list the user toggled away from the default (see MANAGE_LINES_EXPANDED_MAX).
+  const [toggledSections, setToggledSections] = useState<Set<string>>(() => new Set());
   const [importDraft, setImportDraft] = useState<OpeningImportDraft | null>(null);
   // Remounts the editor (and its expanded state) whenever the draft is regenerated.
   const [importDraftVersion, setImportDraftVersion] = useState(0);
@@ -268,6 +278,7 @@ export default function OpeningDashboardPage() {
       const nextInspection = await inspectOpeningPgn(selected, config);
       if (nextInspection.recordCount === 0)
         throw new Error(t("OpeningManage.NoPgnRecords", "The PGN contains no valid records."));
+      setImportError(null);
       setInspection(nextInspection);
       resetImportDraft(nextInspection, config.groupingMode);
       setImportMeta({
@@ -443,6 +454,8 @@ export default function OpeningDashboardPage() {
   async function confirmImport() {
     if (!inspection || !importDraft) return;
     setBusy(true);
+    setImportError(null);
+    let createdPath: string | null = null;
     try {
       const prepared = await prepareOpeningImport(inspection, config, {
         groups: importGroups,
@@ -461,6 +474,7 @@ export default function OpeningDashboardPage() {
         dir: documentDir,
       });
       if (created.isErr) throw created.error;
+      createdPath = created.value.path;
 
       setAreas((previous) => ({
         ...previous,
@@ -497,16 +511,16 @@ export default function OpeningDashboardPage() {
         ),
       });
     } catch (error) {
-      setFeedback({
-        text:
-          error instanceof Error
-            ? error.message
-            : t(
-                "Training.Copy.Couldnotimporttherepertoire.8d7bcf4d",
-                "Could not import the repertoire.",
-              ),
-        color: "red",
-      });
+      // Do not leave an orphan editable copy behind when the repertoire was not registered.
+      if (createdPath) await remove(createdPath).catch(() => {});
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : t(
+              "Training.Copy.Couldnotimporttherepertoire.8d7bcf4d",
+              "Could not import the repertoire.",
+            ),
+      );
     } finally {
       setBusy(false);
     }
@@ -695,6 +709,12 @@ export default function OpeningDashboardPage() {
   const sampleErrors = inspection?.samples.filter((sample) => sample.error).length ?? 0;
   const importGroups =
     inspection && importDraft ? draftToImportGroups(inspection, importDraft) : [];
+  const suggestedExclusions =
+    inspection && importDraft
+      ? getOpeningImportSuggestedExclusions(inspection, config.groupingMode).filter((index) =>
+          importDraft.excluded.includes(index),
+        ).length
+      : 0;
 
   return (
     <Container ref={scrollRef} size="xl" py="md">
@@ -885,6 +905,9 @@ export default function OpeningDashboardPage() {
                   areas.openings,
                   repertoire.id,
                 );
+                // Large courses have thousands of draggable lines; mount them only on demand.
+                const repertoireOpen = expandedRepertoires.includes(repertoire.id);
+                const linesOpenByDefault = lineCount <= MANAGE_LINES_EXPANDED_MAX;
                 return (
                   <Accordion.Item key={repertoire.id} value={repertoire.id}>
                     <Accordion.Control>
@@ -931,517 +954,587 @@ export default function OpeningDashboardPage() {
                       </Group>
                     </Accordion.Control>
                     <Accordion.Panel>
-                      <Group justify="space-between" mb="md">
-                        {repertoire.description ? (
-                          <Text size="sm" c="dimmed">
-                            {repertoire.description}
-                          </Text>
-                        ) : (
-                          <span />
-                        )}
-                        <Group gap="xs">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            leftSection={<IconUpload size={14} />}
-                            onClick={() => setAdditionTarget({ repertoireId: repertoire.id })}
-                          >
-                            {t("Repertoire.ImportInto", "Import into repertoire")}
-                          </Button>
-                          <Tooltip
-                            multiline
-                            maw={340}
-                            label={t(
-                              "OpeningConsolidation.ButtonHint",
-                              "Combine related imported sections into fewer sections with multiple lines, preserving matching progress.",
+                      {repertoireOpen && (
+                        <>
+                          <Group justify="space-between" mb="md">
+                            {repertoire.description ? (
+                              <Text size="sm" c="dimmed">
+                                {repertoire.description}
+                              </Text>
+                            ) : (
+                              <span />
                             )}
+                            <Group gap="xs">
+                              <Button
+                                size="xs"
+                                variant="light"
+                                leftSection={<IconUpload size={14} />}
+                                onClick={() => setAdditionTarget({ repertoireId: repertoire.id })}
+                              >
+                                {t("Repertoire.ImportInto", "Import into repertoire")}
+                              </Button>
+                              <Tooltip
+                                multiline
+                                maw={340}
+                                label={t(
+                                  "OpeningConsolidation.ButtonHint",
+                                  "Combine related imported sections into fewer sections with multiple lines, preserving matching progress.",
+                                )}
+                              >
+                                <Button
+                                  size="xs"
+                                  variant="default"
+                                  leftSection={<IconBook2 size={14} />}
+                                  onClick={() => setConsolidatingRepertoireId(repertoire.id)}
+                                >
+                                  {t("OpeningConsolidation.Action", "Consolidate sections")}
+                                </Button>
+                              </Tooltip>
+                              <Button
+                                size="xs"
+                                color="blue"
+                                variant="light"
+                                leftSection={<IconPlayerPlay size={14} />}
+                                onClick={() => openRepertoirePractice(repertoire)}
+                              >
+                                {" "}
+                                {t(
+                                  "Training.Copy.Practicerepertoire.da71a3f0",
+                                  "Practice repertoire",
+                                )}{" "}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="default"
+                                leftSection={<IconDownload size={14} />}
+                                onClick={() => setExportingRepertoireId(repertoire.id)}
+                              >
+                                {" "}
+                                {t("Training.Copy.Exportcopy.ee83b2cd", "Export copy")}{" "}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="default"
+                                leftSection={<IconSettings size={14} />}
+                                onClick={() => openRepertoireSettings(repertoire)}
+                              >
+                                {" "}
+                                {t("Training.Copy.Editrepertoire.c2627a86", "Edit repertoire")}{" "}
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="red"
+                                variant="subtle"
+                                leftSection={<IconTrash size={14} />}
+                                onClick={() => setDeletingRepertoireId(repertoire.id)}
+                              >
+                                {t("OpeningManage.DeleteRepertoire", "Delete repertoire")}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="light"
+                                leftSection={<IconPlus size={14} />}
+                                onClick={() => setVariantRepertoireId(repertoire.id)}
+                              >
+                                {" "}
+                                {t("OpeningManage.AddSection", "Add section")}{" "}
+                              </Button>
+                            </Group>
+                          </Group>
+                          <ScrollArea
+                            h={Math.min(
+                              680,
+                              Math.max(
+                                300,
+                                variants.reduce(
+                                  (height, variant) =>
+                                    height +
+                                    112 +
+                                    (linesOpenByDefault !== toggledSections.has(variant.id)
+                                      ? Math.min(variant.lineIds.length, 8) * 52
+                                      : 0),
+                                  0,
+                                ),
+                              ),
+                            )}
+                            type="auto"
+                            offsetScrollbars
                           >
-                            <Button
-                              size="xs"
-                              variant="default"
-                              leftSection={<IconBook2 size={14} />}
-                              onClick={() => setConsolidatingRepertoireId(repertoire.id)}
+                            <Droppable
+                              droppableId={`variants:${repertoire.id}`}
+                              type={`VARIANT:${repertoire.id}`}
                             >
-                              {t("OpeningConsolidation.Action", "Consolidate sections")}
-                            </Button>
-                          </Tooltip>
-                          <Button
-                            size="xs"
-                            color="blue"
-                            variant="light"
-                            leftSection={<IconPlayerPlay size={14} />}
-                            onClick={() => openRepertoirePractice(repertoire)}
-                          >
-                            {" "}
-                            {t(
-                              "Training.Copy.Practicerepertoire.da71a3f0",
-                              "Practice repertoire",
-                            )}{" "}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="default"
-                            leftSection={<IconDownload size={14} />}
-                            onClick={() => setExportingRepertoireId(repertoire.id)}
-                          >
-                            {" "}
-                            {t("Training.Copy.Exportcopy.ee83b2cd", "Export copy")}{" "}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="default"
-                            leftSection={<IconSettings size={14} />}
-                            onClick={() => openRepertoireSettings(repertoire)}
-                          >
-                            {" "}
-                            {t("Training.Copy.Editrepertoire.c2627a86", "Edit repertoire")}{" "}
-                          </Button>
-                          <Button
-                            size="xs"
-                            color="red"
-                            variant="subtle"
-                            leftSection={<IconTrash size={14} />}
-                            onClick={() => setDeletingRepertoireId(repertoire.id)}
-                          >
-                            {t("OpeningManage.DeleteRepertoire", "Delete repertoire")}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            leftSection={<IconPlus size={14} />}
-                            onClick={() => setVariantRepertoireId(repertoire.id)}
-                          >
-                            {" "}
-                            {t("OpeningManage.AddSection", "Add section")}{" "}
-                          </Button>
-                        </Group>
-                      </Group>
-                      <ScrollArea
-                        h={Math.min(
-                          680,
-                          Math.max(
-                            300,
-                            variants.reduce(
-                              (height, variant) =>
-                                height + 112 + Math.min(variant.lineIds.length, 8) * 52,
-                              0,
-                            ),
-                          ),
-                        )}
-                        type="auto"
-                        offsetScrollbars
-                      >
-                        <Droppable
-                          droppableId={`variants:${repertoire.id}`}
-                          type={`VARIANT:${repertoire.id}`}
-                        >
-                          {(variantDrop) => (
-                            <Stack
-                              gap="xs"
-                              pr="sm"
-                              ref={variantDrop.innerRef}
-                              {...variantDrop.droppableProps}
-                            >
-                              {variants
-                                .filter((variant) => variant.contentType === "theory")
-                                .map((variant, variantIndex) => {
-                                  const lines = variant.lineIds
-                                    .map((id) => areas.openings.lines[id])
-                                    .filter((line): line is NonNullable<typeof line> =>
-                                      Boolean(line),
-                                    );
-                                  const trainable = lines.filter((line) => line.trainable).length;
-                                  const variantMetrics = getOpeningVariantMetrics(
-                                    areas.openings,
-                                    variant.id,
-                                  );
-                                  return (
-                                    <Draggable
-                                      key={variant.id}
-                                      draggableId={variant.id}
-                                      index={variantIndex}
-                                      isDragDisabled={busy}
-                                    >
-                                      {(variantDrag) => (
-                                        <Card
-                                          withBorder
-                                          padding="sm"
-                                          ref={variantDrag.innerRef}
-                                          {...variantDrag.draggableProps}
+                              {(variantDrop) => (
+                                <Stack
+                                  gap="xs"
+                                  pr="sm"
+                                  ref={variantDrop.innerRef}
+                                  {...variantDrop.droppableProps}
+                                >
+                                  {variants
+                                    .filter((variant) => variant.contentType === "theory")
+                                    .map((variant, variantIndex) => {
+                                      const lines = variant.lineIds
+                                        .map((id) => areas.openings.lines[id])
+                                        .filter((line): line is NonNullable<typeof line> =>
+                                          Boolean(line),
+                                        );
+                                      const trainable = lines.filter(
+                                        (line) => line.trainable,
+                                      ).length;
+                                      const showLines =
+                                        linesOpenByDefault !== toggledSections.has(variant.id);
+                                      const variantMetrics = getOpeningVariantMetrics(
+                                        areas.openings,
+                                        variant.id,
+                                      );
+                                      return (
+                                        <Draggable
+                                          key={variant.id}
+                                          draggableId={variant.id}
+                                          index={variantIndex}
+                                          isDragDisabled={busy}
                                         >
-                                          <Group
-                                            justify="space-between"
-                                            wrap="nowrap"
-                                            align="flex-start"
-                                          >
-                                            <ActionIcon
-                                              variant="subtle"
-                                              color="gray"
-                                              aria-label={t(
-                                                "OpeningManage.DragSection",
-                                                "Drag section",
-                                              )}
-                                              {...variantDrag.dragHandleProps}
+                                          {(variantDrag) => (
+                                            <Card
+                                              withBorder
+                                              padding="sm"
+                                              ref={variantDrag.innerRef}
+                                              {...variantDrag.draggableProps}
                                             >
-                                              <IconGripVertical size={17} />
-                                            </ActionIcon>
-                                            <div style={{ minWidth: 0 }}>
-                                              <Group gap="xs">
-                                                <Text fw={500} truncate>
-                                                  {variant.name}
-                                                </Text>
-                                                {variant.contentType === "modelGame" && (
-                                                  <Badge color="violet" size="sm">
-                                                    {" "}
-                                                    {t(
-                                                      "Training.Copy.Modelgame.f131746e",
-                                                      "Model game",
-                                                    )}{" "}
-                                                  </Badge>
-                                                )}
-                                                <Badge color="teal" size="sm" variant="light">
-                                                  {variantMetrics.progress}%
-                                                </Badge>
-                                                <Badge color="orange" size="sm" variant="light">
-                                                  {" "}
-                                                  {t("Training.Copy.Diff.b89aece8", "Diff.")}{" "}
-                                                  {variantMetrics.difficulty}%
-                                                </Badge>
-                                              </Group>
-                                              <Text size="xs" c="dimmed">
-                                                {t(
-                                                  "Training.Copy.v0linesv1comments.1541f5f2",
-                                                  "{{v0}} lines · {{v1}} comments",
-                                                  { v0: lines.length, v1: variant.commentCount },
-                                                )}
-                                                {variant.hasVariations
-                                                  ? t(
-                                                      "OpeningManage.ContainsSubvariations",
-                                                      " · contains subvariations",
-                                                    )
-                                                  : ""}
-                                              </Text>
-                                            </div>
-                                            <Group gap="xs" wrap="nowrap">
-                                              <ActionIcon
-                                                aria-label={t(
-                                                  "Repertoire.ImportIntoVariant",
-                                                  "Import PGN into this section",
-                                                )}
-                                                onClick={() =>
-                                                  setAdditionTarget({
-                                                    repertoireId: repertoire.id,
-                                                    variantId: variant.id,
-                                                  })
-                                                }
+                                              <Group
+                                                justify="space-between"
+                                                wrap="nowrap"
+                                                align="flex-start"
                                               >
-                                                <IconUpload size={16} />
-                                              </ActionIcon>
-                                              <ActionIcon
-                                                size="lg"
-                                                variant="subtle"
-                                                aria-label={t(
-                                                  "OpeningManage.ConfigureSection",
-                                                  "Configure section",
-                                                )}
-                                                onClick={() => openVariantSettings(variant)}
-                                              >
-                                                <IconSettings size={16} />
-                                              </ActionIcon>
-                                              <Button
-                                                size="xs"
-                                                variant="default"
-                                                leftSection={<IconFileSearch size={14} />}
-                                                onClick={() =>
-                                                  openVariant(repertoire, variant.id, "analysis")
-                                                }
-                                              >
-                                                {" "}
-                                                {t(
-                                                  "Training.Copy.Editandanalyze.1fa05ca5",
-                                                  "Edit and analyze",
-                                                )}{" "}
-                                              </Button>
-                                              {variant.contentType === "theory" && (
-                                                <Button
-                                                  size="xs"
-                                                  variant="default"
-                                                  leftSection={<IconPlus size={14} />}
-                                                  onClick={() =>
-                                                    openVariant(repertoire, variant.id, "build")
-                                                  }
+                                                <ActionIcon
+                                                  variant="subtle"
+                                                  color="gray"
+                                                  aria-label={t(
+                                                    "OpeningManage.DragSection",
+                                                    "Drag section",
+                                                  )}
+                                                  {...variantDrag.dragHandleProps}
                                                 >
-                                                  {" "}
-                                                  {t(
-                                                    "Training.Copy.Addline.136571b2",
-                                                    "Add line",
-                                                  )}{" "}
-                                                </Button>
-                                              )}
-                                              <Button
-                                                size="xs"
-                                                color="blue"
-                                                variant="light"
-                                                disabled={
-                                                  variant.contentType === "modelGame" ||
-                                                  trainable === 0
-                                                }
-                                                leftSection={<IconPlayerPlay size={14} />}
-                                                onClick={() =>
-                                                  openVariant(repertoire, variant.id, "practice")
-                                                }
-                                              >
-                                                {" "}
-                                                {t(
-                                                  "Training.Copy.Practice.5ab096b1",
-                                                  "Practice",
-                                                )}{" "}
-                                              </Button>
-                                            </Group>
-                                          </Group>
-                                          <Droppable
-                                            droppableId={`lines:${variant.id}`}
-                                            type="LINE"
-                                          >
-                                            {(lineDrop) => (
-                                              <Stack
-                                                gap={5}
-                                                mt="sm"
-                                                ref={lineDrop.innerRef}
-                                                {...lineDrop.droppableProps}
-                                              >
-                                                {lines.map((line, lineIndex) => {
-                                                  const lineMetrics = getOpeningLineMetrics(line);
-                                                  return (
-                                                    <Draggable
-                                                      key={line.id}
-                                                      draggableId={line.id}
-                                                      index={lineIndex}
-                                                      isDragDisabled={busy}
-                                                    >
-                                                      {(lineDrag) => (
-                                                        <Card
-                                                          padding="xs"
-                                                          withBorder
-                                                          ref={lineDrag.innerRef}
-                                                          {...lineDrag.draggableProps}
-                                                        >
-                                                          <Group
-                                                            justify="space-between"
-                                                            wrap="nowrap"
-                                                          >
-                                                            <Group
-                                                              gap="xs"
-                                                              wrap="nowrap"
-                                                              style={{ minWidth: 0 }}
-                                                            >
-                                                              <ActionIcon
-                                                                size="sm"
-                                                                variant="subtle"
-                                                                color="gray"
-                                                                aria-label={t(
-                                                                  "Training.Copy.Dragline.43b2b8b3",
-                                                                  "Drag line",
-                                                                )}
-                                                                {...lineDrag.dragHandleProps}
-                                                              >
-                                                                <IconGripVertical size={14} />
-                                                              </ActionIcon>
-                                                              <div style={{ minWidth: 0 }}>
-                                                                <Text size="sm" fw={500} truncate>
-                                                                  {line.name}
-                                                                </Text>
-                                                                <Text size="xs" c="dimmed">
-                                                                  {line.plyCount}{" "}
-                                                                  {t(
-                                                                    "Training.Copy.pliesprogress.41e81cd7",
-                                                                    "plies · progress",
-                                                                  )}{" "}
-                                                                  {lineMetrics.progress}
-                                                                  {t(
-                                                                    "Training.Copy.difficulty.e37fbd35",
-                                                                    "% · difficulty",
-                                                                  )}{" "}
-                                                                  {lineMetrics.difficulty}%
-                                                                </Text>
-                                                              </div>
-                                                            </Group>
-                                                            <Group gap={4} wrap="nowrap">
-                                                              <Checkbox
-                                                                size="xs"
-                                                                label={t(
-                                                                  "Training.Copy.Train.c216b847",
-                                                                  "Train",
-                                                                )}
-                                                                checked={line.trainable}
-                                                                disabled={
-                                                                  variant.contentType ===
-                                                                    "modelGame" || busy
-                                                                }
-                                                                onChange={async (event) => {
-                                                                  const openings =
-                                                                    updateOpeningLineTrainable(
-                                                                      areas.openings,
-                                                                      line.id,
-                                                                      event.currentTarget.checked,
-                                                                    );
-                                                                  setBusy(true);
-                                                                  try {
-                                                                    await persistOpeningOrganization(
-                                                                      openings,
-                                                                      repertoire.id,
-                                                                    );
-                                                                  } catch (error) {
-                                                                    setFeedback({
-                                                                      text:
-                                                                        error instanceof Error
-                                                                          ? error.message
-                                                                          : t(
-                                                                              "Training.Copy.Couldnotupdatetheeditable.ee7dfced",
-                                                                              "Could not update the editable copy.",
-                                                                            ),
-                                                                      color: "red",
-                                                                    });
-                                                                  } finally {
-                                                                    setBusy(false);
-                                                                  }
-                                                                }}
-                                                              />
-                                                              <ActionIcon
-                                                                size="sm"
-                                                                color="blue"
-                                                                variant="light"
-                                                                aria-label={t(
-                                                                  "Training.Copy.Practicev0.ad258b9d",
-                                                                  "Practice {{v0}}",
-                                                                  { v0: line.name },
-                                                                )}
-                                                                disabled={
-                                                                  variant.contentType ===
-                                                                    "modelGame" ||
-                                                                  !line.trainable ||
-                                                                  busy
-                                                                }
-                                                                onClick={() =>
-                                                                  void openLinePractice(
-                                                                    repertoire,
-                                                                    variant,
-                                                                    line.id,
-                                                                  )
-                                                                }
-                                                              >
-                                                                <IconPlayerPlay size={14} />
-                                                              </ActionIcon>
-                                                              <ActionIcon
-                                                                size="sm"
-                                                                variant="subtle"
-                                                                aria-label={t(
-                                                                  "Training.Copy.Renameline.ec64c5c9",
-                                                                  "Rename line",
-                                                                )}
-                                                                onClick={() => {
-                                                                  setEditingLineId(line.id);
-                                                                  setLineDraftName(line.name);
-                                                                }}
-                                                              >
-                                                                <IconPencil size={14} />
-                                                              </ActionIcon>
-                                                              <ActionIcon
-                                                                size="sm"
-                                                                color="red"
-                                                                variant="subtle"
-                                                                aria-label={t(
-                                                                  "Training.Copy.Deleteline.2781e50b",
-                                                                  "Delete line",
-                                                                )}
-                                                                onClick={() =>
-                                                                  setDeletingLineId(line.id)
-                                                                }
-                                                              >
-                                                                <IconTrash size={14} />
-                                                              </ActionIcon>
-                                                            </Group>
-                                                          </Group>
-                                                        </Card>
-                                                      )}
-                                                    </Draggable>
-                                                  );
-                                                })}
-                                                {lineDrop.placeholder}
-                                                {lines.length === 0 && (
-                                                  <Text size="xs" c="dimmed" ta="center" py={4}>
+                                                  <IconGripVertical size={17} />
+                                                </ActionIcon>
+                                                <div style={{ minWidth: 0 }}>
+                                                  <Group gap="xs">
+                                                    <Text fw={500} truncate>
+                                                      {variant.name}
+                                                    </Text>
+                                                    {variant.contentType === "modelGame" && (
+                                                      <Badge color="violet" size="sm">
+                                                        {" "}
+                                                        {t(
+                                                          "Training.Copy.Modelgame.f131746e",
+                                                          "Model game",
+                                                        )}{" "}
+                                                      </Badge>
+                                                    )}
+                                                    <Badge color="teal" size="sm" variant="light">
+                                                      {variantMetrics.progress}%
+                                                    </Badge>
+                                                    <Badge color="orange" size="sm" variant="light">
+                                                      {" "}
+                                                      {t(
+                                                        "Training.Copy.Diff.b89aece8",
+                                                        "Diff.",
+                                                      )}{" "}
+                                                      {variantMetrics.difficulty}%
+                                                    </Badge>
+                                                  </Group>
+                                                  <Text size="xs" c="dimmed">
+                                                    {t(
+                                                      "Training.Copy.v0linesv1comments.1541f5f2",
+                                                      "{{v0}} lines · {{v1}} comments",
+                                                      {
+                                                        v0: lines.length,
+                                                        v1: variant.commentCount,
+                                                      },
+                                                    )}
+                                                    {variant.hasVariations
+                                                      ? t(
+                                                          "OpeningManage.ContainsSubvariations",
+                                                          " · contains subvariations",
+                                                        )
+                                                      : ""}
+                                                  </Text>
+                                                </div>
+                                                <Group gap="xs" wrap="nowrap">
+                                                  <ActionIcon
+                                                    aria-label={t(
+                                                      "Repertoire.ImportIntoVariant",
+                                                      "Import PGN into this section",
+                                                    )}
+                                                    onClick={() =>
+                                                      setAdditionTarget({
+                                                        repertoireId: repertoire.id,
+                                                        variantId: variant.id,
+                                                      })
+                                                    }
+                                                  >
+                                                    <IconUpload size={16} />
+                                                  </ActionIcon>
+                                                  <ActionIcon
+                                                    size="lg"
+                                                    variant="subtle"
+                                                    aria-label={t(
+                                                      "OpeningManage.ConfigureSection",
+                                                      "Configure section",
+                                                    )}
+                                                    onClick={() => openVariantSettings(variant)}
+                                                  >
+                                                    <IconSettings size={16} />
+                                                  </ActionIcon>
+                                                  <Button
+                                                    size="xs"
+                                                    variant="default"
+                                                    leftSection={<IconFileSearch size={14} />}
+                                                    onClick={() =>
+                                                      openVariant(
+                                                        repertoire,
+                                                        variant.id,
+                                                        "analysis",
+                                                      )
+                                                    }
+                                                  >
                                                     {" "}
                                                     {t(
-                                                      "OpeningManage.BuildLineHint",
-                                                      "Build a line on the board or drop a line from another section here.",
+                                                      "Training.Copy.Editandanalyze.1fa05ca5",
+                                                      "Edit and analyze",
                                                     )}{" "}
-                                                  </Text>
+                                                  </Button>
+                                                  {variant.contentType === "theory" && (
+                                                    <Button
+                                                      size="xs"
+                                                      variant="default"
+                                                      leftSection={<IconPlus size={14} />}
+                                                      onClick={() =>
+                                                        openVariant(repertoire, variant.id, "build")
+                                                      }
+                                                    >
+                                                      {" "}
+                                                      {t(
+                                                        "Training.Copy.Addline.136571b2",
+                                                        "Add line",
+                                                      )}{" "}
+                                                    </Button>
+                                                  )}
+                                                  <Button
+                                                    size="xs"
+                                                    color="blue"
+                                                    variant="light"
+                                                    disabled={
+                                                      variant.contentType === "modelGame" ||
+                                                      trainable === 0
+                                                    }
+                                                    leftSection={<IconPlayerPlay size={14} />}
+                                                    onClick={() =>
+                                                      openVariant(
+                                                        repertoire,
+                                                        variant.id,
+                                                        "practice",
+                                                      )
+                                                    }
+                                                  >
+                                                    {" "}
+                                                    {t(
+                                                      "Training.Copy.Practice.5ab096b1",
+                                                      "Practice",
+                                                    )}{" "}
+                                                  </Button>
+                                                </Group>
+                                              </Group>
+                                              <Droppable
+                                                droppableId={`lines:${variant.id}`}
+                                                type="LINE"
+                                              >
+                                                {(lineDrop) => (
+                                                  <Stack
+                                                    gap={5}
+                                                    mt="sm"
+                                                    ref={lineDrop.innerRef}
+                                                    {...lineDrop.droppableProps}
+                                                  >
+                                                    {lines.length > 0 && (
+                                                      <Button
+                                                        size="compact-xs"
+                                                        variant="subtle"
+                                                        color="gray"
+                                                        w="fit-content"
+                                                        leftSection={
+                                                          showLines ? (
+                                                            <IconChevronDown size={14} />
+                                                          ) : (
+                                                            <IconChevronRight size={14} />
+                                                          )
+                                                        }
+                                                        onClick={() =>
+                                                          setToggledSections((current) => {
+                                                            const next = new Set(current);
+                                                            if (!next.delete(variant.id))
+                                                              next.add(variant.id);
+                                                            return next;
+                                                          })
+                                                        }
+                                                      >
+                                                        {showLines
+                                                          ? t(
+                                                              "OpeningManage.HideLines",
+                                                              "Hide lines",
+                                                            )
+                                                          : t(
+                                                              "OpeningManage.ShowLines",
+                                                              "Show {{count}} lines",
+                                                              {
+                                                                count: lines.length,
+                                                              },
+                                                            )}
+                                                      </Button>
+                                                    )}
+                                                    {(showLines ? lines : []).map(
+                                                      (line, lineIndex) => {
+                                                        const lineMetrics =
+                                                          getOpeningLineMetrics(line);
+                                                        return (
+                                                          <Draggable
+                                                            key={line.id}
+                                                            draggableId={line.id}
+                                                            index={lineIndex}
+                                                            isDragDisabled={busy}
+                                                          >
+                                                            {(lineDrag) => (
+                                                              <Card
+                                                                padding="xs"
+                                                                withBorder
+                                                                ref={lineDrag.innerRef}
+                                                                {...lineDrag.draggableProps}
+                                                              >
+                                                                <Group
+                                                                  justify="space-between"
+                                                                  wrap="nowrap"
+                                                                >
+                                                                  <Group
+                                                                    gap="xs"
+                                                                    wrap="nowrap"
+                                                                    style={{ minWidth: 0 }}
+                                                                  >
+                                                                    <ActionIcon
+                                                                      size="sm"
+                                                                      variant="subtle"
+                                                                      color="gray"
+                                                                      aria-label={t(
+                                                                        "Training.Copy.Dragline.43b2b8b3",
+                                                                        "Drag line",
+                                                                      )}
+                                                                      {...lineDrag.dragHandleProps}
+                                                                    >
+                                                                      <IconGripVertical size={14} />
+                                                                    </ActionIcon>
+                                                                    <div style={{ minWidth: 0 }}>
+                                                                      <Text
+                                                                        size="sm"
+                                                                        fw={500}
+                                                                        truncate
+                                                                      >
+                                                                        {line.name}
+                                                                      </Text>
+                                                                      <Text size="xs" c="dimmed">
+                                                                        {line.plyCount}{" "}
+                                                                        {t(
+                                                                          "Training.Copy.pliesprogress.41e81cd7",
+                                                                          "plies · progress",
+                                                                        )}{" "}
+                                                                        {lineMetrics.progress}
+                                                                        {t(
+                                                                          "Training.Copy.difficulty.e37fbd35",
+                                                                          "% · difficulty",
+                                                                        )}{" "}
+                                                                        {lineMetrics.difficulty}%
+                                                                      </Text>
+                                                                    </div>
+                                                                  </Group>
+                                                                  <Group gap={4} wrap="nowrap">
+                                                                    <Checkbox
+                                                                      size="xs"
+                                                                      label={t(
+                                                                        "Training.Copy.Train.c216b847",
+                                                                        "Train",
+                                                                      )}
+                                                                      checked={line.trainable}
+                                                                      disabled={
+                                                                        variant.contentType ===
+                                                                          "modelGame" || busy
+                                                                      }
+                                                                      onChange={async (event) => {
+                                                                        const openings =
+                                                                          updateOpeningLineTrainable(
+                                                                            areas.openings,
+                                                                            line.id,
+                                                                            event.currentTarget
+                                                                              .checked,
+                                                                          );
+                                                                        setBusy(true);
+                                                                        try {
+                                                                          await persistOpeningOrganization(
+                                                                            openings,
+                                                                            repertoire.id,
+                                                                          );
+                                                                        } catch (error) {
+                                                                          setFeedback({
+                                                                            text:
+                                                                              error instanceof Error
+                                                                                ? error.message
+                                                                                : t(
+                                                                                    "Training.Copy.Couldnotupdatetheeditable.ee7dfced",
+                                                                                    "Could not update the editable copy.",
+                                                                                  ),
+                                                                            color: "red",
+                                                                          });
+                                                                        } finally {
+                                                                          setBusy(false);
+                                                                        }
+                                                                      }}
+                                                                    />
+                                                                    <ActionIcon
+                                                                      size="sm"
+                                                                      color="blue"
+                                                                      variant="light"
+                                                                      aria-label={t(
+                                                                        "Training.Copy.Practicev0.ad258b9d",
+                                                                        "Practice {{v0}}",
+                                                                        { v0: line.name },
+                                                                      )}
+                                                                      disabled={
+                                                                        variant.contentType ===
+                                                                          "modelGame" ||
+                                                                        !line.trainable ||
+                                                                        busy
+                                                                      }
+                                                                      onClick={() =>
+                                                                        void openLinePractice(
+                                                                          repertoire,
+                                                                          variant,
+                                                                          line.id,
+                                                                        )
+                                                                      }
+                                                                    >
+                                                                      <IconPlayerPlay size={14} />
+                                                                    </ActionIcon>
+                                                                    <ActionIcon
+                                                                      size="sm"
+                                                                      variant="subtle"
+                                                                      aria-label={t(
+                                                                        "Training.Copy.Renameline.ec64c5c9",
+                                                                        "Rename line",
+                                                                      )}
+                                                                      onClick={() => {
+                                                                        setEditingLineId(line.id);
+                                                                        setLineDraftName(line.name);
+                                                                      }}
+                                                                    >
+                                                                      <IconPencil size={14} />
+                                                                    </ActionIcon>
+                                                                    <ActionIcon
+                                                                      size="sm"
+                                                                      color="red"
+                                                                      variant="subtle"
+                                                                      aria-label={t(
+                                                                        "Training.Copy.Deleteline.2781e50b",
+                                                                        "Delete line",
+                                                                      )}
+                                                                      onClick={() =>
+                                                                        setDeletingLineId(line.id)
+                                                                      }
+                                                                    >
+                                                                      <IconTrash size={14} />
+                                                                    </ActionIcon>
+                                                                  </Group>
+                                                                </Group>
+                                                              </Card>
+                                                            )}
+                                                          </Draggable>
+                                                        );
+                                                      },
+                                                    )}
+                                                    {lineDrop.placeholder}
+                                                    {lines.length === 0 && (
+                                                      <Text size="xs" c="dimmed" ta="center" py={4}>
+                                                        {" "}
+                                                        {t(
+                                                          "OpeningManage.BuildLineHint",
+                                                          "Build a line on the board or drop a line from another section here.",
+                                                        )}{" "}
+                                                      </Text>
+                                                    )}
+                                                  </Stack>
                                                 )}
-                                              </Stack>
-                                            )}
-                                          </Droppable>
-                                        </Card>
-                                      )}
-                                    </Draggable>
-                                  );
-                                })}
-                              {variantDrop.placeholder}
-                            </Stack>
-                          )}
-                        </Droppable>
-                      </ScrollArea>
-                      <Stack mt="lg" gap="sm">
-                        <Title order={4}>{t("Repertoire.ModelGames", "Model games")}</Title>
-                        <Text size="sm" c="dimmed">
-                          {t(
-                            "Repertoire.ModelGamesHint",
-                            "Reference games for study and analysis. These games never enter memorization practice.",
-                          )}
-                        </Text>
-                        {modelGameCount === 0 && (
-                          <Text size="sm" c="dimmed">
-                            {t(
-                              "Repertoire.NoModelGames",
-                              "No model games yet. Add one from a board or import a PGN.",
-                            )}
-                          </Text>
-                        )}
-                        <SimpleGrid cols={{ base: 1, md: 2 }}>
-                          {variants
-                            .filter((variant) => variant.contentType === "modelGame")
-                            .map((variant) => (
-                              <Card key={variant.id} withBorder>
-                                <Stack gap="xs">
-                                  <Text fw={600}>{variant.name}</Text>
-                                  <Group>
-                                    <Button
-                                      size="xs"
-                                      onClick={() =>
-                                        void openVariant(repertoire, variant.id, "analysis")
-                                      }
-                                    >
-                                      {t("Repertoire.AnalyzeModel", "Open and analyze")}
-                                    </Button>
-                                    <Button
-                                      size="xs"
-                                      variant="default"
-                                      onClick={() => openVariantSettings(variant)}
-                                    >
-                                      {t("Common.Edit", "Edit")}
-                                    </Button>
-                                  </Group>
+                                              </Droppable>
+                                            </Card>
+                                          )}
+                                        </Draggable>
+                                      );
+                                    })}
+                                  {variantDrop.placeholder}
                                 </Stack>
-                              </Card>
-                            ))}
-                        </SimpleGrid>
-                        {!!repertoire.imports?.length && (
-                          <Text size="xs" c="dimmed">
-                            {t("Repertoire.ImportCount", "Recorded additions: {{count}}", {
-                              count: repertoire.imports.length,
-                            })}
-                          </Text>
-                        )}
-                      </Stack>
+                              )}
+                            </Droppable>
+                          </ScrollArea>
+                          <Stack mt="lg" gap="sm">
+                            <Title order={4}>{t("Repertoire.ModelGames", "Model games")}</Title>
+                            <Text size="sm" c="dimmed">
+                              {t(
+                                "Repertoire.ModelGamesHint",
+                                "Reference games for study and analysis. These games never enter memorization practice.",
+                              )}
+                            </Text>
+                            {modelGameCount === 0 && (
+                              <Text size="sm" c="dimmed">
+                                {t(
+                                  "Repertoire.NoModelGames",
+                                  "No model games yet. Add one from a board or import a PGN.",
+                                )}
+                              </Text>
+                            )}
+                            <SimpleGrid cols={{ base: 1, md: 2 }}>
+                              {variants
+                                .filter((variant) => variant.contentType === "modelGame")
+                                .map((variant) => (
+                                  <Card key={variant.id} withBorder>
+                                    <Stack gap="xs">
+                                      <Text fw={600}>{variant.name}</Text>
+                                      <Group>
+                                        <Button
+                                          size="xs"
+                                          onClick={() =>
+                                            void openVariant(repertoire, variant.id, "analysis")
+                                          }
+                                        >
+                                          {t("Repertoire.AnalyzeModel", "Open and analyze")}
+                                        </Button>
+                                        <Button
+                                          size="xs"
+                                          variant="default"
+                                          onClick={() => openVariantSettings(variant)}
+                                        >
+                                          {t("Common.Edit", "Edit")}
+                                        </Button>
+                                      </Group>
+                                    </Stack>
+                                  </Card>
+                                ))}
+                            </SimpleGrid>
+                            {!!repertoire.imports?.length && (
+                              <Text size="xs" c="dimmed">
+                                {t("Repertoire.ImportCount", "Recorded additions: {{count}}", {
+                                  count: repertoire.imports.length,
+                                })}
+                              </Text>
+                            )}
+                          </Stack>
+                        </>
+                      )}
                     </Accordion.Panel>
                   </Accordion.Item>
                 );
@@ -1486,6 +1579,12 @@ export default function OpeningDashboardPage() {
                 "The editable copy will contain {{groups}} sections. Review and adjust how the PGN records are grouped before importing.",
                 { groups: importGroups.length },
               )}
+              {suggestedExclusions > 0 &&
+                ` ${t(
+                  "OpeningImport.PuzzlesExcluded",
+                  "{{count}} records that start from their own position (puzzles, exercises) were left out, because a section can only hold lines from one starting position. You can restore them from “Not imported”.",
+                  { count: suggestedExclusions },
+                )}`}
             </Alert>
             <OpeningImportEditor
               key={importDraftVersion}
@@ -1507,6 +1606,11 @@ export default function OpeningDashboardPage() {
                   </Text>
                 </Card>
               ))}
+            {importError && (
+              <Alert color="red" withCloseButton onClose={() => setImportError(null)}>
+                {importError}
+              </Alert>
+            )}
             <Group justify="flex-end">
               <Button variant="default" disabled={busy} onClick={() => setInspection(null)}>
                 {" "}

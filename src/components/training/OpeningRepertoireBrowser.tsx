@@ -570,12 +570,13 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                         <LearnedProgress summary={variantLearning} />
                       </Box>
                     </div>
-                    <Group grow>
+                    {/* Two columns: four buttons in one row cut their labels to a few letters. */}
+                    <SimpleGrid cols={2} spacing="xs" verticalSpacing="xs">
                       <Link
                         to="/training/openings/$repertoireId/$variantId"
                         params={{ repertoireId, variantId: variant.id }}
                         hash="top"
-                        style={{ textDecoration: "none", flex: 1 }}
+                        style={{ textDecoration: "none" }}
                       >
                         <Button component="span" variant="default" fullWidth>
                           {t("OpeningBrowser.ViewLines", "View lines")}
@@ -586,6 +587,7 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                         batchSize={batchSize}
                         busy={launcher.busy}
                         onClick={() => void launcher.learnVariant(repertoire, variant)}
+                        fullWidth
                       />
                       <ReviewButton
                         lines={lines}
@@ -595,13 +597,14 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                       />
                       <Button
                         variant="light"
+                        fullWidth
                         disabled={variantLearning.learned === 0}
                         loading={launcher.busy}
                         onClick={() => void launcher.practiceVariant(repertoire, variant)}
                       >
                         {t("OpeningBrowser.Train", "Train")}
                       </Button>
-                    </Group>
+                    </SimpleGrid>
                   </Stack>
                 </Card>
               );

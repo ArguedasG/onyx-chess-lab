@@ -2227,6 +2227,11 @@
     "OpeningReview.NextIn": "Próximo repaso en {{interval}}",
     "OpeningReview.DueBadge": "Repaso pendiente",
     "OpeningReview.NothingDue": "Aquí no hay repasos pendientes por ahora.",
-    "OpeningImportEditor.ExcludeSection": "No importar esta sección"
+    "OpeningImportEditor.ExcludeSection": "No importar esta sección",
+    "OpeningImport.ModelGamesSection": "Partidas modelo",
+    "TrainingStorage.ErrorTitle": "No se pudo guardar el progreso de entrenamiento",
+    "OpeningImport.PuzzlesExcluded": "Se dejaron fuera {{count}} registros que empiezan desde su propia posición (puzzles, ejercicios), porque una sección solo puede contener líneas de una misma posición inicial. Puedes restaurarlos desde «No se importarán».",
+    "OpeningManage.HideLines": "Ocultar líneas",
+    "OpeningManage.ShowLines": "Mostrar {{count}} líneas"
   }
 }

@@ -10,10 +10,16 @@ import {
     type TreeState,
 } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
+import { getOpeningImportGroupPreviews, normalizedGroupKey } from "@/utils/openingImportGrouping";
 import i18n from "i18next";
 import { makeUci, parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
+
+export {
+    getOpeningImportGroupPreviews,
+    getOpeningImportSuggestedExclusions,
+} from "@/utils/openingImportGrouping";
 
 export type OpeningImportConfig = {
     color: OpeningRepertoire["color"];
@@ -49,6 +55,9 @@ export type OpeningPgnSample = {
     chapterName?: string;
     chessableGroupName?: string;
     eventName?: string;
+    /** Raw `White`/`Black` headers; course exports use them for chapter and line titles. */
+    whiteName?: string;
+    blackName?: string;
     lineCount: number;
     commentCount: number;
     hasVariations: boolean;
@@ -564,20 +573,14 @@ function meaningfulHeader(value: string | undefined): string | undefined {
     return normalized && normalized !== "?" && normalized !== "-" ? normalized : undefined;
 }
 
-function normalizedGroupKey(value: string): string {
-    return value
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLocaleLowerCase("en-US");
-}
+// "12) Slav", "3. QGA", "1.2) Intro" or "18 A) Kan"; the letter keeps sub-chapters apart.
+const CHAPTER_NUMBER = /^\s*\d+(?:\.\d+)*(?:\s*[A-Z](?=\s*[.)]))?\s*[.)]\s*/;
 
 function chessableGroupName(headers: GameHeaders): string | undefined {
     const candidates = [meaningfulHeader(headers.white), meaningfulHeader(headers.black)];
     for (const candidate of candidates) {
-        if (!candidate || !/^\s*\d+(?:\.\d+)*\s*[.)]\s*/.test(candidate)) continue;
-        const withoutOrder = candidate.replace(/^\s*\d+(?:\.\d+)*\s*[.)]\s*/, "").trim();
+        if (!candidate || !CHAPTER_NUMBER.test(candidate)) continue;
+        const withoutOrder = candidate.replace(CHAPTER_NUMBER, "").trim();
         const beforeVersus = withoutOrder.split(/\s+(?:vs\.?|versus)\s+/i)[0]?.trim();
         if (beforeVersus) return beforeVersus;
     }
@@ -589,6 +592,8 @@ function importGroupingHints(headers: GameHeaders) {
         chapterName: meaningfulHeader(headers.other?.ChapterName),
         chessableGroupName: chessableGroupName(headers),
         eventName: meaningfulHeader(headers.event),
+        whiteName: meaningfulHeader(headers.white),
+        blackName: meaningfulHeader(headers.black),
     };
 }
 
@@ -622,66 +627,6 @@ function lineName(headers: GameHeaders, fallback: string, sectionName?: string):
     const event = meaningfulHeader(headers.event);
     if (event && event !== sectionName) return event;
     return fallback || i18n.t("OpeningImport.LineFallback", "Line");
-}
-
-export function getOpeningImportGroupPreviews(
-    inspection: Pick<OpeningPgnInspection, "filename" | "samples">,
-    mode: OpeningGroupingMode,
-): OpeningImportGroupPreview[] {
-    const valid = inspection.samples.filter((sample) => !sample.error);
-    const eventCounts = new Map<string, number>();
-    for (const sample of valid) {
-        if (!sample.eventName) continue;
-        const key = normalizedGroupKey(sample.eventName);
-        eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
-    }
-
-    const groups = new Map<string, OpeningImportGroupPreview>();
-    for (const sample of valid) {
-        let name = sample.name;
-        let identity = `record:${sample.index}`;
-        if (mode === "single" && sample.contentType === "theory") {
-            name = inspection.filename.replace(/\.pgn$/i, "") || "Imported lines";
-            identity = "single";
-        } else if (mode === "smart" && sample.contentType === "theory") {
-            const eventRepeats = sample.eventName
-                ? (eventCounts.get(normalizedGroupKey(sample.eventName)) ?? 0) > 1
-                : false;
-            const suggested =
-                sample.chapterName ??
-                sample.chessableGroupName ??
-                (eventRepeats ? sample.eventName : undefined);
-            if (suggested) {
-                name = suggested;
-                identity = `smart:${normalizedGroupKey(suggested)}`;
-            }
-        }
-
-        const key = `${sample.contentType}|${sample.startingFen}|${identity}`;
-        const existing = groups.get(key);
-        if (existing) {
-            existing.recordIndexes.push(sample.index);
-            existing.lineCount += sample.lineCount;
-            existing.commentCount += sample.commentCount;
-        } else {
-            groups.set(key, {
-                key,
-                name,
-                startingFen: sample.startingFen,
-                recordIndexes: [sample.index],
-                lineCount: sample.lineCount,
-                commentCount: sample.commentCount,
-                contentType: sample.contentType,
-            });
-        }
-    }
-    const usedNames = new Map<string, number>();
-    return [...groups.values()].map((group) => {
-        const normalized = normalizedGroupKey(group.name);
-        const occurrence = (usedNames.get(normalized) ?? 0) + 1;
-        usedNames.set(normalized, occurrence);
-        return occurrence === 1 ? group : { ...group, name: `${group.name} (${occurrence})` };
-    });
 }
 
 function consolidationName(value: string): string | null {
@@ -1061,12 +1006,13 @@ export async function prepareOpeningImport(
         if (entries.length === 0) continue;
 
         const first = entries[0];
-        let root = structuredClone(first.tree.root);
+        const root = structuredClone(first.tree.root);
         const selectedLineKeys = new Set<string>();
         const lineNames = new Map<string, string>();
         const importedLines = new Map<string, OpeningImportLine>();
         for (const entry of entries) {
-            if (entry !== first) root = mergeImportedOpeningTrees(root, entry.tree.root);
+            // `root` is already a private copy, so later records are merged into it in place.
+            if (entry !== first) mergeOpeningTreeInto(root, entry.tree.root);
             for (const line of entry.variant.lines) {
                 const key = lineKey(line.moves);
                 if (line.trainable) selectedLineKeys.add(key);
@@ -1136,6 +1082,15 @@ export async function prepareOpeningImport(
 }
 
 export function mergeImportedOpeningTrees(target: TreeNode, source: TreeNode): TreeNode {
+    return mergeOpeningTreeInto(structuredClone(target), source);
+}
+
+/**
+ * Merges `source` into `target` in place and returns `target`. Only branches new to `target` are
+ * cloned, so merging many records into one section stays linear in their size; `source` is never
+ * modified.
+ */
+function mergeOpeningTreeInto(target: TreeNode, source: TreeNode): TreeNode {
     if (target.fen !== source.fen) {
         throw new Error(
             i18n.t(
@@ -1145,28 +1100,26 @@ export function mergeImportedOpeningTrees(target: TreeNode, source: TreeNode): T
         );
     }
 
-    function merge(left: TreeNode, right: TreeNode): TreeNode {
-        const node = structuredClone(left);
+    function merge(node: TreeNode, right: TreeNode) {
         const comment = right.comment.trim();
         if (comment && !node.comment.includes(comment)) {
             node.comment = [node.comment.trim(), comment].filter(Boolean).join("\n\n");
         }
         node.annotations = [...new Set([...node.annotations, ...right.annotations])];
         for (const shape of right.shapes) {
-            if (
-                !node.shapes.some((existing) => JSON.stringify(existing) === JSON.stringify(shape))
-            ) {
+            const serialized = JSON.stringify(shape);
+            if (!node.shapes.some((existing) => JSON.stringify(existing) === serialized)) {
                 node.shapes.push(structuredClone(shape));
             }
         }
         for (const child of right.children) {
             const key = moveKey(child);
-            const index = node.children.findIndex((candidate) => moveKey(candidate) === key);
-            if (index < 0) node.children.push(structuredClone(child));
-            else node.children[index] = merge(node.children[index], child);
+            const existing = node.children.find((candidate) => moveKey(candidate) === key);
+            if (existing) merge(existing, child);
+            else node.children.push(structuredClone(child));
         }
-        return node;
     }
 
-    return merge(target, source);
+    merge(target, source);
+    return target;
 }

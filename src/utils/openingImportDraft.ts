@@ -1,5 +1,6 @@
 import {
     getOpeningImportGroupPreviews,
+    getOpeningImportSuggestedExclusions,
     type OpeningGroupingMode,
     type OpeningImportGroupPreview,
     type OpeningPgnInspection,
@@ -51,7 +52,8 @@ export function createOpeningImportDraft(
             contentType: group.contentType,
             recordIndexes: [...group.recordIndexes],
         })),
-        excluded: [],
+        // Puzzles and other loose positions start out excluded; restoring one gives it a section.
+        excluded: getOpeningImportSuggestedExclusions(inspection, mode),
         excludedFrom: {},
         recordNames: {},
         nextSectionId: 1,

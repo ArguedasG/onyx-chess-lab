@@ -35,6 +35,7 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
+import { TRAINING_AREAS_KEY, trainingAreasStorage } from "@/state/trainingAreas";
 import { openFile } from "@/utils/files";
 import { createTab, isEmptyAnalysisTab } from "@/utils/tabs";
 
@@ -270,8 +271,10 @@ function RootLayout() {
             action: () => {
               ask("Are you sure you want to clear all saved data?", {
                 title: "Clear data",
-              }).then((res) => {
+              }).then(async (res) => {
                 if (res) {
+                  // Training data lives in a file now; move it aside so a reset stays recoverable.
+                  await trainingAreasStorage.archive(TRAINING_AREAS_KEY, `cleared-${Date.now()}`);
                   localStorage.clear();
                   sessionStorage.clear();
                   location.reload();

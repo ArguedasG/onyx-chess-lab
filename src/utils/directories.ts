@@ -1,6 +1,9 @@
 import { appDataDir, documentDir, homeDir, resolve } from "@tauri-apps/api/path";
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
+const DOCUMENT_FOLDER = "Onyx Chess Lab";
+const LEGACY_DOCUMENT_FOLDER = "EnCroissant";
+
 function getStoredDirectory(key: string): string | null {
     const stored = localStorage.getItem(key);
     if (!stored) return null;
@@ -35,11 +38,17 @@ export async function getDocumentDir(): Promise<string> {
         return ensureDirectory(customDir);
     }
 
+    let parent: string;
     try {
-        return ensureDirectory(await resolve(await documentDir(), "EnCroissant"));
+        parent = await documentDir();
     } catch {
-        return ensureDirectory(await resolve(await homeDir(), "EnCroissant"));
+        parent = await homeDir();
     }
+    // Installations created before 0.18.3 keep the folder inherited from En Croissant; its path is
+    // normally stored on first launch, and this also covers a reset that cleared that setting.
+    const legacy = await resolve(parent, LEGACY_DOCUMENT_FOLDER);
+    if (await exists(legacy)) return legacy;
+    return ensureDirectory(await resolve(parent, DOCUMENT_FOLDER));
 }
 
 export async function getEnginesDir(): Promise<string> {

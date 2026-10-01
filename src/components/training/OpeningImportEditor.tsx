@@ -75,6 +75,10 @@ export default function OpeningImportEditor({
       records <= EXPANDED_BY_DEFAULT_MAX_RECORDS ? draft.sections.map((s) => s.key) : [],
     );
   });
+  // Smart grouping can leave out hundreds of puzzles; list them only on request.
+  const [showExcluded, setShowExcluded] = useState(
+    () => draft.excluded.length <= EXPANDED_BY_DEFAULT_MAX_RECORDS,
+  );
   const [draggingFen, setDraggingFen] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<{ index: number; name: string } | null>(null);
   const sampleFor = (index: number) => inspection.samples.find((sample) => sample.index === index);
@@ -517,7 +521,15 @@ export default function OpeningImportEditor({
                     : undefined,
                 }}
               >
-                <Group gap="xs" c="dimmed" mb={draft.excluded.length > 0 ? 6 : 0}>
+                <Group
+                  gap="xs"
+                  c="dimmed"
+                  mb={draft.excluded.length > 0 && showExcluded ? 6 : 0}
+                  style={{ cursor: draft.excluded.length > 0 ? "pointer" : undefined }}
+                  onClick={() => draft.excluded.length > 0 && setShowExcluded((open) => !open)}
+                >
+                  {draft.excluded.length > 0 &&
+                    (showExcluded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />)}
                   <IconEyeOff size={16} />
                   <Text size="xs">
                     {draft.excluded.length > 0
@@ -530,9 +542,11 @@ export default function OpeningImportEditor({
                         )}
                   </Text>
                 </Group>
-                <Stack gap={4}>
-                  {draft.excluded.map((recordIndex, index) => renderRecord(recordIndex, index))}
-                </Stack>
+                {showExcluded && (
+                  <Stack gap={4}>
+                    {draft.excluded.map((recordIndex, index) => renderRecord(recordIndex, index))}
+                  </Stack>
+                )}
                 {provided.placeholder}
               </Card>
             )}

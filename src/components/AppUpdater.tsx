@@ -11,6 +11,7 @@ import {
   reduceUpdateProgress,
   type AppUpdateProgress,
 } from "@/utils/appUpdater";
+import { trainingAreasStorage } from "@/state/trainingAreas";
 import { formatBytes } from "@/utils/format";
 
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
@@ -114,6 +115,8 @@ export default function AppUpdater() {
     setInstalling(true);
     setProgress(EMPTY_UPDATE_PROGRESS);
     try {
+      // The Windows installer closes Onyx without a close request.
+      await trainingAreasStorage.flush();
       await update.downloadAndInstall((event) => {
         setProgress((current) => reduceUpdateProgress(current, event));
       });

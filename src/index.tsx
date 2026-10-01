@@ -3,7 +3,9 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import i18n from "i18next";
 import { createRoot } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
+import { preloadTrainingAreas, trainingAreasStorage } from "./state/trainingAreas";
 
 import be_BY from "./translation/be-BY.json";
 import de_DE from "./translation/de-DE.json";
@@ -72,4 +74,10 @@ setAutoFreeze(false);
 
 const container = document.getElementById("app");
 const root = createRoot(container!);
-root.render(<App />);
+
+// Training data is read from disk before rendering so no component can start from empty defaults
+// and overwrite it. Pending writes are flushed before the window closes.
+void preloadTrainingAreas().finally(() => {
+  void getCurrentWindow().onCloseRequested(() => trainingAreasStorage.flush());
+  root.render(<App />);
+});

@@ -82,6 +82,9 @@ import { findOpeningLinePath, getLineMoves, getLineRepresentativeIndices } from 
 import QualityRatingPanel from "./QualityRatingPanel";
 import RepertoireInfo from "./RepertoireInfo";
 
+/** Guided Learn: how long the opponent's reply stays visible before the next move is shown. */
+const LEARN_REPLY_PAUSE_MS = 1000;
+
 function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -432,7 +435,9 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
         if (hasLearnAnnotations(currentNode)) {
           setPracticeState((previous) => ({ ...previous, learnStep: "context" }));
         } else {
-          startLearnDemo();
+          // Leave the opponent's reply on the board for a moment before showing the answer.
+          const timer = setTimeout(startLearnDemo, currentNode.move ? LEARN_REPLY_PAUSE_MS : 0);
+          return () => clearTimeout(timer);
         }
       }
       return;

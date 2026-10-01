@@ -31,6 +31,12 @@ vi.mock("./ImportModal", () => ({ default: () => null }));
 vi.mock("./NewTabHome", () => ({ default: () => null }));
 vi.mock("react-mosaic-component", () => ({ Mosaic: () => null }));
 vi.mock("@tauri-apps/plugin-os", () => ({ platform: () => "windows" }));
+// Training data is preloaded from disk in the app; these tests only need it in memory.
+vi.mock("@/state/trainingAreas", async () => {
+  const { atom } = await import("jotai");
+  const { createEmptyTrainingAreas } = await import("@/utils/trainingAreas");
+  return { trainingAreasAtom: atom(createEmptyTrainingAreas()) };
+});
 vi.mock("@tauri-apps/plugin-log", () => ({ error: vi.fn() }));
 vi.mock("@/bindings", () => ({
   commands: {

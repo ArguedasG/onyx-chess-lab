@@ -12,6 +12,8 @@ import {
 } from "./openingImportDraft";
 import type { OpeningPgnSample } from "./openingTraining";
 
+const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
 function sample(
     index: number,
     name: string,
@@ -20,7 +22,7 @@ function sample(
     return {
         index,
         name,
-        startingFen: "start",
+        startingFen: START,
         lineCount: 1,
         commentCount: 0,
         hasVariations: false,
@@ -35,8 +37,9 @@ const inspection = {
         sample(0, "Slav line one", { chessableGroupName: "Slav" }),
         sample(1, "Slav line two", { chessableGroupName: "Slav", lineCount: 3 }),
         sample(2, "QGA line", { chessableGroupName: "QGA" }),
-        sample(3, "Tactic", { startingFen: "custom-fen" }),
+        sample(3, "Custom line", { startingFen: "custom-fen", chapterName: "Custom" }),
         sample(4, "Broken", { error: "Invalid PGN" }),
+        sample(5, "Custom line two", { startingFen: "custom-fen", chapterName: "Custom" }),
     ],
 };
 
@@ -46,8 +49,28 @@ describe("opening import draft", () => {
         expect(draft.sections.map((section) => [section.name, section.recordIndexes])).toEqual([
             ["Slav", [0, 1]],
             ["QGA", [2]],
-            ["Tactic", [3]],
+            ["Custom", [3, 5]],
         ]);
+        expect(draft.excluded).toEqual([]);
+    });
+
+    it("leaves puzzles out by default in smart mode only", () => {
+        const withPuzzle = {
+            ...inspection,
+            samples: [
+                ...inspection.samples,
+                sample(6, "Fantastic shot!", { startingFen: "puzzle" }),
+            ],
+        };
+        const draft = createOpeningImportDraft(withPuzzle, "smart");
+        expect(draft.excluded).toEqual([6]);
+        expect(
+            draftToImportGroups(withPuzzle, draft).flatMap((g) => g.recordIndexes),
+        ).not.toContain(6);
+
+        const restored = restoreDraftRecord(withPuzzle, draft, 6);
+        expect(restored.sections.at(-1)).toMatchObject({ recordIndexes: [6] });
+        expect(createOpeningImportDraft(withPuzzle, "records").excluded).toEqual([]);
     });
 
     it("moves a record between compatible sections at the requested position", () => {
@@ -89,7 +112,7 @@ describe("opening import draft", () => {
             "Slav",
             "Slav 4.e3",
             "QGA",
-            "Tactic",
+            "Custom",
         ]);
         expect(next?.sections[1]).toMatchObject({ key: "custom:1", recordIndexes: [1] });
     });
@@ -121,7 +144,7 @@ describe("opening import draft", () => {
 
         const groups = draftToImportGroups(inspection, draft);
         expect(groups.map((group) => [group.name, group.recordIndexes])).toEqual([
-            ["Tactic", [3]],
+            ["Custom", [3, 5]],
             ["Queen's Gambit", [0, 1, 2]],
         ]);
         expect(groups[1]).toMatchObject({ lineCount: 5, contentType: "modelGame" });
@@ -138,7 +161,8 @@ describe("opening import draft", () => {
             "Slav",
             "slav (2)",
             "QGA line",
-            "Tactic",
+            "Custom line",
+            "Custom line two",
         ]);
     });
     it("excludes a whole section and restores its records into it", () => {
@@ -148,7 +172,7 @@ describe("opening import draft", () => {
         expect(excluded.excluded).toEqual([0, 1]);
         expect(draftToImportGroups(inspection, excluded).map((group) => group.name)).toEqual([
             "QGA",
-            "Tactic",
+            "Custom",
         ]);
 
         const restored = restoreDraftRecord(inspection, excluded, 1);

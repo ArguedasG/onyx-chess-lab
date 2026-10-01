@@ -2227,6 +2227,11 @@
     "OpeningReview.NextIn": "Next review in {{interval}}",
     "OpeningReview.DueBadge": "Review due",
     "OpeningReview.NothingDue": "There are no reviews due here right now.",
-    "OpeningImportEditor.ExcludeSection": "Do not import this section"
+    "OpeningImportEditor.ExcludeSection": "Do not import this section",
+    "OpeningImport.ModelGamesSection": "Model games",
+    "TrainingStorage.ErrorTitle": "Training progress could not be saved",
+    "OpeningImport.PuzzlesExcluded": "{{count}} records that start from their own position (puzzles, exercises) were left out, because a section can only hold lines from one starting position. You can restore them from “Not imported”.",
+    "OpeningManage.HideLines": "Hide lines",
+    "OpeningManage.ShowLines": "Show {{count}} lines"
   }
 }

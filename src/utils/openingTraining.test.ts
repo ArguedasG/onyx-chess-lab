@@ -1,13 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Chess } from "chessops/chess";
 import { INITIAL_FEN, makeFen } from "chessops/fen";
 import { parseSan } from "chessops/san";
+
+vi.mock("i18next", () => ({
+    default: {
+        t: (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
+            fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values[name])),
+    },
+}));
 import {
     buildOpeningFlatPgn,
     consolidateOpeningSections,
     extractOpeningImportLines,
     getOpeningConsolidationGroups,
     getOpeningImportGroupPreviews,
+    getOpeningImportSuggestedExclusions,
     mergeImportedOpeningTrees,
     previewOpeningTrainingSync,
     type OpeningPgnSample,
@@ -35,6 +43,8 @@ function lineTree(sans: string[]): TreeNode {
     return root;
 }
 
+const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
 function sample(
     index: number,
     name: string,
@@ -43,7 +53,7 @@ function sample(
     return {
         index,
         name,
-        startingFen: "start",
+        startingFen: START,
         lineCount: 1,
         commentCount: 0,
         hasVariations: false,
@@ -80,11 +90,28 @@ describe("opening import grouping", () => {
                     sample(1, "French two", { chapterName: "French", startingFen: "fen-b" }),
                 ],
             },
-            "smart",
+            "records",
         );
 
         expect(groups).toHaveLength(2);
-        expect(groups.map((group) => group.name)).toEqual(["French", "French (2)"]);
+        expect(groups.map((group) => group.name)).toEqual(["French one", "French two"]);
+
+        const shared = getOpeningImportGroupPreviews(
+            {
+                filename: "repertoire.pgn",
+                samples: [
+                    sample(0, "French one", { chapterName: "French", startingFen: "fen-a" }),
+                    sample(1, "French two", { chapterName: "French", startingFen: "fen-b" }),
+                    sample(2, "French three", { chapterName: "French", startingFen: "fen-a" }),
+                    sample(3, "French four", { chapterName: "French", startingFen: "fen-b" }),
+                ],
+            },
+            "smart",
+        );
+        expect(shared.map((group) => [group.name, group.recordIndexes])).toEqual([
+            ["French", [0, 2]],
+            ["French (2)", [1, 3]],
+        ]);
     });
 
     it("keeps the legacy record mode and combines compatible theory in single mode", () => {
@@ -302,5 +329,82 @@ describe("opening import grouping", () => {
             completions: 2,
             totalTimeMs: 4000,
         });
+    });
+});
+
+describe("smart grouping of course exports", () => {
+    const course = (samples: OpeningPgnSample[]) => ({ filename: "course.pgn", samples });
+    const white = (index: number, whiteName: string, extra: Partial<OpeningPgnSample> = {}) =>
+        sample(index, `${whiteName} — ${index}`, {
+            whiteName,
+            blackName: `Line ${index}`,
+            eventName: "Course",
+            ...extra,
+        });
+
+    it("uses repeated White labels as chapters and joins every Quickstarter", () => {
+        const groups = getOpeningImportGroupPreviews(
+            course([
+                white(0, "Introduction to the Course"),
+                white(1, "Quickstarter Guide: Taimanov"),
+                white(2, "Quickstarter Guide: Taimanov"),
+                white(3, "Quickstarter Guide: The Kan"),
+                white(4, "Miniatures"),
+                white(5, "Miniatures"),
+                white(6, "18 A) Kan Begins", { chessableGroupName: "Kan Begins" }),
+            ]),
+            "smart",
+        );
+        expect(groups.map((group) => [group.name, group.recordIndexes])).toEqual([
+            ["Course", [0]],
+            ["Quickstarter", [1, 2, 3]],
+            ["Miniatures", [4, 5]],
+            ["Kan Begins", [6]],
+        ]);
+    });
+
+    it("puts every model game in one section", () => {
+        const groups = getOpeningImportGroupPreviews(
+            course([
+                white(0, "1) Main line", { chessableGroupName: "Main line" }),
+                white(1, "Model Games", { contentType: "modelGame" }),
+                white(2, "Inspiring Games", { contentType: "modelGame" }),
+            ]),
+            "smart",
+        );
+        expect(groups.map((group) => [group.name, group.recordIndexes])).toEqual([
+            ["Main line", [0]],
+            ["Model games", [1, 2]],
+        ]);
+    });
+
+    it("leaves out puzzles that start from their own position", () => {
+        const inspection = course([
+            white(0, "1) Main line", { chessableGroupName: "Main line" }),
+            white(1, "Puzzles", { startingFen: "puzzle-a" }),
+            white(2, "Puzzles", { startingFen: "puzzle-b" }),
+            white(3, "Endgame", { startingFen: "shared" }),
+            white(4, "Endgame", { startingFen: "shared" }),
+            white(5, "Tactics", { startingFen: "shared" }),
+        ]);
+        expect(getOpeningImportSuggestedExclusions(inspection, "smart")).toEqual([1, 2, 5]);
+        expect(getOpeningImportSuggestedExclusions(inspection, "single")).toEqual([]);
+        expect(
+            getOpeningImportGroupPreviews(inspection, "smart").map((group) => group.recordIndexes),
+        ).toEqual([[0], [3, 4]]);
+    });
+
+    it("does not treat players of a game database as chapters", () => {
+        const groups = getOpeningImportGroupPreviews(
+            course([
+                sample(0, "a", { whiteName: "Carlsen, Magnus", blackName: "Nakamura, Hikaru" }),
+                sample(1, "b", { whiteName: "Carlsen, Magnus", blackName: "Caruana, Fabiano" }),
+                sample(2, "c", { whiteName: "DrNykterstein", blackName: "penguingm1" }),
+                sample(3, "d", { whiteName: "penguingm1", blackName: "DrNykterstein" }),
+                sample(4, "e", { whiteName: "penguingm1", blackName: "Firouzja2003" }),
+            ]),
+            "smart",
+        );
+        expect(groups).toHaveLength(5);
     });
 });
