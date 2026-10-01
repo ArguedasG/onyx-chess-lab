@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-29.
+> Última actualización: 2026-09-30.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.2** (elección de idioma en la primera apertura y detección del
-  idioma del sistema).
+- Versión en preparación: **0.18.3** (progreso de entrenamiento en archivo, importación de cursos
+  grandes y agrupación inteligente ampliada).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -421,6 +421,12 @@ real exportado de Chessable.**
 - cambiar la estrategia automática de agrupación reinicia las ediciones;
 - la importación reutiliza los árboles analizados durante la inspección en lugar de leer y analizar
   el PGN dos veces.
+- la agrupación inteligente reconoce capítulos en `White` cuando se repiten y nunca aparecen como
+  `Black` (en una base de partidas los jugadores aparecen en ambos lados), reúne todos los
+  capítulos Quickstarter en una sección y todas las partidas modelo en otra;
+- los registros que empiezan desde una posición propia (puzzles, ejercicios) se dejan fuera por
+  defecto en modo inteligente, con aviso y restauración, porque una sección es un único árbol con una
+  sola posición inicial. Convertirlos en un set táctico enlazado queda pendiente.
 
 ### Modo Aprender
 
@@ -678,6 +684,32 @@ en la documentación de la fase.
 - La posición final de la parte guiada y la de una línea aprendida permanecen en el tablero hasta que
   el estudiante continúa; ya no hay avance automático.
 - Detalle: `docs/release-notes-0.18.1.es.md`.
+
+### 2026-09-29 — Persistencia del entrenamiento en archivo
+
+- Importar un curso grande de Chessable excedía la cuota de `localStorage` (~5 MB), donde vivía todo
+  el entrenamiento; el error aparecía detrás del modal y el progreso posterior de la sesión dejaba de
+  guardarse.
+- `training-areas-v1` pasa a un JSON en los datos privados de Onyx: se carga antes de mostrar la
+  aplicación, se escribe de forma atómica y agrupada, se guarda antes de cerrar la ventana o instalar
+  una actualización, y se migra una sola vez desde `localStorage` conservando una copia de respaldo.
+  Si el archivo existe pero no se puede leer, no se sobrescribe.
+- La importación muestra sus errores dentro del modal y elimina la copia editable si falla.
+- Con el curso de prueba (1.129 registros) la vista previa pasa de 208 a 45 secciones; 171 puzzles
+  quedan fuera y restaurables. Validado manualmente por el autor con el curso real.
+
+### 2026-09-30 — Release 0.18.3
+
+- La fusión de registros de una misma sección deja de copiar el árbol acumulado en cada paso: con
+  175 partidas sintéticas de 80 medias jugadas pasa de 61,6 s a menos de 6,6 s.
+- La administración de repertorios monta el contenido solo al desplegar un repertorio y, por encima
+  de 150 líneas, pliega las líneas de cada sección.
+- El modo Aprender espera un segundo tras la respuesta del rival antes de demostrar la jugada del
+  estudiante; los botones de las tarjetas de sección se distribuyen en dos columnas.
+- Las instalaciones nuevas usan `Documentos\Onyx Chess Lab`; las existentes conservan
+  `Documentos\EnCroissant`. El traslado de carpetas existentes queda para la migración de identidad
+  de la Fase 9.
+- Detalle: `docs/release-notes-0.18.3.es.md`.
 
 ### 2026-09-29 — Release 0.18.2
 
