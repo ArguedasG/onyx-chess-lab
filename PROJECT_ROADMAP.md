@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-09-30.
+> Última actualización: 2026-10-04.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.3** (progreso de entrenamiento en archivo, importación de cursos
-  grandes y agrupación inteligente ampliada).
+- Versión en preparación: **0.18.4** (modo Aprender al estilo Chessable, siguiente línea, tácticas
+  con inicio y fin, atajos de valoración y amenaza, y errores de conexión intermitentes).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -441,7 +441,9 @@ estudiante todavía no vio.
 3. **Sesión Aprender:** el tablero muestra la jugada esperada con flecha y los comentarios PGN; el
    estudiante ejecuta la jugada mostrada y el rival responde automáticamente. Desde 0.18.1 cada
    jugada se demuestra antes de repetirla y la sesión se detiene, hasta que el estudiante continúa,
-   en posiciones o jugadas con comentarios o flechas PGN y en la posición final. Al terminar, la línea
+   en posiciones o jugadas con comentarios o flechas PGN y en la posición final. Desde 0.18.4 hay una
+   sola pausa por jugada: la jugada del rival y la del estudiante se muestran juntas, cada una con su
+   comentario y con clic para ver su posición, y la pausa entre jugadas es configurable. Al terminar, la línea
    se repite una vez sin ayudas; si se completa, queda aprendida. Los errores en este modo no alteran
    las estadísticas por jugada.
 4. **Aprovechar lo ya aprendido:** el tramo compartido con líneas aprendidas se reproduce
@@ -697,6 +699,22 @@ en la documentación de la fase.
 - La importación muestra sus errores dentro del modal y elimina la copia editable si falla.
 - Con el curso de prueba (1.129 registros) la vista previa pasa de 208 a 45 secciones; 171 puzzles
   quedan fuera y restaurables. Validado manualmente por el autor con el curso real.
+
+### 2026-10-04 — Release 0.18.4
+
+- Feedback de un usuario externo: el modo Aprender pausaba dos veces por jugada anotada (posición y
+  jugada demostrada). Ahora pausa una sola vez y muestra juntas la jugada del rival y la del
+  estudiante, como Chessable; la pausa entre jugadas es configurable y Enter o Espacio continúan.
+- Al terminar de aprender o de entrenar la última línea de una sesión se ofrece la siguiente línea
+  del repertorio, para aprender o entrenar según su estado.
+- Guardar una posición en un set táctico permite elegir la jugada de inicio y la última jugada de la
+  solución; las variantes se recortan a la misma profundidad.
+- Atajos Shift+1…0 para valoraciones de posición (por tecla física) y T para la amenaza del rival.
+  PageUp/PageDown siguen cambiando de partida; X/C cambian de variante.
+- Las cancelaciones del explorador de Lichess (`Request cancelled` del plugin HTTP de Tauri) ya no se
+  muestran como fallos. Los catálogos de descargas de encroissant.org se piden con User-Agent, sin
+  redirecciones, con reintentos y con la última copia recibida como respaldo.
+- Detalle: `docs/release-notes-0.18.4.es.md`.
 
 ### 2026-09-30 — Release 0.18.3
 
