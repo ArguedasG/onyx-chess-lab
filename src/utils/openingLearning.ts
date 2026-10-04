@@ -3,8 +3,8 @@ import type { OpeningLine, OpeningsState } from "@/utils/trainingAreas";
 export const DEFAULT_OPENING_LEARN_BATCH = 5;
 
 /**
- * Guided Learn pauses on a move that carries a PGN comment or drawn arrows/circles, so the student
- * can read and see them before continuing.
+ * Guided Learn pauses on a demonstrated move when it, or the opponent's move before it, carries a
+ * PGN comment or drawn arrows/circles, so the student can read and see them before continuing.
  */
 export function hasLearnAnnotations(node: {
     comment: string;
@@ -35,6 +35,15 @@ export function openingLearnBatchSize(state: OpeningsState): number {
     return state.settings.learnBatchSize ?? DEFAULT_OPENING_LEARN_BATCH;
 }
 
+/** Learn mode: pause after the opponent's reply before the next move is shown. */
+export const DEFAULT_OPENING_LEARN_MOVE_DELAY_MS = 900;
+export const MAX_OPENING_LEARN_MOVE_DELAY_MS = 5000;
+
+export function openingLearnMoveDelay(state: OpeningsState): number {
+    const delay = state.settings.learnMoveDelayMs ?? DEFAULT_OPENING_LEARN_MOVE_DELAY_MS;
+    return Math.min(MAX_OPENING_LEARN_MOVE_DELAY_MS, Math.max(0, delay));
+}
+
 /** Trainable theory lines of the given sections, in repertoire order. */
 export function trainableOpeningLines(state: OpeningsState, variantIds: string[]): OpeningLine[] {
     return variantIds.flatMap((variantId) => {
@@ -45,6 +54,19 @@ export function trainableOpeningLines(state: OpeningsState, variantIds: string[]
             return line?.trainable ? [line] : [];
         });
     });
+}
+
+/** The trainable line that follows `lineId` in its repertoire, across sections. */
+export function nextOpeningLine(
+    state: OpeningsState,
+    repertoireId: string,
+    lineId: string,
+): OpeningLine | undefined {
+    const repertoire = state.repertoires[repertoireId];
+    if (!repertoire) return undefined;
+    const lines = trainableOpeningLines(state, repertoire.variantIds);
+    const index = lines.findIndex((line) => line.id === lineId);
+    return index >= 0 ? lines[index + 1] : undefined;
 }
 
 export type OpeningLearningSummary = {

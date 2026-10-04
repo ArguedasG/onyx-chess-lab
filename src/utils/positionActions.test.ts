@@ -6,6 +6,7 @@ import {
     createPositionTacticsRecord,
     findRepertoirePositionMatches,
     getPositionSolutionBranches,
+    getPositionStartOptions,
 } from "./positionActions";
 import { createEmptyTrainingAreas, type OpeningsState } from "./trainingAreas";
 
@@ -86,6 +87,41 @@ describe("current-position actions", () => {
         expect(record.moves.slice(0, 2)).toEqual(["c7c5", "g1f3"]);
         expect(record.sourcePgn).toContain("e5");
         expect(record.sourcePgn).toContain("c5");
+    });
+
+    it("copies a tactic from an earlier start along the board path, cut at the chosen move", () => {
+        const store = createTreeStore();
+        store.getState().makeMoves({ payload: ["e4", "e5", "Nf3", "Nc6", "Bb5"] });
+        store.getState().goToMove([0, 0]);
+        store.getState().makeMoves({ payload: ["Bc4", "Nf6", "d3", "Be7"], mainline: false });
+        const tree = store.getState();
+        expect(tree.position).toEqual([0, 0, 1, 0, 0, 0]);
+
+        const starts = getPositionStartOptions(tree);
+        expect(starts.map((start) => start.san)).toEqual([
+            null,
+            "e4",
+            "e5",
+            "Bc4",
+            "Nf6",
+            "d3",
+            "Be7",
+        ]);
+
+        // Starting after 1. e4, the branch through the board follows 2. Bc4 rather than 2. Nf3.
+        const [branch] = getPositionSolutionBranches(tree, [0]);
+        expect(branch.continuationSan).toEqual(["e5", "Bc4", "Nf6", "d3", "Be7"]);
+        expect(branch.moves[1]).toEqual({ san: "Bc4", halfMoves: 3 });
+
+        const record = createPositionTacticsRecord(tree, 0, "Italian idea", "Board", {
+            startPath: [0],
+            solutionPlies: 3,
+        });
+        expect(record.moves).toEqual(["e7e5", "f1c4", "g8f6"]);
+        expect(record.fen).toBe("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+        expect(record.sourcePgn).toContain("Nf3");
+        expect(record.sourcePgn).not.toContain("Bb5");
+        expect(record.sourcePgn).not.toContain("d3");
     });
 
     it("copies an endgame with explicit student color and objective", () => {

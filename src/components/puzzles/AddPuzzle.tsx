@@ -1,5 +1,4 @@
-import { Alert, Box, Divider, Group, Modal, Paper, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertCircle } from "@tabler/icons-react";
+import { Box, Divider, Group, Modal, Paper, ScrollArea, Stack, Text } from "@mantine/core";
 import { resolve } from "@tauri-apps/api/path";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,6 +8,7 @@ import { getDefaultPuzzleDatabases } from "@/utils/db";
 import { getPuzzlesDir } from "@/utils/directories";
 import { formatBytes, formatNumber } from "@/utils/format";
 import { getPuzzleDatabases } from "@/utils/puzzles";
+import CatalogErrorAlert from "../common/CatalogErrorAlert";
 import ProgressButton from "../common/ProgressButton";
 
 function AddPuzzle({
@@ -23,10 +23,11 @@ function AddPuzzle({
   setPuzzleDbs: Dispatch<SetStateAction<PuzzleDatabaseInfo[]>>;
 }) {
   const { t } = useTranslation();
-  const { data: dbs, error } = useSWRImmutable(
-    "default_puzzle_databases",
-    getDefaultPuzzleDatabases,
-  );
+  const {
+    data: dbs,
+    error,
+    mutate,
+  } = useSWRImmutable("default_puzzle_databases", getDefaultPuzzleDatabases);
 
   return (
     <Modal opened={opened} onClose={() => setOpened(false)} title={t("Databases.Add.Title")}>
@@ -41,10 +42,8 @@ function AddPuzzle({
               initInstalled={puzzleDbs.some((e) => e.title.replace(".db3", "") === db.title)}
             />
           ))}
-          {error && (
-            <Alert icon={<IconAlertCircle size="1rem" />} title={t("Common.Error")} color="red">
-              {t("Databases.Add.ErrorFetch")}
-            </Alert>
+          {error && !dbs && (
+            <CatalogErrorAlert message={t("Databases.Add.ErrorFetch")} onRetry={() => mutate()} />
           )}
         </Stack>
       </ScrollArea.Autosize>

@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Button,
   Center,
@@ -14,7 +13,7 @@ import {
   Text,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { IconAlertCircle, IconDatabase, IconTrophy } from "@tabler/icons-react";
+import { IconDatabase, IconTrophy } from "@tabler/icons-react";
 import { join, resolve } from "@tauri-apps/api/path";
 import { useAtom } from "jotai";
 import { useCallback, useState } from "react";
@@ -31,6 +30,7 @@ import {
 import { usePlatform } from "@/utils/files";
 import { formatBytes } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
+import CatalogErrorAlert from "../common/CatalogErrorAlert";
 import ProgressButton from "../common/ProgressButton";
 import EngineForm from "./EngineForm";
 import ManagedMaiaCard from "./ManagedMaiaCard";
@@ -49,7 +49,7 @@ function AddEngine({
 
   const { os } = usePlatform();
 
-  const { defaultEngines, error, isLoading } = useDefaultEngines(os, opened);
+  const { defaultEngines, error, isLoading, retry } = useDefaultEngines(os, opened);
 
   const form = useForm<LocalEngine>({
     initialValues: {
@@ -104,11 +104,7 @@ function AddEngine({
                   initInstalled={engines.some((e) => e.name === engine.name)}
                 />
               ))}
-              {error && (
-                <Alert icon={<IconAlertCircle size="1rem" />} title={t("Common.Error")} color="red">
-                  {t("Engines.Add.ErrorFetch")}
-                </Alert>
-              )}
+              {error && <CatalogErrorAlert message={t("Engines.Add.ErrorFetch")} onRetry={retry} />}
             </SimpleGrid>
           </ScrollArea.Autosize>
         </Tabs.Panel>

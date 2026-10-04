@@ -25,6 +25,7 @@ import {
   currentReportModalOpenAtom,
   currentTabAtom,
   currentTabSelectedAtom,
+  currentThreatAtom,
   enableAllAtom,
   practiceStateAtom,
   tabsAtom,
@@ -48,6 +49,7 @@ import AnnotationPanel from "../panels/annotation/AnnotationPanel";
 import DatabasePanel from "../panels/database/DatabasePanel";
 import InfoPanel from "../panels/info/InfoPanel";
 import PracticePanel from "../panels/practice/PracticePanel";
+import AnnotationSymbolHotkeys from "./AnnotationSymbolHotkeys";
 import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
@@ -255,6 +257,7 @@ function BoardAnalysis() {
   const allEnabled = useAtomValue(allEnabledAtom);
 
   const keyMap = useAtomValue(keyMapAtom);
+  const setThreat = useSetAtom(currentThreatAtom);
 
   const [, setAnalysisTab] = useAtom(currentAnalysisTabAtom);
   const [currentTabSelected, setCurrentTabSelected] = useAtom(currentTabSelectedAtom);
@@ -301,6 +304,7 @@ function BoardAnalysis() {
     [keyMap.DATABASE_TAB.keys, () => setCurrentTabSelected("database")],
     [keyMap.ANNOTATE_TAB.keys, () => setCurrentTabSelected("annotate")],
     [keyMap.INFO_TAB.keys, () => setCurrentTabSelected("info")],
+    [keyMap.TOGGLE_THREAT.keys, () => setThreat((threat) => !threat)],
     [
       keyMap.TOGGLE_ALL_ENGINES.keys,
       (e) => {
@@ -312,6 +316,9 @@ function BoardAnalysis() {
 
   return (
     <>
+      <AnnotationSymbolHotkeys
+        onAnnotate={(annotation) => !isPracticeRating && setAnnotation(annotation)}
+      />
       <Modal
         opened={pendingTrainingSync !== null}
         onClose={() => !savingRepertoire && setPendingTrainingSync(null)}

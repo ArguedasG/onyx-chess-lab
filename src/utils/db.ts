@@ -1,6 +1,5 @@
 import { resolve } from "@tauri-apps/api/path";
 import { readDir } from "@tauri-apps/plugin-fs";
-import { fetch } from "@tauri-apps/plugin-http";
 import useSWR from "swr";
 import {
     commands,
@@ -14,6 +13,7 @@ import {
 } from "@/bindings";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
 import { getDatabasesDir } from "@/utils/directories";
+import { CATALOG_SWR_OPTIONS, fetchCatalog } from "@/utils/http";
 import { unwrap } from "./unwrap";
 
 export type SuccessDatabaseInfo = Extract<DatabaseInfo, { type: "success" }>;
@@ -46,6 +46,9 @@ export function isTransientPositionError(error: unknown): boolean {
     return (
         normalized.includes("search cancelled") ||
         normalized.includes("search preempted") ||
+        // Tauri's HTTP plugin rejects aborted Lichess requests with these messages.
+        normalized.includes("request cancelled") ||
+        normalized.includes("request canceled") ||
         normalized.includes("operation was aborted") ||
         normalized.includes("aborterror")
     );
@@ -134,34 +137,26 @@ async function getDatabase(name: string): Promise<DatabaseInfo> {
 }
 
 export function useDefaultDatabases(opened: boolean) {
-    const { data, error, isLoading } = useSWR(opened ? "default-dbs" : null, async () => {
-        const data = await fetch("https://www.encroissant.org/databases", {
-            method: "GET",
-        });
-        if (!data.ok) {
-            throw new Error("Failed to fetch engines");
-        }
-        return (await data.json()) as SuccessDatabaseInfo[];
-    });
+    const { data, error, isLoading, mutate } = useSWR(
+        opened ? "default-dbs" : null,
+        () => fetchCatalog<SuccessDatabaseInfo[]>("/databases.json"),
+        CATALOG_SWR_OPTIONS,
+    );
     return {
         defaultDatabases: data,
-        error,
+        // A failed background refresh keeps the list already shown.
+        error: data ? undefined : error,
         isLoading,
+        retry: () => mutate(),
     };
 }
 
 export async function getDefaultPuzzleDatabases(): Promise<
     (PuzzleDatabaseInfo & { downloadLink: string })[]
 > {
-    const data = await fetch("https://www.encroissant.org/puzzle_databases", {
-        method: "GET",
-    });
-    if (!data.ok) {
-        throw new Error("Failed to fetch puzzle databases");
-    }
-    return (await data.json()) as (PuzzleDatabaseInfo & {
-        downloadLink: string;
-    })[];
+    return fetchCatalog<(PuzzleDatabaseInfo & { downloadLink: string })[]>(
+        "/puzzle_databases.json",
+    );
 }
 
 export interface Opening {

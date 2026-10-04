@@ -9,6 +9,12 @@ export function addPieceSymbol(move: string): string {
     return pieceChar + move.slice(1);
 }
 
+/** Move with its number, e.g. "3. e3" or "2... Nf6"; `halfMoves` counts the move itself. */
+export function formatNumberedMove(san: string, halfMoves: number): string {
+    const number = Math.ceil(halfMoves / 2);
+    return halfMoves % 2 === 1 ? `${number}. ${san}` : `${number}... ${san}`;
+}
+
 export type Annotation =
     | ""
     | "!"

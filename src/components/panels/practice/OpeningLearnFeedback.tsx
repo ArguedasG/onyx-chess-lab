@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import {
   IconArrowRight,
   IconBulb,
@@ -8,8 +8,11 @@ import {
   IconRepeat,
   IconSchool,
 } from "@tabler/icons-react";
+import { useAtomValue } from "jotai";
 import { useTranslation } from "react-i18next";
-import type { PracticeState } from "@/state/atoms";
+import { moveNotationTypeAtom, type PracticeState } from "@/state/atoms";
+import { addPieceSymbol, formatNumberedMove } from "@/utils/annotation";
+import type { TreeNode } from "@/utils/treeReducer";
 
 function LearnComment({ comment }: { comment: string }) {
   if (!comment.trim()) return null;
@@ -22,6 +25,51 @@ function LearnComment({ comment }: { comment: string }) {
         </Text>
       </Group>
     </Paper>
+  );
+}
+
+/** One move of a guided demonstration; clicking it shows its position on the board. */
+function LearnMoveEntry({
+  label,
+  node,
+  active,
+  onClick,
+}: {
+  label: string;
+  node: TreeNode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const symbols = useAtomValue(moveNotationTypeAtom) === "symbols";
+  return (
+    <Stack gap={4}>
+      <Group gap="xs" wrap="nowrap">
+        <Text size="sm" fw={600}>
+          {label}
+        </Text>
+        <UnstyledButton
+          onClick={onClick}
+          px={6}
+          style={{
+            borderRadius: "var(--mantine-radius-sm)",
+            background: active ? "var(--mantine-color-default-hover)" : undefined,
+            outline: active ? "1px solid var(--mantine-color-default-border)" : undefined,
+          }}
+        >
+          <Text size="sm" fw={active ? 700 : 500} c={active ? undefined : "blue"}>
+            {formatNumberedMove(
+              symbols ? addPieceSymbol(node.san ?? "") : (node.san ?? ""),
+              node.halfMoves,
+            )}
+          </Text>
+        </UnstyledButton>
+      </Group>
+      {node.comment.trim() && (
+        <Text size="sm" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {node.comment.trim()}
+        </Text>
+      )}
+    </Stack>
   );
 }
 
@@ -40,7 +88,8 @@ function ContinueButton({ label, onClick }: { label: string; onClick: () => void
 export default function OpeningLearnFeedback({
   practiceState,
   comment,
-  move,
+  demo,
+  onViewDemoPosition,
   hasNextLine,
   onContinue,
   onNextLine,
@@ -51,10 +100,11 @@ export default function OpeningLearnFeedback({
   practiceState: PracticeState;
   /** Comment of the position on the board; shown only while guiding. */
   comment: string;
-  /** SAN of the move that led to the position on the board. */
-  move: string;
+  /** Guided demonstration: the opponent's move before the shown move, and the shown move. */
+  demo: { previous: TreeNode; shown: TreeNode; viewingPrevious: boolean } | null;
+  onViewDemoPosition: (which: "previous" | "shown") => void;
   hasNextLine: boolean;
-  /** Leaves a guided pause (annotated position, demonstrated move or final position). */
+  /** Leaves a guided pause (demonstrated move or final position). */
   onContinue: () => void;
   onNextLine: () => void;
   onRestartGuided: () => void;
@@ -66,36 +116,40 @@ export default function OpeningLearnFeedback({
   const step = practiceState.learnStep ?? "play";
   const mistakes = practiceState.mistakes ?? 0;
 
-  if (practiceState.phase === "waiting" && guided && step === "context") {
+  if (practiceState.phase === "waiting" && guided && step === "demo" && demo) {
+    const { previous, shown, viewingPrevious } = demo;
     return (
       <Stack gap="xs">
-        <Alert
-          color="blue"
-          icon={<IconSchool size={16} />}
-          title={t("OpeningLearn.ContextTitle", "Look at the position")}
-        >
+        <Paper withBorder p="sm">
+          <Stack gap="sm">
+            {previous.san ? (
+              <LearnMoveEntry
+                label={t("OpeningLearn.OpponentMove", "Opponent")}
+                node={previous}
+                active={viewingPrevious}
+                onClick={() => onViewDemoPosition("previous")}
+              />
+            ) : (
+              previous.comment.trim() && (
+                <Text size="sm" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  {previous.comment.trim()}
+                </Text>
+              )
+            )}
+            <LearnMoveEntry
+              label={t("OpeningLearn.YourMove", "Your turn")}
+              node={shown}
+              active={!viewingPrevious}
+              onClick={() => onViewDemoPosition("shown")}
+            />
+          </Stack>
+        </Paper>
+        <Text size="xs" c="dimmed">
           {t(
-            "OpeningLearn.ContextBody",
-            "Read the comment and the arrows. Next you will see the move of the line.",
+            "OpeningLearn.DemoHint",
+            "Click a move to see its position. Then you will play your move yourself.",
           )}
-        </Alert>
-        <LearnComment comment={comment} />
-        <ContinueButton label={t("OpeningLearn.ShowMove", "Show the move")} onClick={onContinue} />
-      </Stack>
-    );
-  }
-
-  if (practiceState.phase === "waiting" && guided && step === "demo") {
-    return (
-      <Stack gap="xs">
-        <Alert
-          color="blue"
-          icon={<IconSchool size={16} />}
-          title={t("OpeningLearn.DemoTitle", "The line continues with {{move}}", { move })}
-        >
-          {t("OpeningLearn.DemoBody", "Then you will play this move yourself.")}
-        </Alert>
-        <LearnComment comment={comment} />
+        </Text>
         <ContinueButton label={t("OpeningLearn.PlayIt", "Play it")} onClick={onContinue} />
       </Stack>
     );

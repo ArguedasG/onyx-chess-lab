@@ -648,11 +648,11 @@ export type PracticeState = {
     /** Learn mode: first the move is shown (`guided`), then the line is repeated unaided. */
     learnStage?: "guided" | "recall";
     /**
-     * Guided Learn step: `context` holds an annotated position before the move is shown, `demo`
-     * shows the line move, `play` waits for the student to repeat it and `end` holds the final
-     * position. Every step except `play` waits until the student continues.
+     * Guided Learn step: `demo` shows the line move next to the opponent's move before it, `play`
+     * waits for the student to repeat it and `end` holds the final position. `demo` waits for the
+     * student only when one of those moves is annotated; `end` always waits.
      */
-    learnStep?: "context" | "demo" | "play" | "end";
+    learnStep?: "demo" | "play" | "end";
     /** Guided Learn: ply whose line move was already demonstrated. */
     learnShownPly?: number;
     /** Where the current line attempt starts; Learn mode restarts from here. */

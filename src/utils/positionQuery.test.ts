@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commands } from "@/bindings";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
-import { queryPosition } from "./db";
+import { isTransientPositionError, queryPosition } from "./db";
 import { computeTreeCoverage } from "./repertoire";
 import type { TreeNode } from "./treeReducer";
 
@@ -115,5 +115,24 @@ describe("position query lifecycle", () => {
                 "coverage:3",
             ),
         ).rejects.toThrow("Database unavailable");
+    });
+});
+
+describe("isTransientPositionError", () => {
+    it("treats cancelled searches and requests as transient", () => {
+        expect(isTransientPositionError(new Error("Search cancelled"))).toBe(true);
+        expect(isTransientPositionError(new DOMException("Aborted", "AbortError"))).toBe(true);
+        // Tauri's HTTP plugin: aborted in JS, aborted in Rust and aborted while reading the body.
+        expect(isTransientPositionError(new Error("Request cancelled"))).toBe(true);
+        expect(isTransientPositionError("Request canceled")).toBe(true);
+        expect(isTransientPositionError("Request cancelled")).toBe(true);
+    });
+
+    it("keeps real failures visible", () => {
+        expect(isTransientPositionError(new Error("Failed to fetch Lichess games: 429"))).toBe(
+            false,
+        );
+        expect(isTransientPositionError(new Error("Database unavailable"))).toBe(false);
+        expect(isTransientPositionError(undefined)).toBe(false);
     });
 });

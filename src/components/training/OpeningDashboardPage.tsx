@@ -97,7 +97,11 @@ import {
   OpeningConfigFields,
   type NewRepertoireInput,
 } from "./OpeningManageForms";
-import { openingLearnBatchSize } from "@/utils/openingLearning";
+import {
+  MAX_OPENING_LEARN_MOVE_DELAY_MS,
+  openingLearnBatchSize,
+  openingLearnMoveDelay,
+} from "@/utils/openingLearning";
 import {
   createOpeningImportDraft,
   draftToImportGroups,
@@ -862,6 +866,34 @@ export default function OpeningDashboardPage() {
                     ...previous,
                     openings: updateOpeningPracticeSettings(previous.openings, {
                       learnBatchSize: Math.min(30, size),
+                    }),
+                  }));
+                }}
+              />
+              <NumberInput
+                size="xs"
+                maw={260}
+                min={0}
+                max={MAX_OPENING_LEARN_MOVE_DELAY_MS / 1000}
+                step={0.1}
+                decimalScale={1}
+                suffix=" s"
+                label={t("OpeningLearn.MoveDelay", "Pause between moves in Learn mode")}
+                description={t(
+                  "OpeningLearn.MoveDelayDescription",
+                  "How long the opponent's move stays before your move is shown.",
+                )}
+                value={openingLearnMoveDelay(areas.openings) / 1000}
+                onChange={(value) => {
+                  const seconds = Number(value);
+                  if (value === "" || !Number.isFinite(seconds) || seconds < 0) return;
+                  setAreas((previous) => ({
+                    ...previous,
+                    openings: updateOpeningPracticeSettings(previous.openings, {
+                      learnMoveDelayMs: Math.min(
+                        MAX_OPENING_LEARN_MOVE_DELAY_MS,
+                        Math.round(seconds * 1000),
+                      ),
                     }),
                   }));
                 }}

@@ -5,7 +5,9 @@ import {
     isOpeningLineLearned,
     learnedOpeningPrefixLength,
     markOpeningLineLearned,
+    nextOpeningLine,
     openingLearnBatchSize,
+    openingLearnMoveDelay,
     openingLearnStartPly,
     trainableOpeningLines,
 } from "./openingLearning";
@@ -110,6 +112,32 @@ describe("opening learning", () => {
         expect(summary).toMatchObject({ learned: 1, total: 3 });
         expect(summary.pending.map((l) => l.id)).toEqual(["b", "d"]);
         expect(openingLearnBatchSize(current)).toBe(5);
+    });
+
+    it("finds the next trainable line of the repertoire", () => {
+        const current = state([
+            line("a", ["e2e4"]),
+            line("hidden", ["d2d4"], { trainable: false }),
+            line("b", ["c2c4"]),
+            line("game", ["g1f3"], { variantId: "v2" }),
+        ]);
+        expect(nextOpeningLine(current, "r1", "a")?.id).toBe("b");
+        // Model games are not trainable theory, so the last theory line has no successor.
+        expect(nextOpeningLine(current, "r1", "b")).toBeUndefined();
+        expect(nextOpeningLine(current, "missing", "a")).toBeUndefined();
+    });
+
+    it("uses the configured Learn move delay within its limits", () => {
+        const current = state([]);
+        expect(openingLearnMoveDelay(current)).toBe(900);
+        const withDelay = (learnMoveDelayMs: number) =>
+            openingLearnMoveDelay({
+                ...current,
+                settings: { ...current.settings, learnMoveDelayMs },
+            });
+        expect(withDelay(300)).toBe(300);
+        expect(withDelay(0)).toBe(0);
+        expect(withDelay(60_000)).toBe(5000);
     });
 
     it("finds the prefix already covered by learned lines of the repertoire", () => {

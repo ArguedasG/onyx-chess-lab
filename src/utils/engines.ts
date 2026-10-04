@@ -1,8 +1,8 @@
-import { fetch } from "@tauri-apps/plugin-http";
 import type { Platform } from "@tauri-apps/plugin-os";
 import useSWR from "swr";
 import { z } from "zod";
 import { type BestMoves, commands, type EngineOptions, type GoMode } from "@/bindings";
+import { CATALOG_SWR_OPTIONS, fetchCatalog } from "./http";
 import { unwrap } from "./unwrap";
 
 export const requiredEngineSettings = ["MultiPV", "Threads", "Hash"];
@@ -113,21 +113,22 @@ export function getBestMovesOnce(
 }
 
 export function useDefaultEngines(os: Platform | undefined, opened: boolean) {
-    const { data, error, isLoading } = useSWR(opened ? os : null, async (os: Platform) => {
-        const bmi2: boolean = await commands.isBmi2Compatible();
-        const data = await fetch(`https://www.encroissant.org/engines?os=${os}&bmi2=${bmi2}`, {
-            method: "GET",
-        });
-        if (!data.ok) {
-            throw new Error("Failed to fetch engines");
-        }
-        return (await data.json()).filter(
-            (e: { os: Platform; bmi2: boolean }) => e.os === os && e.bmi2 === bmi2,
-        );
-    });
+    const { data, error, isLoading, mutate } = useSWR(
+        opened ? os : null,
+        async (os: Platform) => {
+            const bmi2: boolean = await commands.isBmi2Compatible();
+            const engines = await fetchCatalog<(LocalEngine & { os: Platform; bmi2: boolean })[]>(
+                `/engines.json?os=${os}&bmi2=${bmi2}`,
+            );
+            return engines.filter((e) => e.os === os && e.bmi2 === bmi2);
+        },
+        CATALOG_SWR_OPTIONS,
+    );
     return {
         defaultEngines: data as LocalEngine[],
-        error,
+        // A failed background refresh keeps the list already shown.
+        error: data ? undefined : error,
         isLoading,
+        retry: () => mutate(),
     };
 }

@@ -41,6 +41,7 @@ import {
   enginesAtom,
   tabEngineSettingsFamily,
 } from "@/state/atoms";
+import { keyMapAtom } from "@/state/keybinds";
 import { chessopsError, positionFromFen, swapMove } from "@/utils/chessops";
 import type { Engine } from "@/utils/engines";
 import { formatNodes } from "@/utils/format";
@@ -119,6 +120,7 @@ function BestMovesComponent({
 
   const [settingsOn, toggleSettingsOn] = useToggle();
   const [threat, setThreat] = useAtom(currentThreatAtom);
+  const keyMap = useAtomValue(keyMapAtom);
   const [detachedEngineId, setDetachedEngineId] = useAtom(currentDetachedEngineAtom);
   const isDetached = detachedEngineId === engine.id;
   const theme = useMantineTheme();
@@ -189,7 +191,9 @@ function BestMovesComponent({
           />
         </Accordion.Control>
         <ActionIcon.Group>
-          <Tooltip label="Check the opponent's threat">
+          <Tooltip
+            label={`${t("Board.Analysis.ShowThreat", "Check the opponent's threat")} (${keyMap.TOGGLE_THREAT.keys.toUpperCase()})`}
+          >
             <ActionIcon
               size="lg"
               onClick={() => setThreat(!threat)}

@@ -249,6 +249,8 @@ const openingsStateSchema = z.object({
         evaluateOutsideRepertoire: z.boolean(),
         /** New lines per Learn session; defaults to `DEFAULT_OPENING_LEARN_BATCH`. */
         learnBatchSize: z.number().int().positive().optional(),
+        /** Learn mode pause between automatic moves; defaults to `DEFAULT_OPENING_LEARN_MOVE_DELAY_MS`. */
+        learnMoveDelayMs: z.number().int().nonnegative().optional(),
     }),
 });
 export type OpeningsState = z.infer<typeof openingsStateSchema>;

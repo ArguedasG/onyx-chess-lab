@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Button,
   Center,
@@ -16,7 +15,6 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { IconAlertCircle } from "@tabler/icons-react";
 import { basename, resolve } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom, useSetAtom } from "jotai";
@@ -29,6 +27,7 @@ import { getDatabases, type SuccessDatabaseInfo, useDefaultDatabases } from "@/u
 import { capitalize, formatBytes, formatNumber } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
 import FileInput from "../common/FileInput";
+import CatalogErrorAlert from "../common/CatalogErrorAlert";
 import ProgressButton from "../common/ProgressButton";
 
 interface AddDatabaseFormValues {
@@ -57,7 +56,7 @@ function AddDatabase({
   const [databaseDir] = useAtom(storedDatabasesDirAtom);
   const setConversionState = useSetAtom(databaseConversionStateAtom);
 
-  const { defaultDatabases, error, isLoading } = useDefaultDatabases(opened);
+  const { defaultDatabases, error, isLoading, retry } = useDefaultDatabases(opened);
 
   async function convertDB(paths: string[], title: string, description?: string) {
     if (paths.length === 0) return;
@@ -142,9 +141,7 @@ function AddDatabase({
                 />
               ))}
               {error && (
-                <Alert icon={<IconAlertCircle size="1rem" />} title="Error" color="red">
-                  {"Failed to fetch the database's info from the server."}
-                </Alert>
+                <CatalogErrorAlert message={t("Databases.Add.ErrorFetch")} onRetry={retry} />
               )}
             </SimpleGrid>
           </ScrollArea.Autosize>

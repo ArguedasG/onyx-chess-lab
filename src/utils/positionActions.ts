@@ -25,11 +25,27 @@ export type RepertoirePositionMatch = {
     continuationSan: string[];
 };
 
+export type PositionSolutionMove = {
+    san: string;
+    /** Plies played from the start of the game after this move, for move numbers. */
+    halfMoves: number;
+};
+
 export type PositionSolutionBranch = {
     childIndex: number;
     san: string;
     continuationSan: string[];
     continuationPlies: number;
+    /** The branch move and its continuation, one entry per ply. */
+    moves: PositionSolutionMove[];
+};
+
+export type PositionStartOption = {
+    /** Board path of the starting position. */
+    path: number[];
+    /** Move that led to the position; null for the start of the game. */
+    san: string | null;
+    halfMoves: number;
 };
 
 export function positionFenKey(fen: string): string {
@@ -117,18 +133,54 @@ export function findRepertoirePositionMatches(
     );
 }
 
-function clonePositionSubtree(tree: TreeState, preferredChildIndex?: number): TreeNode {
-    const current = getNodeAtPath(tree.root, tree.position);
-    const root = structuredClone(current);
+/** The rest of the board path after `startPath` when it continues through `childIndex`. */
+function boardPathAfter(tree: TreeState, startPath: number[], childIndex: number): number[] {
+    const onBoardPath =
+        startPath.length < tree.position.length &&
+        startPath.every((index, depth) => tree.position[depth] === index) &&
+        tree.position[startPath.length] === childIndex;
+    return onBoardPath ? tree.position.slice(startPath.length + 1) : [];
+}
+
+function promoteChild(node: TreeNode, childIndex: number) {
+    if (childIndex > 0 && childIndex < node.children.length) {
+        const [preferred] = node.children.splice(childIndex, 1);
+        node.children.unshift(preferred);
+    }
+}
+
+function truncateTree(node: TreeNode, depth: number) {
+    if (depth <= 0) {
+        node.children = [];
+        return;
+    }
+    for (const child of node.children) truncateTree(child, depth - 1);
+}
+
+/**
+ * Copy the subtree at `startPath` (the displayed position by default). The preferred branch, and
+ * the board path through it, become the main line; `solutionPlies` cuts every line at that depth.
+ */
+function clonePositionSubtree(
+    tree: TreeState,
+    options: { preferredChildIndex?: number; startPath?: number[]; solutionPlies?: number } = {},
+): TreeNode {
+    const startPath = options.startPath ?? tree.position;
+    const root = structuredClone(getNodeAtPath(tree.root, startPath));
     root.move = null;
     root.san = null;
-    if (
-        preferredChildIndex !== undefined &&
-        preferredChildIndex > 0 &&
-        preferredChildIndex < root.children.length
-    ) {
-        const [preferred] = root.children.splice(preferredChildIndex, 1);
-        root.children.unshift(preferred);
+    if (options.preferredChildIndex !== undefined) {
+        const rest = boardPathAfter(tree, startPath, options.preferredChildIndex);
+        promoteChild(root, options.preferredChildIndex);
+        let node = root.children[0];
+        for (const childIndex of rest) {
+            if (!node) break;
+            promoteChild(node, childIndex);
+            node = node.children[0];
+        }
+    }
+    if (options.solutionPlies !== undefined && options.solutionPlies > 0) {
+        truncateTree(root, options.solutionPlies);
     }
     return root;
 }
@@ -152,30 +204,54 @@ function positionSourcePgn(tree: TreeState, root: TreeNode, title: string, sourc
     });
 }
 
-export function getPositionSolutionBranches(tree: TreeState): PositionSolutionBranch[] {
-    const node = getNodeAtPath(tree.root, tree.position);
+/** Positions on the board path, from the start of the game to the displayed one. */
+export function getPositionStartOptions(tree: TreeState): PositionStartOption[] {
+    const options: PositionStartOption[] = [];
+    let node = tree.root;
+    options.push({ path: [], san: null, halfMoves: node.halfMoves });
+    for (let depth = 0; depth < tree.position.length; depth += 1) {
+        const child = node.children[tree.position[depth]];
+        if (!child) break;
+        node = child;
+        options.push({
+            path: tree.position.slice(0, depth + 1),
+            san: child.san ?? (child.move ? makeUci(child.move) : null),
+            halfMoves: child.halfMoves,
+        });
+    }
+    return options;
+}
+
+/**
+ * Continuations from `startPath` (the displayed position by default). A branch that leads to the
+ * displayed position follows the board path first, then the main line.
+ */
+export function getPositionSolutionBranches(
+    tree: TreeState,
+    startPath: number[] = tree.position,
+): PositionSolutionBranch[] {
+    const node = getNodeAtPath(tree.root, startPath);
     return node.children.map((child, childIndex) => {
-        const continuation = getMainLine(child);
-        const continuationSan = [child.san, ...mainLineSan(child)].filter((san): san is string =>
-            Boolean(san),
-        );
+        const rest = boardPathAfter(tree, startPath, childIndex);
+        const moves: PositionSolutionMove[] = [];
+        let current: TreeNode | undefined = child;
+        let depth = 0;
+        while (current) {
+            moves.push({
+                san: current.san ?? (current.move ? makeUci(current.move) : ""),
+                halfMoves: current.halfMoves,
+            });
+            current = current.children[rest[depth] ?? 0];
+            depth += 1;
+        }
         return {
             childIndex,
             san: child.san ?? makeUci(child.move!),
-            continuationSan,
-            continuationPlies: 1 + continuation.length,
+            continuationSan: moves.map((move) => move.san).filter(Boolean),
+            continuationPlies: moves.length,
+            moves,
         };
     });
-}
-
-function mainLineSan(node: TreeNode): string[] {
-    const result: string[] = [];
-    let current = node;
-    while (current.children[0]) {
-        current = current.children[0];
-        if (current.san) result.push(current.san);
-    }
-    return result;
 }
 
 export function createPositionTacticsRecord(
@@ -183,8 +259,9 @@ export function createPositionTacticsRecord(
     preferredChildIndex: number,
     title: string,
     sourceLabel: string,
+    options: { startPath?: number[]; solutionPlies?: number } = {},
 ): ParsedTrainingRecord {
-    const root = clonePositionSubtree(tree, preferredChildIndex);
+    const root = clonePositionSubtree(tree, { ...options, preferredChildIndex });
     const moves = getMainLine(root);
     if (moves.length === 0)
         throw new Error(
