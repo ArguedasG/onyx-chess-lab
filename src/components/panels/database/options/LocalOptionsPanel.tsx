@@ -165,10 +165,22 @@ function LocalOptionsPanel({ boardFen }: { boardFen: string }) {
           data={[
             { value: "exact", label: t("Board.Database.Local.Exact") },
             { value: "partial", label: t("Board.Database.Local.Partial") },
+            {
+              value: "pawns",
+              label: t("Board.Database.Local.PawnStructure", "Pawn structure"),
+            },
           ]}
           value={options.type}
-          onChange={(v) => setOptions({ ...options, type: v as "exact" | "partial" })}
+          onChange={(v) => setOptions({ ...options, type: v as "exact" | "partial" | "pawns" })}
         />
+        {options.type === "pawns" && (
+          <Text size="xs" c="dimmed">
+            {t(
+              "Board.Database.Local.PawnStructure.Desc",
+              "Find games that reached the same pawn structure, wherever the other pieces are.",
+            )}
+          </Text>
+        )}
       </Stack>
 
       <Group>
@@ -219,6 +231,14 @@ function LocalOptionsPanel({ boardFen }: { boardFen: string }) {
               }}
             >
               {t("Board.Database.Local.SimilarStructure")}
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setOptions((q) => ({ ...q, type: "pawns", fen: boardFen }));
+              }}
+            >
+              {t("Board.Database.Local.PawnStructure", "Pawn structure")}
             </Button>
             <Button
               variant="default"

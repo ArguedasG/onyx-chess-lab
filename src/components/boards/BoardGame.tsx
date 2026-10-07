@@ -576,6 +576,13 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     return moves;
   }
 
+  /** FEN the generated game starts from: the end of the source mainline. */
+  function getStartFen(): string {
+    let node = root;
+    while (node.children.length > 0) node = node.children[0];
+    return node.fen;
+  }
+
   async function startGame() {
     if (isStarting) return;
     toggleEditingMode(false);
@@ -1575,8 +1582,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                                 {t("ModelGame.InitialPosition.Edit", "Edit board / FEN")}
                               </Button>
                             </Group>
-                            <Text size="xs" ff="monospace" truncate title={root.fen}>
-                              {root.fen}
+                            <Text size="xs" ff="monospace" truncate title={getStartFen()}>
+                              {getStartFen()}
                             </Text>
                           </Stack>
                         </Paper>

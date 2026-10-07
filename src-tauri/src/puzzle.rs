@@ -10,8 +10,15 @@ use crate::{
     error::Error,
 };
 
+/// Opens a puzzle database; a failure is reported to the UI instead of panicking.
+fn open_puzzle_db(file: &str) -> Result<diesel::SqliteConnection, Error> {
+    diesel::SqliteConnection::establish(file)
+        .map_err(|error| Error::from(std::io::Error::other(error.to_string())))
+}
+
 #[derive(Debug)]
 struct PuzzleCache {
+    file: String,
     cache: VecDeque<Puzzle>,
     counter: usize,
     min_rating: u16,
@@ -22,6 +29,7 @@ struct PuzzleCache {
 impl PuzzleCache {
     fn new() -> Self {
         Self {
+            file: String::new(),
             cache: VecDeque::new(),
             counter: 0,
             min_rating: 0,
@@ -38,6 +46,7 @@ impl PuzzleCache {
         theme: &Option<String>,
     ) -> Result<(), Error> {
         if self.cache.is_empty()
+            || self.file != file
             || self.min_rating != min_rating
             || self.max_rating != max_rating
             || self.theme != *theme
@@ -46,7 +55,7 @@ impl PuzzleCache {
             self.cache.clear();
             self.counter = 0;
 
-            let mut db = diesel::SqliteConnection::establish(file).expect("open database");
+            let mut db = open_puzzle_db(file)?;
 
             let new_puzzles: Vec<Puzzle> = if let Some(theme_name) = theme {
                 puzzles::table
@@ -68,6 +77,7 @@ impl PuzzleCache {
             };
 
             self.cache = new_puzzles.into_iter().collect();
+            self.file = file.to_string();
             self.min_rating = min_rating;
             self.max_rating = max_rating;
             self.theme = theme.clone();
@@ -88,7 +98,7 @@ impl PuzzleCache {
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_puzzle(
+pub async fn get_puzzle(
     file: String,
     min_rating: u16,
     max_rating: u16,
@@ -96,7 +106,10 @@ pub fn get_puzzle(
 ) -> Result<Puzzle, Error> {
     static PUZZLE_CACHE: Lazy<Mutex<PuzzleCache>> = Lazy::new(|| Mutex::new(PuzzleCache::new()));
 
-    let mut cache = PUZZLE_CACHE.lock().unwrap();
+    // A failed query must not poison the cache for the rest of the session.
+    let mut cache = PUZZLE_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.get_puzzles(&file, min_rating, max_rating, &theme)?;
     cache.get_next_puzzle().ok_or(Error::NoPuzzles)
 }
@@ -116,8 +129,7 @@ pub struct PuzzleDatabaseInfo {
 pub async fn get_puzzle_db_info(file: PathBuf) -> Result<PuzzleDatabaseInfo, Error> {
     let path = file;
 
-    let mut db =
-        diesel::SqliteConnection::establish(&path.to_string_lossy()).expect("open database");
+    let mut db = open_puzzle_db(&path.to_string_lossy())?;
 
     let puzzle_count = puzzles::table.count().get_result::<i64>(&mut db)? as i32;
 
@@ -142,8 +154,8 @@ pub fn delete_puzzle_database(file: String) -> Result<(), Error> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_puzzle_themes(file: String) -> Result<Vec<String>, Error> {
-    let mut db = diesel::SqliteConnection::establish(&file).expect("open database");
+pub async fn get_puzzle_themes(file: String) -> Result<Vec<String>, Error> {
+    let mut db = open_puzzle_db(&file)?;
     let result: Vec<String> = themes::table
         .select(themes::name)
         .order(themes::name.asc())
@@ -153,8 +165,8 @@ pub fn get_puzzle_themes(file: String) -> Result<Vec<String>, Error> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_themes_for_puzzle(file: String, puzzle_id: i32) -> Result<Vec<String>, Error> {
-    let mut db = diesel::SqliteConnection::establish(&file).expect("open database");
+pub async fn get_themes_for_puzzle(file: String, puzzle_id: i32) -> Result<Vec<String>, Error> {
+    let mut db = open_puzzle_db(&file)?;
     let result: Vec<String> = themes::table
         .inner_join(puzzle_themes::table)
         .filter(puzzle_themes::puzzle_id.eq(puzzle_id))

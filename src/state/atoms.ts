@@ -357,6 +357,16 @@ export const modelGameBatchSettingsAtom = atomWithStorage<ModelGameBatchSettings
 const modelGameBatchIdFamily = atomFamily((_tab: string) => atom<string | null>(null));
 export const currentModelGameBatchIdAtom = tabValue(modelGameBatchIdFamily);
 
+/** Experiments modal state per generator tab, so it survives leaving and returning to the tab. */
+export type ModelGameExperimentView = {
+    opened: boolean;
+    experimentId: string | null;
+    selectedGames: number[];
+};
+export const modelGameExperimentViewFamily = atomFamily((_tab: string) =>
+    atom<ModelGameExperimentView>({ opened: false, experimentId: null, selectedGames: [] }),
+);
+
 export const gameSameTimeControlAtom = atomWithStorage<boolean>("game-same-time-control", true);
 
 export const gameOpeningBookPathAtom = atomWithStorage<string | null>(

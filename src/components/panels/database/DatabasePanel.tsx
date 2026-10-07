@@ -67,7 +67,8 @@ type DBType =
 export type LocalOptions = {
   path: string | null;
   fen: string;
-  type: "exact" | "partial";
+  /** "pawns" matches the exact pawn structure and ignores every other piece. */
+  type: "exact" | "partial" | "pawns";
   player: number | null;
   color: "white" | "black" | "any";
   elo_min?: number;
@@ -244,8 +245,8 @@ function DatabasePanel() {
 
   const header = (
     <>
-      <Group justify="space-between" w="100%" wrap="nowrap">
-        <Group>
+      <Group justify="space-between" w="100%" wrap="nowrap" align="flex-start">
+        <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
           <SegmentedControl
             data={[
               { label: t("Board.Database.Local"), value: "local" },
@@ -266,10 +267,31 @@ function DatabasePanel() {
               }}
               placeholder={t("Board.Database.SelectReference")}
               size="sm"
-              flex={1}
-              maw={200}
+              w={200}
+              miw={160}
               allowDeselect={false}
             />
+          )}
+          {db === "local" && (
+            <Button
+              size="xs"
+              variant={localOptions.type === "pawns" ? "filled" : "default"}
+              title={t(
+                "Board.Database.Local.PawnStructure.Desc",
+                "Find games that reached the same pawn structure, wherever the other pieces are.",
+              )}
+              onClick={() => {
+                const pawns = localOptions.type !== "pawns";
+                setLocalOptions((q) => ({
+                  ...q,
+                  type: pawns ? "pawns" : "exact",
+                  fen: debouncedFen,
+                }));
+                if (pawns && tabType === "report") setTabType("games");
+              }}
+            >
+              {t("Board.Database.Local.PawnStructure", "Pawn structure")}
+            </Button>
           )}
           {db === "local" && tabType !== "options" && (
             <Button

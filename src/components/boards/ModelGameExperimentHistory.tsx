@@ -2,7 +2,9 @@ import {
   ActionIcon,
   Badge,
   Button,
+  Checkbox,
   Group,
+  Menu,
   Modal,
   Pagination,
   Paper,
@@ -17,15 +19,21 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconArrowLeft,
+  IconBook2,
+  IconChevronDown,
+  IconDeviceFloppy,
   IconDownload,
+  IconFileExport,
   IconFlask,
+  IconNotebook,
   IconRefresh,
   IconTrash,
   IconZoomCheck,
 } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { useAtom, useSetAtom } from "jotai";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ModelGameExperimentDetail, ModelGameExperimentSummary } from "@/bindings";
@@ -33,7 +41,10 @@ import { commands } from "@/bindings";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import EmpiricalWdlPanel from "@/components/boards/EmpiricalWdlPanel";
 import ExperimentAnalysisPanel from "@/components/boards/ExperimentAnalysisPanel";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import AddToStudyModal from "@/components/studies/AddToStudyModal";
+import RepertoireAdditionModal from "@/components/training/RepertoireAdditionModal";
+import { activeTabAtom, modelGameExperimentViewFamily, tabsAtom } from "@/state/atoms";
+import { combineModelGamePgns, writeModelGameSelectionPgn } from "@/utils/modelGame";
 import { createTab } from "@/utils/tabs";
 import { unwrap } from "@/utils/unwrap";
 
@@ -98,8 +109,29 @@ export default function ModelGameExperimentHistory({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [, setTabs] = useAtom(tabsAtom);
+  const activeTab = useAtomValue(activeTabAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
-  const [opened, { open, close }] = useDisclosure(false);
+  // Bind to the tab that mounted this panel; analyzing a game switches the active tab.
+  const [ownerTab] = useState(() => activeTab ?? "model-game-generator");
+  const [view, setView] = useAtom(modelGameExperimentViewFamily(ownerTab));
+  const opened = view.opened;
+  const open = useCallback(() => setView((current) => ({ ...current, opened: true })), [setView]);
+  const close = useCallback(() => setView((current) => ({ ...current, opened: false })), [setView]);
+  const selectedGames = view.selectedGames;
+  const setSelectedGames = useCallback(
+    (update: number[] | ((current: number[]) => number[])) =>
+      setView((current) => ({
+        ...current,
+        selectedGames: typeof update === "function" ? update(current.selectedGames) : update,
+      })),
+    [setView],
+  );
+  const [saveTarget, setSaveTarget] = useState<
+    | { kind: "study"; games: { title: string; pgn: string }[] }
+    | { kind: "repertoire"; path: string }
+    | null
+  >(null);
+  const [savingSelection, setSavingSelection] = useState(false);
   const [summaries, setSummaries] = useState<ModelGameExperimentSummary[]>([]);
   const [detail, setDetail] = useState<ModelGameExperimentDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -138,8 +170,15 @@ export default function ModelGameExperimentHistory({
     async (experimentId: string) => {
       setLoading(true);
       try {
-        setDetail(unwrap(await commands.getModelGameExperiment(experimentId)));
+        const loaded = unwrap(await commands.getModelGameExperiment(experimentId));
+        setDetail(loaded);
+        setView((current) => ({
+          ...current,
+          experimentId,
+          selectedGames: current.experimentId === experimentId ? current.selectedGames : [],
+        }));
       } catch (error) {
+        setView((current) => ({ ...current, experimentId: null }));
         notifications.show({
           title: t("ModelGame.Experiments.LoadError", "Could not load experiments"),
           message: error instanceof Error ? error.message : String(error),
@@ -149,8 +188,21 @@ export default function ModelGameExperimentHistory({
         setLoading(false);
       }
     },
-    [t],
+    [setView, t],
   );
+
+  // Restore the modal when returning to this tab, e.g. after closing an analyzed game.
+  const restoredView = useRef(false);
+  useEffect(() => {
+    if (restoredView.current) return;
+    restoredView.current = true;
+    if (view.opened && view.experimentId) void openExperiment(view.experimentId);
+  }, [openExperiment, view.experimentId, view.opened]);
+
+  function backToList() {
+    setDetail(null);
+    setView((current) => ({ ...current, experimentId: null, selectedGames: [] }));
+  }
 
   useEffect(() => {
     if (!requestedExperimentId || requestedExperimentId === lastRequestedExperimentId.current)
@@ -162,7 +214,7 @@ export default function ModelGameExperimentHistory({
 
   async function openHistory() {
     await refresh();
-    setDetail(null);
+    backToList();
     open();
   }
 
@@ -175,7 +227,7 @@ export default function ModelGameExperimentHistory({
         setActiveTab,
         pgn: artifact.pgn,
       });
-      close();
+      // Keep the modal state: it reopens on this experiment when the user returns.
       navigate({ to: "/" });
     } catch (error) {
       notifications.show({
@@ -183,6 +235,53 @@ export default function ModelGameExperimentHistory({
         message: error instanceof Error ? error.message : String(error),
         color: "red",
       });
+    }
+  }
+
+  async function readSelectedGames(): Promise<{ title: string; pgn: string }[]> {
+    if (!detail) return [];
+    const games = detail.games.filter((game) => selectedGames.includes(game.index));
+    return Promise.all(
+      games.map(async (game) => ({
+        title: `#${game.index + 1} ${game.whitePlayer} - ${game.blackPlayer} (${resultLabel(game.result)})`,
+        pgn: unwrap(
+          await commands.readModelGameExperimentGame(detail.summary.experimentId, game.index),
+        ).pgn,
+      })),
+    );
+  }
+
+  async function saveSelection(kind: "pgn" | "study" | "repertoire") {
+    if (!detail || selectedGames.length === 0) return;
+    setSavingSelection(true);
+    try {
+      const games = await readSelectedGames();
+      const pgn = combineModelGamePgns(games.map((game) => game.pgn));
+      if (kind === "study") {
+        setSaveTarget({ kind: "study", games });
+      } else if (kind === "repertoire") {
+        setSaveTarget({ kind: "repertoire", path: await writeModelGameSelectionPgn(pgn) });
+      } else {
+        const destination = await saveDialog({
+          defaultPath: `model-games-${detail.summary.experimentId}.pgn`,
+          filters: [{ name: "PGN", extensions: ["pgn"] }],
+        });
+        if (!destination) return;
+        await writeTextFile(destination, pgn);
+        notifications.show({
+          title: t("ModelGame.Experiments.Selection.Saved", "Games saved"),
+          message: destination,
+          color: "green",
+        });
+      }
+    } catch (error) {
+      notifications.show({
+        title: t("ModelGame.Experiments.Selection.Error", "Could not save the selected games"),
+        message: error instanceof Error ? error.message : String(error),
+        color: "red",
+      });
+    } finally {
+      setSavingSelection(false);
     }
   }
 
@@ -228,7 +327,7 @@ export default function ModelGameExperimentHistory({
     if (!pendingDelete) return;
     try {
       unwrap(await commands.deleteModelGameExperiment(pendingDelete));
-      if (detail?.summary.experimentId === pendingDelete) setDetail(null);
+      if (detail?.summary.experimentId === pendingDelete) backToList();
       setPendingDelete(null);
       await refresh();
     } catch (error) {
@@ -259,6 +358,26 @@ export default function ModelGameExperimentHistory({
         onClose={() => setPendingDelete(null)}
         onConfirm={deleteExperiment}
       />
+
+      {saveTarget?.kind === "study" && (
+        <AddToStudyModal
+          opened
+          onClose={() => setSaveTarget(null)}
+          pgn=""
+          suggestedTitle=""
+          sourceLabel={t("ModelGame.Title", "Model Game Generator")}
+          games={saveTarget.games}
+          zIndex={1000}
+        />
+      )}
+      {saveTarget?.kind === "repertoire" && (
+        <RepertoireAdditionModal
+          initialPath={saveTarget.path}
+          initialMode="modelGame"
+          zIndex={1000}
+          onClose={() => setSaveTarget(null)}
+        />
+      )}
 
       <Modal
         opened={exportModalOpened}
@@ -321,7 +440,7 @@ export default function ModelGameExperimentHistory({
                 variant="subtle"
                 size="xs"
                 leftSection={<IconArrowLeft size={15} />}
-                onClick={() => setDetail(null)}
+                onClick={backToList}
               >
                 {t("Common.Back", "Back")}
               </Button>
@@ -369,6 +488,71 @@ export default function ModelGameExperimentHistory({
             {detail.summary.status !== "running" && (
               <EmpiricalWdlPanel experimentId={detail.summary.experimentId} />
             )}
+            {detail.games.length > 0 && (
+              <Group justify="space-between">
+                <Checkbox
+                  label={t("ModelGame.Experiments.Selection.All", "Select all games")}
+                  checked={
+                    selectedGames.length > 0 &&
+                    selectedGames.length ===
+                      detail.games.filter((game) => game.artifactAvailable).length
+                  }
+                  indeterminate={
+                    selectedGames.length > 0 &&
+                    selectedGames.length <
+                      detail.games.filter((game) => game.artifactAvailable).length
+                  }
+                  onChange={(event) =>
+                    setSelectedGames(
+                      event.currentTarget.checked
+                        ? detail.games
+                            .filter((game) => game.artifactAvailable)
+                            .map((game) => game.index)
+                        : [],
+                    )
+                  }
+                />
+                <Menu position="bottom-end" withinPortal zIndex={1000}>
+                  <Menu.Target>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      leftSection={<IconDeviceFloppy size={15} />}
+                      rightSection={<IconChevronDown size={14} />}
+                      disabled={selectedGames.length === 0}
+                      loading={savingSelection}
+                    >
+                      {t("ModelGame.Experiments.Selection.Save", "Save selected ({{count}})", {
+                        count: selectedGames.length,
+                      })}
+                    </Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      leftSection={<IconNotebook size={15} />}
+                      onClick={() => void saveSelection("study")}
+                    >
+                      {t("ModelGame.Experiments.Selection.Study", "Add to a study")}
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconBook2 size={15} />}
+                      onClick={() => void saveSelection("repertoire")}
+                    >
+                      {t(
+                        "ModelGame.Experiments.Selection.Repertoire",
+                        "Add to a repertoire as model games",
+                      )}
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconFileExport size={15} />}
+                      onClick={() => void saveSelection("pgn")}
+                    >
+                      {t("ModelGame.Experiments.Selection.Pgn", "Save as PGN file")}
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              </Group>
+            )}
             <ScrollArea h={430} type="auto">
               <Stack gap="xs">
                 {detail.games.length === 0 ? (
@@ -379,16 +563,31 @@ export default function ModelGameExperimentHistory({
                   detail.games.map((game) => (
                     <Paper key={`${game.index}-${game.gameId}`} withBorder p="xs">
                       <Group justify="space-between" wrap="nowrap">
-                        <div>
-                          <Text size="sm" fw={500}>
-                            #{game.index + 1} · {game.whitePlayer} – {game.blackPlayer}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {resultLabel(game.result)} · {game.plies}{" "}
-                            {t("ModelGame.Experiments.Plies", "plies")} · {game.attempts}{" "}
-                            {t("ModelGame.Experiments.Attempts", "attempt(s)")}
-                          </Text>
-                        </div>
+                        <Group gap="sm" wrap="nowrap">
+                          <Checkbox
+                            aria-label={t("ModelGame.Experiments.Selection.Game", "Select game")}
+                            disabled={!game.artifactAvailable}
+                            checked={selectedGames.includes(game.index)}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setSelectedGames((current) =>
+                                checked
+                                  ? [...current, game.index].sort((a, b) => a - b)
+                                  : current.filter((index) => index !== game.index),
+                              );
+                            }}
+                          />
+                          <div>
+                            <Text size="sm" fw={500}>
+                              #{game.index + 1} · {game.whitePlayer} – {game.blackPlayer}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {resultLabel(game.result)} · {game.plies}{" "}
+                              {t("ModelGame.Experiments.Plies", "plies")} · {game.attempts}{" "}
+                              {t("ModelGame.Experiments.Attempts", "attempt(s)")}
+                            </Text>
+                          </div>
+                        </Group>
                         <Tooltip label={t("Board.Action.AnalyzeGame", "Analizar partida")}>
                           <ActionIcon
                             variant="light"

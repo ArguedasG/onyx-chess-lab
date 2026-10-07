@@ -67,8 +67,8 @@ pub use self::schema::puzzle_themes;
 pub use self::schema::puzzles;
 pub use self::schema::themes;
 pub use self::search::{
-    cancel_position_search, is_position_in_db, search_position, ActivePositionSearches,
-    PositionQueryJs, PositionSearchCache,
+    cancel_position_search, positions_in_db, search_position, ActivePositionSearches,
+    NoveltyReference, PositionQueryJs, PositionSearchCache,
 };
 
 const DATABASE_VERSION: &str = "1.0.0";
@@ -139,15 +139,17 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
 {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
         (|| {
+            // First, so the journal-mode pragma below waits for other connections' locks
+            // instead of failing at once with "database is locked".
+            if let Some(d) = self.busy_timeout {
+                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
+            }
             match self.journal_mode {
                 JournalMode::Delete => conn.batch_execute("PRAGMA journal_mode = DELETE;")?,
                 JournalMode::Off => conn.batch_execute("PRAGMA journal_mode = OFF;")?,
             }
             if self.enable_foreign_keys {
                 conn.batch_execute("PRAGMA foreign_keys = ON;")?;
-            }
-            if let Some(d) = self.busy_timeout {
-                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
             }
             Ok(())
         })()
@@ -1044,6 +1046,7 @@ pub struct GameQuery {
     pub wanted_result: Option<String>,
 }
 
+#[cfg(test)]
 impl GameQuery {
     pub fn new() -> Self {
         Self::default()

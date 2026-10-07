@@ -28,7 +28,7 @@ use vampirc_uci::{
 };
 
 use crate::{
-    db::{is_position_in_db, GameQuery, PositionQueryJs},
+    db::{positions_in_db, NoveltyReference},
     engine::{
         parse_fen_and_apply_moves, BaseEngine, EngineLog, EngineOption, EngineReader, GoMode,
     },
@@ -607,7 +607,21 @@ pub struct AnalysisOptions {
     pub annotate_novelties: bool,
     pub reference_db: Option<PathBuf>,
     pub reversed: bool,
+    /// PGN date of the analyzed game; only earlier database games count for its novelty.
+    #[serde(default)]
+    #[specta(optional)]
+    pub game_date: Option<String>,
+    /// Players of the analyzed game, used to leave the game itself out when it has no date.
+    #[serde(default)]
+    #[specta(optional)]
+    pub white: Option<String>,
+    #[serde(default)]
+    #[specta(optional)]
+    pub black: Option<String>,
 }
+
+/// Grace period on top of the requested move time before a silent engine counts as hung.
+const ENGINE_HANG_MARGIN: Duration = Duration::from_secs(30);
 
 #[tauri::command]
 #[specta::specta]
@@ -616,6 +630,20 @@ pub async fn cancel_analysis(id: String, state: tauri::State<'_, AppState>) -> R
         flag.store(true, Ordering::SeqCst);
     }
     Ok(())
+}
+
+/// Removes a report's cancel flag on every exit path, unless a newer run already replaced it.
+struct CancelFlagGuard<'a> {
+    flags: &'a dashmap::DashMap<String, Arc<AtomicBool>>,
+    id: String,
+    flag: Arc<AtomicBool>,
+}
+
+impl Drop for CancelFlagGuard<'_> {
+    fn drop(&mut self) {
+        self.flags
+            .remove_if(&self.id, |_, current| Arc::ptr_eq(current, &self.flag));
+    }
 }
 
 #[tauri::command]
@@ -630,10 +658,24 @@ pub async fn analyze_game(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<Vec<MoveAnalysis>, Error> {
+    if options.annotate_novelties && options.reference_db.is_none() {
+        return Err(Error::MissingReferenceDatabase);
+    }
+
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    state
+    // A new report for the same tab replaces the old one; otherwise the old run could no longer
+    // be cancelled and would keep the engine and the database busy.
+    if let Some(previous) = state
         .analysis_cancel_flags
-        .insert(id.clone(), cancel_flag.clone());
+        .insert(id.clone(), cancel_flag.clone())
+    {
+        previous.store(true, Ordering::SeqCst);
+    }
+    let _cancel_guard = CancelFlagGuard {
+        flags: &state.analysis_cancel_flags,
+        id: id.clone(),
+        flag: cancel_flag.clone(),
+    };
 
     let path = PathBuf::from(&engine);
     let mut analysis: Vec<MoveAnalysis> = Vec::new();
@@ -673,12 +715,16 @@ pub async fn analyze_game(
         fens.reverse();
     }
 
-    let mut novelty_found = false;
+    // Leave room in the progress bar for the database pass that finds the novelty.
+    let engine_share = if options.annotate_novelties {
+        90.0
+    } else {
+        100.0
+    };
 
     for (i, (_, moves, _)) in fens.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
-            proc.kill().await?;
-            state.analysis_cancel_flags.remove(&id);
+            let _ = proc.kill().await;
             return Err(Error::AnalysisCancelled);
         }
 
@@ -686,7 +732,7 @@ pub async fn analyze_game(
             &state.progress_state,
             &app,
             id.clone(),
-            (i as f32 / fens.len() as f32) * 100.0,
+            (i as f32 / fens.len() as f32) * engine_share,
             false,
         )?;
 
@@ -712,9 +758,39 @@ pub async fn analyze_game(
         .await?;
 
         proc.go(&go_mode).await?;
+        // Only a fixed move time says how long a search should take; depth or nodes can
+        // legitimately take minutes, so those are never cut off.
+        let hang_deadline = match go_mode {
+            GoMode::Time(ms) => {
+                Some(Instant::now() + Duration::from_millis(ms.into()) + ENGINE_HANG_MARGIN)
+            }
+            _ => None,
+        };
 
         let mut current_analysis = MoveAnalysis::default();
-        while let Ok(Some(line)) = reader.next_line().await {
+        loop {
+            // Poll so a cancel takes effect during long searches, not only between positions.
+            let line =
+                match tokio::time::timeout(Duration::from_millis(250), reader.next_line()).await {
+                    Err(_) => {
+                        if cancel_flag.load(Ordering::SeqCst) {
+                            let _ = proc.kill().await;
+                            return Err(Error::AnalysisCancelled);
+                        }
+                        if hang_deadline.is_some_and(|deadline| Instant::now() > deadline) {
+                            let _ = proc.kill().await;
+                            return Err(Error::EngineTimeout(format!(
+                                "no answer in position {} of {}",
+                                i + 1,
+                                fens.len()
+                            )));
+                        }
+                        continue;
+                    }
+                    Ok(Ok(Some(line))) => line,
+                    // The engine exited or crashed: fail instead of returning an empty report.
+                    Ok(_) => return Err(Error::EngineDisconnected),
+                };
             match parse_one(&line) {
                 UciMessage::Info(attrs) => {
                     if let Ok(best_moves) =
@@ -752,32 +828,54 @@ pub async fn analyze_game(
     }
 
     for (i, analysis) in analysis.iter_mut().enumerate() {
-        let fen = &fens[i].0;
-        // let query = PositionQuery::exact_from_fen(&fen.to_string())?;
-        let query = PositionQueryJs {
-            fen: fen.to_string(),
-            type_: "exact".to_string(),
-        };
-
         analysis.is_sacrifice = fens[i].2;
-        if options.annotate_novelties && !novelty_found {
-            if let Some(reference) = options.reference_db.clone() {
-                analysis.novelty = !is_position_in_db(
-                    reference,
-                    GameQuery::new().position(query.clone()).clone(),
-                    state.clone(),
-                )
-                .await?;
-                if analysis.novelty {
-                    novelty_found = true;
-                }
-            } else {
-                return Err(Error::MissingReferenceDatabase);
-            }
+    }
+
+    if let (true, Some(reference)) = (options.annotate_novelties, options.reference_db.clone()) {
+        // The novelty is the first position of the game that no game in the database reached.
+        let positions = fens
+            .iter()
+            .map(|(fen, _, _)| {
+                let setup = fen.as_setup().clone();
+                let mode = CastlingMode::detect(&setup);
+                setup.position::<Chess>(mode).map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let report_progress = |fraction: f32| {
+            let _ = update_progress(
+                &state.progress_state,
+                &app,
+                id.clone(),
+                engine_share + fraction * (100.0 - engine_share - 1.0),
+                false,
+            );
+        };
+        let known = |name: &Option<String>| {
+            name.as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty() && *name != "?")
+                .map(str::to_string)
+        };
+        let novelty_reference = NoveltyReference {
+            date: options.game_date.clone(),
+            players: known(&options.white).zip(known(&options.black)),
+        };
+        let found = positions_in_db(
+            reference,
+            positions,
+            novelty_reference,
+            id.clone(),
+            state.clone(),
+            &cancel_flag,
+            &report_progress,
+        )
+        .await?;
+        if let Some(first_new) = found.iter().position(|found| !found) {
+            analysis[first_new].novelty = true;
         }
     }
+
     update_progress(&state.progress_state, &app, id.clone(), 100.0, true)?;
-    state.analysis_cancel_flags.remove(&id);
     Ok(analysis)
 }
 

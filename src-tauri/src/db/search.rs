@@ -252,10 +252,19 @@ pub struct PartialData {
     material: MaterialCount,
 }
 
+/// Exact pawn placement for both colors; every other piece is ignored.
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct PawnStructureData {
+    white_pawns: Bitboard,
+    black_pawns: Bitboard,
+    pawn_home: u16,
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum PositionQuery {
     Exact(ExactData),
     Partial(PartialData),
+    Pawns(PawnStructureData),
 }
 
 impl PositionQuery {
@@ -282,6 +291,16 @@ impl PositionQuery {
             material,
         }))
     }
+
+    pub fn pawns_from_fen(fen: &str) -> Result<PositionQuery, Error> {
+        let fen = Fen::from_ascii(fen.as_bytes())?;
+        let board = fen.into_setup().board;
+        Ok(PositionQuery::Pawns(PawnStructureData {
+            white_pawns: board.pawns() & board.white(),
+            black_pawns: board.pawns() & board.black(),
+            pawn_home: get_pawn_home(&board),
+        }))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Type, PartialEq, Eq, Hash)]
@@ -294,6 +313,7 @@ pub(super) fn convert_position_query(query: PositionQueryJs) -> Result<PositionQ
     match query.type_.as_str() {
         "exact" => PositionQuery::exact_from_fen(&query.fen),
         "partial" => PositionQuery::partial_from_fen(&query.fen),
+        "pawns" => PositionQuery::pawns_from_fen(&query.fen),
         _ => Err(
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid position query").into(),
         ),
@@ -317,6 +337,11 @@ impl PositionQuery {
                     && is_contained(tested_board.queens(), query_board.queens())
                     && is_contained(tested_board.kings(), query_board.kings())
             }
+            PositionQuery::Pawns(ref data) => {
+                let board = position.board();
+                board.pawns() & board.white() == data.white_pawns
+                    && board.pawns() & board.black() == data.black_pawns
+            }
         }
     }
 
@@ -327,6 +352,8 @@ impl PositionQuery {
                     && is_material_reachable(&data.material, material)
             }
             PositionQuery::Partial(ref data) => is_material_reachable(&data.material, material),
+            // A pawn that left its home square never returns, so the game can be skipped.
+            PositionQuery::Pawns(ref data) => is_end_reachable(data.pawn_home, pawn_home),
         }
     }
 
@@ -337,6 +364,7 @@ impl PositionQuery {
                     && is_material_reachable(material, &data.material)
             }
             PositionQuery::Partial(_) => true,
+            PositionQuery::Pawns(ref data) => is_end_reachable(pawn_home, data.pawn_home),
         }
     }
 }
@@ -835,120 +863,283 @@ pub async fn search_position(
     Ok((openings, normalized_games))
 }
 
-pub async fn is_position_in_db(
+/// Which database games count as prior knowledge when looking for a novelty.
+#[derive(Debug, Default, Clone)]
+pub struct NoveltyReference {
+    /// The analyzed game's PGN date; only earlier games count, as in ChessBase.
+    pub date: Option<String>,
+    /// Fallback without a usable date: games between these players are left out, so a game
+    /// taken from the reference database does not count as its own prior knowledge.
+    pub players: Option<(String, String)>,
+}
+
+/// "YYYY.MM.DD" with unknown month or day as "00", so dates compare as strings.
+/// None when the year is unknown or the text is not a PGN date.
+fn comparable_date(date: &str) -> Option<String> {
+    let mut parts = date.trim().split('.');
+    let year = parts.next()?;
+    if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let mut part = || -> Option<String> {
+        match parts.next() {
+            None => Some("00".to_string()),
+            Some(value) if value.bytes().all(|b| b == b'?') => Some("00".to_string()),
+            Some(value) if value.len() <= 2 && value.bytes().all(|b| b.is_ascii_digit()) => {
+                Some(format!("{value:0>2}"))
+            }
+            Some(_) => None,
+        }
+    };
+    let month = part()?;
+    let day = part()?;
+    Some(format!("{year}.{month}.{day}"))
+}
+
+fn player_ids(state: &AppState, file: &Path, name: &str) -> Result<Vec<i32>, Error> {
+    let db = &mut get_db_or_create(state, &file.to_string_lossy(), ConnectionOptions::default())?;
+    Ok(players::table
+        .filter(players::name.eq(name))
+        .select(players::id)
+        .load(db)?)
+}
+
+/// Which of `positions` occur in some mainline of the counted database games, using one scan.
+///
+/// Matches positions exactly like an exact position search. A per-position search would scan
+/// the whole database once for each rare position, which takes minutes on large databases.
+/// The scan yields to interactive position searches and restarts once they finish.
+pub async fn positions_in_db(
     file: PathBuf,
-    query: GameQuery,
+    positions: Vec<Chess>,
+    reference: NoveltyReference,
+    owner: String,
     state: tauri::State<'_, AppState>,
-) -> Result<bool, Error> {
-    let collision_lock = {
-        let entry = state
-            .search_collisions
-            .entry((query.clone(), file.clone()))
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())));
-        entry.value().clone()
-    };
-    let collision_key = (query.clone(), file.clone());
-    let _collision_cleanup = SearchCollisionCleanup {
-        collisions: &state.search_collisions,
-        key: collision_key,
-        lock: &collision_lock,
-    };
-
-    let _guard = collision_lock.lock().await;
-
-    if !MmapSearchIndex::is_up_to_date(&file) {
-        super::clear_search_cache_for_db(&state, &file);
+    cancelled: &AtomicBool,
+    progress: &(dyn Fn(f32) + Sync),
+) -> Result<Vec<bool>, Error> {
+    if positions.is_empty() {
+        return Ok(vec![]);
     }
 
-    if let Some(pos) = state
-        .line_cache
-        .lock()
-        .unwrap()
-        .get(&(query.clone(), file.clone()))
-    {
-        return Ok(!pos.0.is_empty());
-    }
-
-    let parsed_position_query: Option<PositionQuery> = if let Some(pq) = &query.position {
-        Some(convert_position_query(pq.clone())?)
-    } else {
-        None
+    let game_date = reference.date.as_deref().and_then(comparable_date);
+    let excluded_players = match (&game_date, &reference.players) {
+        (None, Some((white, black))) => Some((
+            player_ids(&state, &file, white)?,
+            player_ids(&state, &file, black)?,
+        )),
+        _ => None,
     };
-
-    let start = Instant::now();
-    info!("start loading games for is_position_in_db");
-
-    let permit = state.new_request.acquire().await.unwrap();
-
-    let mmap_index = {
-        let mut cache = state.db_cache.lock().unwrap();
-        let cache_is_current = cache.as_ref().is_some_and(|(cached_path, _)| {
-            cached_path == &file && MmapSearchIndex::is_up_to_date(&file)
-        });
-        if !cache_is_current {
-            *cache = None;
-            let index_path = get_index_path(&file);
-
-            if !MmapSearchIndex::is_up_to_date(&file) {
-                info!("Search index not found, generating automatically...");
-                drop(cache);
-                if let Err(e) = super::generate_search_index(&file, &state) {
-                    return Err(Error::from(std::io::Error::other(format!(
-                        "Failed to generate search index: {}",
-                        e
-                    ))));
-                }
-                cache = state.db_cache.lock().unwrap();
-            }
-
-            info!("Loading games from mmap binary search index");
-            match MmapSearchIndex::open(&index_path) {
-                Ok(index) => {
-                    info!(
-                        "Opened mmap index with {} games: {:?}",
-                        index.len(),
-                        start.elapsed()
-                    );
-                    *cache = Some((file.clone(), index));
-                }
-                Err(e) => {
-                    return Err(Error::from(e));
-                }
-            }
+    let counts = |entry: &SearchGameEntryRef<'_>| -> bool {
+        if let Some(game_date) = &game_date {
+            // Undated games count as known, so no novelty is claimed against them.
+            return entry
+                .date
+                .and_then(comparable_date)
+                .is_none_or(|date| date < *game_date);
         }
-        cache.as_ref().unwrap().1.clone()
+        if let Some((white, black)) = &excluded_players {
+            return !(white.contains(&entry.white_id) && black.contains(&entry.black_id));
+        }
+        true
     };
 
-    let check_entry = |entry: SearchGameEntryRef<'_>| -> bool {
-        let end_material: MaterialCount = ByColor {
-            white: entry.white_material,
-            black: entry.black_material,
+    // Registered as a background search so interactive searches preempt it.
+    let sequence = state
+        .position_search_sequence
+        .fetch_add(1, Ordering::Relaxed)
+        + 1;
+    let request = begin_position_search(
+        &state.active_position_searches,
+        format!("novelty:{owner}"),
+        file.clone(),
+        sequence,
+    );
+    request
+        .cancellation
+        .background
+        .store(true, Ordering::Release);
+    let wait = || tokio::time::sleep(std::time::Duration::from_millis(50));
+
+    loop {
+        // Reset first, so a preemption that arrives after the wait below is not lost.
+        request
+            .cancellation
+            .preempted
+            .store(false, Ordering::Release);
+        request
+            .cancellation
+            .cancelled
+            .store(false, Ordering::Release);
+        while state
+            .active_position_searches
+            .iter()
+            .any(|search| !search.background.load(Ordering::Acquire))
+        {
+            if cancelled.load(Ordering::Relaxed) {
+                return Err(Error::AnalysisCancelled);
+            }
+            wait().await;
+        }
+
+        let permit = loop {
+            if cancelled.load(Ordering::Relaxed) {
+                return Err(Error::AnalysisCancelled);
+            }
+            if let Ok(permit) = state.new_request.clone().try_acquire_owned() {
+                break permit;
+            }
+            wait().await;
         };
-        if let Some(position_query) = &parsed_position_query {
-            position_query.can_reach(&end_material, entry.pawn_home)
-                && get_move_after_match(entry.moves, &entry.fen, position_query)
-                    .unwrap_or(None)
-                    .is_some()
-        } else {
-            false
+        if request.is_cancelled() {
+            // Preempted while waiting for a slot: let the interactive search go first.
+            drop(permit);
+            continue;
+        }
+
+        let mmap_index = {
+            let mut cache = state.db_cache.lock().unwrap();
+            let cache_is_current = cache.as_ref().is_some_and(|(cached_path, _)| {
+                cached_path == &file && MmapSearchIndex::is_up_to_date(&file)
+            });
+            if !cache_is_current {
+                *cache = None;
+                if !MmapSearchIndex::is_up_to_date(&file) {
+                    drop(cache);
+                    super::clear_search_cache_for_db(&state, &file);
+                    if let Err(e) = super::generate_search_index(&file, &state) {
+                        return Err(Error::from(std::io::Error::other(format!(
+                            "Failed to generate search index: {}",
+                            e
+                        ))));
+                    }
+                    cache = state.db_cache.lock().unwrap();
+                }
+                *cache = Some((file.clone(), MmapSearchIndex::open(&get_index_path(&file))?));
+            }
+            cache.as_ref().unwrap().1.clone()
+        };
+
+        let stop = || cancelled.load(Ordering::Relaxed) || request.is_cancelled();
+        let result =
+            scan_positions_in_index(&mmap_index, positions.clone(), &counts, &stop, progress);
+        drop(permit);
+        match result {
+            Err(Error::AnalysisCancelled) if !cancelled.load(Ordering::Relaxed) => {
+                info!("novelty scan for {owner} yielded to an interactive search");
+                progress(0.0);
+            }
+            other => return other,
+        }
+    }
+}
+
+fn scan_positions_in_index(
+    mmap_index: &MmapSearchIndex,
+    positions: Vec<Chess>,
+    counts: &(dyn Fn(&SearchGameEntryRef<'_>) -> bool + Sync),
+    cancelled: &(dyn Fn() -> bool + Sync),
+    progress: &(dyn Fn(f32) + Sync),
+) -> Result<Vec<bool>, Error> {
+    struct Target {
+        pawn_home: u16,
+        material: MaterialCount,
+    }
+    let targets: Vec<Target> = positions
+        .iter()
+        .map(|position| Target {
+            pawn_home: get_pawn_home(position.board()),
+            material: get_material_count(position.board()),
+        })
+        .collect();
+    let mut indexes: HashMap<Chess, Vec<usize>> = HashMap::new();
+    for (index, position) in positions.into_iter().enumerate() {
+        indexes.entry(position).or_default().push(index);
+    }
+    let found: Vec<AtomicBool> = targets.iter().map(|_| AtomicBool::new(false)).collect();
+    let remaining = AtomicUsize::new(targets.len());
+    let mark = |chess: &Chess| {
+        if let Some(matches) = indexes.get(chess) {
+            for &index in matches {
+                if !found[index].swap(true, Ordering::Relaxed) {
+                    remaining.fetch_sub(1, Ordering::Relaxed);
+                }
+            }
         }
     };
+    let any_open = |test: &dyn Fn(&Target) -> bool| {
+        targets
+            .iter()
+            .zip(&found)
+            .any(|(target, found)| !found.load(Ordering::Relaxed) && test(target))
+    };
 
-    let exists = mmap_index.par_iter().any(check_entry);
-
-    info!("finished search in {:?}", start.elapsed());
-
-    if !exists {
-        state
-            .line_cache
-            .lock()
-            .unwrap()
-            .insert((query.clone(), file.clone()), (vec![], vec![]));
+    let total = mmap_index.len().max(1);
+    let processed = AtomicUsize::new(0);
+    let scan = mmap_index
+        .par_iter()
+        .try_for_each(|entry| -> Result<(), ()> {
+            if cancelled() {
+                return Err(());
+            }
+            let done = processed.fetch_add(1, Ordering::Relaxed) + 1;
+            if done % 50_000 == 0 {
+                progress(done as f32 / total as f32);
+            }
+            if remaining.load(Ordering::Relaxed) == 0 || !counts(&entry) {
+                return Ok(());
+            }
+            let end_material: MaterialCount = ByColor {
+                white: entry.white_material,
+                black: entry.black_material,
+            };
+            // Same pruning as an exact search: the game's final state must be reachable from a target.
+            if !any_open(&|target| {
+                is_end_reachable(entry.pawn_home, target.pawn_home)
+                    && is_material_reachable(&end_material, &target.material)
+            }) {
+                return Ok(());
+            }
+            let mut chess = match entry.fen {
+                Some(fen) => {
+                    let Ok(fen) = Fen::from_ascii(fen.as_bytes()) else {
+                        return Ok(());
+                    };
+                    let setup = fen.into_setup();
+                    let mode = CastlingMode::detect(&setup);
+                    let Ok(chess) = Chess::from_setup(setup, mode) else {
+                        return Ok(());
+                    };
+                    chess
+                }
+                None => Chess::default(),
+            };
+            mark(&chess);
+            for byte in iter_mainline_move_bytes(entry.moves) {
+                let Some(m) = decode_move(byte, &chess) else {
+                    return Ok(());
+                };
+                chess.play_unchecked(&m);
+                if m.is_capture() || m.role() == shakmaty::Role::Pawn || m.is_promotion() {
+                    let board = chess.board();
+                    let pawn_home = get_pawn_home(board);
+                    let material = get_material_count(board);
+                    if !any_open(&|target| {
+                        is_end_reachable(target.pawn_home, pawn_home)
+                            && is_material_reachable(&target.material, &material)
+                    }) {
+                        break;
+                    }
+                }
+                mark(&chess);
+            }
+            Ok(())
+        });
+    if scan.is_err() {
+        return Err(Error::AnalysisCancelled);
     }
-
-    drop(permit);
-
-    Ok(exists)
+    progress(1.0);
+    Ok(found.into_iter().map(AtomicBool::into_inner).collect())
 }
 
 #[cfg(test)]
@@ -1286,6 +1477,125 @@ mod tests {
         let query = PositionQuery::partial_from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8").unwrap();
         let result = get_move_after_match(&game, &None, &query).unwrap();
         assert_eq!(result, Some("e4".to_string()));
+    }
+
+    #[test]
+    fn single_scan_finds_the_same_positions_as_exact_searches() {
+        use crate::db::search_index::{SearchGameEntry, SearchIndex};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("novelty.ecsi");
+        let entry = |id, moves: Vec<u8>| SearchGameEntry {
+            id,
+            white_id: 1,
+            black_id: 2,
+            date: None,
+            result: GameResult::Draw,
+            pawn_home: get_pawn_home(&shakmaty::Board::default()),
+            white_material: 39,
+            black_material: 39,
+            white_elo: 0,
+            black_elo: 0,
+            fen: None,
+            moves,
+        };
+        // Only 1. e4 e5 is in the database.
+        SearchIndex {
+            entries: vec![entry(1, vec![12, 12])],
+        }
+        .write_to(&path)
+        .unwrap();
+        let index = MmapSearchIndex::open(&path).unwrap();
+
+        let fens = [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+        ];
+        let positions: Vec<Chess> = fens
+            .iter()
+            .map(|fen| {
+                Fen::from_ascii(fen.as_bytes())
+                    .unwrap()
+                    .into_position(CastlingMode::Standard)
+                    .unwrap()
+            })
+            .collect();
+        let found =
+            scan_positions_in_index(&index, positions, &|_| true, &|| false, &|_| {}).unwrap();
+        assert_eq!(found, vec![true, true, true, false]);
+        for (fen, expected) in fens.iter().zip(&found) {
+            let query = PositionQuery::exact_from_fen(fen).unwrap();
+            let entry = index.get_entry_ref(0).unwrap();
+            assert_eq!(
+                find_position_match(entry.moves, &entry.fen, &query)
+                    .unwrap()
+                    .is_some(),
+                *expected
+            );
+        }
+
+        assert!(scan_positions_in_index(
+            &index,
+            vec![Chess::default()],
+            &|_| true,
+            &|| true,
+            &|_| {}
+        )
+        .is_err());
+        // Games that do not count (e.g. later than the analyzed game) are not prior knowledge.
+        assert_eq!(
+            scan_positions_in_index(
+                &index,
+                vec![Chess::default()],
+                &|_| false,
+                &|| false,
+                &|_| {}
+            )
+            .unwrap(),
+            vec![false]
+        );
+    }
+
+    #[test]
+    fn pgn_dates_compare_with_unknown_parts_as_zero() {
+        assert_eq!(comparable_date("2024.1.5").as_deref(), Some("2024.01.05"));
+        assert_eq!(comparable_date("1990.??.??").as_deref(), Some("1990.00.00"));
+        assert_eq!(comparable_date("2001").as_deref(), Some("2001.00.00"));
+        assert_eq!(comparable_date("????.??.??"), None);
+        assert_eq!(comparable_date("yesterday"), None);
+        assert!(comparable_date("1990.05.01").unwrap() < comparable_date("1990.05.02").unwrap());
+        // A game known only by year does not count games from that same year as earlier.
+        assert!(comparable_date("1990.05.01").unwrap() >= comparable_date("1990.??.??").unwrap());
+    }
+
+    #[test]
+    fn pawn_structure_match_ignores_pieces_and_requires_exact_pawns() {
+        // Same pawns as after 1. e4 e5, with every other piece moved or removed.
+        let query =
+            PositionQuery::pawns_from_fen("4k3/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/4K3 b - - 0 1")
+                .unwrap();
+        let start = Chess::default();
+        assert!(!query.matches(&start));
+        let after: Chess =
+            Fen::from_ascii(b"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+                .unwrap()
+                .into_position(CastlingMode::Standard)
+                .unwrap();
+        assert!(query.matches(&after));
+        // Extra pawns are not the same structure, unlike a partial search.
+        let after_e4: Chess =
+            Fen::from_ascii(b"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
+                .unwrap()
+                .into_position(CastlingMode::Standard)
+                .unwrap();
+        assert!(!query.matches(&after_e4));
+
+        let game = vec![12, 12]; // 1. e4 e5
+        assert_eq!(
+            find_position_match(&game, &None, &query).unwrap(),
+            Some((2, "*".into()))
+        );
     }
 
     #[test]

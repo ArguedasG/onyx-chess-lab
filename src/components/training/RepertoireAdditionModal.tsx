@@ -47,6 +47,8 @@ export default function RepertoireAdditionModal({
   initialRepertoireId = "",
   initialVariantId = "",
   initialPath = "",
+  initialMode = "theory",
+  zIndex,
 }: {
   onClose: () => void;
   tree?: TreeState;
@@ -54,13 +56,15 @@ export default function RepertoireAdditionModal({
   initialRepertoireId?: string;
   initialVariantId?: string;
   initialPath?: string;
+  initialMode?: AdditionMode;
+  zIndex?: number;
 }) {
   const { t } = useTranslation();
   const areas = useAtomValue(trainingAreasAtom);
   const atomStore = useStore();
   const [repertoireId, setRepertoireId] = useState(initialRepertoireId);
   const [variantId, setVariantId] = useState(initialVariantId);
-  const [mode, setMode] = useState<AdditionMode>("theory");
+  const [mode, setMode] = useState<AdditionMode>(initialMode);
   const [scope, setScope] = useState<"line" | "subtree">("line");
   const [path, setPath] = useState(initialPath);
   const [selection, setSelection] = useState("");
@@ -251,6 +255,7 @@ export default function RepertoireAdditionModal({
       size="lg"
       closeOnClickOutside={!busy}
       closeOnEscape={!busy}
+      zIndex={zIndex}
     >
       <Stack>
         <Alert color="blue">
@@ -261,6 +266,7 @@ export default function RepertoireAdditionModal({
         </Alert>
         {error && <Alert color="red">{error}</Alert>}
         <Select
+          comboboxProps={{ zIndex: zIndex === undefined ? undefined : zIndex + 1 }}
           label={t("Repertoire.Target", "Repertoire")}
           value={repertoireId}
           disabled={busy || !!preview}
@@ -284,6 +290,7 @@ export default function RepertoireAdditionModal({
         />
         {mode === "theory" ? (
           <Select
+            comboboxProps={{ zIndex: zIndex === undefined ? undefined : zIndex + 1 }}
             label={t("Repertoire.Variant", "Section")}
             value={variantId}
             disabled={busy || !!preview}

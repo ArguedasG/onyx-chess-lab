@@ -55,3 +55,24 @@ export function serializeModelGameArtifacts(
         manifest: serializeGameManifest(manifest),
     };
 }
+
+/** One multi-game PGN from experiment artifacts, in the given order. */
+export function combineModelGamePgns(pgns: string[]): string {
+    return `${pgns
+        .map((pgn) => pgn.trim())
+        .filter(Boolean)
+        .join("\n\n")}\n`;
+}
+
+/** Writes selected experiment games to app data so PGN-based importers can read them. */
+export async function writeModelGameSelectionPgn(pgn: string): Promise<string> {
+    const { appDataDir, resolve } = await import("@tauri-apps/api/path");
+    const { BaseDirectory, exists, mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+    const directory = "model-games/selections";
+    if (!(await exists(directory, { baseDir: BaseDirectory.AppData }))) {
+        await mkdir(directory, { baseDir: BaseDirectory.AppData, recursive: true });
+    }
+    const relative = `${directory}/selection-${Date.now()}.pgn`;
+    await writeTextFile(relative, pgn, { baseDir: BaseDirectory.AppData });
+    return resolve(await appDataDir(), relative);
+}

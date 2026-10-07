@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Modal, Select, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Modal, Select, Stack, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,12 +16,17 @@ export default function AddToStudyModal({
   pgn,
   suggestedTitle,
   sourceLabel,
+  games,
+  zIndex,
 }: {
   opened: boolean;
   onClose: () => void;
   pgn: string;
   suggestedTitle: string;
   sourceLabel: string;
+  /** Adds each game as its own chapter instead of `pgn` under the chosen title. */
+  games?: { title: string; pgn: string }[];
+  zIndex?: number;
 }) {
   const { t } = useTranslation();
   const [library, setLibrary] = useState<StudyLibrary | null>(null);
@@ -30,6 +35,7 @@ export default function AddToStudyModal({
   const [newStudyName, setNewStudyName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const multiple = games !== undefined;
 
   useEffect(() => {
     if (!opened) return;
@@ -67,21 +73,30 @@ export default function AddToStudyModal({
   }
 
   async function add() {
-    if (!studyId || !title.trim()) return;
+    if (!studyId || (!multiple && !title.trim())) return;
     setBusy(true);
     setError("");
     try {
+      const chapters = games ?? [{ title, pgn }];
       const next = await updateStudyLibrary((current) =>
-        addStudyChapter(current, studyId, {
-          title,
-          pgn,
-          source: { kind: "board", label: sourceLabel },
-        }),
+        chapters.reduce(
+          (library, chapter) =>
+            addStudyChapter(library, studyId, {
+              title: chapter.title,
+              pgn: chapter.pgn,
+              source: { kind: "board", label: sourceLabel },
+            }),
+          current,
+        ),
       );
       setLibrary(next);
       notifications.show({
         color: "green",
-        message: t("Studies.Added", "The chapter was added to the study."),
+        message: multiple
+          ? t("Studies.AddedMany", "{{count}} chapters were added to the study.", {
+              count: chapters.length,
+            })
+          : t("Studies.Added", "The chapter was added to the study."),
       });
       onClose();
     } catch (cause) {
@@ -95,11 +110,17 @@ export default function AddToStudyModal({
     <Modal
       opened={opened}
       onClose={() => !busy && onClose()}
-      title={t("Studies.AddCurrent", "Add current game to a study")}
+      title={
+        multiple
+          ? t("Studies.AddGames", "Add games to a study")
+          : t("Studies.AddCurrent", "Add current game to a study")
+      }
+      zIndex={zIndex}
     >
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
         <Select
+          comboboxProps={{ zIndex: zIndex === undefined ? undefined : zIndex + 1 }}
           label={t("Studies.Study", "Study")}
           data={(library?.studyOrder ?? []).flatMap((id) => {
             const study = library?.studies[id];
@@ -110,12 +131,20 @@ export default function AddToStudyModal({
           disabled={busy}
           placeholder={t("Studies.SelectStudy", "Select a study")}
         />
-        <TextInput
-          label={t("Studies.ChapterName", "Chapter name")}
-          value={title}
-          onChange={(event) => setTitle(event.currentTarget.value)}
-          disabled={busy}
-        />
+        {multiple ? (
+          <Text size="sm" c="dimmed">
+            {t("Studies.AddGames.Desc", "Each game becomes its own chapter ({{count}}).", {
+              count: games.length,
+            })}
+          </Text>
+        ) : (
+          <TextInput
+            label={t("Studies.ChapterName", "Chapter name")}
+            value={title}
+            onChange={(event) => setTitle(event.currentTarget.value)}
+            disabled={busy}
+          />
+        )}
         <Group align="end" grow>
           <TextInput
             label={t("Studies.NewStudy", "New study")}
@@ -131,8 +160,14 @@ export default function AddToStudyModal({
           <Button variant="default" onClick={onClose} disabled={busy}>
             {t("Common.Cancel", "Cancel")}
           </Button>
-          <Button loading={busy} disabled={!studyId || !title.trim()} onClick={add}>
-            {t("Studies.AddChapter", "Add chapter")}
+          <Button
+            loading={busy}
+            disabled={!studyId || (multiple ? games.length === 0 : !title.trim())}
+            onClick={add}
+          >
+            {multiple
+              ? t("Studies.AddChapters", "Add chapters")
+              : t("Studies.AddChapter", "Add chapter")}
           </Button>
         </Group>
       </Stack>

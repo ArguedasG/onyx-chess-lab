@@ -1,6 +1,7 @@
 import { useTranslation as useTrainingTranslation } from "react-i18next";
 import TacticsAdvanceControl from "./TacticsAdvanceControl";
 import TacticsSolutionModal from "./TacticsSolutionModal";
+import TacticsTimerBar from "./TacticsTimerBar";
 import {
   ActionIcon,
   Alert,
@@ -24,6 +25,7 @@ import {
 import {
   IconArrowLeft,
   IconAlertTriangle,
+  IconBulb,
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
@@ -34,7 +36,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { parseUci } from "chessops";
+import { makeSquare, parseUci } from "chessops";
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
@@ -47,6 +49,7 @@ import { useInitialOpponentMove } from "@/hooks/useInitialOpponentMove";
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { formatTime } from "@/utils/format";
 import { isMaiaEngine } from "@/utils/humanBots";
+import { Stopwatch } from "@/utils/stopwatch";
 import { launchTrainingPosition } from "@/utils/trainingLaunch";
 import {
   completeTacticsCycle,
@@ -57,6 +60,7 @@ import {
   saveTacticsActiveCycle,
   setTacticsResumeIndex,
   updateTacticsAutoAdvance,
+  updateTacticsSetConfig,
   type TacticsActiveCycle,
   type TacticsCycleSummary,
   type TacticsSet,
@@ -142,7 +146,6 @@ export default function TacticsSessionV2Page() {
     () => initialCycle?.failedIndexes ?? [],
   );
   const [failures, setFailures] = useState(() => initialCycle?.failures ?? 0);
-  const [cycleElapsedBase, setCycleElapsedBase] = useState(() => initialCycle?.timeMs ?? 0);
   const [exercise, setExercise] = useState<TacticsLoadedExercise | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -159,16 +162,23 @@ export default function TacticsSessionV2Page() {
   > | null>(null);
   const [earlyFinishOpen, setEarlyFinishOpen] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
-  const startedAt = useRef(Date.now());
-  const cycleRunStartedAt = useRef(Date.now());
+  // Attempt time restarts on each retry; exercise time spans every try of the current puzzle.
+  const attemptClock = useRef(new Stopwatch());
+  const exerciseClock = useRef(new Stopwatch());
+  const cycleClock = useRef(new Stopwatch(initialCycle?.timeMs ?? 0));
+  const [timersPaused, setTimersPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const exerciseDone = useRef(false);
+  const [hintRequest, setHintRequest] = useState(0);
+  const hintCounted = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, setTick] = useState(0);
 
   const isWoodpecker = set?.config.mode === "woodpecker";
+  const exerciseTimerEnabled = set?.config.exerciseTimer !== false;
   const resumeIndex = isWoodpecker ? (cycleQueue[cyclePosition] ?? 0) : index;
   const activeIndex = browsingIndex ?? resumeIndex;
-  const cycleElapsed =
-    cycleElapsedBase + (finishedSummary ? 0 : Date.now() - cycleRunStartedAt.current);
+  const cycleElapsed = cycleClock.current.elapsed();
   const currentCycleCompletedIndexes = useMemo(
     () =>
       isWoodpecker
@@ -198,14 +208,13 @@ export default function TacticsSessionV2Page() {
       position: cyclePosition,
       failedIndexes,
       failures,
-      timeMs: cycleElapsedBase,
+      timeMs: cycleClock.current.elapsed(),
     };
     setAreas((previous) => ({
       ...previous,
       tactics: saveTacticsActiveCycle(previous.tactics, setId, activeCycle),
     }));
   }, [
-    cycleElapsedBase,
     cycleNumber,
     cyclePosition,
     cycleQueue,
@@ -219,7 +228,8 @@ export default function TacticsSessionV2Page() {
 
   const setSource = set?.source;
   const setExerciseIds = set?.exerciseIds;
-  const setConfig = set?.config;
+  // Display-only settings such as the timer must not reload the current puzzle.
+  const setConfigKey = set ? JSON.stringify({ ...set.config, exerciseTimer: undefined }) : null;
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -228,7 +238,11 @@ export default function TacticsSessionV2Page() {
     setResult(null);
     setRetrying(false);
     setMessage("");
-    startedAt.current = Date.now();
+    attemptClock.current.reset(0, !pausedRef.current);
+    exerciseClock.current.reset(0, !pausedRef.current);
+    exerciseDone.current = false;
+    hintCounted.current = false;
+    const setConfig = setConfigKey ? (JSON.parse(setConfigKey) as TacticsSet["config"]) : null;
 
     async function load() {
       if (!setConfig || !setExerciseIds)
@@ -259,7 +273,7 @@ export default function TacticsSessionV2Page() {
   }, [
     activeIndex,
     areas.tactics.exercises,
-    setConfig,
+    setConfigKey,
     setExerciseIds,
     setId,
     setSource,
@@ -275,7 +289,28 @@ export default function TacticsSessionV2Page() {
   }, [activeIndex]);
 
   function elapsedNow() {
-    return cycleElapsedBase + Date.now() - cycleRunStartedAt.current;
+    return cycleClock.current.elapsed();
+  }
+
+  function setPaused(paused: boolean) {
+    pausedRef.current = paused;
+    setTimersPaused(paused);
+  }
+
+  function pauseTimers() {
+    attemptClock.current.pause();
+    exerciseClock.current.pause();
+    cycleClock.current.pause();
+    setPaused(true);
+  }
+
+  /** Playing a move, changing puzzle or pressing the button resumes the paused clocks. */
+  function resumeTimers() {
+    if (!pausedRef.current) return;
+    attemptClock.current.resume();
+    if (!exerciseDone.current) exerciseClock.current.resume();
+    if (!finishedSummary) cycleClock.current.resume();
+    setPaused(false);
   }
 
   function activeCycleSnapshot(overrides: Partial<TacticsActiveCycle> = {}): TacticsActiveCycle {
@@ -328,7 +363,7 @@ export default function TacticsSessionV2Page() {
     feedback: string,
   ) {
     if (!exercise || !set || result || retrying) return;
-    const timeMs = Date.now() - startedAt.current;
+    const timeMs = attemptClock.current.elapsed();
     if (outcome === "incorrect") {
       const nextFailures = failures + 1;
       const nextFailed = failedIndexes.includes(activeIndex)
@@ -351,31 +386,53 @@ export default function TacticsSessionV2Page() {
       retryTimer.current = setTimeout(() => {
         setBoardAttempt((value) => value + 1);
         setRetrying(false);
-        startedAt.current = Date.now();
+        attemptClock.current.reset(0, !pausedRef.current);
       }, 700);
       return;
     }
 
+    exerciseClock.current.pause();
+    exerciseDone.current = true;
     setResult(outcome);
     setMessage(feedback);
     persistAttempt(outcome, playedMove, timeMs, isWoodpecker ? activeCycleSnapshot() : undefined);
   }
 
   function recordSolutionReveal() {
+    recordAssistedMistake(
+      trainingT(
+        "Training.Tactics.Solution.RetryMessage",
+        "Solution shown and counted as a mistake. Reproduce the line to complete the puzzle.",
+      ),
+    );
+  }
+
+  /** Like the puzzle trainer, the first hint on a puzzle counts it as failed. */
+  function requestHint() {
     if (!exercise || !set || result || retrying) return;
-    const timeMs = Date.now() - startedAt.current;
+    resumeTimers();
+    if (!hintCounted.current) {
+      hintCounted.current = true;
+      recordAssistedMistake(
+        trainingT(
+          "Training.Tactics.Hint.Message",
+          "Hint used: counted as a mistake. Press again to see the full move.",
+        ),
+      );
+    }
+    setHintRequest((value) => value + 1);
+  }
+
+  function recordAssistedMistake(feedback: string) {
+    if (!exercise || !set || result || retrying) return;
+    const timeMs = attemptClock.current.elapsed();
     const nextFailures = failures + 1;
     const nextFailed = failedIndexes.includes(activeIndex)
       ? failedIndexes
       : [...failedIndexes, activeIndex];
     setFailures(nextFailures);
     setFailedIndexes(nextFailed);
-    setMessage(
-      trainingT(
-        "Training.Tactics.Solution.RetryMessage",
-        "Solution shown and counted as a mistake. Reproduce the line to complete the puzzle.",
-      ),
-    );
+    setMessage(feedback);
     persistAttempt(
       "incorrect",
       null,
@@ -389,7 +446,7 @@ export default function TacticsSessionV2Page() {
   function closeSolution() {
     setSolutionOpen(false);
     setBoardAttempt((value) => value + 1);
-    startedAt.current = Date.now();
+    attemptClock.current.reset(0, !pausedRef.current);
   }
 
   function resetExerciseState() {
@@ -398,7 +455,10 @@ export default function TacticsSessionV2Page() {
     setRetrying(false);
     setMessage("");
     setBoardAttempt((value) => value + 1);
-    startedAt.current = Date.now();
+    attemptClock.current.reset(0, true);
+    exerciseDone.current = false;
+    exerciseClock.current.resume();
+    resumeTimers();
   }
 
   function jumpTo(target: number) {
@@ -427,7 +487,7 @@ export default function TacticsSessionV2Page() {
       failures,
       timeMs: elapsedNow(),
     };
-    setCycleElapsedBase(summary.timeMs);
+    cycleClock.current.pause();
     setFinishedSummary(summary);
     setAreas((previous) => ({
       ...previous,
@@ -500,9 +560,8 @@ export default function TacticsSessionV2Page() {
     setCyclePosition(0);
     setFailedIndexes([]);
     setFailures(0);
-    setCycleElapsedBase(0);
     setFinishedSummary(null);
-    cycleRunStartedAt.current = Date.now();
+    cycleClock.current.reset(0, true);
     resetExerciseState();
     setAreas((previous) => ({
       ...previous,
@@ -590,6 +649,8 @@ export default function TacticsSessionV2Page() {
   const cyclePercent = isWoodpecker
     ? Math.round((Math.min(cycleCompleted, total) / Math.max(1, total)) * 100)
     : Math.round(((activeIndex + 1) / total) * 100);
+  const hintAvailable =
+    !!exercise && set.config.validationMode !== "engine" && exercise.solutionLines.length > 0;
   const completedOptions = completedIndexes.map((value) => ({
     value: String(value),
     label: trainingT("Training.Copy.Puzzlev0.76f70f4a", "Puzzle {{v0}} ✓", { v0: value + 1 }),
@@ -632,12 +693,6 @@ export default function TacticsSessionV2Page() {
             </div>
           </Group>
           <Group>
-            {isWoodpecker && (
-              <Badge color="orange" variant="light">
-                {formatTime(cycleElapsed)} · {failures}{" "}
-                {trainingT("Training.Copy.mistakes.5fb1604c", "mistakes")}{" "}
-              </Badge>
-            )}
             <Badge variant="light">
               {isWoodpecker ? "Woodpecker" : trainingT("Training.Copy.Guided.57bd258f", "Guided")}
             </Badge>
@@ -668,6 +723,16 @@ export default function TacticsSessionV2Page() {
             )}
           </Group>
         </Group>
+
+        {(exerciseTimerEnabled || isWoodpecker) && (
+          <TacticsTimerBar
+            exerciseMs={exerciseTimerEnabled ? exerciseClock.current.elapsed() : null}
+            cycleMs={isWoodpecker ? cycleElapsed : null}
+            mistakes={isWoodpecker ? failures : null}
+            paused={timersPaused}
+            onTogglePause={() => (timersPaused ? resumeTimers() : pauseTimers())}
+          />
+        )}
 
         <Progress value={cyclePercent} color="orange" />
 
@@ -700,6 +765,8 @@ export default function TacticsSessionV2Page() {
                   areas.tactics.attempts.filter((attempt) => attempt.exerciseId === exercise.id)
                     .length
                 }
+                hintRequest={hintRequest}
+                onUserMove={resumeTimers}
                 onCorrect={(move) =>
                   finishAttempt(
                     "correct",
@@ -726,6 +793,7 @@ export default function TacticsSessionV2Page() {
                 exercise={exercise}
                 set={set}
                 disabled={result !== null || retrying}
+                onUserMove={resumeTimers}
                 onResult={finishAttempt}
               />
             )}
@@ -770,6 +838,22 @@ export default function TacticsSessionV2Page() {
                 >
                   {" "}
                   {trainingT("Training.Copy.Analyzeposition.7cd475fb", "Analyze position")}{" "}
+                </Button>
+                <Button
+                  variant="light"
+                  leftSection={<IconBulb size={16} />}
+                  disabled={result !== null || retrying || !hintAvailable}
+                  title={
+                    hintAvailable
+                      ? undefined
+                      : trainingT(
+                          "Training.Tactics.Hint.Unavailable",
+                          "Hints need a prepared solution line.",
+                        )
+                  }
+                  onClick={requestHint}
+                >
+                  {trainingT("Training.Tactics.Hint.Button", "Hint")}
                 </Button>
                 <Button
                   variant="light"
@@ -874,6 +958,24 @@ export default function TacticsSessionV2Page() {
                   searchable
                   clearable
                   onChange={(value) => value !== null && jumpTo(Number(value))}
+                />
+                <Switch
+                  label={trainingT("Training.Tactics.Timer.Exercise.Toggle", "Per-exercise timer")}
+                  checked={exerciseTimerEnabled}
+                  onChange={(event) => {
+                    const exerciseTimer = event.currentTarget.checked;
+                    setAreas((previous) => {
+                      const current = previous.tactics.sets[setId];
+                      if (!current) return previous;
+                      return {
+                        ...previous,
+                        tactics: updateTacticsSetConfig(previous.tactics, setId, {
+                          ...current.config,
+                          exerciseTimer,
+                        }),
+                      };
+                    });
+                  }}
                 />
                 <Switch
                   label={trainingT(
@@ -1013,6 +1115,8 @@ function GuidedTacticsBoard({
   set,
   disabled,
   variationSeed,
+  hintRequest,
+  onUserMove,
   onCorrect,
   onIncorrect,
 }: {
@@ -1020,6 +1124,8 @@ function GuidedTacticsBoard({
   set: TacticsSet;
   disabled: boolean;
   variationSeed: number;
+  hintRequest: number;
+  onUserMove: () => void;
   onCorrect: (lastMove: string) => void;
   onIncorrect: (move: string) => void;
 }) {
@@ -1042,6 +1148,8 @@ function GuidedTacticsBoard({
         startingActor={set.config.startingActor}
         disabled={disabled}
         variationSeed={variationSeed}
+        hintRequest={hintRequest}
+        onUserMove={onUserMove}
         onCorrect={onCorrect}
         onIncorrect={onIncorrect}
       />
@@ -1054,6 +1162,8 @@ function GuidedTacticsBoardInner({
   startingActor,
   disabled,
   variationSeed,
+  hintRequest,
+  onUserMove,
   onCorrect,
   onIncorrect,
 }: {
@@ -1061,11 +1171,16 @@ function GuidedTacticsBoardInner({
   startingActor: TacticsSet["config"]["startingActor"];
   disabled: boolean;
   variationSeed: number;
+  hintRequest: number;
+  onUserMove: () => void;
   onCorrect: (lastMove: string) => void;
   onIncorrect: (move: string) => void;
 }) {
   const store = useContext(TreeStateContext)!;
   const makeMove = useStore(store, (state) => state.makeMove);
+  const setShapes = useStore(store, (state) => state.setShapes);
+  // A remounted board starts without hints even if the parent counter is already non-zero.
+  const handledHint = useRef(hintRequest);
   const boardRef = useRef<HTMLDivElement>(null);
   const candidates = useRef(lines);
   const ply = useRef(0);
@@ -1105,8 +1220,33 @@ function GuidedTacticsBoardInner({
 
   useInitialOpponentMove(startingActor, playOpponent);
 
+  // Progressive hint as in the puzzle trainer: mark the piece, then show the move, then clear.
+  useEffect(() => {
+    if (hintRequest === handledHint.current) return;
+    handledHint.current = hintRequest;
+    if (completed.current || opponentMoveInFlight.current) return;
+    const expected = parseUci(candidates.current[0]?.[ply.current] ?? "");
+    if (!expected || !("from" in expected)) return;
+    const from = makeSquare(expected.from);
+    const to = makeSquare(expected.to);
+    const shapes = store.getState().currentNode().shapes;
+    const isHint = (shape: (typeof shapes)[number]) =>
+      shape.orig === from && (!shape.dest || shape.dest === to);
+    if (shapes.some((shape) => shape.orig === from && shape.dest === to)) {
+      setShapes(shapes.filter((shape) => !isHint(shape)));
+    } else if (shapes.some((shape) => shape.orig === from && !shape.dest)) {
+      setShapes([
+        ...shapes.filter((shape) => !isHint(shape)),
+        { orig: from, dest: to, brush: "green" },
+      ]);
+    } else {
+      setShapes([...shapes, { orig: from, dest: undefined, brush: "green" }]);
+    }
+  }, [hintRequest, setShapes, store]);
+
   function handleMove(uci: string) {
     if (completed.current || disabled || autoMoving) return;
+    onUserMove();
     const matching = candidates.current.filter((line) => line[ply.current] === uci);
     if (matching.length === 0) {
       completed.current = true;
@@ -1137,11 +1277,13 @@ function EngineTacticsBoard({
   exercise,
   set,
   disabled,
+  onUserMove,
   onResult,
 }: {
   exercise: TacticsLoadedExercise;
   set: TacticsSet;
   disabled: boolean;
+  onUserMove: () => void;
   onResult: (
     outcome: "correct" | "incorrect" | "unsupported",
     playedMove: string | null,
@@ -1157,6 +1299,7 @@ function EngineTacticsBoard({
 
   async function evaluateMove(playedMove: string) {
     if (busy || disabled) return;
+    onUserMove();
     const localEngines = engines.filter(
       (engine): engine is LocalEngine =>
         engine.type === "local" && Boolean(engine.path) && !isMaiaEngine(engine),

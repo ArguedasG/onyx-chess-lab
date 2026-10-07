@@ -650,7 +650,7 @@ fn build_report(
         &snapshot.database,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )?;
-    connection.busy_timeout(Duration::from_millis(500))?;
+    connection.busy_timeout(Duration::from_secs(5))?;
     for offset in (0..snapshot.summary.total).step_by(BATCH as usize) {
         check()?;
         let records = snapshot.records(offset, BATCH)?;

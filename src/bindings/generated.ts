@@ -904,7 +904,15 @@ export type AnalysisArtifactDocument = { summary: AnalysisArtifactSummary; versi
 export type AnalysisArtifactKind = "openingReport" | "playerProfile"
 export type AnalysisArtifactSummary = { id: string; kind: AnalysisArtifactKind; title: string; sourceLabel: string; createdAt: string; updatedAt: string; schemaVersion: number; versionCount: number }
 export type AnalysisArtifactVersion = { version: number; savedAt: string; payloadJson: string }
-export type AnalysisOptions = { fen: string; moves: string[]; annotateNovelties: boolean; referenceDb: string | null; reversed: boolean }
+export type AnalysisOptions = { fen: string; moves: string[]; annotateNovelties: boolean; referenceDb: string | null; reversed: boolean; 
+/**
+ * PGN date of the analyzed game; only earlier database games count for its novelty.
+ */
+gameDate?: string | null; 
+/**
+ * Players of the analyzed game, used to leave the game itself out when it has no date.
+ */
+white?: string | null; black?: string | null }
 export type BestMoves = { nodes: number; depth: number; score: Score; uciMoves: string[]; sanMoves: string[]; multipv: number; nps: number }
 export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: string; fen: string; moves: string[]; progress: number }
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }

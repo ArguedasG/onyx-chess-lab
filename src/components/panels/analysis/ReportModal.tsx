@@ -1,13 +1,13 @@
 import { Button, Checkbox, Group, Modal, NumberInput, Select, Stack } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
 import { useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { memo, useContext, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useStore } from "zustand";
 import { commands, type GoMode } from "@/bindings";
-import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { enginesAtom, referenceDbAtom } from "@/state/atoms";
+import { updateTabTreeStore } from "@/state/store/tabTreeStores";
 import type { LocalEngine } from "@/utils/engines";
 
 const reportSettingsAtom = atomWithStorage("report-settings", {
@@ -18,10 +18,18 @@ const reportSettingsAtom = atomWithStorage("report-settings", {
   engine: "",
 });
 
+/** Tabs with a report running in this window; the persisted inProgress flag can be stale. */
+const runningReports = new Set<string>();
+
+export function isReportRunning(tab: string): boolean {
+  return runningReports.has(tab);
+}
+
 function ReportModal({
   tab,
   initialFen,
   moves,
+  game,
   reportingMode,
   closeReportingMode,
   setInProgress,
@@ -29,6 +37,8 @@ function ReportModal({
   tab: string;
   initialFen: string;
   moves: string[];
+  /** Headers used to judge novelties against earlier games only. */
+  game: { date: string | null; white: string; black: string };
   reportingMode: boolean;
   closeReportingMode: () => void;
   setInProgress: (value: boolean) => void;
@@ -41,8 +51,6 @@ function ReportModal({
     () => (engines ?? []).filter((e): e is LocalEngine => e.type === "local"),
     [engines],
   );
-  const store = useContext(TreeStateContext)!;
-  const addAnalysis = useStore(store, (s) => s.addAnalysis);
 
   const [reportSettings, setReportSettings] = useAtom(reportSettingsAtom);
 
@@ -72,6 +80,8 @@ function ReportModal({
   function analyze() {
     setReportSettings(form.values);
     setInProgress(true);
+    runningReports.add(tab);
+    const showVariations = form.values.variations;
     closeReportingMode();
     const engine = localEngines.find((e) => e.id === form.values.engine);
     const engineSettings = (engine?.settings ?? []).map((s) => ({
@@ -91,17 +101,37 @@ function ReportModal({
           referenceDb,
           reversed: form.values.reversed,
           moves,
+          gameDate: game.date,
+          white: game.white,
+          black: game.black,
         },
         engineSettings,
       )
       .then((analysis) => {
+        // Apply to the tab that started the report, even if the user switched tabs meanwhile.
         if (analysis.status === "ok") {
-          addAnalysis(analysis.data, {
-            showVariations: form.values.variations,
+          updateTabTreeStore(tab, (store) =>
+            store.getState().addAnalysis(analysis.data, { showVariations }),
+          );
+        } else if (analysis.error !== "Analysis cancelled") {
+          notifications.show({
+            title: t("Board.Analysis.ReportFailed", "Could not generate the report"),
+            message: analysis.error,
+            color: "red",
           });
         }
       })
-      .finally(() => setInProgress(false));
+      .catch((error) => {
+        notifications.show({
+          title: t("Board.Analysis.ReportFailed", "Could not generate the report"),
+          message: error instanceof Error ? error.message : String(error),
+          color: "red",
+        });
+      })
+      .finally(() => {
+        runningReports.delete(tab);
+        updateTabTreeStore(tab, (store) => store.getState().setReportInProgress(false));
+      });
   }
 
   return (

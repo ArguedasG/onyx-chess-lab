@@ -79,6 +79,17 @@ pub(super) fn canonical_query(mut query: GameQuery) -> Result<GameQuery, Error> 
         let mode = shakmaty::CastlingMode::detect(&setup);
         let chess: shakmaty::Chess = setup.position(mode)?;
         setup = chess.into_setup(EnPassantMode::Legal);
+    } else if position.type_ == "pawns" {
+        // Only pawn placement matters, so equal structures share one cached query.
+        let pawns = setup.board.pawns();
+        let mut board = shakmaty::Board::empty();
+        for square in pawns {
+            if let Some(piece) = setup.board.piece_at(square) {
+                board.set_piece_at(square, piece);
+            }
+        }
+        setup = shakmaty::Setup::empty();
+        setup.board = board;
     }
     setup.halfmoves = 0;
     setup.fullmoves = std::num::NonZeroU32::new(1).unwrap();
@@ -733,7 +744,7 @@ fn read_offsets(snapshot: &Snapshot, offsets: &[u32]) -> Result<Vec<PositionGame
         &snapshot.database,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )?;
-    connection.busy_timeout(Duration::from_millis(500))?;
+    connection.busy_timeout(Duration::from_secs(5))?;
     let mut statement = connection.prepare("SELECT COALESCE(w.Name,'?'), COALESCE(b.Name,'?'), g.WhiteElo, g.BlackElo, g.Date, COALESCE(g.Result,'*'), COALESCE(e.Name,'?') FROM Games g JOIN Players w ON w.ID=g.WhiteID JOIN Players b ON b.ID=g.BlackID JOIN Events e ON e.ID=g.EventID WHERE g.ID=?1")?;
     let mut page = Vec::with_capacity(offsets.len());
     for &snapshot_offset in offsets {

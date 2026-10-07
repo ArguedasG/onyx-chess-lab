@@ -221,6 +221,8 @@ function BoardAnalysis() {
       setTabs,
       setActiveTab,
       pgn,
+      // The copied line ends at the selected move; open the generator on that position.
+      position: position.map(() => 0),
     });
   }, [headers, position, root, setActiveTab, setTabs, t]);
   useEffect(() => {

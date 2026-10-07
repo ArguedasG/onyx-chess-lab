@@ -123,6 +123,8 @@ const tacticsSetSchema = z.object({
         startingActor: tacticsStartingActorSchema,
         variationPolicy: tacticsVariationPolicySchema,
         validationMode: tacticsValidationModeSchema,
+        /** Per-exercise timer in sessions; missing means on, like the puzzle trainer. */
+        exerciseTimer: z.boolean().optional(),
     }),
     createdAt: z.string(),
     updatedAt: z.string(),

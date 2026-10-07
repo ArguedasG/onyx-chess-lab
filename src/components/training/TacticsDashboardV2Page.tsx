@@ -17,6 +17,7 @@ import {
   Select,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   Textarea,
   TextInput,
@@ -1155,6 +1156,15 @@ function TacticsConfigFields({
           }
         />
       </Group>
+      <Switch
+        label={trainingT("Training.Tactics.Timer.Exercise.Toggle", "Per-exercise timer")}
+        description={trainingT(
+          "Training.Tactics.Timer.Exercise.ToggleDesc",
+          "Shows how long each puzzle takes. It can be turned off later during the session.",
+        )}
+        checked={config.exerciseTimer !== false}
+        onChange={(event) => onChange({ ...config, exerciseTimer: event.currentTarget.checked })}
+      />
       {config.mode === "woodpecker" && (
         <Text size="xs" c="dimmed">
           {" "}
