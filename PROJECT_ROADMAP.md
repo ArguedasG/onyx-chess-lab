@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-04.
+> Última actualización: 2026-10-07.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.4** (modo Aprender al estilo Chessable, siguiente línea, tácticas
-  con inicio y fin, atajos de valoración y amenaza, y errores de conexión intermitentes).
+- Versión en preparación: **0.18.5** (timers y pistas en tácticas, búsqueda por estructura de
+  peones, experimentos del generador y reportes de análisis más robustos).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -699,6 +699,25 @@ en la documentación de la fase.
 - La importación muestra sus errores dentro del modal y elimina la copia editable si falla.
 - Con el curso de prueba (1.129 registros) la vista previa pasa de 208 a 45 secciones; 171 puzzles
   quedan fuera y restaurables. Validado manualmente por el autor con el curso real.
+
+### 2026-10-07 — Release 0.18.5
+
+- Uso intensivo del autor: los sets tácticos reciben el timer por ejercicio y la pista del modo de
+  puzzles de Lichess; los timers de Woodpecker se muestran como recuadros con pausa que se reanuda
+  al jugar o cambiar de ejercicio.
+- Búsqueda por estructura de peones exacta (`pawns`) en la base local, con poda por peones en su
+  casilla inicial y caché compartida entre posiciones con la misma estructura.
+- Generador: abre en la posición elegida, recuerda el experimento y la selección por pestaña, y
+  guarda partidas seleccionadas en estudios, repertorios (partidas modelo) o PGN.
+- Reportes que no terminaban o salían vacíos: el resultado se aplicaba al estado de una pestaña ya
+  desmontada; las novedades hacían una búsqueda completa por posición (minutos en Gigabase y con
+  los permisos de búsqueda ocupados); cancelar no detenía esa fase. Ahora una sola pasada, contra
+  partidas anteriores a la fecha (o sin los mismos jugadores), cedida ante búsquedas interactivas,
+  con vigía de motor colgado en modo tiempo.
+- `busy_timeout` antes del pragma de diario en cada conexión; estado de pestaña creado una sola vez;
+  comandos de puzzles asíncronos y sin `expect`.
+- Pendiente de decidir si vuelve “database is locked”: modo WAL.
+- Detalle: `docs/release-notes-0.18.5.es.md`.
 
 ### 2026-10-04 — Release 0.18.4
 
