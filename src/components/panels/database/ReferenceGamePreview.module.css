@@ -1,0 +1,17 @@
+.root {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}
+
+.board {
+  width: 190px;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}

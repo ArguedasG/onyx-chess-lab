@@ -6,15 +6,21 @@ import { memo, useEffect, useState } from "react";
 import type { NormalizedGame } from "@/bindings";
 import { activeTabAtom, tabsAtom } from "@/state/atoms";
 import { createTab } from "@/utils/tabs";
+import type { ReferencePreview } from "./ReferenceGamePreview";
 
 function GamesTable({
   games,
   loading,
   databasePath,
+  selectedId,
+  onSelect,
 }: {
   games: NormalizedGame[];
   loading: boolean;
   databasePath?: string | null;
+  selectedId?: number | null;
+  /** Click previews a game; double click still opens it. */
+  onSelect?: (preview: ReferencePreview) => void;
 }) {
   const [, setTabs] = useAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
@@ -26,37 +32,46 @@ function GamesTable({
   }, [games]);
 
   const navigate = useNavigate();
+  const open = (game: NormalizedGame) => {
+    createTab({
+      tab: {
+        name: `${game.white} - ${game.black}`,
+        type: "analysis",
+      },
+      setTabs,
+      setActiveTab,
+      pgn: game.moves,
+      headers: game,
+      gameOrigin: databasePath
+        ? {
+            kind: "database",
+            database: databasePath,
+            gameId: game.id,
+          }
+        : undefined,
+    });
+    navigate({ to: "/" });
+  };
   return (
     <DataTable
       withTableBorder
       highlightOnHover
+      height="100%"
+      verticalSpacing={4}
+      fz="sm"
       records={filteredGames}
+      rowBackgroundColor={(game) =>
+        game.id === selectedId ? "var(--mantine-primary-color-light)" : undefined
+      }
       fetching={loading}
       totalRecords={games.length}
       recordsPerPage={20}
       page={page}
       onPageChange={setPage}
-      onRowClick={(e) => {
-        const game = e.record;
-        createTab({
-          tab: {
-            name: `${game.white} - ${game.black}`,
-            type: "analysis",
-          },
-          setTabs,
-          setActiveTab,
-          pgn: game.moves,
-          headers: game,
-          gameOrigin: databasePath
-            ? {
-                kind: "database",
-                database: databasePath,
-                gameId: game.id,
-              }
-            : undefined,
-        });
-        navigate({ to: "/" });
-      }}
+      onRowClick={({ record }) =>
+        onSelect ? onSelect({ game: record, open: () => open(record) }) : open(record)
+      }
+      onRowDoubleClick={({ record }) => open(record)}
       columns={[
         {
           accessor: "white",

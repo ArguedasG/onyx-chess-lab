@@ -51,6 +51,7 @@ import {
   showArrowsAtom,
   showConsecutiveArrowsAtom,
   showCoordinatesAtom,
+  showEngineStripAtom,
   showDestsAtom,
   showVariationArrowsAtom,
   snapArrowsAtom,
@@ -200,6 +201,17 @@ export default function Page() {
         description: t("Settings.MoveHighlight.Desc"),
         keywords: ["highlight", "last move"],
         render: () => <SettingsSwitch atom={moveHighlightAtom} />,
+      },
+      {
+        id: "engine-strip",
+        category: "board",
+        title: t("Settings.EngineStrip", "Engine under the board"),
+        description: t(
+          "Settings.EngineStrip.Desc",
+          "Show engine lines under the analysis board. When off, engines are only in Analysis → Engines and the board uses all the height.",
+        ),
+        keywords: ["engine", "strip", "stockfish", "motor"],
+        render: () => <SettingsSwitch atom={showEngineStripAtom} />,
       },
       {
         id: "arrows",

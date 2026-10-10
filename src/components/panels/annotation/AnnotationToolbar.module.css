@@ -1,0 +1,50 @@
+.root {
+  flex-shrink: 0;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.bar {
+  padding: 2px 4px;
+  min-height: 30px;
+}
+
+.symbol {
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 26px;
+}
+
+.more {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: var(--mantine-radius-sm);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  color: var(--mantine-color-dimmed);
+}
+
+.more:hover:not(:disabled) {
+  background: var(--mantine-color-default-hover);
+}
+
+.more:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.moreActive {
+  color: var(--mantine-primary-color-filled);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.editor {
+  border-top: 1px solid var(--mantine-color-default-border);
+  max-height: 30vh;
+  overflow-y: auto;
+}

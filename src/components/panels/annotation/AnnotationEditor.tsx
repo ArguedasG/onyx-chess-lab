@@ -11,7 +11,8 @@ import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { spellCheckAtom } from "@/state/atoms";
 import { getNodeAtPath } from "@/utils/treeReducer";
 
-function AnnotationEditor() {
+/** `compact` keeps only text formatting, for the editor that opens under the notation. */
+function AnnotationEditor({ compact }: { compact?: boolean }) {
   const { t } = useTranslation();
 
   const store = useContext(TreeStateContext)!;
@@ -46,6 +47,8 @@ function AnnotationEditor() {
   return (
     <RichTextEditor
       editor={editor}
+      variant={compact ? "subtle" : undefined}
+      style={compact ? { border: "none" } : undefined}
       spellCheck={spellCheck}
       labels={{
         boldControlLabel: t("RichText.Bold"),
@@ -74,19 +77,23 @@ function AnnotationEditor() {
           <RichTextEditor.ClearFormatting />
         </RichTextEditor.ControlsGroup>
 
-        <RichTextEditor.ControlsGroup>
-          <RichTextEditor.H1 />
-          <RichTextEditor.H2 />
-          <RichTextEditor.H3 />
-          <RichTextEditor.H4 />
-        </RichTextEditor.ControlsGroup>
+        {!compact && (
+          <RichTextEditor.ControlsGroup>
+            <RichTextEditor.H1 />
+            <RichTextEditor.H2 />
+            <RichTextEditor.H3 />
+            <RichTextEditor.H4 />
+          </RichTextEditor.ControlsGroup>
+        )}
 
-        <RichTextEditor.ControlsGroup>
-          <RichTextEditor.Blockquote />
-          <RichTextEditor.Hr />
-          <RichTextEditor.BulletList />
-          <RichTextEditor.OrderedList />
-        </RichTextEditor.ControlsGroup>
+        {!compact && (
+          <RichTextEditor.ControlsGroup>
+            <RichTextEditor.Blockquote />
+            <RichTextEditor.Hr />
+            <RichTextEditor.BulletList />
+            <RichTextEditor.OrderedList />
+          </RichTextEditor.ControlsGroup>
+        )}
         <RichTextEditor.ControlsGroup>
           <RichTextEditor.Link />
           <RichTextEditor.Unlink />

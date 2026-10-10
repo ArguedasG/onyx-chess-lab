@@ -39,3 +39,8 @@
   > :global(square.current-premove) {
   background-color: rgba(20, 30, 85, 0.5) !important;
 }
+
+/* Bars and board keep their size; the board is fitted by measuring them, so none may shrink. */
+.boardColumn > * {
+  flex-shrink: 0;
+}

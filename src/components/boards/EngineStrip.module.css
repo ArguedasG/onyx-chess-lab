@@ -1,0 +1,205 @@
+.strip {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-body);
+  /* Never let the strip push the board away; long content scrolls instead. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.section + .section,
+.waiting {
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 1px 6px;
+}
+
+.waiting {
+  flex-wrap: wrap;
+  min-height: 26px;
+  row-gap: 2px;
+}
+
+.engineButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 6px;
+  border-radius: var(--mantine-radius-sm);
+  font-weight: 700;
+  font-size: var(--mantine-font-size-xs);
+  white-space: nowrap;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  border: 1px solid var(--mantine-color-default-border);
+  white-space: nowrap;
+}
+
+.engineButton:hover,
+.chips:hover,
+.pill:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chips {
+  display: flex;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: var(--mantine-radius-sm);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.inlineLine {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.inlineLine > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats {
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 2px;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12.5px;
+}
+
+/* The best line stands out, like the main line of a game. */
+.primary {
+  background: var(--mantine-primary-color-light);
+}
+
+.score {
+  flex: 0 0 3.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+}
+
+.moves {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.number {
+  color: var(--mantine-color-dimmed);
+  margin-left: 4px;
+}
+
+.moves > span:first-child .number {
+  margin-left: 0;
+}
+
+.move {
+  all: unset;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.move:hover:not(:disabled) {
+  background: var(--mantine-color-default-hover);
+}
+
+.move:disabled {
+  cursor: default;
+}
+
+.more {
+  align-self: flex-start;
+  margin: 1px 8px 0 calc(3.2rem + 18px);
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+}
+
+.more:hover {
+  color: var(--mantine-color-text);
+}
+
+.message {
+  padding: 3px 12px 5px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+}
+
+.chevron {
+  transition: transform 150ms ease;
+}
+
+.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+
+/* Engines tab: no height cap, roomier lines. */
+.wide {
+  max-height: none;
+  overflow: visible;
+  border: none;
+  background: transparent;
+}
+
+.wide .line {
+  height: 26px;
+  font-size: 13.5px;
+}
+
+.wide .score {
+  font-size: 13px;
+}

@@ -110,7 +110,7 @@ import { unwrap } from "@/utils/unwrap";
 import EngineLogsView from "../common/EngineLogsView";
 import FileInput from "../common/FileInput";
 import GameInfo from "../common/GameInfo";
-import GameNotation from "../common/GameNotation";
+import GameNotation, { NotationZoneHeader } from "../common/GameNotation";
 import MoveControls from "../common/MoveControls";
 import { TreeStateContext } from "../common/TreeStateContext";
 import Board from "./Board";
@@ -1998,11 +1998,11 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         </Modal>
       )}
       <PanelHeader zone="notation">
-        <PanelTitle>
-          {gameState === "settingUp" && editingMode
-            ? t("Panels.EditPosition", "Edit position")
-            : t("Panels.Notation", "Notation")}
-        </PanelTitle>
+        {gameState === "settingUp" && editingMode ? (
+          <PanelTitle>{t("Panels.EditPosition", "Edit position")}</PanelTitle>
+        ) : (
+          <NotationZoneHeader title={t("Panels.Notation", "Notation")} />
+        )}
       </PanelHeader>
       <Portal target="#panel-notation">
         {gameState === "settingUp" && editingMode ? (
@@ -2016,6 +2016,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           <Stack h="100%" gap="xs">
             <GameNotation
               topBar
+              headerless
               controls={
                 <BoardControls
                   editingMode={gameState === "settingUp" && editingMode}

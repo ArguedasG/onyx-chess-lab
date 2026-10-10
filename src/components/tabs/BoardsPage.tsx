@@ -421,7 +421,11 @@ function TabSwitch({ tab }: { tab: Tab }) {
     <TreeStateProvider key={tab.revision ?? 0} id={tab.value}>
       <Mosaic<ViewId>
         renderTile={(id) =>
-          id === "left" ? <div id="left" /> : <RightColumn layoutKey={layoutKey} />
+          id === "left" ? (
+            <div id="left" style={{ height: "100%" }} />
+          ) : (
+            <RightColumn layoutKey={layoutKey} />
+          )
         }
         value={windowsState.currentNode}
         onChange={(currentNode) => setWindowsState({ currentNode })}

@@ -15,7 +15,7 @@ import { chessgroundDests, chessgroundMove } from "chessops/compat";
 import { makeFen, parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { useAtom, useAtomValue } from "jotai";
-import { memo, useCallback, useContext, useMemo, useState } from "react";
+import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { match } from "ts-pattern";
@@ -70,11 +70,11 @@ import ShowMaterial from "../common/ShowMaterial";
 import { TreeStateContext } from "../common/TreeStateContext";
 import FideInfo from "../databases/FideInfo";
 import { updateCardPerformance } from "../files/opening";
-import { arrowColors } from "../panels/analysis/BestMoves";
+import { arrowColors } from "../panels/analysis/arrowColors";
 import AnnotationHint from "./AnnotationHint";
 import { BoardBar } from "./BoardBar";
 import Clock from "./Clock";
-import EvalBar from "./EvalBar";
+import EvalBar, { EVAL_BAR_WIDTH } from "./EvalBar";
 import MoveInput from "./MoveInput";
 import PromotionModal from "./PromotionModal";
 
@@ -96,6 +96,8 @@ interface ChessboardProps {
   onMove?: (uci: string) => void;
   cgRef?: React.Ref<ChessgroundRef>;
   enablePremoves?: boolean;
+  /** Shown under the board (e.g. the engine strip); the board shrinks to keep it in view. */
+  footer?: React.ReactNode;
 }
 
 function Board({
@@ -111,8 +113,51 @@ function Board({
   onMove,
   cgRef,
   enablePremoves = false,
+  footer,
 }: ChessboardProps) {
   const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const hasFooter = !!footer;
+  const [fittedWidth, setFittedWidth] = useState<number | null>(null);
+
+  // Fit the square board to the column's real height. Bars, gaps and the eval bar are measured
+  // rather than assumed, so themes, fonts and zoom cannot leave dead space around the board.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const column = columnRef.current;
+    const board = boardRef.current;
+    if (!root || !column || !board) return;
+    const fit = () => {
+      // Height comes from the whole area minus the footer, never from the column itself:
+      // the column's own height can lag behind the board it contains.
+      const rootHeight = root.getBoundingClientRect().height;
+      const footer = footerRef.current;
+      const rootGap = Number.parseFloat(getComputedStyle(root).rowGap) || 0;
+      const available = rootHeight - (footer ? footer.getBoundingClientRect().height + rootGap : 0);
+      const columnRect = column.getBoundingClientRect();
+      const boardRect = board.getBoundingClientRect();
+      if (available <= 0 || boardRect.width === 0) return;
+      const gap = Number.parseFloat(getComputedStyle(column).rowGap) || 0;
+      const rows = Array.from(column.children);
+      const otherRows = rows
+        .filter((row) => row !== board.parentElement)
+        .reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
+      const side = available - otherRows - gap * (rows.length - 1);
+      const next = Math.max(192, Math.floor(side + columnRect.width - boardRect.width));
+      setFittedWidth((previous) =>
+        previous !== null && Math.abs(previous - next) < 1 ? previous : next,
+      );
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(root);
+    observer.observe(column);
+    observer.observe(board);
+    if (footerRef.current) observer.observe(footerRef.current);
+    fit();
+    return () => observer.disconnect();
+  }, [boardRef, hasFooter]);
 
   const store = useContext(TreeStateContext)!;
 
@@ -518,6 +563,12 @@ function Board({
     !!headers.white_time_control ||
     !!headers.black_time_control;
 
+  // Player bars only take room when they have something to show; an unnamed analysis gets
+  // the whole height for the board, like ChessBase.
+  const named = (name: string | null | undefined) => !!name && name.trim() !== "" && name !== "?";
+  const showTopBar = hasClock || named(headers.white) || named(headers.black);
+  const showBottomBar = showTopBar || moveInput || !!error;
+
   const practiceLock = !!practicing && !deck.positions.find((c) => c.fen === currentNode.fen);
   const practiceInteractionLock =
     !!practicing &&
@@ -582,47 +633,59 @@ function Board({
 
   return (
     <>
-      <Box w="100%" h="100%">
+      <Box
+        ref={rootRef}
+        w="100%"
+        h="100%"
+        style={{ display: "flex", flexDirection: "column", gap: "0.5rem", overflow: "hidden" }}
+      >
         <Box
+          ref={columnRef}
+          className={classes.boardColumn}
           style={{
             display: "flex",
             flexDirection: "column",
             width: "100%",
-            height: "100%",
+            flex: "1 1 0",
+            minHeight: 0,
             gap: "0.5rem",
             flexWrap: "nowrap",
             overflow: "hidden",
             maxWidth:
-              //            topbar   bottompadding                tabs                                  bottomb    topbar   evalbar                                gaps    ???
-              `calc(100vh - 2.25rem - var(--mantine-spacing-sm) - 2.5rem - var(--mantine-spacing-sm) - ${BAR_HEIGHT} - ${BAR_HEIGHT} + 1.563rem + var(--mantine-spacing-md) - 1rem  - 0.2rem)`,
+              fittedWidth !== null
+                ? fittedWidth
+                : //            topbar   bottompadding                tabs                                  bottomb    topbar   evalbar                                gaps    ???
+                  `calc(100vh - 2.25rem - var(--mantine-spacing-sm) - 2.5rem - var(--mantine-spacing-sm) - ${BAR_HEIGHT} - ${BAR_HEIGHT} + 1.563rem + var(--mantine-spacing-md) - 1rem  - 0.2rem)`,
           }}
         >
-          <BoardBar
-            name={topPlayer}
-            rating={orientation === "white" ? headers.black_elo : headers.white_elo}
-            onNameClick={() => {
-              if (orientation === "white") {
-                setBlackFideOpen(true);
-              } else {
-                setWhiteFideOpen(true);
-              }
-            }}
-            height={BAR_HEIGHT}
-          >
-            <ShowMaterial
-              fen={currentNode.fen}
-              color={orientation === "white" ? "black" : "white"}
-              mode={materialDisplay}
-            />
-            {hasClock && (
-              <Clock
-                color={orientation === "black" ? "white" : "black"}
-                turn={turn}
-                whiteTime={whiteTime}
-                blackTime={blackTime}
+          {showTopBar && (
+            <BoardBar
+              name={topPlayer}
+              rating={orientation === "white" ? headers.black_elo : headers.white_elo}
+              onNameClick={() => {
+                if (orientation === "white") {
+                  setBlackFideOpen(true);
+                } else {
+                  setWhiteFideOpen(true);
+                }
+              }}
+              height={BAR_HEIGHT}
+            >
+              <ShowMaterial
+                fen={currentNode.fen}
+                color={orientation === "white" ? "black" : "white"}
+                mode={materialDisplay}
               />
-            )}
-          </BoardBar>
+              {hasClock && (
+                <Clock
+                  color={orientation === "black" ? "white" : "black"}
+                  turn={turn}
+                  whiteTime={whiteTime}
+                  blackTime={blackTime}
+                />
+              )}
+            </BoardBar>
+          )}
           <Group
             style={{
               position: "relative",
@@ -647,7 +710,9 @@ function Board({
             <Box
               h="100%"
               style={{
-                width: 25,
+                // Wide enough for the reopen chevron when the bar is hidden.
+                width: evalOpen ? EVAL_BAR_WIDTH : 16,
+                flexShrink: 0,
               }}
             >
               {!evalOpen && (
@@ -810,32 +875,44 @@ function Board({
               />
             </Box>
           </Group>
-          <BoardBar
-            name={bottomPlayer}
-            rating={orientation === "white" ? headers.white_elo : headers.black_elo}
-            onNameClick={() => {
-              if (orientation === "white") {
-                setWhiteFideOpen(true);
-              } else {
-                setBlackFideOpen(true);
-              }
-            }}
-            height={BAR_HEIGHT}
-          >
-            {error && (
-              <Text ta="center" c="red">
-                {t(chessopsError(error))}
-              </Text>
-            )}
+          {showBottomBar && (
+            <BoardBar
+              name={bottomPlayer}
+              rating={orientation === "white" ? headers.white_elo : headers.black_elo}
+              onNameClick={() => {
+                if (orientation === "white") {
+                  setWhiteFideOpen(true);
+                } else {
+                  setBlackFideOpen(true);
+                }
+              }}
+              height={BAR_HEIGHT}
+            >
+              {error && (
+                <Text ta="center" c="red">
+                  {t(chessopsError(error))}
+                </Text>
+              )}
 
-            {moveInput && <MoveInput currentNode={currentNode} />}
+              {moveInput && <MoveInput currentNode={currentNode} />}
 
-            <ShowMaterial fen={currentNode.fen} color={orientation} mode={materialDisplay} />
-            {hasClock && (
-              <Clock color={orientation} turn={turn} whiteTime={whiteTime} blackTime={blackTime} />
-            )}
-          </BoardBar>
+              <ShowMaterial fen={currentNode.fen} color={orientation} mode={materialDisplay} />
+              {hasClock && (
+                <Clock
+                  color={orientation}
+                  turn={turn}
+                  whiteTime={whiteTime}
+                  blackTime={blackTime}
+                />
+              )}
+            </BoardBar>
+          )}
         </Box>
+        {footer && (
+          <div ref={footerRef} style={{ flexShrink: 0 }}>
+            {footer}
+          </div>
+        )}
       </Box>
       <FideInfo opened={whiteFideOpen} setOpened={setWhiteFideOpen} name={headers.white} />
       <FideInfo opened={blackFideOpen} setOpened={setBlackFideOpen} name={headers.black} />

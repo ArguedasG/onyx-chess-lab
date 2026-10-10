@@ -183,6 +183,8 @@ export const showDestsAtom = atomWithStorage<boolean>("show-dests", true);
 export const moveHighlightAtom = atomWithStorage<boolean>("move-highlight", true);
 export const snapArrowsAtom = atomWithStorage<boolean>("snap-dests", true);
 export const showArrowsAtom = atomWithStorage<boolean>("show-arrows", true);
+/** Engine strip under the analysis board; off leaves engines to the Engines tab. */
+export const showEngineStripAtom = atomWithStorage<boolean>("show-engine-strip", true);
 export const showConsecutiveArrowsAtom = atomWithStorage<boolean>("show-consecutive-arrows", false);
 export const showVariationArrowsAtom = atomWithStorage<boolean>("show-variation-arrows", true);
 export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>("erase-drawables-on-click", true);
@@ -554,11 +556,6 @@ const openingPracticeQueueFamily = atomFamily((_tab: string) =>
     atom<OpeningPracticeQueue | null>(null),
 );
 export const currentOpeningPracticeQueueAtom = tabValue(openingPracticeQueueFamily);
-
-const expandedEnginesFamily = atomFamily((_tab: string) => atom<string[] | undefined>(undefined));
-export const currentExpandedEnginesAtom = tabValue(expandedEnginesFamily);
-
-export const currentDetachedEngineAtom = atomWithStorage<string | null>("detached-engine", null);
 
 const pgnOptionsFamily = atomFamily((_tab: string) =>
     atom({

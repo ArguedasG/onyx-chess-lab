@@ -46,7 +46,16 @@ import CompleteMoveCell from "./CompleteMoveCell";
 import styles from "./GameNotation.module.css";
 import OpeningName from "./OpeningName";
 
-function GameNotation({ topBar, controls }: { topBar?: boolean; controls?: React.ReactNode }) {
+function GameNotation({
+  topBar,
+  controls,
+  headerless,
+}: {
+  topBar?: boolean;
+  controls?: React.ReactNode;
+  /** The caller shows <NotationZoneHeader> in the panel header instead of the inner bar. */
+  headerless?: boolean;
+}) {
   const store = useContext(TreeStateContext)!;
   const currentFen = useStore(store, (s) => s.currentNode().fen);
   const copyPgn = useStore(store, (s) => s.copyPgn);
@@ -97,7 +106,7 @@ function GameNotation({ topBar, controls }: { topBar?: boolean; controls?: React
           </>
         )}
         <Stack h="100%" gap={0} style={{ flex: 1, minWidth: 0 }}>
-          {topBar && <NotationHeader />}
+          {topBar && !headerless && <NotationHeader />}
           <ScrollArea flex={1} offsetScrollbars scrollbars="y" viewportRef={viewport}>
             <Stack gap="xs">
               <Box>
@@ -146,42 +155,99 @@ function GameNotation({ topBar, controls }: { topBar?: boolean; controls?: React
 }
 
 function NotationHeader() {
+  return (
+    <Stack gap="xs" pt="xs">
+      <Group justify="space-between" px="sm">
+        <OpeningName />
+        <NotationToggles />
+      </Group>
+      <Divider />
+    </Stack>
+  );
+}
+
+/** Show/hide moves, table view, comments and variations. */
+export function NotationToggles({ size = "md" }: { size?: "sm" | "md" }) {
   const { t } = useTranslation();
   const [invisible, setInvisible] = useAtom(currentInvisibleAtom);
   const [showComments, setShowComments] = useAtom(currentShowCommentsAtom);
   const [showVariations, setShowVariations] = useAtom(currentShowVariationsAtom);
   const [tableView, setTableView] = useAtom(tableViewAtom);
+  const iconSize = size === "sm" ? 15 : "1rem";
+  const variant = size === "sm" ? "subtle" : undefined;
+  const color = size === "sm" ? "gray" : undefined;
   return (
-    <Stack gap="xs" pt="xs">
-      <Group justify="space-between" px="sm">
+    <Group gap={size === "sm" ? 2 : "sm"} wrap="nowrap">
+      <Tooltip label={invisible ? t("Notation.ShowMoves") : t("Notation.HideMoves")}>
+        <ActionIcon
+          size={size}
+          variant={variant}
+          color={color}
+          onClick={() => setInvisible((v) => !v)}
+        >
+          {invisible ? <IconEyeOff size={iconSize} /> : <IconEye size={iconSize} />}
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label={tableView ? t("Notation.NormalView") : t("Notation.TableView")}>
+        <ActionIcon
+          size={size}
+          variant={variant}
+          color={color}
+          onClick={() => setTableView((v) => !v)}
+        >
+          {tableView ? <IconList size={iconSize} /> : <IconLayoutList size={iconSize} />}
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label={showComments ? t("Notation.HideComments") : t("Notation.ShowComments")}>
+        <ActionIcon
+          size={size}
+          variant={variant}
+          color={color}
+          onClick={() => setShowComments((v) => !v)}
+        >
+          {showComments ? <IconArticle size={iconSize} /> : <IconArticleOff size={iconSize} />}
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label={showVariations ? t("Notation.HideVariations") : t("Notation.ShowVariations")}>
+        <ActionIcon
+          size={size}
+          variant={variant}
+          color={color}
+          onClick={() => setShowVariations((v) => !v)}
+        >
+          {showVariations ? (
+            <IconArrowsSplit size={iconSize} />
+          ) : (
+            <IconArrowRight size={iconSize} />
+          )}
+        </ActionIcon>
+      </Tooltip>
+    </Group>
+  );
+}
+
+/**
+ * Notation header for the right column's zone header: title, opening name and view toggles in
+ * one row, so the notation does not carry a second bar of its own.
+ */
+export function NotationZoneHeader({ title, extra }: { title: string; extra?: React.ReactNode }) {
+  return (
+    <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+      <Text
+        fz="xs"
+        fw={600}
+        c="dimmed"
+        tt="uppercase"
+        style={{ letterSpacing: "0.02em", whiteSpace: "nowrap" }}
+      >
+        {title}
+      </Text>
+      <Box style={{ flex: 1, minWidth: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
         <OpeningName />
-        <Group gap="sm">
-          <Tooltip label={invisible ? t("Notation.ShowMoves") : t("Notation.HideMoves")}>
-            <ActionIcon onClick={() => setInvisible((v) => !v)}>
-              {invisible ? <IconEyeOff size="1rem" /> : <IconEye size="1rem" />}
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label={tableView ? t("Notation.NormalView") : t("Notation.TableView")}>
-            <ActionIcon onClick={() => setTableView((v) => !v)}>
-              {tableView ? <IconList size="1rem" /> : <IconLayoutList size="1rem" />}
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label={showComments ? t("Notation.HideComments") : t("Notation.ShowComments")}>
-            <ActionIcon onClick={() => setShowComments((v) => !v)}>
-              {showComments ? <IconArticle size="1rem" /> : <IconArticleOff size="1rem" />}
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip
-            label={showVariations ? t("Notation.HideVariations") : t("Notation.ShowVariations")}
-          >
-            <ActionIcon onClick={() => setShowVariations((v) => !v)}>
-              {showVariations ? <IconArrowsSplit size="1rem" /> : <IconArrowRight size="1rem" />}
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Group>
-      <Divider />
-    </Stack>
+      </Box>
+      {extra}
+      <NotationToggles size="sm" />
+    </Group>
   );
 }
 

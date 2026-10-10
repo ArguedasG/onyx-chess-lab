@@ -1,18 +1,24 @@
-import { Alert, Button, Group, Modal, Paper, Portal, Stack, Tabs, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Alert,
+  Button,
+  Group,
+  Modal,
+  Paper,
+  Portal,
+  Stack,
+  Tabs,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import { useHotkeys, useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import {
-  IconDatabase,
-  IconInfoCircle,
-  IconNotes,
-  IconTargetArrow,
-  IconZoomCheck,
-} from "@tabler/icons-react";
+import { IconDatabase, IconInfoCircle, IconTargetArrow, IconZoomCheck } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import type { Piece } from "chessops";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { commands } from "@/bindings";
@@ -25,6 +31,7 @@ import {
   currentReportModalOpenAtom,
   currentTabAtom,
   currentTabSelectedAtom,
+  showEngineStripAtom,
   currentThreatAtom,
   enableAllAtom,
   practiceStateAtom,
@@ -40,12 +47,11 @@ import {
 } from "@/utils/openingTraining";
 import { createTab, getTabFile, saveToFile } from "@/utils/tabs";
 import { unwrap } from "@/utils/unwrap";
-import DetachedEval from "../common/DetachedEval";
-import GameNotation from "../common/GameNotation";
+import GameNotation, { NotationZoneHeader } from "../common/GameNotation";
 import MoveControls from "../common/MoveControls";
 import { TreeStateContext } from "../common/TreeStateContext";
 import AnalysisPanel from "../panels/analysis/AnalysisPanel";
-import AnnotationPanel from "../panels/annotation/AnnotationPanel";
+import AnnotationToolbar, { annotationToolbarAtom } from "../panels/annotation/AnnotationToolbar";
 import DatabasePanel from "../panels/database/DatabasePanel";
 import InfoPanel from "../panels/info/InfoPanel";
 import PracticePanel from "../panels/practice/PracticePanel";
@@ -54,6 +60,7 @@ import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
 import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
+import EngineStrip from "./EngineStrip";
 import EvalListener from "./EvalListener";
 
 function BoardAnalysis() {
@@ -262,13 +269,29 @@ function BoardAnalysis() {
   const keyMap = useAtomValue(keyMapAtom);
   const setThreat = useSetAtom(currentThreatAtom);
 
-  const [, setAnalysisTab] = useAtom(currentAnalysisTabAtom);
+  const [analysisTab, setAnalysisTab] = useAtom(currentAnalysisTabAtom);
   const [currentTabSelected, setCurrentTabSelected] = useAtom(currentTabSelectedAtom);
   const [, setReportModalOpen] = useAtom(currentReportModalOpenAtom);
   const practiceTabSelected = useAtomValue(currentPracticeTabAtom);
   const practicing = currentTabSelected === "practice" && practiceTabSelected === "train";
   const practiceState = useAtomValue(practiceStateAtom);
   const isPracticeRating = practicing && practiceState.phase === "correct";
+  // Engine lines would give away repertoire answers, and mean nothing while editing a position.
+  // The Engines tab shows the same strip in the panel, so the board gets the room back.
+  const showEngineStrip = useAtomValue(showEngineStripAtom);
+  const [showAnnotationBar, setShowAnnotationBar] = useAtom(annotationToolbarAtom);
+  const engineStrip = useMemo(
+    () =>
+      !showEngineStrip ||
+      currentTabSelected === "practice" ||
+      editingMode ||
+      (currentTabSelected === "analysis" &&
+        analysisTab !== "report" &&
+        analysisTab !== "logs") ? undefined : (
+        <EngineStrip />
+      ),
+    [showEngineStrip, currentTabSelected, editingMode, analysisTab],
+  );
 
   const setPracticePath = useStore(store, (s) => s.setPracticePath);
   useEffect(() => {
@@ -305,7 +328,6 @@ function BoardAnalysis() {
       },
     ],
     [keyMap.DATABASE_TAB.keys, () => setCurrentTabSelected("database")],
-    [keyMap.ANNOTATE_TAB.keys, () => setCurrentTabSelected("annotate")],
     [keyMap.INFO_TAB.keys, () => setCurrentTabSelected("info")],
     [keyMap.TOGGLE_THREAT.keys, () => setThreat((threat) => !threat)],
     [
@@ -411,6 +433,7 @@ function BoardAnalysis() {
           editingMode={editingMode}
           boardRef={boardRef}
           selectedPiece={selectedPiece}
+          footer={engineStrip}
         />
       </Portal>
       <Portal target="#panel-tools">
@@ -424,7 +447,8 @@ function BoardAnalysis() {
           <Tabs
             w="100%"
             h="100%"
-            value={currentTabSelected}
+            // "annotate" was a tab before the annotation bar moved under the notation.
+            value={currentTabSelected === "annotate" ? "info" : currentTabSelected}
             onChange={(v) => setCurrentTabSelected(v || "info")}
             keepMounted={false}
             activateTabWithKeyboard={false}
@@ -457,9 +481,6 @@ function BoardAnalysis() {
                 <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
                   {t("Board.Tabs.Database")}
                 </Tabs.Tab>
-                <Tabs.Tab value="annotate" leftSection={<IconNotes size="1rem" />}>
-                  {t("Board.Tabs.Annotate")}
-                </Tabs.Tab>
                 <Tabs.Tab value="info" leftSection={<IconInfoCircle size="1rem" />}>
                   {t("Board.Tabs.Info")}
                 </Tabs.Tab>
@@ -476,9 +497,6 @@ function BoardAnalysis() {
             <Tabs.Panel value="database" flex={1} style={{ overflowY: "hidden" }}>
               <DatabasePanel />
             </Tabs.Panel>
-            <Tabs.Panel value="annotate" flex={1} style={{ overflowY: "hidden" }}>
-              <AnnotationPanel />
-            </Tabs.Panel>
             <Tabs.Panel value="analysis" flex={1} style={{ overflowY: "hidden" }}>
               <AnalysisPanel />
             </Tabs.Panel>
@@ -486,11 +504,35 @@ function BoardAnalysis() {
         </Paper>
       </Portal>
       <PanelHeader zone="notation">
-        <PanelTitle>
-          {editingMode
-            ? t("Panels.EditPosition", "Edit position")
-            : t("Panels.Notation", "Notation")}
-        </PanelTitle>
+        {editingMode ? (
+          <PanelTitle>{t("Panels.EditPosition", "Edit position")}</PanelTitle>
+        ) : (
+          <NotationZoneHeader
+            title={t("Panels.Notation", "Notation")}
+            extra={
+              !practicing && (
+                <Tooltip
+                  label={
+                    showAnnotationBar
+                      ? t("Annotate.HideBar", "Hide annotation bar")
+                      : t("Annotate.ShowBar", "Show annotation bar")
+                  }
+                >
+                  <ActionIcon
+                    size="sm"
+                    variant={showAnnotationBar ? "light" : "subtle"}
+                    color={showAnnotationBar ? undefined : "gray"}
+                    onClick={() => setShowAnnotationBar((value) => !value)}
+                    fw={700}
+                    fz={12}
+                  >
+                    !?
+                  </ActionIcon>
+                </Tooltip>
+              )
+            }
+          />
+        )}
       </PanelHeader>
       <Portal target="#panel-notation">
         {editingMode ? (
@@ -544,9 +586,9 @@ function BoardAnalysis() {
                 </Stack>
               </Paper>
             )}
-            <DetachedEval />
             <GameNotation
               topBar
+              headerless
               controls={
                 <BoardControls
                   editingMode={editingMode}
@@ -557,6 +599,7 @@ function BoardAnalysis() {
                 />
               }
             />
+            {showAnnotationBar && !practicing && <AnnotationToolbar />}
             <MoveControls />
           </Stack>
         )}

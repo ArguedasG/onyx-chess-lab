@@ -10,27 +10,33 @@ vi.mock("@mantine/core", () => ({
   Alert: ({ children }: { children: ReactNode }) => <div role="alert">{children}</div>,
   Group: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Select: ({
-    label,
+    label: visibleLabel,
+    "aria-label": ariaLabel,
     value,
     data,
     onChange,
   }: {
-    label: string;
+    label?: string;
+    "aria-label"?: string;
     value: string;
     data: { value: string; label: string }[];
     onChange: (value: string | null) => void;
-  }) => (
-    <label>
-      {label}
-      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
-        {data.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  ),
+  }) => {
+    const label = visibleLabel ?? ariaLabel ?? "";
+    return (
+      <label>
+        {label}
+        <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+          {data.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  },
+  Stack: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SegmentedControl: ({
     data,
     onChange,

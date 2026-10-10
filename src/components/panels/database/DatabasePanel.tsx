@@ -1,18 +1,23 @@
 import {
+  ActionIcon,
   Alert,
   Button,
+  Collapse,
   Group,
   ScrollArea,
   SegmentedControl,
   Select,
   Stack,
-  Tabs,
   Text,
+  Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
+import { IconChevronDown, IconFilter, IconRefresh } from "@tabler/icons-react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { Link } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
-import { memo, useContext, useEffect, useRef } from "react";
+import { atomWithStorage } from "jotai/utils";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr/immutable";
 import { match } from "ts-pattern";
@@ -45,6 +50,8 @@ import NoDatabaseWarning from "./NoDatabaseWarning";
 import OpeningsTable from "./OpeningsTable";
 import OpeningReportPanel from "./OpeningReportPanel";
 import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
+import ReferenceGamePreview, { type ReferencePreview } from "./ReferenceGamePreview";
+import classes from "./DatabasePanel.module.css";
 import LichessOptionsPanel from "./options/LichessOptionsPanel";
 import LocalOptionsPanel from "./options/LocalOptionsPanel";
 import MasterOptionsPanel from "./options/MastersOptionsPanel";
@@ -77,6 +84,12 @@ export type LocalOptions = {
   end_date?: string;
   result: "any" | "whitewon" | "draw" | "blackwon";
 };
+
+/** Which explorer sections are folded (true = folded). */
+const databaseSectionsAtom = atomWithStorage("database-panel-sections", {
+  reference: false,
+  games: false,
+});
 
 function sortOpenings(openings: Opening[]) {
   return openings.sort(
@@ -207,10 +220,10 @@ function DatabasePanel() {
     const active = activeQuery.current;
     // Also cancel when SWR already has the new position cached and does not run its fetcher.
     // A fetcher for this render may have run already; never cancel that new controller.
-    if (active && (active.key !== queryKey || tabType === "options")) {
+    if (active && active.key !== queryKey) {
       active.controller.abort();
     }
-  }, [queryKey, tabType]);
+  }, [queryKey]);
 
   const {
     data: openingData,
@@ -219,7 +232,7 @@ function DatabasePanel() {
     error,
     mutate,
   } = useSWR(
-    tabType !== "options" && !missingExplorerToken ? [dbType, tabId] : null,
+    !missingExplorerToken ? [dbType, tabId] : null,
     async ([source, owner]: [DBType, string | undefined]) => {
       activeQuery.current?.controller.abort();
       const controller = new AbortController();
@@ -243,77 +256,110 @@ function DatabasePanel() {
     0,
   );
 
-  const header = (
-    <>
-      <Group justify="space-between" w="100%" wrap="nowrap" align="flex-start">
-        <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
-          <SegmentedControl
-            data={[
-              { label: t("Board.Database.Local"), value: "local" },
-              { label: t("Board.Database.LichessAll"), value: "lch_all" },
-              { label: t("Board.Database.LichessMaster"), value: "lch_master" },
-            ]}
-            value={db}
-            onChange={(value) => setDb(value as "local" | "lch_all" | "lch_master")}
-          />
+  // "stats", "games" and "options" were tabs; they all live in the explorer view now.
+  const view = tabType === "report" ? "report" : "explorer";
+  const reportDisabled = dbType.type === "local" && dbType.options.type !== "exact";
+  const showReference = !(dbType.type === "local" && dbType.options.type === "partial");
+  const [sections, setSections] = useAtom(databaseSectionsAtom);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [preview, setPreview] = useState<ReferencePreview | null>(null);
 
-          {db === "local" && (
-            <Select
-              data={dbSelectData}
-              value={referenceDatabase}
-              onChange={async (value) => {
-                await commands.clearGames();
-                setReferenceDatabase(value);
-              }}
-              placeholder={t("Board.Database.SelectReference")}
+  // A preview belongs to the position and source it was picked from.
+  useEffect(() => {
+    setPreview(null);
+  }, [debouncedFen, db, referenceDatabase]);
+
+  // Coming back from a game opened from the list (or "see games" in the report) shows the games.
+  useEffect(() => {
+    if (tabType === "games") setSections((current) => ({ ...current, games: false }));
+  }, [tabType, setSections]);
+
+  const toolbar = (
+    <>
+      <Group gap={6} wrap="wrap" mb={4}>
+        <SegmentedControl
+          size="xs"
+          data={[
+            { label: t("Board.Database.Local"), value: "local" },
+            { label: t("Board.Database.LichessAll"), value: "lch_all" },
+            { label: t("Board.Database.LichessMaster"), value: "lch_master" },
+          ]}
+          value={db}
+          onChange={(value) => setDb(value as "local" | "lch_all" | "lch_master")}
+        />
+        {db === "local" && (
+          <Select
+            data={dbSelectData}
+            value={referenceDatabase}
+            onChange={async (value) => {
+              await commands.clearGames();
+              setReferenceDatabase(value);
+            }}
+            placeholder={t("Board.Database.SelectReference")}
+            size="xs"
+            w={180}
+            allowDeselect={false}
+          />
+        )}
+        {db === "local" && (
+          <Button
+            size="compact-xs"
+            variant={localOptions.type === "pawns" ? "filled" : "default"}
+            title={t(
+              "Board.Database.Local.PawnStructure.Desc",
+              "Find games that reached the same pawn structure, wherever the other pieces are.",
+            )}
+            onClick={() => {
+              const pawns = localOptions.type !== "pawns";
+              setLocalOptions((q) => ({
+                ...q,
+                type: pawns ? "pawns" : "exact",
+                fen: debouncedFen,
+              }));
+              if (pawns && tabType === "report") setTabType("games");
+            }}
+          >
+            {t("Board.Database.Local.PawnStructure", "Pawn structure")}
+          </Button>
+        )}
+        <Button
+          size="compact-xs"
+          variant={filtersOpen ? "light" : "default"}
+          leftSection={<IconFilter size={13} />}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          {t("Board.Database.Filters", "Filters")}
+        </Button>
+        {db === "local" && (
+          <Tooltip label={t("Board.Database.Refresh")}>
+            <ActionIcon
               size="sm"
-              w={200}
-              miw={160}
-              allowDeselect={false}
-            />
-          )}
-          {db === "local" && (
-            <Button
-              size="xs"
-              variant={localOptions.type === "pawns" ? "filled" : "default"}
-              title={t(
-                "Board.Database.Local.PawnStructure.Desc",
-                "Find games that reached the same pawn structure, wherever the other pieces are.",
-              )}
-              onClick={() => {
-                const pawns = localOptions.type !== "pawns";
-                setLocalOptions((q) => ({
-                  ...q,
-                  type: pawns ? "pawns" : "exact",
-                  fen: debouncedFen,
-                }));
-                if (pawns && tabType === "report") setTabType("games");
-              }}
-            >
-              {t("Board.Database.Local.PawnStructure", "Pawn structure")}
-            </Button>
-          )}
-          {db === "local" && tabType !== "options" && (
-            <Button
-              size="xs"
               variant="subtle"
+              color="gray"
               loading={isLoading}
               onClick={() => {
                 void mutate();
               }}
             >
-              {t("Board.Database.Refresh")}
-            </Button>
-          )}
-        </Group>
-
-        {tabType !== "options" && (
-          <Text style={{ whiteSpace: "nowrap" }}>
-            {t("Board.Database.Matches", {
-              matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
-            })}
-          </Text>
+              <IconRefresh size={15} />
+            </ActionIcon>
+          </Tooltip>
         )}
+        <div style={{ flex: 1 }} />
+        <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+          {t("Board.Database.Matches", {
+            matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
+          })}
+        </Text>
+        <SegmentedControl
+          size="xs"
+          value={view}
+          onChange={(value) => setTabType(value === "report" ? "report" : "stats")}
+          data={[
+            { label: t("Board.Database.Explorer", "Explorer"), value: "explorer" },
+            { label: t("OpeningReport.Tab"), value: "report", disabled: reportDisabled },
+          ]}
+        />
       </Group>
       <DatabaseLoader isLoading={isLoading} tab={tab?.value ?? null} />
       {!!openingData?.snapshot?.skippedGames && (
@@ -321,177 +367,186 @@ function DatabasePanel() {
           {t("Board.Database.SkippedGames", { count: openingData.snapshot.skippedGames })}
         </Alert>
       )}
+      <Collapse in={filtersOpen}>
+        <ScrollArea.Autosize mah="40vh" offsetScrollbars className={classes.filters}>
+          {match(db)
+            .with("local", () => <LocalOptionsPanel boardFen={debouncedFen} />)
+            .with("lch_all", () => <LichessOptionsPanel />)
+            .with("lch_master", () => <MasterOptionsPanel />)
+            .exhaustive()}
+        </ScrollArea.Autosize>
+      </Collapse>
     </>
   );
 
-  return (
-    <Stack h="100%" gap={0}>
-      <Tabs
-        defaultValue="stats"
-        orientation="vertical"
-        placement="right"
-        value={tabType}
-        onChange={(v) => setTabType(v!)}
-        display="flex"
-        flex={1}
-        style={{ overflow: "hidden" }}
-      >
-        <Tabs.List>
-          <Tabs.Tab
-            value="stats"
-            disabled={dbType.type === "local" && dbType.options.type === "partial"}
-          >
-            {t("Board.Database.Stats")}
-          </Tabs.Tab>
-          <Tabs.Tab value="games">{t("Board.Database.Games")}</Tabs.Tab>
-          <Tabs.Tab
-            value="report"
-            disabled={dbType.type === "local" && dbType.options.type !== "exact"}
-          >
-            {t("OpeningReport.Tab")}
-          </Tabs.Tab>
-          <Tabs.Tab value="options">{t("Board.Database.Options")}</Tabs.Tab>
-        </Tabs.List>
+  const blocked = blockingMessage({
+    type: db,
+    referenceDatabase,
+    missingExplorerToken,
+    error: transientError ? undefined : error,
+    t,
+  });
 
-        <PanelWithError
-          value="stats"
-          error={transientError ? undefined : error}
-          type={db}
-          header={header}
-          missingExplorerToken={missingExplorerToken}
+  const gamesTable =
+    dbType.type === "local" && openingData?.snapshot ? (
+      <PositionGamesTable
+        snapshot={openingData.snapshot}
+        databasePath={dbType.options.path!}
+        owner={tabId ?? ""}
+        selectedId={preview?.game.id ?? null}
+        onSelect={setPreview}
+        onExpired={() => {
+          void mutate();
+        }}
+      />
+    ) : (
+      <GamesTable
+        games={openingData?.games || []}
+        loading={isLoading}
+        databasePath={dbType.type === "local" ? dbType.options.path : null}
+        selectedId={preview?.game.id ?? null}
+        onSelect={setPreview}
+      />
+    );
+
+  const referenceOpen = showReference && !sections.reference;
+  const gamesOpen = !sections.games;
+
+  return (
+    <Stack h="100%" gap={0} px="sm" py="xs" style={{ overflow: "hidden" }}>
+      {toolbar}
+      {blocked ? (
+        blocked
+      ) : view === "report" ? (
+        <ScrollArea
+          data-testid="opening-report-scroll-area"
+          flex={1}
+          mih={0}
+          offsetScrollbars
+          type="auto"
         >
-          <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
-        </PanelWithError>
-        <PanelWithError
-          value="games"
-          error={transientError ? undefined : error}
-          type={db}
-          header={header}
-          missingExplorerToken={missingExplorerToken}
-        >
-          {dbType.type === "local" && openingData?.snapshot ? (
-            <PositionGamesTable
+          {dbType.type !== "local" && openingData?.remote && !isLoading ? (
+            <RemoteOpeningReportPanel
+              key={`${dbType.type}:${dbType.fen}:${JSON.stringify(dbType.options)}`}
+              data={openingData.remote}
+              fen={dbType.fen}
+              source={dbType.type === "lch_all" ? "Lichess" : "Lichess Masters"}
+              onGames={() => setTabType("games")}
+            />
+          ) : dbType.type === "local" &&
+            dbType.options.type === "exact" &&
+            openingData?.snapshot &&
+            !isLoading ? (
+            <OpeningReportPanel
+              key={`${openingData.snapshot.token}:${dbType.options.fen}`}
               snapshot={openingData.snapshot}
+              displayFen={dbType.options.fen}
               databasePath={dbType.options.path!}
               owner={tabId ?? ""}
+              onGames={() => setTabType("games")}
               onExpired={() => {
                 void mutate();
               }}
             />
           ) : (
-            <GamesTable
-              games={openingData?.games || []}
-              loading={isLoading}
-              databasePath={dbType.type === "local" ? dbType.options.path : null}
-            />
+            <Text p="sm" c="dimmed">
+              {t("OpeningReport.WaitForQuery")}
+            </Text>
           )}
-        </PanelWithError>
-        <PanelWithError
-          value="report"
-          error={transientError ? undefined : error}
-          type={db}
-          header={header}
-          missingExplorerToken={missingExplorerToken}
-        >
-          <ScrollArea
-            data-testid="opening-report-scroll-area"
-            flex={1}
-            mih={0}
-            offsetScrollbars
-            type="auto"
+        </ScrollArea>
+      ) : (
+        <div className={classes.sections}>
+          {showReference && (
+            <PanelSection
+              title={t("Board.Database.Reference", "Reference")}
+              collapsed={!referenceOpen}
+              onToggle={() =>
+                setSections((current) => ({ ...current, reference: !current.reference }))
+              }
+              flex={!referenceOpen ? "0 0 auto" : gamesOpen ? "0 0 42%" : "1 1 0"}
+            >
+              <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
+            </PanelSection>
+          )}
+          <PanelSection
+            title={t("Board.Database.Games")}
+            collapsed={!gamesOpen}
+            onToggle={() => setSections((current) => ({ ...current, games: !current.games }))}
+            flex={gamesOpen ? "1 1 0" : "0 0 auto"}
           >
-            {tabType === "report" &&
-            dbType.type !== "local" &&
-            openingData?.remote &&
-            !isLoading ? (
-              <RemoteOpeningReportPanel
-                key={`${dbType.type}:${dbType.fen}:${JSON.stringify(dbType.options)}`}
-                data={openingData.remote}
-                fen={dbType.fen}
-                source={dbType.type === "lch_all" ? "Lichess" : "Lichess Masters"}
-                onGames={() => setTabType("games")}
+            <div className={classes.gamesTable}>{gamesTable}</div>
+            {preview && (
+              <ReferenceGamePreview
+                preview={preview}
+                currentFen={debouncedFen}
+                onClose={() => setPreview(null)}
               />
-            ) : tabType === "report" &&
-              dbType.type === "local" &&
-              dbType.options.type === "exact" &&
-              openingData?.snapshot &&
-              !isLoading ? (
-              <OpeningReportPanel
-                key={`${openingData.snapshot.token}:${dbType.options.fen}`}
-                snapshot={openingData.snapshot}
-                displayFen={dbType.options.fen}
-                databasePath={dbType.options.path!}
-                owner={tabId ?? ""}
-                onGames={() => setTabType("games")}
-                onExpired={() => {
-                  void mutate();
-                }}
-              />
-            ) : (
-              <Text p="sm" c="dimmed">
-                {t("OpeningReport.WaitForQuery")}
-              </Text>
             )}
-          </ScrollArea>
-        </PanelWithError>
-        <PanelWithError
-          value="options"
-          error={transientError ? undefined : error}
-          type={db}
-          header={header}
-          missingExplorerToken={missingExplorerToken}
-        >
-          <ScrollArea flex={1} offsetScrollbars pt="sm">
-            {match(db)
-              .with("local", () => <LocalOptionsPanel boardFen={debouncedFen} />)
-              .with("lch_all", () => <LichessOptionsPanel />)
-              .with("lch_master", () => <MasterOptionsPanel />)
-              .exhaustive()}
-          </ScrollArea>
-        </PanelWithError>
-      </Tabs>
+          </PanelSection>
+        </div>
+      )}
     </Stack>
   );
 }
 
-function PanelWithError(props: {
-  value: string;
-  error: unknown;
-  type: string;
-  header: React.ReactNode;
+/** A collapsible block of the explorer, separated by its header instead of a border. */
+function PanelSection({
+  title,
+  collapsed,
+  onToggle,
+  flex,
+  children,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  flex: string;
   children: React.ReactNode;
-  missingExplorerToken: boolean;
 }) {
-  const referenceDatabase = useAtomValue(referenceDbAtom);
-  const { t } = useTranslation();
-  let children = props.children;
-  if (props.type === "local" && !referenceDatabase) {
-    children = <NoDatabaseWarning />;
-  }
-  if (props.missingExplorerToken && props.type !== "local") {
-    children = (
+  return (
+    <section className={classes.section} style={{ flex }}>
+      <UnstyledButton
+        className={classes.sectionHeader}
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+      >
+        <IconChevronDown
+          size={14}
+          className={classes.chevron}
+          style={{ transform: collapsed ? "rotate(-90deg)" : undefined }}
+        />
+        {title}
+      </UnstyledButton>
+      {!collapsed && <div className={classes.sectionBody}>{children}</div>}
+    </section>
+  );
+}
+
+/** Why the source cannot be queried right now, if it cannot. */
+function blockingMessage({
+  type,
+  referenceDatabase,
+  missingExplorerToken,
+  error,
+  t,
+}: {
+  type: string;
+  referenceDatabase: string | null;
+  missingExplorerToken: boolean;
+  error: unknown;
+  t: (key: string) => string;
+}) {
+  if (error) return <Alert color="red">{t("Board.Database.QueryFailed")}</Alert>;
+  if (type === "local" && !referenceDatabase) return <NoDatabaseWarning />;
+  if (missingExplorerToken && type !== "local") {
+    return (
       <Alert color="yellow">
         {t("Board.Database.ExplorerAuthRequired1")} <Link to="/accounts">Users</Link>{" "}
         {t("Board.Database.ExplorerAuthRequired2")}
       </Alert>
     );
   }
-  if (props.error) {
-    children = <Alert color="red">{t("Board.Database.QueryFailed")}</Alert>;
-  }
-
-  return (
-    <Tabs.Panel
-      py="xs"
-      px="sm"
-      value={props.value}
-      flex={1}
-      style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}
-    >
-      {props.header}
-      {children}
-    </Tabs.Panel>
-  );
+  return null;
 }
 
 export default memo(DatabasePanel);

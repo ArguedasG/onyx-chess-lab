@@ -39,7 +39,7 @@ const keys: KeyMap = {
     PRACTICE_TAB: { name: "Go to practice tab", keys: "p" },
     ANALYSIS_TAB: { name: "Go to analysis tab", keys: "a" },
     DATABASE_TAB: { name: "Go to database tab", keys: "b" },
-    ANNOTATE_TAB: { name: "Go to annotate tab", keys: "d" },
+    ANNOTATE_TAB: { name: "Comment the current move", keys: "d" },
     INFO_TAB: { name: "Go to info tab", keys: "i" },
     ANNOTATION_BRILLIANT: { name: "Toggle brilliant move annotation", keys: "1" },
     ANNOTATION_GOOD: { name: "Toggle good move annotation", keys: "2" },

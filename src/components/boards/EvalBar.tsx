@@ -1,9 +1,11 @@
 import type { Color } from "@lichess-org/chessground/types";
-import { Box, Text, Tooltip, useMantineTheme } from "@mantine/core";
+import { Box, Tooltip, useMantineTheme } from "@mantine/core";
 import { useAtom } from "jotai";
 import type { Score } from "@/bindings";
 import { currentEvalBarDisplayAtom, currentEvalOpenAtom } from "@/state/atoms";
 import { formatScore, getWinChance } from "@/utils/score";
+
+export const EVAL_BAR_WIDTH = 12;
 
 function EvalBar({ score, orientation }: { score: Score | null; orientation: Color }) {
   const theme = useMantineTheme();
@@ -32,22 +34,16 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
           key: "black",
           height: blackWin,
           bg: theme.colors.dark[4],
-          textColor: theme.colors.gray[2],
-          label: blackWin >= 20 ? blackWin.toFixed(0) : "",
         },
         {
           key: "draw",
           height: draw,
           bg: theme.colors.gray[5],
-          textColor: theme.colors.dark[8],
-          label: draw >= 20 ? draw.toFixed(0) : "",
         },
         {
           key: "white",
           height: whiteWin,
           bg: theme.colors.gray[2],
-          textColor: theme.colors.dark[8],
-          label: whiteWin >= 20 ? whiteWin.toFixed(0) : "",
         },
       ];
 
@@ -66,11 +62,7 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
             flexDirection: "column",
             justifyContent: "center",
           }}
-        >
-          <Text fz="xs" c={section.textColor} ta="center">
-            {section.label}
-          </Text>
-        </Box>
+        ></Box>
       ));
     } else {
       const progress =
@@ -86,17 +78,7 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
             display: "flex",
             flexDirection: "column",
           }}
-        >
-          <Text
-            fz="xs"
-            c={theme.colors.gray[2]}
-            ta="center"
-            py={3}
-            mt={orientation === "black" ? "auto" : undefined}
-          >
-            {scoreValue.value <= 0 && formatScore(scoreValue, 1).replace(/\+|-/, "")}
-          </Text>
-        </Box>,
+        ></Box>,
         <Box
           key="white"
           style={{
@@ -106,17 +88,7 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
             display: "flex",
             flexDirection: "column",
           }}
-        >
-          <Text
-            fz="xs"
-            py={3}
-            c={theme.colors.dark[8]}
-            ta="center"
-            mt={orientation === "white" ? "auto" : undefined}
-          >
-            {scoreValue.value > 0 && formatScore(scoreValue, 1).slice(1)}
-          </Text>
-        </Box>,
+        ></Box>,
       ];
 
       if (orientation === "black") {
@@ -139,9 +111,10 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
           e.preventDefault();
         }}
         style={{
-          width: 25,
+          // Thin and rounded; the exact score is in the tooltip and the engine strip.
+          width: EVAL_BAR_WIDTH,
           height: "100%",
-          borderRadius: "var(--mantine-radius-xs)",
+          borderRadius: EVAL_BAR_WIDTH / 2,
           overflow: "hidden",
         }}
       >

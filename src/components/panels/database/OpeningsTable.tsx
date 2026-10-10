@@ -40,6 +40,8 @@ function OpeningsTable({ openings, loading }: { openings: Opening[]; loading: bo
     <DataTable
       withTableBorder
       highlightOnHover
+      height="100%"
+      verticalSpacing={4}
       records={openings}
       fetching={loading || openings === null}
       rowStyle={(game, i) => {
