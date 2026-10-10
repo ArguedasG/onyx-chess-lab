@@ -19,7 +19,6 @@ import {
   Title,
 } from "@mantine/core";
 import { resolveResource } from "@tauri-apps/api/path";
-import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArrowLeft,
@@ -48,6 +47,8 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { usePendingPgnImport } from "@/hooks/usePendingPgnImport";
+import PendingPgnNotice from "../files/PendingPgnNotice";
 import { Chessground } from "@/chessground/Chessground";
 import { positionFromFen } from "@/utils/chessops";
 import type { LocalEngine } from "@/utils/engines";
@@ -173,6 +174,19 @@ export default function EndgameTrainingV2Page() {
   const [feedback, setFeedback] = useState<{ text: string; color?: string } | null>(null);
   const [resolvingSetId, setResolvingSetId] = useState<string | null>(null);
   const [deletingSetId, setDeletingSetId] = useState<string | null>(null);
+  const pendingImport = usePendingPgnImport("endgames");
+  const importCardRef = useRef<HTMLDivElement>(null);
+
+  // A PGN sent from Files: bring the import form into view and suggest a set name.
+  useEffect(() => {
+    const path = pendingImport.path;
+    if (!path) return;
+    setName((current) => current || filename(path, trainingT));
+    const frame = requestAnimationFrame(() =>
+      importCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [pendingImport.path, trainingT]);
   const [outcomeQuiz, setOutcomeQuiz] = useState<OutcomeQuizState | null>(null);
   const bundledLoadStarted = useRef(false);
   const lastRandomPositionId = useRef<string | null>(null);
@@ -266,11 +280,10 @@ export default function EndgameTrainingV2Page() {
   }, [areas.endgames.bundledContentVersion, setAreas, trainingT]);
 
   async function importSet() {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "PGN de estudio", extensions: ["pgn"] }],
-    });
-    if (typeof selected !== "string") return;
+    const selected = await pendingImport.choosePath([
+      { name: "PGN de estudio", extensions: ["pgn"] },
+    ]);
+    if (!selected) return;
     try {
       const records = await parseTrainingRecords(await readTextFile(selected), {
         requireExplicitFen: true,
@@ -875,7 +888,7 @@ export default function EndgameTrainingV2Page() {
           })
         )}
 
-        <Card withBorder>
+        <Card ref={importCardRef} withBorder>
           <Stack>
             <Group>
               <IconUpload size={24} color="var(--mantine-color-teal-6)" />
@@ -892,6 +905,7 @@ export default function EndgameTrainingV2Page() {
                 </Text>
               </div>
             </Group>
+            <PendingPgnNotice path={pendingImport.path} onClear={pendingImport.clear} />
             <SimpleGrid cols={{ base: 1, md: 2 }}>
               <TextInput
                 label={trainingT("Training.Copy.Setname.a54101c6", "Set name")}

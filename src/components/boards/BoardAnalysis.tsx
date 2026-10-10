@@ -53,6 +53,7 @@ import AnnotationSymbolHotkeys from "./AnnotationSymbolHotkeys";
 import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
+import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
 import EvalListener from "./EvalListener";
 
 function BoardAnalysis() {
@@ -412,7 +413,7 @@ function BoardAnalysis() {
           selectedPiece={selectedPiece}
         />
       </Portal>
-      <Portal target="#topRight" style={{ height: "100%" }}>
+      <Portal target="#panel-tools">
         <Paper
           withBorder
           style={{
@@ -442,25 +443,28 @@ function BoardAnalysis() {
               },
             }}
           >
-            <Tabs.List grow>
-              {isRepertoire && (
-                <Tabs.Tab value="practice" leftSection={<IconTargetArrow size="1rem" />}>
-                  {t("Board.Tabs.Practice")}
+            {/* The tab bar lives in the zone header, so it stays visible when the zone is folded. */}
+            <PanelHeader zone="tools">
+              <Tabs.List grow>
+                {isRepertoire && (
+                  <Tabs.Tab value="practice" leftSection={<IconTargetArrow size="1rem" />}>
+                    {t("Board.Tabs.Practice")}
+                  </Tabs.Tab>
+                )}
+                <Tabs.Tab value="analysis" leftSection={<IconZoomCheck size="1rem" />}>
+                  {t("Board.Tabs.Analysis")}
                 </Tabs.Tab>
-              )}
-              <Tabs.Tab value="analysis" leftSection={<IconZoomCheck size="1rem" />}>
-                {t("Board.Tabs.Analysis")}
-              </Tabs.Tab>
-              <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
-                {t("Board.Tabs.Database")}
-              </Tabs.Tab>
-              <Tabs.Tab value="annotate" leftSection={<IconNotes size="1rem" />}>
-                {t("Board.Tabs.Annotate")}
-              </Tabs.Tab>
-              <Tabs.Tab value="info" leftSection={<IconInfoCircle size="1rem" />}>
-                {t("Board.Tabs.Info")}
-              </Tabs.Tab>
-            </Tabs.List>
+                <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
+                  {t("Board.Tabs.Database")}
+                </Tabs.Tab>
+                <Tabs.Tab value="annotate" leftSection={<IconNotes size="1rem" />}>
+                  {t("Board.Tabs.Annotate")}
+                </Tabs.Tab>
+                <Tabs.Tab value="info" leftSection={<IconInfoCircle size="1rem" />}>
+                  {t("Board.Tabs.Info")}
+                </Tabs.Tab>
+              </Tabs.List>
+            </PanelHeader>
             {isRepertoire && (
               <Tabs.Panel value="practice" flex={1} style={{ overflowY: "hidden" }}>
                 <PracticePanel saveFile={userSaveFile} />
@@ -481,7 +485,14 @@ function BoardAnalysis() {
           </Tabs>
         </Paper>
       </Portal>
-      <Portal target="#bottomRight" style={{ height: "100%" }}>
+      <PanelHeader zone="notation">
+        <PanelTitle>
+          {editingMode
+            ? t("Panels.EditPosition", "Edit position")
+            : t("Panels.Notation", "Notation")}
+        </PanelTitle>
+      </PanelHeader>
+      <Portal target="#panel-notation">
         {editingMode ? (
           <EditingCard
             boardRef={boardRef}

@@ -122,6 +122,7 @@ import BotLeaguePanel from "./BotLeaguePanel";
 import { ModelGameBatchProgress, ModelGameBatchSetup } from "./ModelGameBatchPanel";
 import ModelGameExperimentHistory from "./ModelGameExperimentHistory";
 import { OpponentForm, type OpponentSettings } from "./OpponentForm";
+import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
 
 function gameResultToOutcome(result: GameResult): Outcome {
   if (result.type === "whiteWins") return "1-0";
@@ -1500,7 +1501,10 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           enablePremoves={isPlayerVsEngine && gameState === "playing"}
         />
       </Portal>
-      <Portal target="#topRight" style={{ height: "100%", overflow: "hidden" }}>
+      <PanelHeader zone="tools">
+        <PanelTitle>{generatorMode ? t("ModelGame.Title") : t("Panels.Game", "Game")}</PanelTitle>
+      </PanelHeader>
+      <Portal target="#panel-tools">
         <Paper withBorder shadow="sm" p="md" h="100%">
           {logsOpened ? (
             <EngineLogsView
@@ -1993,7 +1997,14 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           <BotLeaguePanel id={activeTab ?? "model-game-generator"} embedded />
         </Modal>
       )}
-      <Portal target="#bottomRight" style={{ height: "100%" }}>
+      <PanelHeader zone="notation">
+        <PanelTitle>
+          {gameState === "settingUp" && editingMode
+            ? t("Panels.EditPosition", "Edit position")
+            : t("Panels.Notation", "Notation")}
+        </PanelTitle>
+      </PanelHeader>
+      <Portal target="#panel-notation">
         {gameState === "settingUp" && editingMode ? (
           <EditingCard
             boardRef={boardRef}

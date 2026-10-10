@@ -58,6 +58,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import GameNotation from "../common/GameNotation";
 import MoveControls from "../common/MoveControls";
 import { TreeStateContext } from "../common/TreeStateContext";
+import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
 import AddPuzzle from "./AddPuzzle";
 import PuzzleBoard from "./PuzzleBoard";
 
@@ -302,7 +303,10 @@ function Puzzles({ id }: { id: string }) {
           db={selectedDb}
         />
       </Portal>
-      <Portal target="#topRight" style={{ height: "100%" }}>
+      <PanelHeader zone="tools">
+        <PanelTitle>{t("Home.Card.Puzzle.Title")}</PanelTitle>
+      </PanelHeader>
+      <Portal target="#panel-tools">
         <Paper
           h="100%"
           withBorder
@@ -667,7 +671,10 @@ function Puzzles({ id }: { id: string }) {
           </Group>
         </Paper>
       </Portal>
-      <Portal target="#bottomRight" style={{ height: "100%" }}>
+      <PanelHeader zone="notation">
+        <PanelTitle>{t("Panels.Notation", "Notation")}</PanelTitle>
+      </PanelHeader>
+      <Portal target="#panel-notation">
         <Stack h="100%" gap="xs">
           <Paper withBorder p="md" mih="5rem">
             <ScrollArea h="100%" offsetScrollbars>

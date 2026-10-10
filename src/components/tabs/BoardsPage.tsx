@@ -33,7 +33,8 @@ import {
 import { keyMapAtom } from "@/state/keybinds";
 import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
-import { createTab, genID, isPersistentGameOrigin, type Tab } from "@/utils/tabs";
+import { rightColumnLayoutKey } from "@/state/rightColumnLayout";
+import { createTab, genID, getTabFile, isPersistentGameOrigin, type Tab } from "@/utils/tabs";
 import {
   getTabPath,
   getTrainingTabName,
@@ -48,6 +49,7 @@ import { BoardTab } from "./BoardTab";
 import ConfirmChangesModal from "./ConfirmChangesModal";
 import ImportModal from "./ImportModal";
 import NewTabHome from "./NewTabHome";
+import RightColumn from "./RightColumn";
 
 import "react-mosaic-component/react-mosaic-component.css";
 
@@ -385,29 +387,26 @@ export default function BoardsPage() {
   );
 }
 
-type ViewId = "left" | "topRight" | "bottomRight";
-
-const fullLayout: { [viewId: string]: ReactNode } = {
-  left: <div id="left" />,
-  topRight: <div id="topRight" />,
-  bottomRight: <div id="bottomRight" />,
-};
+type ViewId = "left" | "right";
 
 interface WindowsState {
   currentNode: MosaicNode<ViewId> | null;
 }
 
-const windowsStateAtom = atomWithStorage<WindowsState>("windowsState", {
-  currentNode: {
-    direction: "row",
-    first: "left",
-    second: {
-      direction: "column",
-      first: "topRight",
-      second: "bottomRight",
-    },
-  },
-});
+/** Board | right column. The column splits itself (see RightColumn); the width split is kept. */
+function initialWindowsState(): WindowsState {
+  let splitPercentage: number | undefined;
+  try {
+    const previous = JSON.parse(localStorage.getItem("windowsState") ?? "null");
+    const stored = previous?.currentNode?.splitPercentage;
+    if (typeof stored === "number") splitPercentage = stored;
+  } catch {
+    // Older layout unreadable: start from the default width.
+  }
+  return { currentNode: { direction: "row", first: "left", second: "right", splitPercentage } };
+}
+
+const windowsStateAtom = atomWithStorage<WindowsState>("windowsState-v2", initialWindowsState());
 
 function TabSwitch({ tab }: { tab: Tab }) {
   const [windowsState, setWindowsState] = useAtom(windowsStateAtom);
@@ -416,10 +415,14 @@ function TabSwitch({ tab }: { tab: Tab }) {
   if (tab.type === "training") return null;
   if (tab.type === "new") return <NewTabHome id={tab.value} />;
 
+  const layoutKey = rightColumnLayoutKey(tab.type, getTabFile(tab)?.metadata.type === "repertoire");
+
   return (
     <TreeStateProvider key={tab.revision ?? 0} id={tab.value}>
       <Mosaic<ViewId>
-        renderTile={(id) => fullLayout[id]}
+        renderTile={(id) =>
+          id === "left" ? <div id="left" /> : <RightColumn layoutKey={layoutKey} />
+        }
         value={windowsState.currentNode}
         onChange={(currentNode) => setWindowsState({ currentNode })}
         resize={{ minimumPaneSizePercentage: 0 }}

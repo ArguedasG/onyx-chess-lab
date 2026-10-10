@@ -31,6 +31,7 @@ import {
 } from "@/utils/repertoireAddition";
 import { getTabFile, getTabGameNumber } from "@/utils/tabs";
 import { commitRepertoireAddition } from "@/utils/commitRepertoireAddition";
+import { repertoireFileRole } from "@/utils/pgnUsage";
 import type { OpeningsState } from "@/utils/trainingAreas";
 import type { TreeState } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
@@ -77,6 +78,9 @@ export default function RepertoireAdditionModal({
     repertoire?.variantIds
       .map((id) => areas.openings.variants[id])
       .filter((variant) => variant?.contentType === "theory") ?? [];
+
+  // Importing a repertoire's own editable copy into itself would only report duplicates.
+  const fileRole = !tree && repertoire && path ? repertoireFileRole(repertoire, path) : null;
 
   function ensureNoDirtyTargets() {
     for (const tab of atomStore.get(tabsAtom)) {
@@ -350,6 +354,30 @@ export default function RepertoireAdditionModal({
             />
           </>
         )}
+        {fileRole === "editable" && (
+          <Alert color="red">
+            {t(
+              "Repertoire.FileIsEditableCopy",
+              "This PGN is the editable copy of “{{name}}”. Choose another file or another repertoire.",
+              { name: repertoire?.name },
+            )}
+          </Alert>
+        )}
+        {(fileRole === "source" || fileRole === "imported") && (
+          <Alert color="yellow">
+            {fileRole === "source"
+              ? t(
+                  "Repertoire.FileIsSource",
+                  "“{{name}}” was created from this PGN. Lines it already has are merged, so only new moves and comments are added.",
+                  { name: repertoire?.name },
+                )
+              : t(
+                  "Repertoire.FileAlreadyImported",
+                  "This PGN was already imported into “{{name}}”. Lines it already has are merged, so only new moves and comments are added.",
+                  { name: repertoire?.name },
+                )}
+          </Alert>
+        )}
         {preview && (
           <Alert color="teal">
             {t(
@@ -371,7 +399,12 @@ export default function RepertoireAdditionModal({
           )}
           <Button
             loading={busy}
-            disabled={!repertoire || (!tree && !path) || (mode === "theory" && !variantId)}
+            disabled={
+              !repertoire ||
+              (!tree && !path) ||
+              (mode === "theory" && !variantId) ||
+              fileRole === "editable"
+            }
             onClick={() => void (preview ? commit() : inspect())}
           >
             {preview

@@ -22,7 +22,6 @@ import {
   Title,
 } from "@mantine/core";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { open } from "@tauri-apps/plugin-dialog";
 import { remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArrowLeft,
@@ -87,6 +86,8 @@ import { headersToPGN } from "@/utils/chess";
 import { INITIAL_FEN } from "chessops/fen";
 import { useTranslation } from "react-i18next";
 import { useOpeningScrollRestoration } from "@/hooks/useOpeningScrollRestoration";
+import { usePendingPgnImport } from "@/hooks/usePendingPgnImport";
+import PendingPgnNotice from "../files/PendingPgnNotice";
 import RepertoireAdditionModal from "./RepertoireAdditionModal";
 import OpeningExportModal from "./OpeningExportModal";
 import OpeningConsolidationModal from "./OpeningConsolidationModal";
@@ -177,6 +178,7 @@ export default function OpeningDashboardPage() {
   const [lineDraftName, setLineDraftName] = useState("");
   const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
   const [deletingRepertoireId, setDeletingRepertoireId] = useState<string | null>(null);
+  const pendingImport = usePendingPgnImport("openings");
   const repertoires = useMemo(
     () => Object.values(areas.openings.repertoires),
     [areas.openings.repertoires],
@@ -268,13 +270,10 @@ export default function OpeningDashboardPage() {
   }
 
   async function selectImportFile(meta: { name: string; description: string }) {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        { name: t("Training.Copy.RepertoirePGN.19310184", "Repertoire PGN"), extensions: ["pgn"] },
-      ],
-    });
-    if (typeof selected !== "string") return;
+    const selected = await pendingImport.choosePath([
+      { name: t("Training.Copy.RepertoirePGN.19310184", "Repertoire PGN"), extensions: ["pgn"] },
+    ]);
+    if (!selected) return;
 
     setBusy(true);
     setFeedback(null);
@@ -798,6 +797,7 @@ export default function OpeningDashboardPage() {
           config={config}
           onConfigChange={setConfig}
           onSelectFile={selectImportFile}
+          notice={<PendingPgnNotice path={pendingImport.path} onClear={pendingImport.clear} />}
         />
 
         <div style={{ order: 1 }}>

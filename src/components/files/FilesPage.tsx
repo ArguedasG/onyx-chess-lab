@@ -14,14 +14,18 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { useHotkeys, useToggle } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import {
   IconFileDescription,
+  IconFileImport,
   IconFilePlus,
   IconFolderPlus,
   IconSearch,
   IconFolder,
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
+import { dirname } from "@tauri-apps/api/path";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { readDir, remove } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,6 +36,7 @@ import OpenFolderButton from "../common/OpenFolderButton";
 import DirectoryTree from "./DirectoryTree";
 import { DragContext } from "./DirectoryTree";
 import FileCard from "./FileCard";
+import ImportPgnModal from "./ImportPgnModal";
 import {
   type Directory,
   type FileMetadata,
@@ -41,6 +46,7 @@ import {
 import { CreateDirectoryModal, CreateModal, EditModal } from "./Modals";
 
 const FILE_TYPES: FileType[] = ["game", "repertoire", "tournament", "puzzle", "other"];
+const EMPTY_PATHS: string[] = [];
 type Entry = FileMetadata | Directory;
 
 function findEntryByPath(entries: Entry[], path: string): Entry | null {
@@ -90,6 +96,12 @@ function FilesPage() {
   const [createModal, toggleCreateModal] = useToggle();
   const [createDirModal, toggleCreateDirModal] = useToggle();
   const [editModal, toggleEditModal] = useToggle();
+  const [importTarget, setImportTarget] = useState<{
+    dir: string;
+    label: string;
+    paths: string[];
+  } | null>(null);
+  const [externalDrag, setExternalDrag] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -194,6 +206,71 @@ function FilesPage() {
 
   const refreshDirectory = useCallback(() => mutate(), [mutate]);
 
+  // Imports go into the selected folder (or the selected file's folder), like "New file".
+  const openImport = useCallback(
+    async (paths: string[] = []) => {
+      let dir = documentDir;
+      let label = t("Files.Title");
+      if (selected?.type === "directory") {
+        dir = selected.path;
+        label = selected.name;
+      } else if (selected) {
+        dir = await dirname(selected.path);
+        if (dir !== documentDir) label = dir.split(/[\\/]/).pop() ?? label;
+      }
+      setImportTarget({ dir, label, paths });
+    },
+    [documentDir, selected, t],
+  );
+
+  // PGN files dragged from the system file explorer open the import dialog.
+  const openImportRef = useRef(openImport);
+  openImportRef.current = openImport;
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    getCurrentWebview()
+      .onDragDropEvent(({ payload }) => {
+        if (payload.type === "leave") {
+          setExternalDrag(false);
+          return;
+        }
+        if (payload.type === "over") return;
+        const pgns = payload.paths.filter((path) => /\.pgn$/i.test(path));
+        if (payload.type === "enter") {
+          setExternalDrag(pgns.length > 0);
+          return;
+        }
+        setExternalDrag(false);
+        if (pgns.length > 0) void openImportRef.current(pgns);
+      })
+      .then((unlisten) => {
+        if (disposed) unlisten();
+        else stop = unlisten;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, []);
+
+  const handleImported = useCallback(
+    async (imported: FileMetadata[]) => {
+      await mutate();
+      setSelected(imported[imported.length - 1]);
+      notifications.show({
+        color: "green",
+        message: t(
+          "Files.Import.Done",
+          "{{count}} files imported. Use “Use in…” to add them to a study, repertoire or training set.",
+          { count: imported.length },
+        ),
+      });
+    },
+    [mutate, t],
+  );
+
   const handleConfirmDelete = useCallback(async () => {
     if (!selected) {
       return;
@@ -236,6 +313,15 @@ function FilesPage() {
           selected={selected}
         />
       )}
+      <ImportPgnModal
+        opened={importTarget !== null}
+        onClose={() => setImportTarget(null)}
+        initialPaths={importTarget?.paths ?? EMPTY_PATHS}
+        initialType={filter ?? "game"}
+        targetDir={importTarget?.dir ?? documentDir}
+        targetLabel={importTarget?.label ?? ""}
+        onImported={handleImported}
+      />
       <CreateDirectoryModal
         opened={createDirModal}
         setOpened={toggleCreateDirModal}
@@ -258,7 +344,15 @@ function FilesPage() {
       </Group>
 
       <Group grow flex={1} style={{ overflow: "hidden" }} px="md" pb="md">
-        <Paper withBorder style={{ borderWidth: 2 }} h="100%">
+        <Paper
+          withBorder
+          style={{
+            borderWidth: 2,
+            borderStyle: externalDrag ? "dashed" : undefined,
+            borderColor: externalDrag ? "var(--mantine-primary-color-filled)" : undefined,
+          }}
+          h="100%"
+        >
           <Stack ref={dropzoneRef} gap={0} h="100%" style={{ overflow: "hidden" }}>
             <Group p="xs" gap="xs">
               <Input
@@ -279,6 +373,11 @@ function FilesPage() {
                   }
                 }}
               />
+              <Tooltip label={t("Files.Import.Title", "Import PGN files")}>
+                <ActionIcon variant="default" size="lg" onClick={() => void openImport()}>
+                  <IconFileImport size="1rem" />
+                </ActionIcon>
+              </Tooltip>
               <Tooltip label={t("Files.CreateFile.Title")}>
                 <ActionIcon variant="default" size="lg" onClick={() => toggleCreateModal()}>
                   <IconFilePlus size="1rem" />

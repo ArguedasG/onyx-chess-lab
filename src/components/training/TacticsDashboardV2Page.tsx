@@ -23,7 +23,6 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   IconArrowLeft,
   IconChartBar,
@@ -48,6 +47,8 @@ import { TreeStateProvider } from "@/components/common/TreeStateContext";
 import TacticsSetStatisticsModal from "@/components/training/TacticsSetStatisticsModal";
 import { activeTabAtom, tabsAtom } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { usePendingPgnImport } from "@/hooks/usePendingPgnImport";
+import PendingPgnNotice from "../files/PendingPgnNotice";
 import { getPuzzleDatabases } from "@/utils/puzzles";
 import {
   addTacticsFileSet,
@@ -118,6 +119,19 @@ export default function TacticsDashboardV2Page() {
   const [draftConfig, setDraftConfig] = useState<TacticsSet["config"]>(defaultConfig);
   const [inspection, setInspection] = useState<TacticsPgnInspection | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const pendingImport = usePendingPgnImport("tactics");
+  const importCardRef = useRef<HTMLDivElement>(null);
+
+  // A PGN sent from Files: bring the import form into view and suggest a set name.
+  useEffect(() => {
+    const path = pendingImport.path;
+    if (!path) return;
+    setSetName((current) => current || filename(path, trainingT));
+    const frame = requestAnimationFrame(() =>
+      importCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [pendingImport.path, trainingT]);
 
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -240,16 +254,10 @@ export default function TacticsDashboardV2Page() {
   }
 
   async function selectImportFile() {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: trainingT("Training.Copy.TacticsPGN.2840fe24", "Tactics PGN"),
-          extensions: ["pgn"],
-        },
-      ],
-    });
-    if (typeof selected !== "string") return;
+    const selected = await pendingImport.choosePath([
+      { name: trainingT("Training.Copy.TacticsPGN.2840fe24", "Tactics PGN"), extensions: ["pgn"] },
+    ]);
+    if (!selected) return;
     setImportBusy(true);
     setFeedback(null);
     try {
@@ -630,7 +638,7 @@ export default function TacticsDashboardV2Page() {
           </Stack>
         </Card>
 
-        <Card withBorder>
+        <Card ref={importCardRef} withBorder>
           <Stack>
             <Group>
               <IconUpload size={26} color="var(--mantine-color-orange-6)" />
@@ -650,6 +658,7 @@ export default function TacticsDashboardV2Page() {
                 </Text>
               </div>
             </Group>
+            <PendingPgnNotice path={pendingImport.path} onClear={pendingImport.clear} />
             <SimpleGrid cols={{ base: 1, md: 2, lg: 4 }}>
               <TextInput
                 label={trainingT("Training.Copy.Name.562bb157", "Name")}

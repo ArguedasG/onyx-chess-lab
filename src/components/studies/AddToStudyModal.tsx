@@ -17,6 +17,7 @@ export default function AddToStudyModal({
   suggestedTitle,
   sourceLabel,
   games,
+  sourceKind = "board",
   zIndex,
 }: {
   opened: boolean;
@@ -26,6 +27,8 @@ export default function AddToStudyModal({
   sourceLabel: string;
   /** Adds each game as its own chapter instead of `pgn` under the chosen title. */
   games?: { title: string; pgn: string }[];
+  /** "file" records `sourceLabel` as the file path, so Files can tell the chapters came from it. */
+  sourceKind?: "board" | "file";
   zIndex?: number;
 }) {
   const { t } = useTranslation();
@@ -84,7 +87,7 @@ export default function AddToStudyModal({
             addStudyChapter(library, studyId, {
               title: chapter.title,
               pgn: chapter.pgn,
-              source: { kind: "board", label: sourceLabel },
+              source: { kind: sourceKind, label: sourceLabel },
             }),
           current,
         ),

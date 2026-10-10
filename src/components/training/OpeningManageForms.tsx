@@ -1,6 +1,6 @@
 import { Button, Card, Group, Select, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconUpload } from "@tabler/icons-react";
-import { useRef, useState, type Ref } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import type { OpeningImportConfig } from "@/utils/openingTraining";
 
@@ -118,12 +118,14 @@ export function ImportRepertoireCard({
   onConfigChange,
   onSelectFile,
   cardRef,
+  notice,
 }: {
   busy: boolean;
   config: OpeningImportConfig;
   onConfigChange: (config: OpeningImportConfig) => void;
   onSelectFile: (input: { name: string; description: string }) => void;
   cardRef?: Ref<HTMLDivElement>;
+  notice?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
@@ -147,6 +149,7 @@ export function ImportRepertoireCard({
             </Text>
           </div>
         </Group>
+        {notice}
         <SimpleGrid cols={{ base: 1, md: 2, lg: 4 }}>
           <TextInput
             label={t("Training.Copy.Name.562bb157", "Name")}
