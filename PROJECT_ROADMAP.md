@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-07.
+> Última actualización: 2026-10-11.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,10 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.18.5** (timers y pistas en tácticas, búsqueda por estructura de
-  peones, experimentos del generador y reportes de análisis más robustos).
+- Versión en preparación: **0.19.0** (reestructuración de la interfaz: panel derecho con zonas
+  plegables, motor bajo el tablero, anotación junto a la notación, base de datos en secciones,
+  informe de aperturas con filtros y gráficas, táctica en modo enfoque, capítulos e importación de
+  PGN en Archivos).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -88,8 +90,9 @@ prueban y comunican problemas.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
 - Usuarios: estudiantes y miembros de un grupo de ajedrez; es probable que pronto la utilicen un
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
-- Trabajo actual: **consolidación del entrenamiento de aperturas** (importación editable y modo
-  Aprender; ver sección 7.A). La Fase 8 conserva 8.0 y 8.1 implementadas y 8.2 pendiente.
+- Trabajo actual: **reestructuración de la interfaz inspirada en ChessBase para Mac** (adaptar sus
+  patrones, no copiarlos), hecha por fases revisadas por el autor. La Fase 8 conserva 8.0 y 8.1
+  implementadas y 8.2 pendiente.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
@@ -699,6 +702,26 @@ en la documentación de la fase.
 - La importación muestra sus errores dentro del modal y elimina la copia editable si falla.
 - Con el curso de prueba (1.129 registros) la vista previa pasa de 208 a 45 secciones; 171 puzzles
   quedan fuera y restaurables. Validado manualmente por el autor con el curso real.
+
+### 2026-10-11 — Release 0.19.0
+
+- Reestructuración de la interfaz por fases, cada una probada por el autor antes de seguir:
+  columna derecha con dos zonas (notación y herramientas) plegables, maximizables,
+  intercambiables y con distribución propia por tipo de pantalla.
+- Motor en una franja bajo el tablero (o en la subpestaña Motores, que la oculta); el tablero se
+  dimensiona midiendo el espacio real y las barras de jugador vacías ya no ocupan alto. Se retiran
+  la lista de motores del panel, el motor fijado sobre la notación y la pestaña Anotar.
+- Barra de anotación bajo la notación y cabecera de notación única; base de datos en secciones
+  apiladas (Referencia y Partidas) con filtros plegables y vista previa de partidas.
+- Informe de aperturas versión 4: el backend guarda el desglose jugada × año × rango de ELO (hasta
+  40 jugadas, celdas dispersas) y los años activos de cada jugador; la vista filtra por ELO y
+  período sin nueva consulta y solo dibuja tendencias con muestra suficiente (100 partidas con
+  fecha, 6 años, 30 partidas por ventana). Los informes anteriores siguen abriéndose sin filtros.
+- Táctica en modo enfoque con insignia animada de acierto o error; pestaña Capítulos/Partidas;
+  importación de PGN en Archivos con acciones directas y avisos de uso existente.
+- Ideas aplazadas: paleta Ctrl+K, columna de tendencia, portada de bases, barra lateral por
+  grupos y sección Preparación.
+- Detalle: `docs/release-notes-0.19.0.es.md`.
 
 ### 2026-10-07 — Release 0.18.5
 
