@@ -12,7 +12,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
-import { IconChevronDown, IconFilter, IconRefresh } from "@tabler/icons-react";
+import { IconChevronDown, IconFilter, IconRefresh, IconSwitchVertical } from "@tabler/icons-react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { Link } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
@@ -85,10 +85,15 @@ export type LocalOptions = {
   result: "any" | "whitewon" | "draw" | "blackwon";
 };
 
-/** Which explorer sections are folded (true = folded). */
-const databaseSectionsAtom = atomWithStorage("database-panel-sections", {
+/** Which explorer sections are folded (true = folded), and which one goes on top. */
+const databaseSectionsAtom = atomWithStorage<{
+  reference: boolean;
+  games: boolean;
+  gamesFirst?: boolean;
+}>("database-panel-sections", {
   reference: false,
   games: false,
+  gamesFirst: false,
 });
 
 function sortOpenings(openings: Opening[]) {
@@ -269,9 +274,13 @@ function DatabasePanel() {
     setPreview(null);
   }, [debouncedFen, db, referenceDatabase]);
 
-  // Coming back from a game opened from the list (or "see games" in the report) shows the games.
+  // Arriving for games (a player from the report, "see games", or back from a game opened from
+  // the list) puts them first: the reference folds for this tab until the user reopens it.
+  const [focusGames, setFocusGames] = useState(false);
   useEffect(() => {
-    if (tabType === "games") setSections((current) => ({ ...current, games: false }));
+    if (tabType !== "games") return;
+    setSections((current) => ({ ...current, games: false }));
+    setFocusGames(true);
   }, [tabType, setSections]);
 
   const toolbar = (
@@ -409,8 +418,11 @@ function DatabasePanel() {
       />
     );
 
-  const referenceOpen = showReference && !sections.reference;
+  const referenceOpen = showReference && !sections.reference && !focusGames;
   const gamesOpen = !sections.games;
+  const gamesFirst = !!sections.gamesFirst;
+  const swapSections = () =>
+    setSections((current) => ({ ...current, gamesFirst: !current.gamesFirst }));
 
   return (
     <Stack h="100%" gap={0} px="sm" py="xs" style={{ overflow: "hidden" }}>
@@ -460,10 +472,22 @@ function DatabasePanel() {
             <PanelSection
               title={t("Board.Database.Reference", "Reference")}
               collapsed={!referenceOpen}
-              onToggle={() =>
-                setSections((current) => ({ ...current, reference: !current.reference }))
-              }
+              onToggle={() => {
+                if (focusGames) {
+                  setFocusGames(false);
+                  setSections((current) => ({ ...current, reference: false }));
+                } else {
+                  setSections((current) => ({ ...current, reference: !current.reference }));
+                }
+              }}
               flex={!referenceOpen ? "0 0 auto" : gamesOpen ? "0 0 42%" : "1 1 0"}
+              order={gamesFirst ? 1 : 0}
+              onSwap={swapSections}
+              swapLabel={
+                gamesFirst
+                  ? t("Board.Database.MoveUp", "Move up")
+                  : t("Board.Database.MoveDown", "Move down")
+              }
             >
               <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
             </PanelSection>
@@ -473,6 +497,13 @@ function DatabasePanel() {
             collapsed={!gamesOpen}
             onToggle={() => setSections((current) => ({ ...current, games: !current.games }))}
             flex={gamesOpen ? "1 1 0" : "0 0 auto"}
+            order={gamesFirst ? 0 : 1}
+            onSwap={showReference ? swapSections : undefined}
+            swapLabel={
+              gamesFirst
+                ? t("Board.Database.MoveDown", "Move down")
+                : t("Board.Database.MoveUp", "Move up")
+            }
           >
             <div className={classes.gamesTable}>{gamesTable}</div>
             {preview && (
@@ -495,28 +526,43 @@ function PanelSection({
   collapsed,
   onToggle,
   flex,
+  order,
+  onSwap,
+  swapLabel,
   children,
 }: {
   title: string;
   collapsed: boolean;
   onToggle: () => void;
   flex: string;
+  order: number;
+  onSwap?: () => void;
+  swapLabel: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className={classes.section} style={{ flex }}>
-      <UnstyledButton
-        className={classes.sectionHeader}
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-      >
-        <IconChevronDown
-          size={14}
-          className={classes.chevron}
-          style={{ transform: collapsed ? "rotate(-90deg)" : undefined }}
-        />
-        {title}
-      </UnstyledButton>
+    <section className={classes.section} style={{ flex, order }}>
+      <div className={classes.sectionHeaderRow}>
+        <UnstyledButton
+          className={classes.sectionHeader}
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+        >
+          <IconChevronDown
+            size={14}
+            className={classes.chevron}
+            style={{ transform: collapsed ? "rotate(-90deg)" : undefined }}
+          />
+          {title}
+        </UnstyledButton>
+        {onSwap && (
+          <Tooltip label={swapLabel}>
+            <ActionIcon size="xs" variant="subtle" color="gray" onClick={onSwap}>
+              <IconSwitchVertical size={13} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </div>
       {!collapsed && <div className={classes.sectionBody}>{children}</div>}
     </section>
   );

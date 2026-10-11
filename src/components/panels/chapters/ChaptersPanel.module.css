@@ -1,0 +1,44 @@
+.header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--mantine-font-size-sm);
+  border-left: 3px solid transparent;
+}
+
+.item:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.active {
+  background: var(--mantine-primary-color-light);
+  border-left-color: var(--mantine-primary-color-filled);
+  font-weight: 700;
+}
+
+.number {
+  min-width: 1.6em;
+  text-align: right;
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

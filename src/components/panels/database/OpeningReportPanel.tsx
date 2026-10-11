@@ -340,7 +340,7 @@ export default function OpeningReportPanel({
           cancel();
           setOpened(false);
         }}
-        size="95%"
+        size="calc(100vw - 3rem)"
         title={t("OpeningReport.Title")}
         scrollAreaComponent={ModalScrollArea}
       >

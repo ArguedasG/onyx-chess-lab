@@ -44,7 +44,7 @@ export function openingReportFixture(): OpeningReport {
         };
     });
     return {
-        version: 3,
+        version: 4,
         generatedAt: "2026-08-28T12:00:00Z",
         databaseName: "Local test.db3",
         databaseGames: 4,
@@ -88,6 +88,32 @@ export function openingReportFixture(): OpeningReport {
             { minElo: 2400, maxElo: 2599, results },
         ],
         unknownEloGames: 0,
+        moveBreakdown: [
+            {
+                move: "Nf3",
+                year: 2024,
+                band: 1,
+                results: { white: 0, draw: 1, black: 0, unknown: 0 },
+            },
+            {
+                move: "d4",
+                year: null,
+                band: 1,
+                results: { white: 0, draw: 0, black: 1, unknown: 0 },
+            },
+            {
+                move: "d4",
+                year: 2022,
+                band: 1,
+                results: { white: 1, draw: 0, black: 0, unknown: 0 },
+            },
+            {
+                move: "e4",
+                year: null,
+                band: 0,
+                results: { white: 0, draw: 0, black: 0, unknown: 1 },
+            },
+        ],
         mostPlayedPlayers: [
             {
                 id: 1,
@@ -101,6 +127,8 @@ export function openingReportFixture(): OpeningReport {
                 unknown: 0,
                 averageElo: 2517,
                 peakElo: 2600,
+                firstYear: 2022,
+                lastYear: 2024,
             },
         ],
         strongestPlayers: [
@@ -116,6 +144,8 @@ export function openingReportFixture(): OpeningReport {
                 unknown: 0,
                 averageElo: 2517,
                 peakElo: 2600,
+                firstYear: 2022,
+                lastYear: 2024,
             },
         ],
         playerCount: 4,

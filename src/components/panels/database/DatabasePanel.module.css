@@ -12,7 +12,15 @@
   min-height: 0;
 }
 
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .sectionHeader {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 6px;

@@ -78,7 +78,7 @@ export default function OpeningReportLibraryModal({
         opened={selected !== null}
         onClose={() => setSelected(null)}
         title={t("OpeningReport.HistoricalSnapshot", "Saved historical snapshot (read-only).")}
-        size="95%"
+        size="calc(100vw - 3rem)"
       >
         <Alert color="gray" mb="md">
           {t(

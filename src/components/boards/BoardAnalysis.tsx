@@ -13,7 +13,13 @@ import {
 } from "@mantine/core";
 import { useHotkeys, useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconDatabase, IconInfoCircle, IconTargetArrow, IconZoomCheck } from "@tabler/icons-react";
+import {
+  IconDatabase,
+  IconInfoCircle,
+  IconListNumbers,
+  IconTargetArrow,
+  IconZoomCheck,
+} from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import type { Piece } from "chessops";
@@ -60,6 +66,7 @@ import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
 import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
+import ChaptersPanel, { hasChapters } from "../panels/chapters/ChaptersPanel";
 import EngineStrip from "./EngineStrip";
 import EvalListener from "./EvalListener";
 
@@ -71,6 +78,8 @@ function BoardAnalysis() {
   const [currentTab, setCurrentTab] = useAtom(currentTabAtom);
   const tabFile = getTabFile(currentTab);
   const isRepertoire = tabFile?.metadata.type === "repertoire";
+  // Repertoire records are sections trained from the Practice tab, not chapters to browse.
+  const showChapters = hasChapters(currentTab) && !isRepertoire;
   const hasPersistentOrigin = currentTab?.gameOrigin.kind !== "none";
   const autoSave = useAtomValue(autoSaveAtom);
   const { documentDir } = useLoaderData({ from: "/" });
@@ -448,7 +457,12 @@ function BoardAnalysis() {
             w="100%"
             h="100%"
             // "annotate" was a tab before the annotation bar moved under the notation.
-            value={currentTabSelected === "annotate" ? "info" : currentTabSelected}
+            value={
+              currentTabSelected === "annotate" ||
+              (currentTabSelected === "chapters" && !showChapters)
+                ? "info"
+                : currentTabSelected
+            }
             onChange={(v) => setCurrentTabSelected(v || "info")}
             keepMounted={false}
             activateTabWithKeyboard={false}
@@ -481,6 +495,13 @@ function BoardAnalysis() {
                 <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
                   {t("Board.Tabs.Database")}
                 </Tabs.Tab>
+                {showChapters && (
+                  <Tabs.Tab value="chapters" leftSection={<IconListNumbers size="1rem" />}>
+                    {currentTab?.gameOrigin.kind === "study"
+                      ? t("Board.Tabs.Chapters", "Chapters")
+                      : t("Board.Tabs.Games", "Games")}
+                  </Tabs.Tab>
+                )}
                 <Tabs.Tab value="info" leftSection={<IconInfoCircle size="1rem" />}>
                   {t("Board.Tabs.Info")}
                 </Tabs.Tab>
@@ -489,6 +510,11 @@ function BoardAnalysis() {
             {isRepertoire && (
               <Tabs.Panel value="practice" flex={1} style={{ overflowY: "hidden" }}>
                 <PracticePanel saveFile={userSaveFile} />
+              </Tabs.Panel>
+            )}
+            {showChapters && (
+              <Tabs.Panel value="chapters" flex={1} style={{ overflowY: "hidden" }}>
+                <ChaptersPanel />
               </Tabs.Panel>
             )}
             <Tabs.Panel value="info" flex={1} style={{ overflowY: "hidden" }}>

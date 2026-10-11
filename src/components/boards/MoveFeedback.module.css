@@ -1,0 +1,56 @@
+.badge {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  /* Pop in (scale 0.6 → 1, ~180 ms), hold, then fade out. */
+  animation:
+    pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both,
+    fade 300ms ease-in 1100ms forwards;
+}
+
+.correct {
+  background: #2f9e44;
+}
+
+.incorrect {
+  background: #e03131;
+}
+
+/* The final verdict stays until the next puzzle. */
+.persistent {
+  animation: pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes fade {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge,
+  .persistent {
+    animation: none;
+    transform: translate(-50%, -50%);
+  }
+}

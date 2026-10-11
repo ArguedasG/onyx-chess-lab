@@ -29,6 +29,10 @@ const MAX_INITIAL_PLY: u32 = 512;
 const MAX_REPORT_PLAYERS: usize = 2_000_000;
 const PLAYER_TABLE_SIZE: usize = 20;
 const MODEL_GAME_TABLE_SIZE: usize = 20;
+/// Continuations broken down by year and Elo band. Cells are sparse, so this only guards
+/// against pathological positions; beyond it, rare moves appear in unfiltered views only.
+const MAX_BREAKDOWN_MOVES: usize = 40;
+
 const ELO_BANDS: &[(i32, i32)] = &[
     (1, 1599),
     (1600, 1799),
@@ -155,11 +159,21 @@ struct PlayerAggregate {
     elo_sum: u64,
     rated_games: u32,
     peak_elo: i32,
+    first_year: u32,
+    last_year: u32,
 }
 
 impl PlayerAggregate {
-    fn add(&mut self, game: &SearchGameEntryRef<'_>, white: bool) {
+    fn add(&mut self, game: &SearchGameEntryRef<'_>, white: bool, year: Option<u32>) {
         self.games += 1;
+        if let Some(year) = year {
+            self.first_year = if self.first_year == 0 {
+                year
+            } else {
+                self.first_year.min(year)
+            };
+            self.last_year = self.last_year.max(year);
+        }
         if white {
             self.white_games += 1;
         } else {
@@ -225,6 +239,9 @@ pub struct ReportPlayer {
     pub unknown: u32,
     pub average_elo: Option<f64>,
     pub peak_elo: Option<i32>,
+    /// First and last year the player reached the position (dated games only).
+    pub first_year: Option<u32>,
+    pub last_year: Option<u32>,
 }
 
 #[derive(Clone, Serialize, Type)]
@@ -232,6 +249,19 @@ pub struct ReportPlayer {
 pub struct ReportEloBand {
     pub min_elo: i32,
     pub max_elo: i32,
+    pub results: ReportResults,
+}
+
+/// Results of one continuation for one year and mean-Elo band. Lets the report filter its
+/// move table, Elo table and trends by rating class and period without querying again.
+#[derive(Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportMoveCell {
+    #[serde(rename = "move")]
+    pub san: String,
+    pub year: Option<u32>,
+    /// Index into `elo_bands`; `None` when either rating is missing.
+    pub band: Option<u32>,
     pub results: ReportResults,
 }
 
@@ -306,6 +336,8 @@ pub struct OpeningReport {
     pub unknown_year_games: u32,
     pub elo_bands: Vec<ReportEloBand>,
     pub unknown_elo_games: u32,
+    /// Sparse cells for the most played continuations (see `MAX_BREAKDOWN_MOVES`).
+    pub move_breakdown: Vec<ReportMoveCell>,
     pub most_played_players: Vec<ReportPlayer>,
     pub strongest_players: Vec<ReportPlayer>,
     pub player_count: u32,
@@ -615,6 +647,35 @@ fn continuation_after_match(
     Ok(SanPlus::from_move(chess, &movement).to_string())
 }
 
+/// Keeps the cells of the most played continuations, in a stable order.
+fn top_move_breakdown(
+    breakdown: HashMap<(String, Option<u32>, Option<u32>), ReportResults>,
+) -> Vec<ReportMoveCell> {
+    let mut totals: HashMap<&str, u32> = HashMap::new();
+    for ((san, _, _), results) in &breakdown {
+        *totals.entry(san.as_str()).or_default() += results.total();
+    }
+    let mut ranked: Vec<(&str, u32)> = totals.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let kept: BTreeSet<String> = ranked
+        .into_iter()
+        .take(MAX_BREAKDOWN_MOVES)
+        .map(|(san, _)| san.to_string())
+        .collect();
+    let mut cells: Vec<ReportMoveCell> = breakdown
+        .into_iter()
+        .filter(|((san, _, _), _)| kept.contains(san))
+        .map(|((san, year, band), results)| ReportMoveCell {
+            san,
+            year,
+            band,
+            results,
+        })
+        .collect();
+    cells.sort_by(|a, b| (&a.san, a.year, a.band).cmp(&(&b.san, b.year, b.band)));
+    cells
+}
+
 fn build_report(
     snapshot: &Snapshot,
     index: &MmapSearchIndex,
@@ -645,6 +706,7 @@ fn build_report(
     let has_metadata_filters = metadata_filter(&options.event).is_some()
         || metadata_filter(&options.time_control).is_some();
     let mut filtered_openings: BTreeMap<String, ReportResults> = BTreeMap::new();
+    let mut breakdown: HashMap<(String, Option<u32>, Option<u32>), ReportResults> = HashMap::new();
     let mut matching_games = 0_u32;
     let connection = rusqlite::Connection::open_with_flags(
         &snapshot.database,
@@ -667,46 +729,58 @@ fn build_report(
                 .filter(|entry| entry.id == record.id)
                 .ok_or_else(|| invalid("Position query expired"))?;
             matching_games += 1;
-            if has_metadata_filters {
+            // The snapshot already knows each game's next move unless report-only metadata
+            // filters changed the cohort, in which case it is recomputed as before.
+            let continuation = if has_metadata_filters {
+                let continuation = continuation_after_match(&entry, &record, cancelled)?;
                 filtered_openings
-                    .entry(continuation_after_match(&entry, &record, cancelled)?)
+                    .entry(continuation.clone())
                     .or_default()
                     .add(entry.result);
-            }
+                continuation
+            } else {
+                record.next_move.clone()
+            };
+            let year = entry
+                .date
+                .and_then(|date| date.get(..4))
+                .and_then(|year| year.parse::<u32>().ok())
+                .filter(|year| (1..=9999).contains(year));
+            let band = (entry.white_elo > 0 && entry.black_elo > 0)
+                .then(|| (entry.white_elo as i32 + entry.black_elo as i32) / 2)
+                .and_then(|mean| {
+                    ELO_BANDS
+                        .iter()
+                        .position(|(lo, hi)| (*lo..=*hi).contains(&mean))
+                })
+                .map(|band| band as u32);
+            breakdown
+                .entry((continuation, year, band))
+                .or_default()
+                .add(entry.result);
             statistics.add(&entry);
             if entry.white_id != 0 {
-                players.entry(entry.white_id).or_default().add(&entry, true);
+                players
+                    .entry(entry.white_id)
+                    .or_default()
+                    .add(&entry, true, year);
             }
             if entry.black_id != 0 && entry.black_id != entry.white_id {
                 players
                     .entry(entry.black_id)
                     .or_default()
-                    .add(&entry, false);
+                    .add(&entry, false, year);
             }
             if players.len() > MAX_REPORT_PLAYERS {
                 return Err(invalid(
                     "Opening report contains more than 2,000,000 distinct players",
                 ));
             }
-            if entry.white_elo > 0 && entry.black_elo > 0 {
-                let mean = (entry.white_elo as i32 + entry.black_elo as i32) / 2;
-                if let Some((band, _)) = ELO_BANDS
-                    .iter()
-                    .enumerate()
-                    .find(|(_, (lo, hi))| (*lo..=*hi).contains(&mean))
-                {
-                    elo_bands[band].add(entry.result);
-                } else {
-                    unknown_elo_games += 1;
-                }
+            if let Some(band) = band {
+                elo_bands[band as usize].add(entry.result);
             } else {
                 unknown_elo_games += 1;
             }
-            let year = entry
-                .date
-                .and_then(|date| date.get(..4))
-                .and_then(|year| year.parse::<u32>().ok())
-                .filter(|year| (1..=9999).contains(year));
             if let Some(year) = year {
                 years.entry(year).or_default().add(entry.result);
             } else {
@@ -739,6 +813,7 @@ fn build_report(
                 * 50.0,
         );
     }
+    let move_breakdown = top_move_breakdown(breakdown);
     let mut selected: Vec<_> = selected.into_iter().map(|item| item.0).collect();
     selected.sort_by(|a, b| b.cmp(a));
     let player_count = players.len() as u32;
@@ -774,6 +849,8 @@ fn build_report(
             average_elo: (player.rated_games > 0)
                 .then(|| player.elo_sum as f64 / player.rated_games as f64),
             peak_elo: (player.peak_elo > 0).then_some(player.peak_elo),
+            first_year: (player.first_year > 0).then_some(player.first_year),
+            last_year: (player.last_year > 0).then_some(player.last_year),
         }
     };
     let most_played_players = most_played_ids.into_iter().map(&public_player).collect();
@@ -1112,7 +1189,7 @@ fn build_report(
     let report_event = metadata_filter(&options.event).map(str::to_string);
     let report_time_control = metadata_filter(&options.time_control).map(str::to_string);
     Ok(OpeningReport {
-        version: 3,
+        version: 4,
         generated_at: chrono::Utc::now().to_rfc3339(),
         database_name: snapshot
             .database
@@ -1151,6 +1228,7 @@ fn build_report(
             })
             .collect(),
         unknown_elo_games,
+        move_breakdown,
         most_played_players,
         strongest_players,
         player_count,
@@ -1342,6 +1420,29 @@ mod tests {
             report.years.iter().map(|y| y.year).collect::<Vec<_>>(),
             vec![2022, 2024]
         );
+        // Every matching game lands in exactly one breakdown cell, keyed like the move table.
+        assert_eq!(
+            report
+                .move_breakdown
+                .iter()
+                .map(|cell| cell.results.total())
+                .sum::<u32>(),
+            report.position.total
+        );
+        for opening in &report.position.openings {
+            let cells: u32 = report
+                .move_breakdown
+                .iter()
+                .filter(|cell| cell.san == opening.move_)
+                .map(|cell| cell.results.total())
+                .sum();
+            assert_eq!(
+                cells,
+                (opening.white + opening.draw + opening.black + opening.unknown) as u32
+            );
+        }
+        assert!(report.move_breakdown.iter().all(|cell| cell.band.is_some()));
+        assert_eq!((ana.first_year, ana.last_year), (Some(2022), Some(2024)));
         let convergence = report
             .transpositions
             .iter()

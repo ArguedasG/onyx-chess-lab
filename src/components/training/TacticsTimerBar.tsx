@@ -5,7 +5,7 @@ import { formatTime } from "@/utils/format";
 
 function TimerTile({ label, value, dimmed }: { label: string; value: string; dimmed?: boolean }) {
   return (
-    <Paper withBorder p="xs" miw={110} style={{ flex: 1 }}>
+    <Paper withBorder p="xs" miw={100} style={{ flex: 1 }}>
       <Text size="xs" c="dimmed">
         {label}
       </Text>
@@ -35,7 +35,7 @@ export default function TacticsTimerBar({
   const hasClock = exerciseMs !== null || cycleMs !== null;
 
   return (
-    <Group gap="xs" wrap="nowrap" align="stretch">
+    <Group gap="xs" wrap="wrap" align="stretch">
       {exerciseMs !== null && (
         <TimerTile
           label={trainingT("Training.Tactics.Timer.Exercise", "Puzzle time")}

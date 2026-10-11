@@ -14,11 +14,14 @@ function ConfirmChangesModal({
   toggle,
   closeTab,
   tab,
+  switching = false,
 }: {
   opened: boolean;
   toggle: () => void;
   closeTab: () => void;
   tab: Tab;
+  /** The tab stays open and loads another game or chapter instead of closing. */
+  switching?: boolean;
 }) {
   const setTabs = useSetAtom(tabsAtom);
   const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
@@ -100,7 +103,12 @@ function ConfirmChangesModal({
                   "OpeningEdit.CloseDecisionDescription",
                   "Choose whether to discard the changes, save only the editable PGN, or also update the training lines.",
                 )
-              : t("Tabs.SaveBeforeClosing", "Do you want to save your changes before closing?")}
+              : switching
+                ? t(
+                    "Tabs.SaveBeforeSwitching",
+                    "Do you want to save your changes before switching?",
+                  )
+                : t("Tabs.SaveBeforeClosing", "Do you want to save your changes before closing?")}
           </Text>
         </div>
         {error && (
@@ -123,7 +131,9 @@ function ConfirmChangesModal({
           >
             {isRepertoire
               ? t("OpeningEdit.DiscardAndClose", "Discard and close")
-              : t("Tabs.CloseWithoutSaving", "Close without saving")}
+              : switching
+                ? t("Tabs.SwitchWithoutSaving", "Switch without saving")
+                : t("Tabs.CloseWithoutSaving", "Close without saving")}
           </Button>
           {isRepertoire ? (
             <>
@@ -136,7 +146,9 @@ function ConfirmChangesModal({
             </>
           ) : (
             <Button loading={saving} onClick={() => void saveAndClose()}>
-              {t("Tabs.SaveAndClose", "Save and close")}
+              {switching
+                ? t("Tabs.SaveAndSwitch", "Save and switch")
+                : t("Tabs.SaveAndClose", "Save and close")}
             </Button>
           )}
         </Group>

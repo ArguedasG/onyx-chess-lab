@@ -988,7 +988,11 @@ export type OpeningBookConfig = { path: string; maxPly?: bigint }
 export type OpeningLineSide = "white" | "black" | "both"
 export type OpeningRepertoireConfig = { id: string; version?: number; mode?: OpeningRepertoireMode; maxPly?: number; lines?: WeightedOpeningLine[] }
 export type OpeningRepertoireMode = "weighted" | "forcedLine" | "none"
-export type OpeningReport = { version: number; generatedAt: string; databaseName: string; databaseGames: number; position: PositionSummary; options: OpeningReportOptions; filters: ReportFilters; statistics: ReportStatistics; years: ReportYear[]; unknownYearGames: number; eloBands: ReportEloBand[]; unknownEloGames: number; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; modelGames: ReportModelGame[]; modelGameCount: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
+export type OpeningReport = { version: number; generatedAt: string; databaseName: string; databaseGames: number; position: PositionSummary; options: OpeningReportOptions; filters: ReportFilters; statistics: ReportStatistics; years: ReportYear[]; unknownYearGames: number; eloBands: ReportEloBand[]; unknownEloGames: number; 
+/**
+ * Sparse cells for the most played continuations (see `MAX_BREAKDOWN_MOVES`).
+ */
+moveBreakdown: ReportMoveCell[]; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; modelGames: ReportModelGame[]; modelGameCount: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
 export type OpeningReportOptions = { depth: number; theoryGames: number; maxLines: number; displayFen: string; event?: string | null; timeControl?: string | null }
 export type OutOpening = { name: string; fen: string }
 export type Outcome = "1-0" | "0-1" | "1/2-1/2" | "*"
@@ -1015,8 +1019,21 @@ export type ReportEloBand = { minElo: number; maxElo: number; results: ReportRes
 export type ReportFilters = { whitePlayer: number | null; blackPlayer: number | null; anyPlayer: number | null; whiteElo: [number, number] | null; blackElo: [number, number] | null; startDate: string | null; endDate: string | null; result: string | null; event?: string | null; timeControl?: string | null }
 export type ReportLine = { moves: string[]; fen: string; statistics: ReportStatistics; exampleOffset: number; example: PositionGameMetadata }
 export type ReportModelGame = { relevanceScore: number; ratingComponent: number; recencyComponent: number; continuationComponent: number; meanElo: number | null; year: number | null; continuationPlies: number; exampleOffset: number; example: PositionGameMetadata; deviationPly: number | null; deviationMove: string | null; deviationPositionFen: string | null; deviationCutoff: string | null; deviationBaselineGames: number }
+/**
+ * Results of one continuation for one year and mean-Elo band. Lets the report filter its
+ * move table, Elo table and trends by rating class and period without querying again.
+ */
+export type ReportMoveCell = { move: string; year: number | null; 
+/**
+ * Index into `elo_bands`; `None` when either rating is missing.
+ */
+band: number | null; results: ReportResults }
 export type ReportMoveOrder = { startFen: string; moves: string[]; statistics: ReportStatistics; exampleOffset: number }
-export type ReportPlayer = { id: number; name: string; games: number; whiteGames: number; blackGames: number; wins: number; draws: number; losses: number; unknown: number; averageElo: number | null; peakElo: number | null }
+export type ReportPlayer = { id: number; name: string; games: number; whiteGames: number; blackGames: number; wins: number; draws: number; losses: number; unknown: number; averageElo: number | null; peakElo: number | null; 
+/**
+ * First and last year the player reached the position (dated games only).
+ */
+firstYear: number | null; lastYear: number | null }
 export type ReportResults = { white: number; draw: number; black: number; unknown: number }
 export type ReportRoute = { moves: string[]; results: ReportResults; exampleOffset: number }
 export type ReportStatistics = { results: ReportResults; averageWhiteElo: number | null; averageBlackElo: number | null; ratedWhite: number; ratedBlack: number }

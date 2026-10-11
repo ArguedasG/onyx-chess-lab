@@ -1,14 +1,22 @@
-import { Alert, Button, Card, Group, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands } from "@/bindings";
+import { commands, type ReportResults } from "@/bindings";
 import type { RemoteOpeningData } from "@/utils/lichess/api";
 import { unwrap } from "@/utils/unwrap";
+import { moverScore } from "@/utils/openingReportFilters";
 import OpeningReportLibraryModal from "./OpeningReportLibraryModal";
+import { MovesTable } from "./report/ReportTables";
+import ResultBar from "./report/ResultBar";
+import classes from "./report/report.module.css";
 
 function total(data: Pick<RemoteOpeningData, "white" | "draws" | "black">) {
   return data.white + data.draws + data.black;
+}
+
+function asResults(data: Pick<RemoteOpeningData, "white" | "draws" | "black">): ReportResults {
+  return { white: data.white, draw: data.draws, black: data.black, unknown: 0 };
 }
 
 function score(data: Pick<RemoteOpeningData, "white" | "draws" | "black">) {
@@ -35,6 +43,7 @@ export default function RemoteOpeningReportPanel({
   const [libraryOpened, setLibraryOpened] = useState(false);
   const games = total(data);
   const continuations = [...data.moves].sort((left, right) => total(right) - total(left));
+  const moverIsWhite = fen.split(" ")[1] !== "b";
   const history = [...(data.history ?? [])].reverse().slice(0, 18);
   const references = data.topGames?.length ? data.topGames : (data.recentGames ?? []);
 
@@ -72,7 +81,7 @@ export default function RemoteOpeningReportPanel({
   };
 
   return (
-    <Stack p="sm" gap="lg" style={{ overflow: "auto" }}>
+    <Stack p="sm" gap="xl" className={classes.root} style={{ overflow: "auto" }}>
       {!readOnly && (
         <OpeningReportLibraryModal opened={libraryOpened} onClose={() => setLibraryOpened(false)} />
       )}
@@ -111,59 +120,40 @@ export default function RemoteOpeningReportPanel({
         FEN: {fen}
       </Text>
 
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <Card withBorder>
-          <Text size="sm" c="dimmed">
-            {t("OpeningReport.Matching")}
-          </Text>
-          <Text fz="xl" fw={700}>
-            {games.toLocaleString()}
-          </Text>
-        </Card>
-        <Card withBorder>
-          <Text size="sm" c="dimmed">
-            {t("OpeningReport.WhiteScore")}
-          </Text>
-          <Text fz="xl" fw={700}>
-            {score(data)}
-          </Text>
-        </Card>
-        <Card withBorder>
-          <Text size="sm" c="dimmed">
-            {t("OpeningReport.Outcomes")}
-          </Text>
-          <Text fz="xl" fw={700}>
-            {data.white.toLocaleString()} / {data.draws.toLocaleString()} /{" "}
-            {data.black.toLocaleString()}
-          </Text>
-        </Card>
-      </SimpleGrid>
+      <div>
+        <div className={classes.stats}>
+          <div>
+            <div className={classes.label}>{t("OpeningReport.Matching")}</div>
+            <div className={classes.statValue}>{games.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className={classes.label}>
+              {moverIsWhite
+                ? t("OpeningReport.WhiteScores", "White scores")
+                : t("OpeningReport.BlackScores", "Black scores")}
+            </div>
+            <div className={classes.statValue}>
+              {(() => {
+                const value = moverScore(asResults(data), moverIsWhite);
+                return value === null ? "—" : `${value.toFixed(1)}%`;
+              })()}
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <ResultBar results={asResults(data)} />
+        </div>
+      </div>
 
-      <Title order={3}>{t("OpeningReport.Continuations")}</Title>
-      <Table.ScrollContainer minWidth={560}>
-        <Table striped withTableBorder>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t("OpeningReport.Move")}</Table.Th>
-              <Table.Th>{t("OpeningReport.Games")}</Table.Th>
-              <Table.Th>{t("OpeningReport.Frequency")}</Table.Th>
-              <Table.Th>{t("OpeningReport.WhiteScore")}</Table.Th>
-              <Table.Th>{t("OpeningReport.AverageElo")}</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {continuations.map((move) => (
-              <Table.Tr key={move.uci}>
-                <Table.Td>{move.san}</Table.Td>
-                <Table.Td>{total(move).toLocaleString()}</Table.Td>
-                <Table.Td>{games ? `${((total(move) / games) * 100).toFixed(1)}%` : "—"}</Table.Td>
-                <Table.Td>{score(move)}</Table.Td>
-                <Table.Td>{move.averageRating || "—"}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+      <div>
+        <div className={classes.sectionTitle}>{t("OpeningReport.Continuations")}</div>
+        <MovesTable
+          rows={continuations.map((move) => ({ move: move.san, results: asResults(move) }))}
+          moverIsWhite={moverIsWhite}
+          readOnly
+          onMove={() => {}}
+        />
+      </div>
 
       {history.length > 0 && (
         <>

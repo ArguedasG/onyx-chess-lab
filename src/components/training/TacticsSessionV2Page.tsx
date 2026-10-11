@@ -2,7 +2,9 @@ import { useTranslation as useTrainingTranslation } from "react-i18next";
 import TacticsAdvanceControl from "./TacticsAdvanceControl";
 import TacticsSolutionModal from "./TacticsSolutionModal";
 import TacticsTimerBar from "./TacticsTimerBar";
+import classes from "./TacticsSession.module.css";
 import {
+  Accordion,
   ActionIcon,
   Alert,
   Badge,
@@ -16,7 +18,6 @@ import {
   NumberInput,
   Progress,
   Select,
-  SimpleGrid,
   Stack,
   Switch,
   Text,
@@ -42,6 +43,10 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "r
 import { useStore } from "zustand";
 import type { BestMoves, ScoreValue } from "@/bindings";
 import Board from "@/components/boards/Board";
+import MoveFeedback, {
+  feedbackSquare,
+  type MoveFeedbackState,
+} from "@/components/boards/MoveFeedback";
 import { TreeStateContext, TreeStateProvider } from "@/components/common/TreeStateContext";
 import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
@@ -656,432 +661,461 @@ export default function TacticsSessionV2Page() {
     label: trainingT("Training.Copy.Puzzlev0.76f70f4a", "Puzzle {{v0}} ✓", { v0: value + 1 }),
   }));
 
+  const sideToMove = exercise?.fen.split(" ")[1] === "b" ? "black" : "white";
+  // With "opponent first" the record starts with the other side's move.
+  const studentSide =
+    set.config.startingActor === "student"
+      ? sideToMove
+      : sideToMove === "white"
+        ? "black"
+        : "white";
+
   return (
-    <Container size="xl" py="md">
-      <Stack gap="md">
-        <Group justify="space-between" align="flex-start">
-          <Group>
-            <Button
-              component={Link}
-              to="/training/tactics"
-              variant="subtle"
-              p="xs"
-              aria-label={trainingT("Training.Copy.Back.ab26ae7b", "Back")}
-            >
-              <IconArrowLeft size={20} />
-            </Button>
-            <div>
-              <Title order={2}>{set.name}</Title>
-              <Text size="sm" c="dimmed">
-                {browsingIndex !== null
-                  ? trainingT(
-                      "Training.Copy.Exploringpuzzlev0resumeat.ec21e9ea",
-                      "Exploring puzzle {{v0}} · resume at {{v1}}",
-                      { v0: activeIndex + 1, v1: resumeIndex + 1 },
-                    )
-                  : isWoodpecker
-                    ? trainingT(
-                        "Training.Copy.Cyclev0puzzlev1of.a2d5bda7",
-                        "Cycle {{v0}} · puzzle {{v1}} of {{v2}}",
-                        { v0: cycleNumber, v1: activeIndex + 1, v2: total },
-                      )
-                    : trainingT("Training.Copy.Puzzlev0ofv1.2278f01a", "Puzzle {{v0}} of {{v1}}", {
-                        v0: activeIndex + 1,
-                        v1: total,
-                      })}
-              </Text>
-            </div>
-          </Group>
-          <Group>
-            <Badge variant="light">
-              {isWoodpecker ? "Woodpecker" : trainingT("Training.Copy.Guided.57bd258f", "Guided")}
-            </Badge>
-            {isWoodpecker && (
-              <Menu position="bottom-end" withinPortal>
-                <Menu.Target>
-                  <ActionIcon
-                    variant="default"
-                    aria-label={trainingT("Training.Copy.Cyclesettings.56a17ec9", "Cycle settings")}
-                  >
-                    <IconSettings size={17} />
-                  </ActionIcon>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Label>
-                    {trainingT("Training.Copy.Advancedoptions.abd17408", "Advanced options")}
-                  </Menu.Label>
-                  <Menu.Item
-                    color="red"
-                    leftSection={<IconAlertTriangle size={15} />}
-                    onClick={() => setEarlyFinishOpen(true)}
-                  >
-                    {" "}
-                    {trainingT("Training.Copy.Endcycleearly.d3cc4e59", "End cycle early")}{" "}
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
-            )}
-          </Group>
-        </Group>
-
-        {(exerciseTimerEnabled || isWoodpecker) && (
-          <TacticsTimerBar
-            exerciseMs={exerciseTimerEnabled ? exerciseClock.current.elapsed() : null}
-            cycleMs={isWoodpecker ? cycleElapsed : null}
-            mistakes={isWoodpecker ? failures : null}
-            paused={timersPaused}
-            onTogglePause={() => (timersPaused ? resumeTimers() : pauseTimers())}
-          />
-        )}
-
-        <Progress value={cyclePercent} color="orange" />
-
-        <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
-          <Card withBorder style={{ gridColumn: "span 2", minHeight: 520 }}>
-            {loading ? (
-              <Stack align="center" py="xl">
-                <Loader />
-                <Text c="dimmed">
-                  {trainingT("Training.Copy.Loadingpuzzle.f51a73af", "Loading puzzle…")}
-                </Text>
-              </Stack>
-            ) : loadError || !exercise ? (
-              <Alert
-                color="red"
-                title={trainingT(
-                  "Training.Copy.Couldnotloadthepuzzle.1fbadbba",
-                  "Could not load the puzzle",
-                )}
+    <div className={classes.page}>
+      <div className={classes.topBar}>
+        <Button
+          component={Link}
+          to="/training/tactics"
+          variant="subtle"
+          size="compact-sm"
+          px={4}
+          aria-label={trainingT("Training.Copy.Back.ab26ae7b", "Back")}
+        >
+          <IconArrowLeft size={18} />
+        </Button>
+        <Text fw={700} truncate>
+          {set.name}
+        </Text>
+        <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+          {browsingIndex !== null
+            ? trainingT(
+                "Training.Copy.Exploringpuzzlev0resumeat.ec21e9ea",
+                "Exploring puzzle {{v0}} · resume at {{v1}}",
+                { v0: activeIndex + 1, v1: resumeIndex + 1 },
+              )
+            : isWoodpecker
+              ? trainingT(
+                  "Training.Copy.Cyclev0puzzlev1of.a2d5bda7",
+                  "Cycle {{v0}} · puzzle {{v1}} of {{v2}}",
+                  { v0: cycleNumber, v1: activeIndex + 1, v2: total },
+                )
+              : trainingT("Training.Copy.Puzzlev0ofv1.2278f01a", "Puzzle {{v0}} of {{v1}}", {
+                  v0: activeIndex + 1,
+                  v1: total,
+                })}
+        </Text>
+        <div style={{ flex: 1 }} />
+        <Badge variant="light">
+          {isWoodpecker ? "Woodpecker" : trainingT("Training.Copy.Guided.57bd258f", "Guided")}
+        </Badge>
+        {isWoodpecker && (
+          <Menu position="bottom-end" withinPortal>
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label={trainingT("Training.Copy.Cyclesettings.56a17ec9", "Cycle settings")}
               >
-                {loadError}
-              </Alert>
-            ) : set.config.validationMode !== "engine" && exercise.solutionLines.length > 0 ? (
-              <GuidedTacticsBoard
-                key={`${exercise.id}-${activeIndex}-${boardAttempt}`}
-                exercise={exercise}
-                set={set}
-                disabled={result !== null || retrying}
-                variationSeed={
-                  areas.tactics.attempts.filter((attempt) => attempt.exerciseId === exercise.id)
-                    .length
-                }
-                hintRequest={hintRequest}
-                onUserMove={resumeTimers}
-                onCorrect={(move) =>
-                  finishAttempt(
-                    "correct",
-                    move,
-                    trainingT(
-                      "Training.Copy.Puzzlesolvedcorrectly.aa4b0cbe",
-                      "Puzzle solved correctly.",
-                    ),
-                  )
-                }
-                onIncorrect={(move) => finishAttempt("incorrect", move, "")}
-              />
-            ) : set.config.validationMode === "prepared" ? (
-              <Alert color="yellow">
-                {" "}
-                {trainingT(
-                  "Training.Copy.Thisrecordhasnoprepared.9e18dd59",
-                  "This record has no prepared solution. Switch validation to automatic or engine.",
-                )}{" "}
-              </Alert>
-            ) : (
-              <EngineTacticsBoard
-                key={`${exercise.id}-${activeIndex}-${boardAttempt}`}
-                exercise={exercise}
-                set={set}
-                disabled={result !== null || retrying}
-                onUserMove={resumeTimers}
-                onResult={finishAttempt}
-              />
-            )}
-          </Card>
+                <IconSettings size={17} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>
+                {trainingT("Training.Copy.Advancedoptions.abd17408", "Advanced options")}
+              </Menu.Label>
+              <Menu.Item
+                color="red"
+                leftSection={<IconAlertTriangle size={15} />}
+                onClick={() => setEarlyFinishOpen(true)}
+              >
+                {trainingT("Training.Copy.Endcycleearly.d3cc4e59", "End cycle early")}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        )}
+      </div>
+      <Progress value={cyclePercent} color="orange" size={3} radius={0} />
 
-          <Stack>
-            <Card withBorder>
-              <Stack>
-                <div>
-                  <Text fw={600}>
-                    {exercise?.title ??
-                      trainingT("Training.Copy.Puzzlev0.c9ca2375", "Puzzle {{v0}}", {
-                        v0: activeIndex + 1,
-                      })}
-                  </Text>
-                  <Text size="sm" c="dimmed" mt="xs">
-                    {exercise?.solutionLines.length
-                      ? trainingT(
-                          "Training.Copy.Findandcompletetheprepared.14fd71f2",
-                          "Find and complete the prepared continuation.",
-                        )
-                      : trainingT(
-                          "Training.Copy.Themovewillbevalidated.da46d52c",
-                          "The move will be validated by a local engine.",
-                        )}
-                  </Text>
-                </div>
-                {message && (
-                  <Alert
-                    color={
-                      result === "correct" ? "teal" : result === "unsupported" ? "yellow" : "red"
-                    }
-                    icon={result === "correct" ? <IconCheck size={16} /> : <IconX size={16} />}
-                  >
-                    {message}
-                  </Alert>
-                )}
-                <Button
-                  variant="default"
-                  leftSection={<IconSearch size={16} />}
-                  onClick={analyzePosition}
-                >
-                  {" "}
-                  {trainingT("Training.Copy.Analyzeposition.7cd475fb", "Analyze position")}{" "}
-                </Button>
-                <Button
-                  variant="light"
-                  leftSection={<IconBulb size={16} />}
-                  disabled={result !== null || retrying || !hintAvailable}
-                  title={
-                    hintAvailable
-                      ? undefined
-                      : trainingT(
-                          "Training.Tactics.Hint.Unavailable",
-                          "Hints need a prepared solution line.",
-                        )
-                  }
-                  onClick={requestHint}
-                >
-                  {trainingT("Training.Tactics.Hint.Button", "Hint")}
-                </Button>
-                <Button
-                  variant="light"
-                  color="orange"
-                  leftSection={<IconEye size={16} />}
-                  disabled={result !== null || retrying}
-                  onClick={() => setSolutionOpen(true)}
-                >
-                  {trainingT("Training.Tactics.Solution.Title", "View solution")}
-                </Button>
-                {result === "unsupported" && (
+      <div className={classes.main}>
+        <div className={classes.boardArea}>
+          {loading ? (
+            <Stack align="center" py="xl">
+              <Loader />
+              <Text c="dimmed">
+                {trainingT("Training.Copy.Loadingpuzzle.f51a73af", "Loading puzzle…")}
+              </Text>
+            </Stack>
+          ) : loadError || !exercise ? (
+            <Alert
+              color="red"
+              title={trainingT(
+                "Training.Copy.Couldnotloadthepuzzle.1fbadbba",
+                "Could not load the puzzle",
+              )}
+            >
+              {loadError}
+            </Alert>
+          ) : set.config.validationMode !== "engine" && exercise.solutionLines.length > 0 ? (
+            <GuidedTacticsBoard
+              key={`${exercise.id}-${activeIndex}-${boardAttempt}`}
+              exercise={exercise}
+              set={set}
+              disabled={result !== null || retrying}
+              variationSeed={
+                areas.tactics.attempts.filter((attempt) => attempt.exerciseId === exercise.id)
+                  .length
+              }
+              hintRequest={hintRequest}
+              onUserMove={resumeTimers}
+              onCorrect={(move) =>
+                finishAttempt(
+                  "correct",
+                  move,
+                  trainingT(
+                    "Training.Copy.Puzzlesolvedcorrectly.aa4b0cbe",
+                    "Puzzle solved correctly.",
+                  ),
+                )
+              }
+              onIncorrect={(move) => finishAttempt("incorrect", move, "")}
+            />
+          ) : set.config.validationMode === "prepared" ? (
+            <Alert color="yellow">
+              {trainingT(
+                "Training.Copy.Thisrecordhasnoprepared.9e18dd59",
+                "This record has no prepared solution. Switch validation to automatic or engine.",
+              )}
+            </Alert>
+          ) : (
+            <EngineTacticsBoard
+              key={`${exercise.id}-${activeIndex}-${boardAttempt}`}
+              exercise={exercise}
+              set={set}
+              disabled={result !== null || retrying}
+              onUserMove={resumeTimers}
+              onResult={finishAttempt}
+            />
+          )}
+        </div>
+
+        <aside className={classes.side}>
+          <div>
+            <Group gap={10} wrap="nowrap">
+              <span
+                className={classes.turnDot}
+                style={{ background: studentSide === "white" ? "#f4f4f2" : "#1b1b1a" }}
+              />
+              <Text fw={700} size="xl">
+                {studentSide === "white"
+                  ? trainingT("Training.Tactics.WhiteToMove", "White to move")
+                  : trainingT("Training.Tactics.BlackToMove", "Black to move")}
+              </Text>
+            </Group>
+            <Text size="sm" mt={4}>
+              {exercise?.solutionLines.length
+                ? trainingT("Training.Tactics.FindBest", "Find the best move")
+                : trainingT(
+                    "Training.Copy.Themovewillbevalidated.da46d52c",
+                    "The move will be validated by a local engine.",
+                  )}
+            </Text>
+            <Text size="xs" c="dimmed" mt={2} lineClamp={2}>
+              {exercise?.title ??
+                trainingT("Training.Copy.Puzzlev0.c9ca2375", "Puzzle {{v0}}", {
+                  v0: activeIndex + 1,
+                })}
+            </Text>
+          </div>
+
+          {(exerciseTimerEnabled || isWoodpecker) && (
+            <TacticsTimerBar
+              exerciseMs={exerciseTimerEnabled ? exerciseClock.current.elapsed() : null}
+              cycleMs={isWoodpecker ? cycleElapsed : null}
+              mistakes={isWoodpecker ? failures : null}
+              paused={timersPaused}
+              onTogglePause={() => (timersPaused ? resumeTimers() : pauseTimers())}
+            />
+          )}
+
+          {message && (
+            <Alert
+              color={result === "correct" ? "teal" : result === "unsupported" ? "yellow" : "red"}
+              icon={result === "correct" ? <IconCheck size={16} /> : <IconX size={16} />}
+            >
+              {message}
+            </Alert>
+          )}
+          {result === "unsupported" && (
+            <Button
+              variant="light"
+              leftSection={<IconRefresh size={16} />}
+              onClick={resetExerciseState}
+            >
+              {trainingT("Training.Copy.Retry.a9254c5f", "Retry")}
+            </Button>
+          )}
+          <TacticsAdvanceControl
+            autoAdvance={set.progress.autoAdvance}
+            solved={result === "correct"}
+            completesCycle={
+              isWoodpecker && new Set([...currentCycleCompletedIndexes, activeIndex]).size >= total
+            }
+            browsing={browsingIndex !== null && browsingIndex !== resumeIndex}
+            exerciseKey={`${setId}:${activeIndex}:${boardAttempt}`}
+            onNext={nextExercise}
+          />
+
+          <div style={{ flex: 1 }} />
+
+          <Stack gap={4}>
+            <Button
+              variant="subtle"
+              color="gray"
+              justify="flex-start"
+              leftSection={<IconBulb size={16} />}
+              disabled={result !== null || retrying || !hintAvailable}
+              title={
+                hintAvailable
+                  ? undefined
+                  : trainingT(
+                      "Training.Tactics.Hint.Unavailable",
+                      "Hints need a prepared solution line.",
+                    )
+              }
+              onClick={requestHint}
+            >
+              {trainingT("Training.Tactics.Hint.Button", "Hint")}
+            </Button>
+            <Button
+              variant="subtle"
+              color="gray"
+              justify="flex-start"
+              leftSection={<IconEye size={16} />}
+              disabled={result !== null || retrying}
+              onClick={() => setSolutionOpen(true)}
+            >
+              {trainingT("Training.Tactics.Solution.Title", "View solution")}
+            </Button>
+            <Button
+              variant="subtle"
+              color="gray"
+              justify="flex-start"
+              leftSection={<IconSearch size={16} />}
+              onClick={analyzePosition}
+            >
+              {trainingT("Training.Copy.Analyzeposition.7cd475fb", "Analyze position")}
+            </Button>
+          </Stack>
+
+          <Accordion variant="default" chevronPosition="right" className={classes.more}>
+            <Accordion.Item value="navigation">
+              <Accordion.Control>
+                <Text size="sm" fw={600}>
+                  {trainingT("Training.Tactics.NavigationSettings", "Navigation and settings")}
+                </Text>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Stack gap="sm">
+                  {browsingIndex !== null && browsingIndex !== resumeIndex && (
+                    <Alert color="blue" variant="light">
+                      {trainingT(
+                        "Training.Copy.Youareexploringanotherpuzzle.350787db",
+                        "You are exploring another puzzle. Your resume point is still saved at puzzle",
+                      )}{" "}
+                      {resumeIndex + 1}.
+                    </Alert>
+                  )}
                   <Button
                     variant="light"
-                    leftSection={<IconRefresh size={16} />}
-                    onClick={resetExerciseState}
+                    size="xs"
+                    onClick={returnToResume}
+                    disabled={browsingIndex === null}
                   >
-                    {" "}
-                    {trainingT("Training.Copy.Retry.a9254c5f", "Retry")}{" "}
-                  </Button>
-                )}
-                <TacticsAdvanceControl
-                  autoAdvance={set.progress.autoAdvance}
-                  solved={result === "correct"}
-                  completesCycle={
-                    isWoodpecker &&
-                    new Set([...currentCycleCompletedIndexes, activeIndex]).size >= total
-                  }
-                  browsing={browsingIndex !== null && browsingIndex !== resumeIndex}
-                  exerciseKey={`${setId}:${activeIndex}:${boardAttempt}`}
-                  onNext={nextExercise}
-                />
-              </Stack>
-            </Card>
-
-            <Card withBorder>
-              <Stack>
-                <Text fw={600}>{trainingT("Training.Copy.Navigation.6d4ca0e8", "Navigation")}</Text>
-                {browsingIndex !== null && browsingIndex !== resumeIndex && (
-                  <Alert color="blue" variant="light">
-                    {" "}
                     {trainingT(
-                      "Training.Copy.Youareexploringanotherpuzzle.350787db",
-                      "You are exploring another puzzle. Your resume point is still saved at puzzle",
+                      "Training.Copy.Returntothefirstincomplete.30ef6874",
+                      "Return to the first incomplete exercise ·",
                     )}{" "}
-                    {resumeIndex + 1}.
-                  </Alert>
-                )}
-                <Button variant="light" onClick={returnToResume} disabled={browsingIndex === null}>
-                  {" "}
-                  {trainingT(
-                    "Training.Copy.Returntothefirstincomplete.30ef6874",
-                    "Return to the first incomplete exercise ·",
-                  )}{" "}
-                  {resumeIndex + 1}
-                </Button>
-                <Group grow>
-                  <Button
-                    variant="default"
-                    leftSection={<IconChevronLeft size={16} />}
-                    disabled={activeIndex === 0}
-                    onClick={() => jumpTo(activeIndex - 1)}
-                  >
-                    {" "}
-                    {trainingT("Training.Copy.Previous.e4ce7c09", "Previous")}{" "}
+                    {resumeIndex + 1}
                   </Button>
-                  <Button
-                    variant="default"
-                    rightSection={<IconChevronRight size={16} />}
-                    disabled={activeIndex + 1 >= total}
-                    onClick={() => jumpTo(activeIndex + 1)}
-                  >
-                    {" "}
-                    {trainingT("Training.Copy.Next.49683b71", "Next")}{" "}
-                  </Button>
-                </Group>
-                <Group align="flex-end" wrap="nowrap">
-                  <NumberInput
-                    label={trainingT("Training.Copy.Gotopuzzle.a6b5d4e1", "Go to puzzle")}
-                    min={1}
-                    max={total}
-                    value={navigationValue}
-                    onChange={setNavigationValue}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    variant="default"
-                    onClick={() => jumpTo(Number(navigationValue || 1) - 1)}
-                  >
-                    {" "}
-                    {trainingT("Training.Copy.Go.460edadf", "Go")}{" "}
-                  </Button>
-                </Group>
-                <Select
-                  label={trainingT("Training.Copy.Completedpuzzles.da5ea6b6", "Completed puzzles")}
-                  placeholder={
-                    completedOptions.length
-                      ? trainingT("Training.Copy.Choosepuzzle.5bdb94e5", "Choose puzzle")
-                      : trainingT("Training.Copy.Noneyet.91ed3180", "None yet")
-                  }
-                  data={completedOptions}
-                  disabled={completedOptions.length === 0}
-                  searchable
-                  clearable
-                  onChange={(value) => value !== null && jumpTo(Number(value))}
-                />
-                <Switch
-                  label={trainingT("Training.Tactics.Timer.Exercise.Toggle", "Per-exercise timer")}
-                  checked={exerciseTimerEnabled}
-                  onChange={(event) => {
-                    const exerciseTimer = event.currentTarget.checked;
-                    setAreas((previous) => {
-                      const current = previous.tactics.sets[setId];
-                      if (!current) return previous;
-                      return {
-                        ...previous,
-                        tactics: updateTacticsSetConfig(previous.tactics, setId, {
-                          ...current.config,
-                          exerciseTimer,
-                        }),
-                      };
-                    });
-                  }}
-                />
-                <Switch
-                  label={trainingT(
-                    "Training.Copy.Advanceautomaticallyaftersolving.db958dbf",
-                    "Advance automatically after solving",
-                  )}
-                  checked={set.progress.autoAdvance}
-                  onChange={(event) =>
-                    setAreas((previous) => ({
-                      ...previous,
-                      tactics: updateTacticsAutoAdvance(
-                        previous.tactics,
-                        setId,
-                        event.currentTarget.checked,
-                      ),
-                    }))
-                  }
-                />
-              </Stack>
-            </Card>
-
-            {isWoodpecker && (
-              <Card withBorder>
-                <Stack>
-                  <Group justify="space-between">
-                    <Text fw={600}>
-                      {trainingT("Training.Copy.Cycle.4b8c1a8a", "Cycle")} {cycleNumber}
-                    </Text>
-                    <Badge>
-                      {failures} {trainingT("Training.Copy.mistakes.5fb1604c", "mistakes")}
-                    </Badge>
+                  <Group grow>
+                    <Button
+                      variant="default"
+                      size="xs"
+                      leftSection={<IconChevronLeft size={16} />}
+                      disabled={activeIndex === 0}
+                      onClick={() => jumpTo(activeIndex - 1)}
+                    >
+                      {trainingT("Training.Copy.Previous.e4ce7c09", "Previous")}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="xs"
+                      rightSection={<IconChevronRight size={16} />}
+                      disabled={activeIndex + 1 >= total}
+                      onClick={() => jumpTo(activeIndex + 1)}
+                    >
+                      {trainingT("Training.Copy.Next.49683b71", "Next")}
+                    </Button>
                   </Group>
-                  <Text size="sm" c="dimmed">
-                    {" "}
-                    {trainingT(
-                      "Training.Copy.Timeandmistakesarerecorded.8687b811",
-                      "Time and mistakes are recorded but do not stop training.",
-                    )}{" "}
-                  </Text>
-                  {set.progress.cycles
-                    .slice(-3)
-                    .reverse()
-                    .map((cycle) => (
-                      <Group key={cycle.id} justify="space-between">
-                        <Text size="xs">
-                          {trainingT("Training.Copy.Cycle.4b8c1a8a", "Cycle")} {cycle.number}
+                  <Group align="flex-end" wrap="nowrap">
+                    <NumberInput
+                      size="xs"
+                      label={trainingT("Training.Copy.Gotopuzzle.a6b5d4e1", "Go to puzzle")}
+                      min={1}
+                      max={total}
+                      value={navigationValue}
+                      onChange={setNavigationValue}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      size="xs"
+                      variant="default"
+                      onClick={() => jumpTo(Number(navigationValue || 1) - 1)}
+                    >
+                      {trainingT("Training.Copy.Go.460edadf", "Go")}
+                    </Button>
+                  </Group>
+                  <Select
+                    size="xs"
+                    label={trainingT(
+                      "Training.Copy.Completedpuzzles.da5ea6b6",
+                      "Completed puzzles",
+                    )}
+                    placeholder={
+                      completedOptions.length
+                        ? trainingT("Training.Copy.Choosepuzzle.5bdb94e5", "Choose puzzle")
+                        : trainingT("Training.Copy.Noneyet.91ed3180", "None yet")
+                    }
+                    data={completedOptions}
+                    disabled={completedOptions.length === 0}
+                    searchable
+                    clearable
+                    onChange={(value) => value !== null && jumpTo(Number(value))}
+                  />
+                  <Switch
+                    size="xs"
+                    label={trainingT(
+                      "Training.Tactics.Timer.Exercise.Toggle",
+                      "Per-exercise timer",
+                    )}
+                    checked={exerciseTimerEnabled}
+                    onChange={(event) => {
+                      const exerciseTimer = event.currentTarget.checked;
+                      setAreas((previous) => {
+                        const current = previous.tactics.sets[setId];
+                        if (!current) return previous;
+                        return {
+                          ...previous,
+                          tactics: updateTacticsSetConfig(previous.tactics, setId, {
+                            ...current.config,
+                            exerciseTimer,
+                          }),
+                        };
+                      });
+                    }}
+                  />
+                  <Switch
+                    size="xs"
+                    label={trainingT(
+                      "Training.Copy.Advanceautomaticallyaftersolving.db958dbf",
+                      "Advance automatically after solving",
+                    )}
+                    checked={set.progress.autoAdvance}
+                    onChange={(event) =>
+                      setAreas((previous) => ({
+                        ...previous,
+                        tactics: updateTacticsAutoAdvance(
+                          previous.tactics,
+                          setId,
+                          event.currentTarget.checked,
+                        ),
+                      }))
+                    }
+                  />
+                  {isWoodpecker && (
+                    <Stack gap={4}>
+                      <Group justify="space-between">
+                        <Text size="sm" fw={600}>
+                          {trainingT("Training.Copy.Cycle.4b8c1a8a", "Cycle")} {cycleNumber}
                         </Text>
-                        <Text size="xs" c="dimmed">
-                          {cycle.failures}{" "}
-                          {trainingT("Training.Copy.mistakes.5c65c76e", "mistakes ·")}{" "}
-                          {formatTime(cycle.timeMs)}
-                        </Text>
+                        <Badge size="sm">
+                          {failures} {trainingT("Training.Copy.mistakes.5fb1604c", "mistakes")}
+                        </Badge>
                       </Group>
-                    ))}
+                      <Text size="xs" c="dimmed">
+                        {trainingT(
+                          "Training.Copy.Timeandmistakesarerecorded.8687b811",
+                          "Time and mistakes are recorded but do not stop training.",
+                        )}
+                      </Text>
+                      {set.progress.cycles
+                        .slice(-3)
+                        .reverse()
+                        .map((cycle) => (
+                          <Group key={cycle.id} justify="space-between">
+                            <Text size="xs">
+                              {trainingT("Training.Copy.Cycle.4b8c1a8a", "Cycle")} {cycle.number}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {cycle.failures}{" "}
+                              {trainingT("Training.Copy.mistakes.5c65c76e", "mistakes ·")}{" "}
+                              {formatTime(cycle.timeMs)}
+                            </Text>
+                          </Group>
+                        ))}
+                    </Stack>
+                  )}
                 </Stack>
-              </Card>
-            )}
-          </Stack>
-        </SimpleGrid>
-
-        <Modal
-          opened={earlyFinishOpen}
-          onClose={() => setEarlyFinishOpen(false)}
-          title={trainingT(
-            "Training.Copy.Endthecyclebeforecompleting.c2e29d9c",
-            "End the cycle before completing the set",
-          )}
-          size="sm"
-        >
-          <Stack>
-            <Alert color="red" icon={<IconAlertTriangle size={18} />}>
-              {" "}
-              {trainingT(
-                "Training.Copy.Thecyclewillbesaved.47fad844",
-                "The cycle will be saved as incomplete with its current progress and mistakes. The next cycle will include the entire set again.",
-              )}{" "}
-            </Alert>
-            <Group justify="flex-end">
-              <Button variant="default" onClick={() => setEarlyFinishOpen(false)}>
-                {" "}
-                {trainingT("Training.Copy.Keeptraining.533691ba", "Keep training")}{" "}
-              </Button>
-              <Button
-                color="red"
-                onClick={() => {
-                  setEarlyFinishOpen(false);
-                  finishCycle();
-                }}
-              >
-                {" "}
-                {trainingT("Training.Copy.Endanyway.3b347291", "End anyway")}{" "}
-              </Button>
-            </Group>
-          </Stack>
-        </Modal>
-        {exercise && (
-          <TacticsSolutionModal
-            opened={solutionOpen}
-            exercise={exercise}
-            set={set}
-            onClose={closeSolution}
-            onReveal={recordSolutionReveal}
-          />
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </aside>
+      </div>
+      <Modal
+        opened={earlyFinishOpen}
+        onClose={() => setEarlyFinishOpen(false)}
+        title={trainingT(
+          "Training.Copy.Endthecyclebeforecompleting.c2e29d9c",
+          "End the cycle before completing the set",
         )}
-      </Stack>
-    </Container>
+        size="sm"
+      >
+        <Stack>
+          <Alert color="red" icon={<IconAlertTriangle size={18} />}>
+            {" "}
+            {trainingT(
+              "Training.Copy.Thecyclewillbesaved.47fad844",
+              "The cycle will be saved as incomplete with its current progress and mistakes. The next cycle will include the entire set again.",
+            )}{" "}
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setEarlyFinishOpen(false)}>
+              {" "}
+              {trainingT("Training.Copy.Keeptraining.533691ba", "Keep training")}{" "}
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                setEarlyFinishOpen(false);
+                finishCycle();
+              }}
+            >
+              {" "}
+              {trainingT("Training.Copy.Endanyway.3b347291", "End anyway")}{" "}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      {exercise && (
+        <TacticsSolutionModal
+          opened={solutionOpen}
+          exercise={exercise}
+          set={set}
+          onClose={closeSolution}
+          onReveal={recordSolutionReveal}
+        />
+      )}
+    </div>
   );
 }
 
@@ -1187,6 +1221,10 @@ function GuidedTacticsBoardInner({
   const [autoMoving, setAutoMoving] = useState(false);
   const completed = useRef(false);
   const opponentMoveInFlight = useRef(false);
+  const [feedback, setFeedback] = useState<MoveFeedbackState | null>(null);
+  const orientation = useStore(store, (state) => state.headers.orientation) ?? "white";
+  const showFeedback = (uci: string, correct: boolean, persistent = false) =>
+    setFeedback({ square: feedbackSquare(uci), correct, persistent, key: Date.now() });
 
   const playOpponent = useCallback(async () => {
     if (completed.current || disabled || opponentMoveInFlight.current) return;
@@ -1250,6 +1288,7 @@ function GuidedTacticsBoardInner({
     const matching = candidates.current.filter((line) => line[ply.current] === uci);
     if (matching.length === 0) {
       completed.current = true;
+      showFeedback(uci, false, true);
       onIncorrect(uci);
       return;
     }
@@ -1257,19 +1296,24 @@ function GuidedTacticsBoardInner({
     ply.current += 1;
     if (matching.some((line) => line.length === ply.current)) {
       completed.current = true;
+      showFeedback(uci, true, true);
       onCorrect(uci);
       return;
     }
+    showFeedback(uci, true);
     void playOpponent();
   }
 
   return (
-    <Board
-      editingMode={false}
-      movable={disabled || autoMoving ? "none" : "turn"}
-      boardRef={boardRef}
-      onMove={handleMove}
-    />
+    <>
+      <Board
+        editingMode={false}
+        movable={disabled || autoMoving ? "none" : "turn"}
+        boardRef={boardRef}
+        onMove={handleMove}
+      />
+      <MoveFeedback board={boardRef.current} feedback={feedback} orientation={orientation} />
+    </>
   );
 }
 
@@ -1296,6 +1340,7 @@ function EngineTacticsBoard({
   const engines = useMemo(() => storedEngines ?? [], [storedEngines]);
   const [busy, setBusy] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
+  const [feedback, setFeedback] = useState<MoveFeedbackState | null>(null);
 
   async function evaluateMove(playedMove: string) {
     if (busy || disabled) return;
@@ -1332,6 +1377,12 @@ function EngineTacticsBoard({
         bestMoves[0] &&
         acceptsMove(bestMoves[0], candidate, side, set.config.acceptanceThresholdCp),
       );
+      setFeedback({
+        square: feedbackSquare(playedMove),
+        correct,
+        persistent: true,
+        key: Date.now(),
+      });
       onResult(
         correct ? "correct" : "incorrect",
         playedMove,
@@ -1366,6 +1417,12 @@ function EngineTacticsBoard({
         movable={busy || disabled ? "none" : "turn"}
         boardRef={boardRef}
         onMove={(move) => void evaluateMove(move)}
+      />
+      <MoveFeedback
+        board={boardRef.current}
+        feedback={feedback}
+        // The engine-validated board keeps the tree's default (white-side) orientation.
+        orientation={initial.headers.orientation ?? "white"}
       />
     </TreeStateProvider>
   );
