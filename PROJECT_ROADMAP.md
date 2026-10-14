@@ -495,7 +495,7 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ---
 
-## 8. Fase 10 — Consolidación pública, multiplataforma y MLOps
+## 9. Fase 10 — Consolidación pública, multiplataforma y MLOps
 
 **Estado: Pendiente; mantenimiento urgente relacionado puede adelantarse.**
 
