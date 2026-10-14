@@ -135,6 +135,22 @@ export function Chessground({ ref, ...props }: ChessgroundProps) {
     });
   }, [api, props, moveMethod]);
 
+  // Chessground caches the board's screen rectangle and only refreshes it on window resize,
+  // scroll or a change of the board's own size. When the layout moves the board without
+  // resizing it (a player bar appearing above it), clicks land on the wrong squares, so the
+  // cached rectangle is dropped before every press.
+  useEffect(() => {
+    const element = boardRef.current;
+    if (!element || !api) return;
+    const refreshBounds = () => api.state.dom.bounds.clear();
+    element.addEventListener("mousedown", refreshBounds, { capture: true });
+    element.addEventListener("touchstart", refreshBounds, { capture: true, passive: true });
+    return () => {
+      element.removeEventListener("mousedown", refreshBounds, { capture: true });
+      element.removeEventListener("touchstart", refreshBounds, { capture: true });
+    };
+  }, [api]);
+
   const boardImage = useAtomValue(boardImageAtom);
   const boardCoordColors = getBoardCoordinateColors(boardImage);
 

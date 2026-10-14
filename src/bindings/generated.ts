@@ -219,7 +219,7 @@ async deleteGame(file: string, n: number) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async deleteDuplicatedGames(file: string) : Promise<Result<null, string>> {
+async deleteDuplicatedGames(file: string) : Promise<Result<number, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_duplicated_games", { file }) };
 } catch (e) {
@@ -227,7 +227,7 @@ async deleteDuplicatedGames(file: string) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async deleteEmptyGames(file: string) : Promise<Result<null, string>> {
+async deleteEmptyGames(file: string) : Promise<Result<number, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_empty_games", { file }) };
 } catch (e) {

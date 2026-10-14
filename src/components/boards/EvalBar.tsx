@@ -98,10 +98,11 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
   }
 
   return (
-    <Tooltip
+    <Tooltip.Floating
       position="right"
+      offset={12}
       color={score && score.value.value < 0 ? "dark" : undefined}
-      label={score ? formatScore(score.value) : undefined}
+      label={score ? formatScore(score.value) : ""}
       disabled={!score}
     >
       <Box
@@ -116,11 +117,12 @@ function EvalBar({ score, orientation }: { score: Score | null; orientation: Col
           height: "100%",
           borderRadius: EVAL_BAR_WIDTH / 2,
           overflow: "hidden",
+          cursor: "help",
         }}
       >
         {ScoreBars}
       </Box>
-    </Tooltip>
+    </Tooltip.Floating>
   );
 }
 

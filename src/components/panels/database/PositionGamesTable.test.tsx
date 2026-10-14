@@ -7,6 +7,20 @@ import { createTab } from "@/utils/tabs";
 import PositionGamesTable from "./PositionGamesTable";
 
 vi.mock("@mantine/core", () => ({
+  ActionIcon: ({
+    children,
+    onClick,
+    "aria-label": label,
+  }: {
+    children: ReactNode;
+    onClick: () => void;
+    "aria-label": string;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {label}
+      {children}
+    </button>
+  ),
   Alert: ({ children }: { children: ReactNode }) => <div role="alert">{children}</div>,
   Group: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Select: ({
@@ -66,7 +80,20 @@ vi.mock("@/state/atoms", () => ({
   positionGamesViewFamily: () => {},
 }));
 vi.mock("@/utils/tabs", () => ({ createTab: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { from?: number; to?: number; total?: number }) =>
+      key === "Board.Database.PageRange" && options
+        ? `${options.from}-${options.to}/${options.total}`
+        : key,
+  }),
+}));
+vi.mock("@mantine/notifications", () => ({ notifications: { show: vi.fn() } }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn() }));
+vi.mock("@tauri-apps/plugin-fs", () => ({ writeTextFile: vi.fn() }));
+vi.mock("mantine-contextmenu", () => ({ useContextMenu: () => ({ showContextMenu: vi.fn() }) }));
+vi.mock("@/components/studies/AddToStudyModal", () => ({ default: () => null }));
+vi.mock("@/utils/chess", () => ({ getPGN: vi.fn(), parsePGN: vi.fn() }));
 vi.mock("@/bindings", () => ({
   commands: {
     getPositionGames: vi.fn(),
@@ -77,28 +104,26 @@ vi.mock("@/bindings", () => ({
 vi.mock("mantine-datatable", () => ({
   DataTable: ({
     records,
-    page,
-    totalRecords,
-    onPageChange,
     onRowClick,
   }: {
     records: PositionGameMetadata[];
-    page: number;
-    totalRecords: number;
-    onPageChange: (page: number) => void;
-    onRowClick: (row: { index: number }) => Promise<void>;
+    onRowClick: (row: {
+      record: PositionGameMetadata;
+      index: number;
+      event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean };
+    }) => void;
   }) => (
     <div>
-      <span>{`page:${page} total:${totalRecords}`}</span>
-      <button type="button" onClick={() => onPageChange(33)}>
-        Last page
-      </button>
       {records.map((record, index) => (
         <button
           key={record.id}
           type="button"
           onClick={() => {
-            void onRowClick({ index });
+            onRowClick({
+              record,
+              index,
+              event: { ctrlKey: false, metaKey: false, shiftKey: false },
+            });
           }}
         >
           {record.white}
@@ -177,7 +202,7 @@ async function click(label: string) {
 
 it("pages beyond 500 without hydrating PGN, then opens the matching node", async () => {
   await mount();
-  await click("Last page");
+  await click("Board.Database.LastPage");
   expect(commands.getPositionGames).toHaveBeenLastCalledWith(
     "one",
     640,
@@ -186,7 +211,7 @@ it("pages beyond 500 without hydrating PGN, then opens the matching node", async
     "asc",
     "games-sort:board",
   );
-  expect(container.textContent).toContain("page:33 total:650");
+  expect(container.textContent).toContain("641-650/650");
   expect(commands.getPositionGame).not.toHaveBeenCalled();
   vi.mocked(commands.getPositionGame).mockResolvedValue({
     status: "ok",
@@ -213,7 +238,7 @@ it("resets pagination on a new snapshot and ignores a late page for the old posi
       resolve = done;
     }),
   );
-  await click("Last page");
+  await click("Board.Database.LastPage");
   await mount("two");
   await act(async () => resolve({ status: "ok", data: [row(641)] }));
   expect(commands.getPositionGames).toHaveBeenLastCalledWith(
@@ -224,7 +249,7 @@ it("resets pagination on a new snapshot and ignores a late page for the old posi
     "asc",
     "games-sort:board",
   );
-  expect(container.textContent).toContain("page:1 total:650");
+  expect(container.textContent).toContain("1-20/650");
   expect(container.textContent).not.toContain("White 641");
 });
 
@@ -252,7 +277,7 @@ it("retries a lifecycle cancellation without showing a database failure", async 
 
 it("sorts the complete snapshot and resets to the first page", async () => {
   await mount();
-  await click("Last page");
+  await click("Board.Database.LastPage");
   const select = container.querySelector<HTMLSelectElement>(
     '[aria-label="Board.Database.SortBy"]',
   )!;
@@ -268,7 +293,7 @@ it("sorts the complete snapshot and resets to the first page", async () => {
     "asc",
     "games-sort:board",
   );
-  expect(container.textContent).toContain("page:1 total:650");
+  expect(container.textContent).toContain("1-20/650");
   await click("Board.Database.Sort.Desc");
   expect(commands.getPositionGames).toHaveBeenLastCalledWith(
     "one",

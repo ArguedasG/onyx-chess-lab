@@ -15,6 +15,7 @@ import { ANNOTATION_INFO, isBasicAnnotation } from "@/utils/annotation";
 import { getGameStats, getMainLine } from "@/utils/chess";
 import classes from "./AnalysisPanel.module.css";
 import ReportModal, { isReportRunning } from "./ReportModal";
+import RetroPanel from "./RetroPanel";
 
 function ReportPanel() {
   const { t } = useTranslation();
@@ -80,6 +81,13 @@ function ReportPanel() {
           inProgress={inProgress}
           setInProgress={setInProgress}
         />
+
+        {!inProgress && (
+          <RetroPanel
+            whiteMistakes={stats.whiteAnnotations["?"] + stats.whiteAnnotations["??"]}
+            blackMistakes={stats.blackAnnotations["?"] + stats.blackAnnotations["??"]}
+          />
+        )}
 
         {stats.whiteAccuracy > 0 && stats.blackAccuracy > 0 && (
           <Group grow>

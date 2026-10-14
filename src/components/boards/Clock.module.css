@@ -7,3 +7,8 @@
   color: var(--mantine-color-white);
   background-color: var(--mantine-color-dark-6);
 }
+
+.lowTime {
+  color: var(--mantine-color-white);
+  background-color: var(--mantine-color-red-8);
+}

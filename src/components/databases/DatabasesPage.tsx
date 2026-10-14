@@ -22,6 +22,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { useDebouncedValue, useToggle } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import { IconArrowRight, IconDatabase, IconPlus, IconSearch } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { basename } from "@tauri-apps/api/path";
@@ -594,6 +595,33 @@ function DuplicateRemover({
   const { t } = useTranslation();
 
   const [loading, setLoading] = useState(false);
+
+  async function cleanUp(run: (file: string) => ReturnType<typeof commands.deleteEmptyGames>) {
+    setLoading(true);
+    try {
+      const result = await run(selectedDatabase.file);
+      if (result.status === "ok") {
+        notifications.show({
+          color: result.data > 0 ? "green" : "gray",
+          message:
+            result.data === 0
+              ? t("Databases.Settings.RemovedNone")
+              : result.data === 1
+                ? t("Databases.Settings.RemovedOne")
+                : t("Databases.Settings.RemovedGames", { count: result.data }),
+          autoClose: 3000,
+        });
+      } else {
+        notifications.show({ color: "red", message: result.error, autoClose: 5000 });
+      }
+    } catch (error) {
+      notifications.show({ color: "red", message: String(error), autoClose: 5000 });
+    } finally {
+      setLoading(false);
+      reload();
+    }
+  }
+
   return (
     <Stack>
       <Text fz="lg" fw="bold">
@@ -601,41 +629,11 @@ function DuplicateRemover({
       </Text>
       <Text fz="sm">{t("Databases.Settings.BatchDelete.Desc")}</Text>
       <Group>
-        <Button
-          loading={loading}
-          onClick={async () => {
-            setLoading(true);
-            commands
-              .deleteDuplicatedGames(selectedDatabase.file)
-              .then(() => {
-                setLoading(false);
-                reload();
-              })
-              .catch(() => {
-                setLoading(false);
-                reload();
-              });
-          }}
-        >
+        <Button loading={loading} onClick={() => void cleanUp(commands.deleteDuplicatedGames)}>
           {t("Databases.Settings.RemoveDup")}
         </Button>
 
-        <Button
-          loading={loading}
-          onClick={async () => {
-            setLoading(true);
-            commands
-              .deleteEmptyGames(selectedDatabase.file)
-              .then(() => {
-                setLoading(false);
-                reload();
-              })
-              .catch(() => {
-                setLoading(false);
-                reload();
-              });
-          }}
-        >
+        <Button loading={loading} onClick={() => void cleanUp(commands.deleteEmptyGames)}>
           {t("Databases.Settings.RemoveEmpty")}
         </Button>
       </Group>

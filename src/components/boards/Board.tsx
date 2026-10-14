@@ -64,6 +64,7 @@ import { chessopsError, forceEnPassant, positionFromFen } from "@/utils/chessops
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
 import { classifyOpeningMove } from "@/utils/openingTraining";
+import { playCorrectSound } from "@/utils/sound";
 import { recordOpeningMoveAttempt } from "@/utils/trainingAreas";
 import { getTabFile, getTabGameNumber } from "@/utils/tabs";
 import ShowMaterial from "../common/ShowMaterial";
@@ -71,6 +72,7 @@ import { TreeStateContext } from "../common/TreeStateContext";
 import FideInfo from "../databases/FideInfo";
 import { updateCardPerformance } from "../files/opening";
 import { arrowColors } from "../panels/analysis/arrowColors";
+import { useRetroBoard } from "../panels/analysis/useRetro";
 import AnnotationHint from "./AnnotationHint";
 import { BoardBar } from "./BoardBar";
 import Clock from "./Clock";
@@ -98,6 +100,8 @@ interface ChessboardProps {
   enablePremoves?: boolean;
   /** Shown under the board (e.g. the engine strip); the board shrinks to keep it in view. */
   footer?: React.ReactNode;
+  /** Temporary marks drawn on top, never saved to the game (e.g. the mated king). */
+  overlayShapes?: DrawShape[];
 }
 
 function Board({
@@ -114,6 +118,7 @@ function Board({
   cgRef,
   enablePremoves = false,
   footer,
+  overlayShapes,
 }: ChessboardProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -151,12 +156,27 @@ function Board({
       );
     };
     const observer = new ResizeObserver(fit);
-    observer.observe(root);
-    observer.observe(column);
-    observer.observe(board);
-    if (footerRef.current) observer.observe(footerRef.current);
+    const observeAll = () => {
+      observer.disconnect();
+      observer.observe(root);
+      observer.observe(column);
+      observer.observe(board);
+      // The player bars appear when a game starts; without watching them the board keeps
+      // the height it had without bars and its bottom ends up cut off.
+      for (const row of Array.from(column.children)) observer.observe(row);
+      if (footerRef.current) observer.observe(footerRef.current);
+    };
+    const mutations = new MutationObserver(() => {
+      observeAll();
+      fit();
+    });
+    mutations.observe(column, { childList: true });
+    observeAll();
     fit();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+    };
   }, [boardRef, hasFooter]);
 
   const store = useContext(TreeStateContext)!;
@@ -240,11 +260,18 @@ function Board({
   const openingQueue = useAtomValue(currentOpeningPracticeQueueAtom);
   const learning = practiceUnit === "line" && openingQueue?.mode === "learn";
   const [sessionStats, setSessionStats] = useAtom(practiceSessionStatsAtom);
+  const retroBoard = useRetroBoard();
   const cardStartTime = useAtomValue(practiceCardStartTimeAtom);
 
   async function makeMove(move: NormalMove) {
     if (!pos) return;
     const san = makeSan(pos, move);
+    // "Learn from your mistakes": the engine judges the move; the game itself is left untouched.
+    if (retroBoard.active) {
+      setPendingMove(null);
+      void retroBoard.submit(makeUci(move), san);
+      return;
+    }
     if (practicing) {
       const c = deck.positions.find((c) => c.fen === currentNode.fen);
       if (!c) {
@@ -287,6 +314,7 @@ function Board({
             return;
           }
           storeMakeMove({ payload: move });
+          playCorrectSound();
           setPracticeState({
             ...practiceState,
             phase: "waiting",
@@ -411,6 +439,7 @@ function Board({
             }));
           }
           storeMakeMove({ payload: move });
+          playCorrectSound();
           setPendingMove(null);
           setPracticeState({
             ...practiceState,
@@ -456,6 +485,7 @@ function Board({
         storeMakeMove({
           payload: move,
         });
+        playCorrectSound();
         setPendingMove(null);
         setPracticeState({
           phase: "correct",
@@ -554,6 +584,13 @@ function Board({
       practiceState.linePath[position.length] ?? -1,
     );
     shapes = [...currentNode.shapes, ...(expected ? [expected] : [])];
+  }
+
+  if (retroBoard.shapes) {
+    shapes = retroBoard.shapes;
+  }
+  if (overlayShapes && overlayShapes.length > 0) {
+    shapes = [...shapes, ...overlayShapes];
   }
 
   const hasClock =
@@ -697,7 +734,7 @@ function Board({
               currentNode.annotations.length > 0 &&
               currentNode.move &&
               square !== undefined && (
-                <Box pl="2.5rem" w="100%" h="100%" pos="absolute">
+                <Box pl="2.5rem" w="100%" h="100%" pos="absolute" style={{ pointerEvents: "none" }}>
                   <Box pos="relative" w="100%" h="100%">
                     <AnnotationHint
                       orientation={orientation}

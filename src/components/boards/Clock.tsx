@@ -4,6 +4,7 @@ import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import { positionFromFen } from "@/utils/chessops";
 import { getClockInfo } from "@/utils/clock";
+import { lowTimeThresholdSeconds } from "@/utils/sound";
 import { TreeStateContext } from "../common/TreeStateContext";
 import classes from "./Clock.module.css";
 
@@ -44,9 +45,19 @@ function Clock({
     .with("black", () => black.progress)
     .otherwise(() => 0);
 
+  // Only a running game passes live times; replayed PGN clocks never turn red.
+  const live = whiteTime !== undefined || blackTime !== undefined;
+  const lowTime =
+    live &&
+    clock !== undefined &&
+    progress > 0 &&
+    clock < lowTimeThresholdSeconds(clock / progress);
+
   return (
     <Paper
-      className={color === "black" ? classes.blackClock : classes.whiteClock}
+      className={
+        lowTime ? classes.lowTime : color === "black" ? classes.blackClock : classes.whiteClock
+      }
       styles={{
         root: {
           opacity: turn !== color ? 0.5 : 1,
@@ -60,6 +71,7 @@ function Clock({
       </Text>
       <Progress
         size="xs"
+        color={lowTime ? "red.3" : undefined}
         w="100%"
         value={progress * 100}
         animated={turn === color}

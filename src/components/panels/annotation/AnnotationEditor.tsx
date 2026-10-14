@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { spellCheckAtom } from "@/state/atoms";
+import { GAME_LINK_SCHEME } from "@/utils/gameLinks";
 import { getNodeAtPath } from "@/utils/treeReducer";
 
 /** `compact` keeps only text formatting, for the editor that opens under the notation. */
@@ -30,6 +31,8 @@ function AnnotationEditor({ compact }: { compact?: boolean }) {
           link: {
             autolink: true,
             openOnClick: false,
+            // Links to database games (see utils/gameLinks).
+            protocols: [GAME_LINK_SCHEME],
           },
         }),
         Markdown,

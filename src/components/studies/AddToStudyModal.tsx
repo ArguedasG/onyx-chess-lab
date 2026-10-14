@@ -1,7 +1,9 @@
 import { Alert, Button, Group, Modal, Select, Stack, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useEffect, useState } from "react";
+import { useAtom } from "jotai";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { lastStudyIdAtom } from "@/state/atoms";
 import {
   addStudyChapter,
   createStudy,
@@ -34,6 +36,9 @@ export default function AddToStudyModal({
   const { t } = useTranslation();
   const [library, setLibrary] = useState<StudyLibrary | null>(null);
   const [studyId, setStudyId] = useState<string | null>(null);
+  const [lastStudyId, setLastStudyId] = useAtom(lastStudyIdAtom);
+  const lastStudyIdRef = useRef(lastStudyId);
+  lastStudyIdRef.current = lastStudyId;
   const [title, setTitle] = useState(suggestedTitle);
   const [newStudyName, setNewStudyName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,8 +51,14 @@ export default function AddToStudyModal({
     setError("");
     void loadStudyLibrary().then(({ library }) => {
       setLibrary(library);
+      // Several things are usually saved to the same study in a row, so the last one is preferred.
+      const last = lastStudyIdRef.current;
       setStudyId((current) =>
-        current && library.studies[current] ? current : (library.studyOrder[0] ?? null),
+        last && library.studies[last]
+          ? last
+          : current && library.studies[current]
+            ? current
+            : (library.studyOrder[0] ?? null),
       );
     });
   }, [opened, suggestedTitle]);
@@ -93,6 +104,7 @@ export default function AddToStudyModal({
         ),
       );
       setLibrary(next);
+      setLastStudyId(studyId);
       notifications.show({
         color: "green",
         message: multiple

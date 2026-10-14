@@ -33,8 +33,9 @@ import {
 } from "@tabler/icons-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+import type { DrawShape } from "@lichess-org/chessground/draw";
 import type { Piece } from "chessops";
-import { makeUci, parseUci } from "chessops";
+import { makeSquare, makeUci, parseUci } from "chessops";
 import { INITIAL_FEN } from "chessops/fen";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -98,6 +99,7 @@ import {
 } from "@/utils/humanBotMeasurements";
 import { getModelGameArtifactPaths, serializeModelGameArtifacts } from "@/utils/modelGame";
 import { normalizeEngineGoMode } from "@/utils/enginePresets";
+import { lowTimeThresholdSeconds, playGameEndSound, playLowTimeSound } from "@/utils/sound";
 import { createTab } from "@/utils/tabs";
 import {
   isEndgameObjectiveMet,
@@ -375,6 +377,64 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     (players.white.type === "human" && blackIsEngineControlled) ||
     (players.black.type === "human" && whiteIsEngineControlled);
   const isPlayerVsHumanBot = getHumanBotHistoryMatch(players) !== null;
+
+  // Warn the human once per game when their clock enters the low-time zone.
+  const lowTimeWarnedRef = useRef({ white: false, black: false });
+  useEffect(() => {
+    lowTimeWarnedRef.current = { white: false, black: false };
+  }, [gameId]);
+  useEffect(() => {
+    if (gameState !== "playing" || !isPlayerVsEngine) return;
+    for (const color of ["white", "black"] as const) {
+      const player = players[color];
+      const remaining = color === "white" ? whiteTime : blackTime;
+      if (player.type !== "human" || !player.timeControl || remaining === null) continue;
+      const threshold = lowTimeThresholdSeconds(player.timeControl.seconds / 1000) * 1000;
+      if (remaining > 0 && remaining < threshold && !lowTimeWarnedRef.current[color]) {
+        lowTimeWarnedRef.current[color] = true;
+        playLowTimeSound();
+      }
+    }
+  }, [gameState, isPlayerVsEngine, players, whiteTime, blackTime]);
+
+  // A light end-of-game signal: a sound and a short toast, plus a red ring on a mated king.
+  const announceGameEnd = (result: GameResult) => {
+    const humanColors = (["white", "black"] as const).filter(
+      (color) => players[color].type === "human",
+    );
+    const winner =
+      result.type === "whiteWins" ? "white" : result.type === "blackWins" ? "black" : null;
+    const perspective = humanColors.length === 1 ? humanColors[0] : null;
+    const kind = !winner ? "draw" : !perspective || perspective === winner ? "win" : "loss";
+    playGameEndSound(kind);
+    const message = !winner
+      ? t("Game.End.Draw", "Draw.")
+      : perspective
+        ? perspective === winner
+          ? t("Game.End.YouWon", "You won!")
+          : t("Game.End.YouLost", "You lost.")
+        : winner === "white"
+          ? t("Game.End.WhiteWins", "White wins.")
+          : t("Game.End.BlackWins", "Black wins.");
+    notifications.show({
+      title: t(`Game.End.Reason.${result.reason}`),
+      message,
+      color: kind === "win" ? "green" : kind === "loss" ? "red" : "gray",
+      autoClose: 4000,
+    });
+  };
+
+  const announceGameEndRef = useRef(announceGameEnd);
+  announceGameEndRef.current = announceGameEnd;
+
+  const currentFen = useStore(store, (s) => s.currentNode().fen);
+  const matedKingShapes: DrawShape[] = useMemo(() => {
+    if (gameState !== "gameOver") return [];
+    const [pos] = positionFromFen(currentFen);
+    if (!pos || !pos.isCheckmate()) return [];
+    const king = pos.board.kingOf(pos.turn);
+    return king === undefined ? [] : [{ orig: makeSquare(king), brush: "red" }];
+  }, [currentFen, gameState]);
   const canAbortBeforeFirstMove =
     !generatorMode && isPlayerVsHumanBot && gameState === "playing" && !humanHasMoved;
 
@@ -1049,6 +1109,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
 
       setGameState("gameOver");
       setResult(outcome);
+      if (!generatorMode) announceGameEndRef.current(payload.result);
     });
 
     return () => {
@@ -1499,6 +1560,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           selectedPiece={selectedPiece}
           cgRef={cgRef}
           enablePremoves={isPlayerVsEngine && gameState === "playing"}
+          overlayShapes={matedKingShapes}
         />
       </Portal>
       <PanelHeader zone="tools">

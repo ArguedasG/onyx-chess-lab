@@ -93,3 +93,98 @@ export function playSound(capture: boolean, check: boolean) {
             });
     }
 }
+
+let audioContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+    if (typeof window === "undefined" || typeof window.AudioContext === "undefined") {
+        return null;
+    }
+    audioContext ??= new AudioContext();
+    if (audioContext.state === "suspended") {
+        void audioContext.resume();
+    }
+    return audioContext;
+}
+
+type Tone = { frequency: number; start: number; duration: number; type?: OscillatorType };
+
+function playTones(tones: Tone[], gain: number) {
+    const volume = getDefaultStore().get(soundVolumeAtom);
+    if (volume <= 0) return;
+    const context = getAudioContext();
+    if (!context) return;
+    const now = context.currentTime;
+    for (const tone of tones) {
+        const oscillator = context.createOscillator();
+        const envelope = context.createGain();
+        oscillator.type = tone.type ?? "sine";
+        oscillator.frequency.value = tone.frequency;
+        const start = now + tone.start;
+        const end = start + tone.duration;
+        // Short attack and exponential release so the tones do not click.
+        envelope.gain.setValueAtTime(0.0001, start);
+        envelope.gain.exponentialRampToValueAtTime(gain * volume, start + 0.01);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+        oscillator.connect(envelope).connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(end + 0.02);
+    }
+}
+
+/** Two rising notes for a correct training move (tactics, openings, mistake review). */
+export function playCorrectSound() {
+    try {
+        playTones(
+            [
+                { frequency: 659.25, start: 0, duration: 0.14 },
+                { frequency: 987.77, start: 0.09, duration: 0.24 },
+            ],
+            0.22,
+        );
+    } catch {
+        // Audio is optional; never break the training flow over it.
+    }
+}
+
+/** Short double beep when the player's clock enters the low-time zone. */
+export function playLowTimeSound() {
+    try {
+        playTones(
+            [
+                { frequency: 880, start: 0, duration: 0.12, type: "triangle" },
+                { frequency: 880, start: 0.2, duration: 0.12, type: "triangle" },
+            ],
+            0.3,
+        );
+    } catch {
+        // Audio is optional.
+    }
+}
+
+/** End of a game: a rising chord for a win, a falling one for a loss, a flat one for a draw. */
+export function playGameEndSound(kind: "win" | "loss" | "draw") {
+    const notes = {
+        win: [523.25, 659.25, 783.99],
+        loss: [392, 329.63, 261.63],
+        draw: [440, 440, 523.25],
+    }[kind];
+    try {
+        playTones(
+            notes.map((frequency, index) => ({
+                frequency,
+                start: index * 0.12,
+                duration: index === notes.length - 1 ? 0.45 : 0.16,
+                type: "triangle" as const,
+            })),
+            0.25,
+        );
+    } catch {
+        // Audio is optional.
+    }
+}
+
+/** Seconds below which a clock counts as low: an eighth of the initial time, within 10–60 s. */
+export function lowTimeThresholdSeconds(initialSeconds: number) {
+    return Math.min(60, Math.max(10, initialSeconds * 0.125));
+}

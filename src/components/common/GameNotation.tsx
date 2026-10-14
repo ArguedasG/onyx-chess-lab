@@ -39,7 +39,9 @@ import {
   currentShowVariationsAtom,
   tableViewAtom,
 } from "@/state/atoms";
+import { useCurrentRetro } from "@/components/panels/analysis/useRetro";
 import { keyMapAtom } from "@/state/keybinds";
+import { retroRunsOn } from "@/utils/retro";
 import { formatScore } from "@/utils/score";
 import { getNodeAtPath, type TreeNode } from "@/utils/treeReducer";
 import CompleteMoveCell from "./CompleteMoveCell";
@@ -84,7 +86,10 @@ function GameNotation({
   }, [currentFen]);
 
   const [invisibleValue, setInvisible] = useAtom(currentInvisibleAtom);
-  const invisible = topBar && invisibleValue;
+  const root = useStore(store, (s) => s.root);
+  const [retro] = useCurrentRetro();
+  // While reviewing mistakes the moves (and the report's best-move variations) stay hidden.
+  const invisible = (topBar && invisibleValue) || retroRunsOn(retro, root);
   const showVariations = useAtomValue(currentShowVariationsAtom);
   const showComments = useAtomValue(currentShowCommentsAtom);
   const [tableView, setTableView] = useAtom(tableViewAtom);

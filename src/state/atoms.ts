@@ -34,6 +34,7 @@ import {
     type MasterGamesOptions,
     masterOptionsSchema,
 } from "@/utils/lichess/explorer";
+import type { RetroState } from "@/utils/retro";
 import { getWinChance, normalizeScore } from "@/utils/score";
 import { genID, type Tab, tabSchema } from "@/utils/tabs";
 import type { TreeState } from "@/utils/treeReducer";
@@ -211,6 +212,11 @@ export const soundCollectionAtom = atomWithStorage<string>(
 );
 
 export const soundVolumeAtom = atomWithStorage<number>("sound-volume", 0.8, undefined, {
+    getOnInit: true,
+});
+
+/** Study that last received a chapter; "Add to study" preselects it. */
+export const lastStudyIdAtom = atomWithStorage<string | null>("last-study-id", null, undefined, {
     getOnInit: true,
 });
 
@@ -466,6 +472,9 @@ export const currentTabSelectedAtom = tabValue(tabFamily);
 
 const reportModalOpenFamily = atomFamily((_tab: string) => atom(false));
 export const currentReportModalOpenAtom = tabValue(reportModalOpenFamily);
+
+/** "Learn from your mistakes" session of each tab; null when none is running. */
+export const retroFamily = atomFamily((_tab: string) => atom<RetroState | null>(null));
 
 export const localOptionsFamily = atomFamily((_tab: string) =>
     atom<LocalOptions>({

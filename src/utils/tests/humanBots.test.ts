@@ -232,7 +232,7 @@ describe("human bot profiles", () => {
         expect(buildHumanBotTraceHeaders(luna, "Black", true)).toEqual({
             BlackBotProfile: "luna",
             BlackBotProfileVersion: "3",
-            BlackBotCatalogVersion: "4.4.0",
+            BlackBotCatalogVersion: "4.5.0",
             BlackBotLevel: "novice-900",
             BlackBotStyle: "adventurous",
             BlackBotStyleEvidence: "editorial",
@@ -251,10 +251,10 @@ describe("human bot profiles", () => {
             BlackBotTopP: "0.98",
         });
         expect(buildHumanBotTiming(luna)).toEqual({
-            minThinkTimeMs: 450,
-            averageThinkTimeMs: 1200,
-            maxThinkTimeMs: 3500,
-            repertoireTimePercent: 45,
+            minThinkTimeMs: 1000,
+            averageThinkTimeMs: 2800,
+            maxThinkTimeMs: 8000,
+            repertoireTimePercent: 40,
         });
     });
 

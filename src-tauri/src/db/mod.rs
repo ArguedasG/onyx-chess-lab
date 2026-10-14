@@ -2030,12 +2030,14 @@ fn delete_orphaned_data(db: &mut SqliteConnection) -> Result<(), Error> {
 
 #[tauri::command]
 #[specta::specta]
+/// Returns how many games were removed.
 pub async fn delete_duplicated_games(
     file: PathBuf,
     state: tauri::State<'_, AppState>,
-) -> Result<(), Error> {
+) -> Result<u32, Error> {
     invalidate_search_index(&state, &file)?;
     let db = &mut get_db_or_create(&state, file.to_str().unwrap(), ConnectionOptions::default())?;
+    let before: i64 = games::table.count().get_result(db)?;
 
     db.batch_execute(
         "
@@ -2056,25 +2058,26 @@ pub async fn delete_duplicated_games(
     update_info_count(db, "GameCount", game_count)?;
     delete_orphaned_data(db)?;
 
-    Ok(())
+    Ok(u32::try_from(before.saturating_sub(game_count)).unwrap_or(u32::MAX))
 }
 
 #[tauri::command]
 #[specta::specta]
+/// Returns how many games were removed.
 pub async fn delete_empty_games(
     file: PathBuf,
     state: tauri::State<'_, AppState>,
-) -> Result<(), Error> {
+) -> Result<u32, Error> {
     invalidate_search_index(&state, &file)?;
     let db = &mut get_db_or_create(&state, file.to_str().unwrap(), ConnectionOptions::default())?;
 
-    diesel::delete(games::table.filter(games::ply_count.eq(0))).execute(db)?;
+    let deleted = diesel::delete(games::table.filter(games::ply_count.eq(0))).execute(db)?;
 
     let game_count: i64 = games::table.count().get_result(db)?;
     update_info_count(db, "GameCount", game_count)?;
     delete_orphaned_data(db)?;
 
-    Ok(())
+    Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
 }
 
 struct PgnGame {

@@ -533,7 +533,7 @@ export default function StudiesPage() {
                     leftSection={<IconPlus size={14} />}
                     onClick={addBlankChapter}
                   >
-                    {t("Studies.Blank", "Blank")}
+                    {t("Studies.Blank", "New")}
                   </Button>
                   <Button
                     size="xs"

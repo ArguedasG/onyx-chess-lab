@@ -2,7 +2,7 @@ import type { EngineSettings, LocalEngine } from "./engines";
 import { RANDOM_SEED_PLACEHOLDER } from "./engines";
 
 export const HUMAN_BOT_CONFIG_VERSION = 6;
-export const HUMAN_BOT_CATALOG_VERSION = "4.4.0";
+export const HUMAN_BOT_CATALOG_VERSION = "4.5.0";
 export const HUMAN_BOT_PROFILE_VERSION = 3;
 export const HUMAN_BOT_REPERTOIRE_SCHEMA_VERSION = 2;
 export const HUMAN_BOT_MODEL_ID = "maia3";
@@ -118,45 +118,45 @@ export const HUMAN_BOT_SAMPLING_STYLES = [
 export const HUMAN_BOT_TIMINGS = [
     {
         id: "casual-fast",
-        minThinkTimeMs: 450,
-        averageThinkTimeMs: 1200,
-        maxThinkTimeMs: 3500,
-        repertoireTimePercent: 45,
-    },
-    {
-        id: "casual",
-        minThinkTimeMs: 500,
-        averageThinkTimeMs: 1450,
-        maxThinkTimeMs: 4200,
-        repertoireTimePercent: 43,
-    },
-    {
-        id: "steady",
-        minThinkTimeMs: 600,
-        averageThinkTimeMs: 1750,
-        maxThinkTimeMs: 5200,
+        minThinkTimeMs: 1000,
+        averageThinkTimeMs: 2800,
+        maxThinkTimeMs: 8000,
         repertoireTimePercent: 40,
     },
     {
-        id: "deliberate",
-        minThinkTimeMs: 650,
-        averageThinkTimeMs: 2000,
-        maxThinkTimeMs: 6000,
+        id: "casual",
+        minThinkTimeMs: 1100,
+        averageThinkTimeMs: 3300,
+        maxThinkTimeMs: 9500,
         repertoireTimePercent: 38,
     },
     {
+        id: "steady",
+        minThinkTimeMs: 1300,
+        averageThinkTimeMs: 3900,
+        maxThinkTimeMs: 11500,
+        repertoireTimePercent: 36,
+    },
+    {
+        id: "deliberate",
+        minThinkTimeMs: 1400,
+        averageThinkTimeMs: 4500,
+        maxThinkTimeMs: 13500,
+        repertoireTimePercent: 34,
+    },
+    {
         id: "patient",
-        minThinkTimeMs: 700,
-        averageThinkTimeMs: 2250,
-        maxThinkTimeMs: 6800,
-        repertoireTimePercent: 35,
+        minThinkTimeMs: 1500,
+        averageThinkTimeMs: 5200,
+        maxThinkTimeMs: 15500,
+        repertoireTimePercent: 32,
     },
     {
         id: "deep",
-        minThinkTimeMs: 750,
-        averageThinkTimeMs: 2500,
-        maxThinkTimeMs: 7500,
-        repertoireTimePercent: 32,
+        minThinkTimeMs: 1600,
+        averageThinkTimeMs: 6000,
+        maxThinkTimeMs: 18000,
+        repertoireTimePercent: 30,
     },
 ] as const satisfies readonly HumanBotTiming[];
 

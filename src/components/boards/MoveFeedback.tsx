@@ -1,5 +1,7 @@
 import { Portal } from "@mantine/core";
 import { IconCheck, IconX } from "@tabler/icons-react";
+import { useEffect } from "react";
+import { playCorrectSound } from "@/utils/sound";
 import classes from "./MoveFeedback.module.css";
 
 export type MoveFeedbackState = {
@@ -31,6 +33,11 @@ export default function MoveFeedback({
   feedback: MoveFeedbackState | null;
   orientation: "white" | "black";
 }) {
+  const correctKey = feedback?.correct ? feedback.key : null;
+  useEffect(() => {
+    if (correctKey !== null) playCorrectSound();
+  }, [correctKey]);
+
   if (!board || !feedback) return null;
   const file = feedback.square.charCodeAt(0) - 97;
   const rank = Number(feedback.square[1]) - 1;

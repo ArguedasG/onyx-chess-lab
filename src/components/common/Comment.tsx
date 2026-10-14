@@ -1,8 +1,15 @@
 import { Typography } from "@mantine/core";
-import { memo } from "react";
-
-import Markdown from "react-markdown";
+import { notifications } from "@mantine/notifications";
+import { IconChess } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
+import { useAtomValue, useSetAtom } from "jotai";
+import { memo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { type GameLink, loadLinkedGame, parseGameLink } from "@/utils/gameLinks";
+import { createTab } from "@/utils/tabs";
 
 type MarkdownNode = {
   type: string;
@@ -59,6 +66,59 @@ function safeCommentLink(href: string | undefined): string | undefined {
   }
 }
 
+/** A link to a database game: opens it in a new analysis tab at the linked move. */
+function GameLinkAnchor({ link, children }: { link: GameLink; children: ReactNode }) {
+  const { t } = useTranslation();
+  const setTabs = useSetAtom(tabsAtom);
+  const setActiveTab = useSetAtom(activeTabAtom);
+  const activeTab = useAtomValue(activeTabAtom);
+  const navigate = useNavigate();
+
+  async function open() {
+    try {
+      const { database, game } = await loadLinkedGame(link);
+      await createTab({
+        tab: {
+          name: `${game.white} - ${game.black}`,
+          type: "analysis",
+          returnTabId: activeTab ?? undefined,
+        },
+        setTabs,
+        setActiveTab,
+        pgn: game.moves,
+        headers: game,
+        position: Array(link.ply).fill(0),
+        gameOrigin: { kind: "database", database, gameId: game.id },
+      });
+      navigate({ to: "/" });
+    } catch {
+      notifications.show({
+        color: "red",
+        message: t("GameLink.NotFound", { database: link.database }),
+      });
+    }
+  }
+
+  return (
+    <a
+      href="#"
+      title={t("GameLink.Open")}
+      style={{ whiteSpace: "nowrap" }}
+      onClick={(event) => {
+        // The comment sits inside a move cell; the click must not also select that move.
+        event.preventDefault();
+        event.stopPropagation();
+        void open();
+      }}
+    >
+      <IconChess size="0.9em" style={{ verticalAlign: "-0.1em", marginRight: 2 }} />
+      {children}
+    </a>
+  );
+}
+
+const urlTransform = (url: string) => (parseGameLink(url) ? url : defaultUrlTransform(url));
+
 function Comment({ comment }: { comment: string }) {
   const multipleLine = comment.split("\n").filter((v) => v.trim() !== "").length > 1;
 
@@ -72,17 +132,21 @@ function Comment({ comment }: { comment: string }) {
     >
       <Markdown
         components={{
-          a: ({ node: _node, href, children, ...props }) =>
-            href === UNDERLINE_LINK ? (
+          a: ({ node: _node, href, children, ...props }) => {
+            const gameLink = parseGameLink(href);
+            if (gameLink) return <GameLinkAnchor link={gameLink}>{children}</GameLinkAnchor>;
+            return href === UNDERLINE_LINK ? (
               <u>{children}</u>
             ) : (
               <a {...props} href={safeCommentLink(href)} target="_blank" rel="noopener noreferrer">
                 {children}
               </a>
-            ),
+            );
+          },
           p: ({ node: _node, ...props }) => (multipleLine ? <p {...props} /> : <span {...props} />),
         }}
         remarkPlugins={[remarkGfm, remarkUnderline]}
+        urlTransform={urlTransform}
         skipHtml
       >
         {comment}
