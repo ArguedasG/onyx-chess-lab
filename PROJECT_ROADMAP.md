@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-11.
+> Última actualización: 2026-10-14.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,10 +78,9 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.19.0** (reestructuración de la interfaz: panel derecho con zonas
-  plegables, motor bajo el tablero, anotación junto a la notación, base de datos en secciones,
-  informe de aperturas con filtros y gráficas, táctica en modo enfoque, capítulos e importación de
-  PGN en Archivos).
+- Versión en preparación: **0.19.1** (repaso de errores tras el reporte de análisis, selección
+  múltiple y menú contextual en las partidas de referencia, enlaces a partidas en los comentarios,
+  avisos de poco tiempo y de fin de partida contra bots, y correcciones del tablero).
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -468,7 +467,35 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ---
 
-## 8. Fase 9 — Consolidación pública, multiplataforma y MLOps
+## 8. Fase 9 — Expansión avanzada de fases anteriores
+
+**Estado: Pendiente; posterior a Fase 8.**
+
+### 9.1. Bots humanos y calibración
+
+- retomar la expansión de la Fase 4;
+- calibrar fuerza relativa y diferencias de estilo con muestras reproducibles;
+- ampliar progresivamente el catálogo solo cuando los perfiles sean distinguibles;
+- evolucionar repertorios, muestreo, timing y selección mediante evidencia.
+
+### 9.2. Torneos interactivos
+
+- formatos configurables y participación del usuario;
+- visualización en vivo, reloj, progreso y logs;
+- recuperación, pausa, cancelación y navegación de rondas;
+- separar la experiencia de torneos del Generador cuando el flujo esté validado.
+
+### 9.3. Interpretación estratégica avanzada
+
+- temas estratégicos y planes en Opening Reports;
+- estructuras y rupturas mediante reglas demostrables;
+- finales típicos de una apertura con procedencia y cobertura;
+- patrones estratégicos con confianza visible;
+- revisión humana de ejemplos representativos.
+
+---
+
+## 8. Fase 10 — Consolidación pública, multiplataforma y MLOps
 
 **Estado: Pendiente; mantenimiento urgente relacionado puede adelantarse.**
 
@@ -492,41 +519,6 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 No se añadirá un modelo decorativo. Un entrenamiento nuevo solo se justifica por una pregunta que los
 modelos existentes no puedan responder y por datos con procedencia y licencia utilizables.
-
----
-
-## 9. Fase 10 — Expansión avanzada de fases anteriores
-
-**Estado: Pendiente; posterior a Fase 9.**
-
-### 10.1. Bots humanos y calibración
-
-- retomar la expansión de la Fase 4;
-- calibrar fuerza relativa y diferencias de estilo con muestras reproducibles;
-- ampliar progresivamente el catálogo solo cuando los perfiles sean distinguibles;
-- evolucionar repertorios, muestreo, timing y selección mediante evidencia.
-
-### 10.2. Torneos interactivos
-
-- formatos configurables y participación del usuario;
-- visualización en vivo, reloj, progreso y logs;
-- recuperación, pausa, cancelación y navegación de rondas;
-- separar la experiencia de torneos del Generador cuando el flujo esté validado.
-
-### 10.3. Interpretación estratégica avanzada
-
-- temas estratégicos y planes en Opening Reports;
-- estructuras y rupturas mediante reglas demostrables;
-- finales típicos de una apertura con procedencia y cobertura;
-- patrones estratégicos con confianza visible;
-- revisión humana de ejemplos representativos.
-
-### 10.4. Automatización opcional de entrenamiento
-
-- crear o actualizar automáticamente un set de errores tácticos solo mediante una opción explícita;
-- permitir revisar candidatas antes de incorporarlas;
-- conservar procedencia, deduplicación y posibilidad de desactivar o borrar la automatización;
-- no modificar sets enlazados a PGN ni contenido incluido.
 
 ---
 
@@ -702,6 +694,26 @@ en la documentación de la fase.
 - La importación muestra sus errores dentro del modal y elimina la copia editable si falla.
 - Con el curso de prueba (1.129 registros) la vista previa pasa de 208 a 45 secciones; 171 puzzles
   quedan fuera y restaurables. Validado manualmente por el autor con el curso real.
+
+### 2026-10-14 — Release 0.19.1
+
+- Correcciones del tablero tras aparecer las barras de jugador: el ajuste de tamaño observa ahora
+  las filas de la columna (el tablero ya no queda cortado) y la posición en pantalla de
+  Chessground se recalcula en cada clic (los clics ya no caen una fila más abajo).
+- “Aprende de tus errores” tras el reporte: ejercicios desde la posición previa a cada ? y ?? del
+  bando elegido; un intento se acepta si pierde como mucho 3 puntos de probabilidad de victoria
+  frente a la mejor jugada (Stockfish, profundidad 16–18). El motor en vivo se apaga y la notación
+  se oculta durante el repaso; la partida no se modifica.
+- Partidas de referencia: paginación compacta en la cabecera, selección múltiple (Ctrl, Mayús) y
+  menú contextual (abrir, estudio, enlace, PGN).
+- Enlaces a partidas en comentarios como links Markdown con esquema propio
+  `onyx://game?db=<archivo>&id=<id>&ply=<n>`; se resuelven contra la carpeta de bases de datos.
+- Bots humanos con tiempos de reflexión de 2,8 a 6 s de media (antes 1,2 a 2,5 s); catálogo 4.5.0.
+  Reloj rojo y aviso sonoro con poco tiempo; sonido, aviso breve y rey mateado marcado al terminar.
+- Sonidos de acierto en entrenamiento generados con Web Audio, sin archivos nuevos.
+- Último estudio usado como destino predeterminado; los comandos de limpieza de bases devuelven el
+  número de partidas eliminadas.
+- Detalle: `docs/release-notes-0.19.1.es.md`.
 
 ### 2026-10-11 — Release 0.19.0
 
