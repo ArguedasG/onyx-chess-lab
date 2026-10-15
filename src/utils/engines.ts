@@ -2,7 +2,8 @@ import type { Platform } from "@tauri-apps/plugin-os";
 import useSWR from "swr";
 import { z } from "zod";
 import { type BestMoves, commands, type EngineOptions, type GoMode } from "@/bindings";
-import { CATALOG_SWR_OPTIONS, fetchCatalog } from "./http";
+import { loadEngineCatalog } from "./catalog";
+import { CATALOG_SWR_OPTIONS } from "./http";
 import { unwrap } from "./unwrap";
 
 export const requiredEngineSettings = ["MultiPV", "Threads", "Hash"];
@@ -117,9 +118,9 @@ export function useDefaultEngines(os: Platform | undefined, opened: boolean) {
         opened ? os : null,
         async (os: Platform) => {
             const bmi2: boolean = await commands.isBmi2Compatible();
-            const engines = await fetchCatalog<(LocalEngine & { os: Platform; bmi2: boolean })[]>(
-                `/engines.json?os=${os}&bmi2=${bmi2}`,
-            );
+            const engines = await loadEngineCatalog<
+                LocalEngine & { os: Platform; bmi2: boolean; downloadLink: string }
+            >(`?os=${os}&bmi2=${bmi2}`);
             return engines.filter((e) => e.os === os && e.bmi2 === bmi2);
         },
         CATALOG_SWR_OPTIONS,

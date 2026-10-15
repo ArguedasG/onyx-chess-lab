@@ -78,7 +78,9 @@ export default function OpeningReportLibraryModal({
         opened={selected !== null}
         onClose={() => setSelected(null)}
         title={t("OpeningReport.HistoricalSnapshot", "Saved historical snapshot (read-only).")}
-        size="calc(100vw - 3rem)"
+        // Width and Mantine's side gutter must add up to the window, or the close button is cut.
+        size="94vw"
+        xOffset="3vw"
       >
         <Alert color="gray" mb="md">
           {t(

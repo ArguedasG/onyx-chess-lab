@@ -37,6 +37,93 @@ export function openingNameLevels(name: string): string[] {
     return subvariation ? [family, variation, subvariation] : [family, variation];
 }
 
+/** Name of a level as a single string: "French Defense" or "French Defense: Advance Variation". */
+export function openingLevelKey(levels: readonly string[]): string {
+    if (levels.length <= 1) return levels[0] ?? "";
+    return `${levels[0]}: ${levels.slice(1).join(", ")}`;
+}
+
+/**
+ * Tree of a player's opening results: `groups` holds the exact results of each family and
+ * family + variation (see `PlayerMetadataAnalysis.openingGroups`), `leaves` those of each full
+ * name. Every node keeps its own result object, so no average is recomputed from other averages.
+ */
+export type OpeningTreeNode<T> = {
+    key: string;
+    label: string;
+    /** Results of all the games under this node. */
+    value: T;
+    /** Results of the games with exactly this name, when it is also a full opening name. */
+    own?: T;
+    children: OpeningTreeNode<T>[];
+};
+
+export function buildOpeningTree<T extends { key: string; games: number }>(
+    leaves: readonly T[],
+    groups: readonly T[],
+): OpeningTreeNode<T>[] {
+    const byKey = new Map(groups.map((value) => [value.key, value]));
+    const families = new Map<string, OpeningTreeNode<T>>();
+    const node = (key: string, label: string, value: T): OpeningTreeNode<T> => ({
+        key,
+        label,
+        value,
+        children: [],
+    });
+    for (const leaf of leaves) {
+        const levels = openingNameLevels(leaf.key);
+        if (levels.length === 0) continue;
+        const familyKey = openingLevelKey(levels.slice(0, 1));
+        // Names that are not "Family: Variation" (an unknown opening) are their own family.
+        const familyValue = byKey.get(familyKey) ?? (levels.length === 1 ? leaf : undefined);
+        if (!familyValue) continue;
+        let family = families.get(familyKey);
+        if (!family) {
+            family = node(familyKey, levels[0], familyValue);
+            families.set(familyKey, family);
+        }
+        if (levels.length === 1) {
+            family.own = leaf;
+            continue;
+        }
+        const variationKey = openingLevelKey(levels.slice(0, 2));
+        let variation = family.children.find((child) => child.key === variationKey);
+        if (!variation) {
+            variation = node(variationKey, levels[1], byKey.get(variationKey) ?? leaf);
+            family.children.push(variation);
+        }
+        if (levels.length === 2) variation.own = leaf;
+        else variation.children.push(node(leaf.key, levels[2], leaf));
+    }
+    const sort = (nodes: OpeningTreeNode<T>[]) => {
+        nodes.sort((a, b) => b.value.games - a.value.games || a.label.localeCompare(b.label));
+        for (const child of nodes) sort(child.children);
+        return nodes;
+    };
+    return sort([...families.values()]);
+}
+
+export type OpeningTreeRow<T> = { node: OpeningTreeNode<T>; depth: number; ownOnly?: boolean };
+
+/** Rows to show of the tree, descending only into expanded nodes (like `visibleOpeningRows`). */
+export function visibleOpeningTreeRows<T extends { games: number }>(
+    nodes: readonly OpeningTreeNode<T>[],
+    expanded: ReadonlySet<string>,
+): OpeningTreeRow<T>[] {
+    const rows: OpeningTreeRow<T>[] = [];
+    const visit = (level: readonly OpeningTreeNode<T>[], depth: number) => {
+        for (const node of level) {
+            rows.push({ node, depth });
+            if (node.children.length === 0 || !expanded.has(node.key)) continue;
+            if (node.own && node.own.games > 0)
+                rows.push({ node, depth: depth + 1, ownOnly: true });
+            visit(node.children, depth + 1);
+        }
+    };
+    visit(nodes, 0);
+    return rows;
+}
+
 type MutableNode = OpeningFamilyNode & { childMap: Map<string, MutableNode> };
 
 function emptyNode(key: string, label: string): MutableNode {

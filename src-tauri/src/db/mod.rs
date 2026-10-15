@@ -5,6 +5,7 @@ mod ops;
 mod player_search;
 mod position_query;
 mod quality;
+mod quality_scan;
 mod schema;
 mod search;
 mod search_index;
@@ -13,6 +14,7 @@ pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };
 pub use quality::get_database_quality;
+pub use quality_scan::{cancel_database_quality, get_database_quality_details};
 
 use crate::{
     db::{
@@ -228,7 +230,12 @@ fn mark_search_index_current(db_path: &Path) -> Result<(), Error> {
     if !MmapSearchIndex::is_valid(&index_path) {
         return Ok(());
     }
+    // Current indexes remember the database they were built from; record its new state.
+    if search_index::restamp(&index_path, &position_query::source_stamp(db_path)?)? {
+        return Ok(());
+    }
 
+    // Older indexes without a stamp compare modification times.
     let times = std::fs::FileTimes::new().set_modified(std::time::SystemTime::now());
     OpenOptions::new()
         .write(true)
@@ -1477,6 +1484,7 @@ pub async fn get_game_metadata(
         Option<String>,
         Option<String>,
         Option<String>,
+        Vec<u8>,
     );
     let rows: Vec<MetadataRow> = sql_query
         .select((
@@ -1501,12 +1509,14 @@ pub async fn get_game_metadata(
             black_players.field(players::name),
             events::name,
             sites::name,
+            // Only to name the opening: the encoded moves are read, not decoded into a PGN.
+            games::moves,
         ))
         .load(db)?;
 
     let data = rows
         .into_iter()
-        .map(|(core, white, black, event, site)| {
+        .map(|(core, white, black, event, site, moves)| {
             let (
                 id,
                 event_id,
@@ -1524,6 +1534,11 @@ pub async fn get_game_metadata(
                 ply_count,
                 fen,
             ) = core;
+            let start = fen
+                .as_deref()
+                .and_then(|fen| Fen::from_ascii(fen.as_bytes()).ok())
+                .unwrap_or_default();
+            let opening = opening_from_encoded_moves(&moves, &start);
             GameMetadata {
                 id,
                 fen: fen.unwrap_or_else(|| Fen::default().to_string()),
@@ -1542,9 +1557,9 @@ pub async fn get_game_metadata(
                 black_elo,
                 result: Outcome::from_str(result.as_deref().unwrap_or_default())
                     .unwrap_or_default(),
+                opening,
                 time_control,
                 eco,
-                opening: None,
                 ply_count,
             }
         })
@@ -2004,7 +2019,16 @@ pub async fn get_players_game_info(
         .map(|((site, player), data)| SiteStatsData { site, player, data })
         .collect();
 
-    println!("get_players_game_info {:?}: {:?}", file, timer.elapsed());
+    // Logged for the performance budget (I-54): opening a player card.
+    info!(
+        "player card: {} games of player {id} in {} ms",
+        game_info
+            .site_stats_data
+            .iter()
+            .map(|site| site.data.len())
+            .sum::<usize>(),
+        timer.elapsed().as_millis()
+    );
 
     Ok(game_info)
 }
@@ -2286,8 +2310,32 @@ pub async fn write_db_game(
         .flatten();
     let temp_game = parsed.next().ok_or(Error::NoMovesFound)?;
 
-    invalidate_search_index(&state, &file)?;
     let db = &mut get_db_or_create(&state, file.to_str().unwrap(), ConnectionOptions::default())?;
+    // What the position index stores of this game, to know afterwards whether it must be rebuilt.
+    type IndexedFields = (
+        i32,
+        i32,
+        Option<String>,
+        Option<String>,
+        Option<i32>,
+        Option<i32>,
+        Option<String>,
+        Vec<u8>,
+    );
+    let before: Option<IndexedFields> = games::table
+        .filter(games::id.eq(game_id))
+        .select((
+            games::white_id,
+            games::black_id,
+            games::date,
+            games::result,
+            games::white_elo,
+            games::black_elo,
+            games::fen,
+            games::moves,
+        ))
+        .first(db)
+        .optional()?;
 
     let white_id = if let Some(name) = temp_game.white_name.as_deref() {
         create_player(db, name)?.id
@@ -2341,6 +2389,43 @@ pub async fn write_db_game(
 
     if updated_rows == 0 {
         return Err(Error::GameNotFound(game_id.to_string()));
+    }
+
+    // Saving a game from a large base used to delete its whole position index (minutes to
+    // rebuild on 10 M games) even when only comments changed. The index is kept when the players,
+    // date, result, ratings, start position and main line are the same.
+    let after: Option<IndexedFields> = games::table
+        .filter(games::id.eq(game_id))
+        .select((
+            games::white_id,
+            games::black_id,
+            games::date,
+            games::result,
+            games::white_elo,
+            games::black_elo,
+            games::fen,
+            games::moves,
+        ))
+        .first(db)
+        .optional()?;
+    let index_unchanged = match (&before, &after) {
+        (Some(before), Some(after)) => {
+            before.0 == after.0
+                && before.1 == after.1
+                && before.2 == after.2
+                && before.3 == after.3
+                && before.4 == after.4
+                && before.5 == after.5
+                && before.6 == after.6
+                && iter_mainline_move_bytes(&before.7).eq(iter_mainline_move_bytes(&after.7))
+        }
+        _ => false,
+    };
+    if index_unchanged {
+        clear_search_cache_for_db(&state, &file);
+        mark_search_index_current(&file)?;
+    } else {
+        invalidate_search_index(&state, &file)?;
     }
 
     Ok(())
@@ -2544,6 +2629,30 @@ mod tests {
             partial_database_path(&path),
             PathBuf::from("training.db3.partial")
         );
+    }
+
+    #[test]
+    fn stamped_indexes_survive_changes_that_do_not_touch_the_games() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("games.db3");
+        std::fs::write(&db_path, b"database-v1").unwrap();
+        let index_path = get_index_path(&db_path);
+        let stamp = position_query::source_stamp(&db_path).unwrap();
+        search_index::SearchIndexWriter::with_source(&index_path, &stamp)
+            .unwrap()
+            .finish()
+            .unwrap();
+        assert!(MmapSearchIndex::is_up_to_date(&db_path));
+
+        // A same-size change (a title, a comment) makes the index look stale…
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&db_path, b"database-v2").unwrap();
+        assert!(!MmapSearchIndex::is_up_to_date(&db_path));
+        // …until it is marked current, which rewrites the stamp in place.
+        mark_search_index_current(&db_path).unwrap();
+        assert!(MmapSearchIndex::is_up_to_date(&db_path));
+        assert!(MmapSearchIndex::is_valid(&index_path));
+        assert!(MmapSearchIndex::open(&index_path).is_ok());
     }
 
     #[test]

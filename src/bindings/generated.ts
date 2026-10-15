@@ -249,6 +249,45 @@ async getDatabaseQuality(file: string) : Promise<Result<DatabaseQualityReport, s
     else return { status: "error", error: e  as any };
 }
 },
+async getEngineBudget() : Promise<EngineBudget> {
+    return await TAURI_INVOKE("get_engine_budget");
+},
+/**
+ * Startup of this session: milliseconds until the main window was shown, or null before that.
+ */
+async getStartupMs() : Promise<number | null> {
+    return await TAURI_INVOKE("get_startup_ms");
+},
+async getAnalysisCacheInfo() : Promise<Result<AnalysisCacheInfo, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_analysis_cache_info") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearAnalysisCache() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_analysis_cache") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Runs the complete report in the background; `id` names its progress events and cancellation.
+ */
+async getDatabaseQualityDetails(file: string, id: string) : Promise<Result<DatabaseQualityDetails, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_database_quality_details", { file, id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelDatabaseQuality(id: string) : Promise<void> {
+    await TAURI_INVOKE("cancel_database_quality", { id });
+},
 async clearGames() : Promise<void> {
     await TAURI_INVOKE("clear_games");
 },
@@ -918,6 +957,7 @@ export type AnalysisArtifactDocument = { summary: AnalysisArtifactSummary; versi
 export type AnalysisArtifactKind = "openingReport" | "playerProfile"
 export type AnalysisArtifactSummary = { id: string; kind: AnalysisArtifactKind; title: string; sourceLabel: string; createdAt: string; updatedAt: string; schemaVersion: number; versionCount: number }
 export type AnalysisArtifactVersion = { version: number; savedAt: string; payloadJson: string }
+export type AnalysisCacheInfo = { entries: number; bytes: bigint; maxEntries: number }
 export type AnalysisOptions = { fen: string; moves: string[]; annotateNovelties: boolean; referenceDb: string | null; reversed: boolean; 
 /**
  * PGN date of the analyzed game; only earlier database games count for its novelty.
@@ -926,7 +966,25 @@ gameDate?: string | null;
 /**
  * Players of the analyzed game, used to leave the game itself out when it has no date.
  */
-white?: string | null; black?: string | null }
+white?: string | null; black?: string | null; 
+/**
+ * Batch analyses wait for a slot of the engine budget and use its threads and hash.
+ */
+priority?: AnalysisPriority | null; 
+/**
+ * Reuse and store evaluations in the analysis cache (on unless `false`).
+ */
+useCache?: boolean | null; 
+/**
+ * Second, deeper pass only around the moves the first pass judged doubtful.
+ */
+refine?: GoMode | null; 
+/**
+ * Take the evaluations of the opening from the Lichess cloud when it has them (sends the
+ * positions to Lichess; off unless `true`).
+ */
+cloudOpenings?: boolean | null }
+export type AnalysisPriority = "interactive" | "batch"
 export type BestMoves = { nodes: number; depth: number; score: Score; uciMoves: string[]; sanMoves: string[]; multipv: number; nps: number }
 export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: string; fen: string; moves: string[]; progress: number }
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }
@@ -944,6 +1002,24 @@ export type BotLeagueSummary = { leagueId: string; ownerId: string; status: BotL
 export type ClockUpdateEvent = { gameId: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type DatabaseInfo = { title: string; description: string; player_count: number; event_count: number; game_count: number; storage_size: bigint; filename: string; indexed: boolean }
 export type DatabaseProgress = { id: string; progress: number }
+export type DatabaseQualityDetails = { games: number; 
+/**
+ * Extra copies of games with the same players, moves, event, site, round, date and time.
+ */
+exactDuplicates: number; 
+/**
+ * Extra copies of games with the same players and moves but other event, site, round or
+ * date: probably the same game imported from another source.
+ */
+probableDuplicates: number; 
+/**
+ * Players with an empty, placeholder or very short name, or digits in it.
+ */
+suspiciousNames: number; suspiciousNameExamples: string[]; 
+/**
+ * Players whose ratings differ by more than `ELO_SPREAD_LIMIT`.
+ */
+inconsistentEloPlayers: number; inconsistentEloExamples: string[] }
 export type DatabaseQualityReport = { games: bigint; 
 /**
  * No moves at all.
@@ -977,6 +1053,7 @@ implausibleElo: bigint;
  * Starts from a custom position (FEN tag): not standard chess from the initial position.
  */
 customStart: bigint }
+export type DepthTime = { depth: number; time: number }
 export type DrawReason = "stalemate" | "insufficientMaterial" | "threefoldRepetition" | "fiftyMoveRule" | "agreement"
 export type EmpiricalWdlCalibration = { meanAbsoluteError: number; brierScore: number }
 export type EmpiricalWdlEvaluator = { engine: string; engineArgs: string[]; goMode: GoMode; uciOptions: EngineOption[] }
@@ -984,6 +1061,19 @@ export type EmpiricalWdlInterval = { lower: number; upper: number }
 export type EmpiricalWdlObserved = { sampleSize: number; whiteWins: number; draws: number; blackWins: number; whiteWin: number; draw: number; blackWin: number; whiteWinInterval: EmpiricalWdlInterval; drawInterval: EmpiricalWdlInterval; blackWinInterval: EmpiricalWdlInterval }
 export type EmpiricalWdlPrediction = { whiteWin: number; draw: number; blackWin: number; rawWhiteWin: number; rawDraw: number; rawBlackWin: number }
 export type EmpiricalWdlResult = { schemaVersion: number; experimentId: string; analyzedAt: string; initialFen: string; initialMoves: string[]; evaluator: EmpiricalWdlEvaluator; prediction: EmpiricalWdlPrediction; observed: EmpiricalWdlObserved; calibration: EmpiricalWdlCalibration }
+export type EngineBudget = { logicalCores: number; physicalCores: number; totalMemoryMb: bigint; 
+/**
+ * Engine processes that batch analyses may run at the same time.
+ */
+batchProcesses: number; 
+/**
+ * `Threads` of each batch engine.
+ */
+threadsPerProcess: number; 
+/**
+ * `Hash` (MB) of each batch engine.
+ */
+hashMbPerProcess: number }
 export type EngineConfig = { name: string; options: UciOptionConfig[] }
 export type EngineLaunchMetadata = { path: string; resolvedArgs: string[]; randomSeed: number | null; appliedOptions: EngineOption[]; skippedUnsupportedOptions: string[] }
 export type EngineLog = { type: "gui"; value: string } | { type: "engine"; value: string }
@@ -1012,7 +1102,11 @@ export type GameResult = { type: "whiteWins"; reason: GameEndReason } | { type: 
 export type GameSort = "id" | "date" | "whiteElo" | "blackElo" | "ply_count"
 export type GameState = { gameId: string; status: GameStatus; initialFen: string; moves: GameMove[]; currentFen: string; ply: number; turn: string; whiteTime: bigint | null; blackTime: bigint | null; whitePlayer: string; blackPlayer: string }
 export type GameStatus = "playing" | { finished: { result: GameResult } }
-export type GoMode = { t: "PlayersTime"; c: PlayersTime } | { t: "Depth"; c: number } | { t: "Time"; c: number } | { t: "Nodes"; c: number } | { t: "Infinite" }
+export type GoMode = { t: "PlayersTime"; c: PlayersTime } | { t: "Depth"; c: number } | { t: "Time"; c: number } | { t: "Nodes"; c: number } | { t: "Infinite" } | 
+/**
+ * Target depth with a time cap: easy positions finish early, hard ones stop at `time` ms.
+ */
+{ t: "DepthTime"; c: DepthTime }
 export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: number; maxThinkTimeMs: number; repertoireTimePercent: number }
 export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
 export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
@@ -1074,7 +1168,19 @@ export type ReportMoveCell = { move: string; year: number | null;
 /**
  * Index into `elo_bands`; `None` when either rating is missing.
  */
-band: number | null; results: ReportResults }
+band: number | null; results: ReportResults; 
+/**
+ * Games with both ratings and a known result: the base of `expected_white`/`score_white`.
+ */
+ratedGames: number; 
+/**
+ * Sum of White's expected score from the Elo difference over `rated_games`.
+ */
+expectedWhite: number; 
+/**
+ * Sum of White's actual score (1, ½, 0) over `rated_games`.
+ */
+scoreWhite: number }
 export type ReportMoveOrder = { startFen: string; moves: string[]; statistics: ReportStatistics; exampleOffset: number }
 export type ReportPlayer = { id: number; name: string; games: number; whiteGames: number; blackGames: number; wins: number; draws: number; losses: number; unknown: number; averageElo: number | null; peakElo: number | null; 
 /**

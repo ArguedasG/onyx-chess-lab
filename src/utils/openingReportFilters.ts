@@ -65,15 +65,53 @@ export function reportYearRange(report: OpeningReport): [number, number] | null 
     return years.length ? [Math.min(...years), Math.max(...years)] : null;
 }
 
-export type MoveRow = { move: string; results: ReportResults };
+/** Rated games of a continuation and White's expected and actual score over them (sums). */
+export type RatedSums = { games: number; expectedWhite: number; scoreWhite: number };
+
+export type MoveRow = { move: string; results: ReportResults; rated?: RatedSums };
+
+/** Fewest rated games before a performance against the Elo expectation is shown. */
+export const MIN_PERFORMANCE_GAMES = 10;
+
+/** Rated sums per continuation under the filter. Reports saved before version 5 have none. */
+function ratedByMove(report: OpeningReport, filter: ReportCellFilter) {
+    const byMove = new Map<string, RatedSums>();
+    for (const cell of reportCells(report)) {
+        if (!matches(cell, filter) || !cell.ratedGames) continue;
+        const sums = byMove.get(cell.move) ?? { games: 0, expectedWhite: 0, scoreWhite: 0 };
+        sums.games += cell.ratedGames;
+        sums.expectedWhite += cell.expectedWhite;
+        sums.scoreWhite += cell.scoreWhite;
+        byMove.set(cell.move, sums);
+    }
+    return byMove;
+}
+
+/**
+ * Score of the side choosing the move against the score its Elo difference predicts, both in %.
+ * Discounts that a move is mostly played by the stronger side. Null below `MIN_PERFORMANCE_GAMES`.
+ */
+export function moverPerformance(rated: RatedSums | undefined, moverIsWhite: boolean) {
+    if (!rated || rated.games < MIN_PERFORMANCE_GAMES) return null;
+    const score = moverIsWhite ? rated.scoreWhite : rated.games - rated.scoreWhite;
+    const expected = moverIsWhite ? rated.expectedWhite : rated.games - rated.expectedWhite;
+    return {
+        games: rated.games,
+        score: (score / rated.games) * 100,
+        expected: (expected / rated.games) * 100,
+        delta: ((score - expected) / rated.games) * 100,
+    };
+}
 
 /** Continuations under the filter, most played first. Unfiltered uses the complete list. */
 export function filteredMoves(report: OpeningReport, filter: ReportCellFilter): MoveRow[] {
     let rows: MoveRow[];
+    const rated = ratedByMove(report, filter);
     if (!isFiltered(filter) || !canFilterReport(report)) {
         rows = report.position.openings.map(({ move, white, draw, black, unknown }) => ({
             move,
             results: { white, draw, black, unknown },
+            rated: rated.get(move),
         }));
     } else {
         const byMove = new Map<string, ReportResults>();
@@ -83,7 +121,7 @@ export function filteredMoves(report: OpeningReport, filter: ReportCellFilter): 
             addResults(results, cell.results);
             byMove.set(cell.move, results);
         }
-        rows = [...byMove].map(([move, results]) => ({ move, results }));
+        rows = [...byMove].map(([move, results]) => ({ move, results, rated: rated.get(move) }));
     }
     return rows
         .filter((row) => reportGames(row.results) > 0)
@@ -188,6 +226,55 @@ export function trendSeries(
         });
     }
     return { years, moves, share, score };
+}
+
+/** Recent years compared with the earlier ones in `moveTrends`. */
+export const TREND_RECENT_YEARS = 3;
+/** Fewest games in each period, and the share change in points, before a trend is marked. */
+export const MIN_TREND_PERIOD_GAMES = 30;
+export const TREND_SHARE_POINTS = 5;
+
+export type MoveTrend = { direction: "up" | "down"; recentShare: number; earlierShare: number };
+
+/**
+ * Whether each continuation is gaining or losing popularity: its share of the position's games in
+ * the last `TREND_RECENT_YEARS` dated years against its share before them. Only marked when both
+ * periods have enough games and the change is at least `TREND_SHARE_POINTS`.
+ */
+export function moveTrends(report: OpeningReport, filter: ReportCellFilter) {
+    const trends = new Map<string, MoveTrend>();
+    const cells = reportCells(report).filter((cell) => cell.year !== null && matches(cell, filter));
+    if (!cells.length) return trends;
+    const firstRecent = Math.max(...cells.map((cell) => cell.year!)) - TREND_RECENT_YEARS + 1;
+    let recentTotal = 0;
+    let earlierTotal = 0;
+    const byMove = new Map<string, { recent: number; earlier: number }>();
+    for (const cell of cells) {
+        const games = reportGames(cell.results);
+        const counts = byMove.get(cell.move) ?? { recent: 0, earlier: 0 };
+        if (cell.year! >= firstRecent) {
+            counts.recent += games;
+            recentTotal += games;
+        } else {
+            counts.earlier += games;
+            earlierTotal += games;
+        }
+        byMove.set(cell.move, counts);
+    }
+    if (recentTotal < MIN_TREND_PERIOD_GAMES || earlierTotal < MIN_TREND_PERIOD_GAMES)
+        return trends;
+    for (const [move, counts] of byMove) {
+        if (move === "*") continue;
+        const recentShare = (counts.recent / recentTotal) * 100;
+        const earlierShare = (counts.earlier / earlierTotal) * 100;
+        if (Math.abs(recentShare - earlierShare) < TREND_SHARE_POINTS) continue;
+        trends.set(move, {
+            direction: recentShare > earlierShare ? "up" : "down",
+            recentShare,
+            earlierShare,
+        });
+    }
+    return trends;
 }
 
 /** Score of the side to move (who chooses the continuation), or null without known results. */

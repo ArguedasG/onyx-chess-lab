@@ -12,6 +12,7 @@ import {
     selectPlayerEngineGames,
     type PlayerAnalysisGame,
     type PlayerAnalysisSource,
+    winChanceClassification,
 } from "./playerAnalysis";
 
 describe("clock coverage levels", () => {
@@ -126,6 +127,29 @@ describe("player metadata analysis", () => {
         );
 
         expect(report.openings[0].key).toBe("Caro-Kann Defense");
+    });
+
+    it("groups the games by opening family and variation with their own results", () => {
+        const opening = (id: number, name: string, result: "1-0" | "0-1") =>
+            game(id, { white: "Player", black: "Opponent", result, eco: null, opening: name });
+        const report = analyzePlayerGames(
+            "Player",
+            [
+                opening(1, "French Defense: Advance Variation, Milner-Barry Gambit", "1-0"),
+                opening(2, "French Defence: Advance Variation", "0-1"),
+                opening(3, "French Defense", "1-0"),
+                opening(4, "English Opening", "1-0"),
+            ],
+            [source],
+        );
+        const groups = Object.fromEntries(
+            (report.openingGroups ?? []).map((group) => [group.key, [group.games, group.wins]]),
+        );
+        expect(groups).toEqual({
+            "French Defense": [3, 2],
+            "French Defense: Advance Variation": [2, 1],
+            "English Opening": [1, 1],
+        });
     });
 
     it("selects either the requested newest games or the complete filtered sample", () => {
@@ -337,5 +361,19 @@ describe("player engine analysis", () => {
             lowTimeMoves: 10,
             criticalErrorsInLowTime: 10,
         });
+    });
+});
+
+describe("win-chance classification", () => {
+    const cp = (value: number) => ({ type: "cp" as const, value });
+
+    it("judges a move by the winning chances it loses, not by centipawns", () => {
+        // From 0.00 to -1.50: about 13.5 points of winning chances, a mistake.
+        expect(winChanceClassification(cp(0), cp(-150), "white")).toBe("mistake");
+        // From +8 to +5 is three pawns, yet the game stays won: only an inaccuracy.
+        expect(winChanceClassification(cp(800), cp(500), "white")).toBe("inaccuracy");
+        // Scores are from White's side; for Black the same drop is seen reversed.
+        expect(winChanceClassification(cp(0), cp(400), "black")).toBe("blunder");
+        expect(winChanceClassification(cp(30), cp(10), "white")).toBeNull();
     });
 });

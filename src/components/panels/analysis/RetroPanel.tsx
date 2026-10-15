@@ -12,7 +12,8 @@ import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
-import { retroRunsOn, samePath } from "@/utils/retro";
+import { retroExplanation, retroRunsOn, samePath } from "@/utils/retro";
+import MistakeExplanation from "./MistakeExplanation";
 import { useRetroActions } from "./useRetro";
 
 /** "Learn from your mistakes" for the analysed game, after the report. */
@@ -149,6 +150,12 @@ export default function RetroPanel({
                     {t("Board.Retro.EngineBest", { move: item.best.san })}
                   </Text>
                 )}
+                <MistakeExplanation
+                  sentences={retroExplanation(retro).filter(
+                    // The alert above already names the engine's best move.
+                    (sentence) => !sentence.key.startsWith("Explain.Best"),
+                  )}
+                />
               </Alert>
             )}
             {retro.phase === "wrong" && (
@@ -165,6 +172,11 @@ export default function RetroPanel({
             {retro.phase === "solution" && item.best && (
               <Alert color="blue" icon={<IconBulb size={18} />} p="xs">
                 {t("Board.Retro.Solution", { move: item.best.san })}
+                <MistakeExplanation
+                  sentences={retroExplanation(retro).filter(
+                    (sentence) => !sentence.key.startsWith("Explain.Best"),
+                  )}
+                />
               </Alert>
             )}
 

@@ -29,6 +29,7 @@ import {
   canFilterReport,
   filteredBands,
   filteredMoves,
+  moveTrends,
   filteredTotal,
   isFiltered,
   moverScore,
@@ -86,6 +87,7 @@ export default function OpeningReportView({
   const canFilter = canFilterReport(report);
   const yearRange = useMemo(() => reportYearRange(report), [report]);
   const rows = useMemo(() => filteredMoves(report, filter), [report, filter]);
+  const trends = useMemo(() => moveTrends(report, filter), [report, filter]);
   const total = useMemo(() => filteredTotal(report, filter), [report, filter]);
   const bands = useMemo(() => filteredBands(report, filter), [report, filter]);
   // The time axis already shows every period, so trends only follow the rating class.
@@ -199,6 +201,7 @@ export default function OpeningReportView({
               <div className={classes.sectionTitle}>{t("OpeningReport.Continuations")}</div>
               <MovesTable
                 rows={rows}
+                trends={trends}
                 moverIsWhite={moverIsWhite}
                 readOnly={readOnly}
                 onMove={(move) => onVariant([move])}

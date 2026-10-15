@@ -74,11 +74,15 @@ pub fn get_opening_from_fens(fens: Vec<String>) -> Result<String, Error> {
 }
 
 pub fn get_opening_from_setup(setup: Setup) -> Result<String, Error> {
-    OPENINGS
-        .iter()
-        .find(|o| o.setup == setup)
-        .map(|o| o.name.clone())
+    OPENING_BY_SETUP
+        .get(&setup_key(setup))
+        .map(|&index| OPENINGS[index].name.clone())
         .ok_or_else(|| Error::NoOpeningFound)
+}
+
+/// The complete FEN of a setup: equal FENs are equal setups.
+fn setup_key(setup: Setup) -> String {
+    Fen::from_setup(setup).to_string()
 }
 
 #[tauri::command]
@@ -165,6 +169,16 @@ lazy_static! {
             });
         }
         positions
+    };
+
+    /// First opening of each setup, so naming a position is a lookup instead of a scan of the
+    /// table (it runs for every ply of every game listed).
+    static ref OPENING_BY_SETUP: std::collections::HashMap<String, usize> = {
+        let mut index = std::collections::HashMap::with_capacity(OPENINGS.len());
+        for (position, opening) in OPENINGS.iter().enumerate() {
+            index.entry(setup_key(opening.setup.clone())).or_insert(position);
+        }
+        index
     };
 }
 

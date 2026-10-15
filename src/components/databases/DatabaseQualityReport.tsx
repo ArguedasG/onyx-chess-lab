@@ -3,6 +3,7 @@ import { IconChecklist } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, type DatabaseQualityReport as Report } from "@/bindings";
+import DatabaseQualityDetails from "./DatabaseQualityDetails";
 
 type CheckKey = Exclude<keyof Report, "games">;
 
@@ -122,6 +123,7 @@ export default function DatabaseQualityReport({ file }: { file: string }) {
           </Table.Caption>
         </Table>
       )}
+      <DatabaseQualityDetails file={file} />
     </Stack>
   );
 }

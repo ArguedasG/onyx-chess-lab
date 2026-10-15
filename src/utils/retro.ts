@@ -4,6 +4,13 @@ import type { ScoreValue } from "@/bindings";
 import { positionFromFen } from "./chessops";
 import { type Engine, getBestMovesOnce, type LocalEngine } from "./engines";
 import { isMaiaEngine } from "./humanBots";
+import {
+    type EngineLine,
+    explainMistake,
+    fenAfterMove,
+    type MistakeFacts,
+    mistakeShapes,
+} from "./moveExplanation";
 import { getWinChance, normalizeScore } from "./score";
 import { getNodeAtPath, type TreeNode } from "./treeReducer";
 
@@ -24,6 +31,8 @@ export type RetroItem = {
     annotation: "?" | "??";
     /** Engine's best move from the parent position, filled in on first use. */
     best?: RetroBest;
+    /** Engine's best line after the mistake (how it is punished), filled in once revealed. */
+    refutation?: EngineLine;
 };
 
 export type RetroPhase = "find" | "evaluating" | "correct" | "wrong" | "solution" | "done";
@@ -139,6 +148,44 @@ export async function judgeRetroMove(
     return { correct, feedback: correct ? null : "worse", best };
 }
 
+/** The opponent's best line after the mistake, used to explain what it allowed. */
+export async function findRetroRefutation(engine: LocalEngine, item: RetroItem) {
+    const fen = fenAfterMove(item.fen, item.uci);
+    if (!fen) return undefined;
+    const [line] = await getBestMovesOnce(
+        engine,
+        { t: "Depth", c: 16 },
+        { fen, moves: [], extraOptions: [{ name: "MultiPV", value: "1" }] },
+        15_000,
+    );
+    if (!line || line.uciMoves.length === 0) return undefined;
+    return {
+        uci: line.uciMoves.slice(0, 8),
+        san: line.sanMoves.slice(0, 8),
+        score: line.score.value,
+    } satisfies EngineLine;
+}
+
+/** The facts the explanation and the arrows are built from. */
+export function retroFacts(item: RetroItem, color: Color): MistakeFacts {
+    return {
+        fen: item.fen,
+        played: { uci: item.uci, san: item.san },
+        color,
+        best: item.best
+            ? { uci: [item.best.uci], san: [item.best.san], score: item.best.score }
+            : undefined,
+        refutation: item.refutation,
+    };
+}
+
+/** Sentences explaining the current mistake once the answer is known. */
+export function retroExplanation(state: RetroState) {
+    const item = state.items[state.index];
+    if (!item || (state.phase !== "correct" && state.phase !== "solution")) return [];
+    return explainMistake(retroFacts(item, state.color));
+}
+
 function arrow(uci: string, brush: string): DrawShape[] {
     const move = parseUci(uci);
     if (!move || !("from" in move)) return [];
@@ -153,11 +200,15 @@ export function retroShapes(state: RetroState): DrawShape[] {
         case "evaluating":
             return state.attempt ? arrow(state.attempt.uci, "blue") : [];
         case "correct":
-            return state.attempt ? arrow(state.attempt.uci, "green") : [];
+            // The answer, the mistake in red and what the mistake lost.
+            return [
+                ...(state.attempt ? arrow(state.attempt.uci, "green") : []),
+                ...mistakeShapes({ ...retroFacts(item, state.color), best: undefined }),
+            ];
         case "wrong":
             return state.attempt ? arrow(state.attempt.uci, "red") : [];
         case "solution":
-            return item.best ? arrow(item.best.uci, "green") : [];
+            return mistakeShapes(retroFacts(item, state.color));
         default:
             return [];
     }

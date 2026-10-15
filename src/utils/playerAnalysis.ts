@@ -1,6 +1,7 @@
-import type { GameMetadata, MoveAnalysis } from "@/bindings";
-import { getCPLoss, normalizeScore } from "@/utils/score";
+import type { GameMetadata, MoveAnalysis, ScoreValue } from "@/bindings";
+import { getCPLoss, getWinChance, normalizeScore } from "@/utils/score";
 import { positionFromFen } from "@/utils/chessops";
+import { openingLevelKey, openingNameLevels } from "@/utils/openingFamilies";
 import { getTimeControl } from "@/utils/timeControl";
 
 export const PLAYER_ANALYSIS_SCHEMA_VERSION = 3;
@@ -85,6 +86,12 @@ export type PlayerMetadataAnalysis = {
     byOpponentRating: PlayerAnalysisBucket[];
     byRatingDifference: PlayerAnalysisBucket[];
     openings: PlayerAnalysisBucket[];
+    /**
+     * The same games grouped by opening family ("French Defense") and by family and variation
+     * ("French Defense: Advance Variation"), so every level of the opening tree has exact results.
+     * Missing in profiles generated before it existed.
+     */
+    openingGroups?: PlayerAnalysisBucket[];
     opponents: PlayerAnalysisBucket[];
     byYear: PlayerAnalysisBucket[];
     findings: PlayerAnalysisFinding[];
@@ -495,6 +502,17 @@ export function analyzePlayerGames(
         filtered,
         (game) => game.game.opening || game.game.eco || "Unknown opening",
     );
+    const openingName = (game: PlayerAnalysisGame) => game.game.opening || game.game.eco || "";
+    const levelKey = (game: PlayerAnalysisGame, depth: number) => {
+        const levels = openingNameLevels(openingName(game));
+        return levels.length >= depth ? openingLevelKey(levels.slice(0, depth)) : null;
+    };
+    const openingGroups = [1, 2].flatMap((depth) =>
+        group(
+            filtered.filter((game) => levelKey(game, depth) !== null),
+            (game) => levelKey(game, depth)!,
+        ),
+    );
     const opponents = group(filtered, (_game, view) => view.opponent || "Unknown opponent");
     const byYear = group(filtered, (game) => game.game.date?.slice(0, 4) || "unknown");
     const summary = bucket("all", filtered);
@@ -511,6 +529,7 @@ export function analyzePlayerGames(
         byOpponentRating,
         byRatingDifference,
         openings,
+        openingGroups,
         opponents,
         byYear,
         findings: buildFindings(summary, byColor, byTimeControl, openings, byRatingDifference),
@@ -526,10 +545,26 @@ function classifyPhase(fen: string, ply: number): PlayerAnalysisPhase {
     return "middlegame";
 }
 
-function classification(loss: number): PlayerAnalysisClassification | null {
-    if (loss >= 200) return "blunder";
-    if (loss >= 100) return "mistake";
-    if (loss >= 40) return "inaccuracy";
+/**
+ * Version of the move classification, part of the stored engine limit so results classified
+ * another way are recalculated (the analysis cache makes that cheap).
+ */
+export const PLAYER_ANALYSIS_CLASSIFICATION = "winchance-v1";
+
+/**
+ * Same thresholds as the game report: points of winning chances lost by the move (5, 10, 20), so
+ * a slip at +8 is not judged like one at 0.00. The centipawn loss is kept for the ACPL.
+ */
+export function winChanceClassification(
+    before: ScoreValue,
+    after: ScoreValue,
+    turn: "white" | "black",
+): PlayerAnalysisClassification | null {
+    const loss =
+        getWinChance(normalizeScore(before, turn)) - getWinChance(normalizeScore(after, turn));
+    if (loss > 20) return "blunder";
+    if (loss > 10) return "mistake";
+    if (loss > 5) return "inaccuracy";
     return null;
 }
 
@@ -542,7 +577,11 @@ export function buildEngineGameMetrics(input: {
     clockSeconds?: Array<number | null>;
 }): PlayerEngineGameMetrics {
     const { item, uciMoves, preMoveFens, analysis } = input;
-    const losses: Array<{ loss: number; phase: PlayerAnalysisPhase }> = [];
+    const losses: Array<{
+        loss: number;
+        phase: PlayerAnalysisPhase;
+        label: PlayerAnalysisClassification | null;
+    }> = [];
     const criticalPositions: PlayerAnalysisCriticalPosition[] = [];
     let hadAdvantage = false;
     let wasInferior = false;
@@ -587,8 +626,12 @@ export function buildEngineGameMetrics(input: {
             position.turn,
         );
         const phase = classifyPhase(preFen, ply);
-        losses.push({ loss, phase });
-        const label = classification(loss);
+        const label = winChanceClassification(
+            analysis[ply].best[0].score.value,
+            analysis[ply + 1].best[0].score.value,
+            position.turn,
+        );
+        losses.push({ loss, phase, label });
         if (label) {
             if (currentClock != null && currentClock <= 30) criticalErrorsInLowTime += 1;
             const postMoveFen = preMoveFens[ply + 1];
@@ -616,9 +659,9 @@ export function buildEngineGameMetrics(input: {
         acpl: values.length
             ? values.reduce((sum, value) => sum + value.loss, 0) / values.length
             : null,
-        inaccuracies: values.filter((value) => value.loss >= 40 && value.loss < 100).length,
-        mistakes: values.filter((value) => value.loss >= 100 && value.loss < 200).length,
-        blunders: values.filter((value) => value.loss >= 200).length,
+        inaccuracies: values.filter((value) => value.label === "inaccuracy").length,
+        mistakes: values.filter((value) => value.label === "mistake").length,
+        blunders: values.filter((value) => value.label === "blunder").length,
     });
     return {
         key: item.key,

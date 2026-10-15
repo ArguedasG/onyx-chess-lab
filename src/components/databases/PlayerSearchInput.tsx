@@ -1,6 +1,6 @@
 import { Autocomplete } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { commands, type Player } from "@/bindings";
 import { query_players } from "@/utils/db";
 import { unwrap } from "@/utils/unwrap";
@@ -20,6 +20,8 @@ export function PlayerSearchInput({
 }) {
   const [tempValue, setTempValue] = useState("");
   const [data, setData] = useState<Player[]>([]);
+  // Only the latest search may replace the suggestions; slower earlier ones arrive late.
+  const latestSearch = useRef(0);
 
   useEffect(() => {
     if (value !== undefined) {
@@ -44,6 +46,7 @@ export function PlayerSearchInput({
       setValue(player.id);
     }
 
+    const search = ++latestSearch.current;
     const res = await query_players(file, {
       name: val,
       options: {
@@ -55,12 +58,15 @@ export function PlayerSearchInput({
         direction: "desc",
       },
     });
-    setData(res.data);
+    if (search === latestSearch.current) setData(res.data);
   }
   return (
     <Autocomplete
       value={tempValue}
-      data={data.map((player) => player.name!)}
+      // Names are unique options; the backend already matched the words in any order and
+      // without accents, so the input's own substring filter would hide those matches.
+      data={[...new Set(data.flatMap((player) => (player.name ? [player.name] : [])))]}
+      filter={({ options }) => options}
       onChange={handleChange}
       rightSection={rightSection}
       leftSection={<IconSearch size="1rem" />}

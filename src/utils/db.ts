@@ -13,7 +13,8 @@ import {
 } from "@/bindings";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
 import { getDatabasesDir } from "@/utils/directories";
-import { CATALOG_SWR_OPTIONS, fetchCatalog } from "@/utils/http";
+import { loadDatabaseCatalog, loadPuzzleDatabaseCatalog } from "@/utils/catalog";
+import { CATALOG_SWR_OPTIONS } from "@/utils/http";
 import { unwrap } from "./unwrap";
 
 export type SuccessDatabaseInfo = Extract<DatabaseInfo, { type: "success" }>;
@@ -141,7 +142,7 @@ async function getDatabase(name: string): Promise<DatabaseInfo> {
 export function useDefaultDatabases(opened: boolean) {
     const { data, error, isLoading, mutate } = useSWR(
         opened ? "default-dbs" : null,
-        () => fetchCatalog<SuccessDatabaseInfo[]>("/databases.json"),
+        () => loadDatabaseCatalog<SuccessDatabaseInfo & { downloadLink: string }>(),
         CATALOG_SWR_OPTIONS,
     );
     return {
@@ -156,9 +157,7 @@ export function useDefaultDatabases(opened: boolean) {
 export async function getDefaultPuzzleDatabases(): Promise<
     (PuzzleDatabaseInfo & { downloadLink: string })[]
 > {
-    return fetchCatalog<(PuzzleDatabaseInfo & { downloadLink: string })[]>(
-        "/puzzle_databases.json",
-    );
+    return loadPuzzleDatabaseCatalog<PuzzleDatabaseInfo & { downloadLink: string }>();
 }
 
 export interface Opening {

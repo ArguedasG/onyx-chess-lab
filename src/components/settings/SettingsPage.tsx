@@ -65,6 +65,7 @@ import {
 import { keyMapAtom } from "@/state/keybinds";
 import { disableTelemetry, enableTelemetry } from "@/utils/telemetry";
 import FileInput from "../common/FileInput";
+import AnalysisCacheSetting from "./AnalysisCacheSetting";
 import BoardSelect from "./BoardSelect";
 import ColorControl from "./ColorControl";
 import FontSizeSlider from "./FontSizeSlider";
@@ -635,6 +636,17 @@ export default function Page() {
             filename={puzzlesDirectory || null}
           />
         ),
+      },
+      {
+        id: "analysis-cache",
+        category: "directories",
+        title: t("Settings.AnalysisCache", "Analysis cache"),
+        description: t(
+          "Settings.AnalysisCache.Desc",
+          "Engine evaluations saved per position, so a position already analyzed with the same engine and limit is not analyzed again. Kept in its own file and limited to 200,000 positions.",
+        ),
+        keywords: ["cache", "engine", "analysis", "evaluation"],
+        render: () => <AnalysisCacheSetting />,
       },
       // Privacy settings
       {

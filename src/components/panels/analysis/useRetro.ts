@@ -8,6 +8,7 @@ import { currentTabAtom, enableAllAtom, enginesAtom, retroFamily } from "@/state
 import {
     collectRetroMistakes,
     findRetroBest,
+    findRetroRefutation,
     judgeRetroMove,
     newRetroState,
     pickReferenceEngine,
@@ -28,6 +29,36 @@ const parentPath = (retro: RetroState) => retro.items[retro.index]?.path.slice(0
  * Board side of "learn from your mistakes": while the board shows the current exercise,
  * moves are judged by the engine instead of being added to the game.
  */
+/**
+ * Once an exercise is answered, looks up how the original mistake is punished so the panel can
+ * explain it and the board can show it. Failures only leave the explanation shorter.
+ */
+function useRetroRefutation() {
+    const [, setRetro] = useCurrentRetro();
+    const storedEngines = useAtomValue(enginesAtom);
+    return useCallback(
+        async (state: RetroState, index: number) => {
+            const item = state.items[index];
+            const engine = pickReferenceEngine(storedEngines ?? []);
+            if (!item || item.refutation || !engine) return;
+            try {
+                const refutation = await findRetroRefutation(engine, item);
+                if (!refutation) return;
+                setRetro((current) => {
+                    if (!current || !samePath(current.items[index]?.path ?? [], item.path))
+                        return current;
+                    const items = [...current.items];
+                    items[index] = { ...items[index], refutation };
+                    return { ...current, items };
+                });
+            } catch {
+                // The explanation simply leaves out what the mistake allowed.
+            }
+        },
+        [setRetro, storedEngines],
+    );
+}
+
 export function useRetroBoard() {
     const store = useContext(TreeStateContext)!;
     const position = useStore(store, (s) => s.position);
@@ -40,6 +71,7 @@ export function useRetroBoard() {
         () => (active && retro ? retroShapes(retro) : null),
         [active, retro],
     );
+    const loadRefutation = useRetroRefutation();
 
     const submit = useCallback(
         async (uci: string, san: string) => {
@@ -72,7 +104,10 @@ export function useRetroBoard() {
                     color: retro.color,
                     uci,
                 });
-                if (verdict.correct) playCorrectSound();
+                if (verdict.correct) {
+                    playCorrectSound();
+                    void loadRefutation(retro, index);
+                }
                 setRetro((current) => {
                     if (!current || current.index !== index) return current;
                     const items = [...current.items];
@@ -95,7 +130,7 @@ export function useRetroBoard() {
                 );
             }
         },
-        [item, retro, setRetro, storedEngines],
+        [item, loadRefutation, retro, setRetro, storedEngines],
     );
 
     return { active, shapes, submit };
@@ -108,6 +143,7 @@ export function useRetroActions() {
     const [retro, setRetro] = useCurrentRetro();
     const storedEngines = useAtomValue(enginesAtom);
     const enableAll = useSetAtom(enableAllAtom);
+    const loadRefutation = useRetroRefutation();
 
     const goToExercise = useCallback(
         (state: RetroState) => {
@@ -161,6 +197,7 @@ export function useRetroActions() {
                 results[index] ??= "failed";
                 return { ...current, items, results, phase: "solution", feedback: null };
             });
+        void loadRefutation(retro, index);
         if (item.best) {
             reveal();
             goToExercise(retro);
@@ -182,7 +219,7 @@ export function useRetroActions() {
                     : current,
             );
         }
-    }, [goToExercise, retro, setRetro, storedEngines]);
+    }, [goToExercise, loadRefutation, retro, setRetro, storedEngines]);
 
     return {
         retro,

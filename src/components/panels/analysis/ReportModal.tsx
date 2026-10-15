@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, Modal, NumberInput, Select, Stack } from "@mantine/core";
+import { Button, Checkbox, Group, Modal, NumberInput, Select, Stack, Text } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useAtom, useAtomValue } from "jotai";
@@ -10,12 +10,22 @@ import { enginesAtom, referenceDbAtom } from "@/state/atoms";
 import { updateTabTreeStore } from "@/state/store/tabTreeStores";
 import type { LocalEngine } from "@/utils/engines";
 
+type ReportGoMode = Exclude<GoMode, { t: "Infinite" }>;
+
+/** Deeper limit of the second pass, only around the doubtful moves. */
+const SECOND_PASS: GoMode = { t: "DepthTime", c: { depth: 22, time: 1500 } };
+// Measured in docs/engine-analysis-phase-8-2.es.md: more errors agree with a 2 s reference.
+const SECOND_PASS_DEFAULT = true;
+
 const reportSettingsAtom = atomWithStorage("report-settings", {
   novelty: true,
   reversed: true,
   variations: true,
-  goMode: { t: "Time", c: 500 } as Exclude<GoMode, { t: "Infinite" }>,
+  // With the second pass, 250 ms per move found as many errors as 500 ms without it, in half the time.
+  goMode: { t: "Time", c: 250 } as ReportGoMode,
   engine: "",
+  secondPass: SECOND_PASS_DEFAULT,
+  cloudOpenings: false,
 });
 
 /** Tabs with a report running in this window; the persisted inProgress flag can be stale. */
@@ -104,6 +114,8 @@ function ReportModal({
           gameDate: game.date,
           white: game.white,
           black: game.black,
+          refine: form.values.secondPass ? SECOND_PASS : null,
+          cloudOpenings: form.values.cloudOpenings,
         },
         engineSettings,
       )
@@ -168,25 +180,95 @@ function ReportModal({
                 { label: t("GoMode.Depth"), value: "Depth" },
                 { label: t("Board.Analysis.Time"), value: "Time" },
                 { label: t("GoMode.Nodes"), value: "Nodes" },
+                { label: t("GoMode.DepthTime", "Depth with a time cap"), value: "DepthTime" },
               ]}
               value={form.values.goMode.t}
               onChange={(v) => {
-                const newGo = form.values.goMode;
-                newGo.t = v as "Depth" | "Time" | "Nodes";
-                form.setFieldValue("goMode", newGo);
+                const current = form.values.goMode;
+                const value =
+                  current.t === "DepthTime"
+                    ? current.c.time
+                    : current.t === "PlayersTime"
+                      ? 500
+                      : current.c;
+                form.setFieldValue(
+                  "goMode",
+                  v === "DepthTime"
+                    ? // Measured in docs/engine-analysis-phase-8-2.es.md: as reliable as 500 ms, faster.
+                      { t: "DepthTime", c: { depth: 16, time: 500 } }
+                    : ({ t: v as "Depth" | "Time" | "Nodes", c: value } as ReportGoMode),
+                );
               }}
             />
-            <NumberInput
-              min={1}
-              value={form.values.goMode.c as number}
-              onChange={(v) =>
-                form.setFieldValue("goMode", {
-                  ...(form.values.goMode as any),
-                  c: (v || 1) as number,
-                })
-              }
-            />
+            {form.values.goMode.t === "DepthTime" ? (
+              <>
+                <NumberInput
+                  min={1}
+                  max={60}
+                  aria-label={t("GoMode.Depth")}
+                  value={form.values.goMode.c.depth}
+                  onChange={(v) =>
+                    form.values.goMode.t === "DepthTime" &&
+                    form.setFieldValue("goMode", {
+                      t: "DepthTime",
+                      c: { ...form.values.goMode.c, depth: Number(v) || 1 },
+                    })
+                  }
+                />
+                <NumberInput
+                  min={50}
+                  step={100}
+                  suffix=" ms"
+                  aria-label={t("Board.Analysis.Time")}
+                  value={form.values.goMode.c.time}
+                  onChange={(v) =>
+                    form.values.goMode.t === "DepthTime" &&
+                    form.setFieldValue("goMode", {
+                      t: "DepthTime",
+                      c: { ...form.values.goMode.c, time: Number(v) || 50 },
+                    })
+                  }
+                />
+              </>
+            ) : (
+              <NumberInput
+                min={1}
+                value={form.values.goMode.c as number}
+                onChange={(v) =>
+                  form.setFieldValue("goMode", {
+                    ...(form.values.goMode as any),
+                    c: (v || 1) as number,
+                  })
+                }
+              />
+            )}
           </Group>
+          {form.values.goMode.t === "DepthTime" && (
+            <Text size="xs" c="dimmed" mt={-8}>
+              {t(
+                "GoMode.DepthTime.Desc",
+                "Easy positions stop at the depth, hard ones at the time cap. Depth 16 with 500 ms found the same errors as 500 ms per move, about 14% faster.",
+              )}
+            </Text>
+          )}
+
+          <Checkbox
+            label={t("Board.Analysis.SecondPass", "Second pass on the doubtful moves")}
+            description={t(
+              "Board.Analysis.SecondPass.Desc",
+              "Analyzes again, deeper (depth 22, up to 1.5 s), the positions around the moves the first pass marked, at most 12 per game.",
+            )}
+            {...form.getInputProps("secondPass", { type: "checkbox" })}
+          />
+
+          <Checkbox
+            label={t("Board.Analysis.CloudOpenings", "Opening from the Lichess cloud")}
+            description={t(
+              "Board.Analysis.CloudOpenings.Desc",
+              "Takes the evaluations of the first moves from the Lichess cloud, much deeper than the report, when it has them. Sends those positions to Lichess.",
+            )}
+            {...form.getInputProps("cloudOpenings", { type: "checkbox" })}
+          />
 
           <Checkbox
             label={t("Board.Analysis.Reversed")}

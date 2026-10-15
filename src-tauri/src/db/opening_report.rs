@@ -263,6 +263,43 @@ pub struct ReportMoveCell {
     /// Index into `elo_bands`; `None` when either rating is missing.
     pub band: Option<u32>,
     pub results: ReportResults,
+    /// Games with both ratings and a known result: the base of `expected_white`/`score_white`.
+    pub rated_games: u32,
+    /// Sum of White's expected score from the Elo difference over `rated_games`.
+    pub expected_white: f64,
+    /// Sum of White's actual score (1, ½, 0) over `rated_games`.
+    pub score_white: f64,
+}
+
+/// Expected score of White from the rating difference (Elo formula).
+pub fn expected_white_score(white_elo: f64, black_elo: f64) -> f64 {
+    1.0 / (1.0 + 10f64.powf((black_elo - white_elo) / 400.0))
+}
+
+#[derive(Clone, Default)]
+struct CellAggregate {
+    results: ReportResults,
+    rated_games: u32,
+    expected_white: f64,
+    score_white: f64,
+}
+
+impl CellAggregate {
+    fn add(&mut self, game: &SearchGameEntryRef<'_>) {
+        self.results.add(game.result);
+        let score = match game.result {
+            GameResult::WhiteWin => 1.0,
+            GameResult::Draw => 0.5,
+            GameResult::BlackWin => 0.0,
+            _ => return,
+        };
+        if game.white_elo > 0 && game.black_elo > 0 {
+            self.rated_games += 1;
+            self.expected_white +=
+                expected_white_score(game.white_elo as f64, game.black_elo as f64);
+            self.score_white += score;
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Type)]
@@ -648,12 +685,20 @@ fn continuation_after_match(
 }
 
 /// Keeps the cells of the most played continuations, in a stable order.
+#[cfg(test)]
+#[test]
+fn expected_score_follows_the_elo_formula() {
+    assert!((expected_white_score(2000.0, 2000.0) - 0.5).abs() < 1e-12);
+    assert!((expected_white_score(2400.0, 2000.0) - 0.909_090_9).abs() < 1e-6);
+    assert!((expected_white_score(2000.0, 2400.0) - 0.090_909_1).abs() < 1e-6);
+}
+
 fn top_move_breakdown(
-    breakdown: HashMap<(String, Option<u32>, Option<u32>), ReportResults>,
+    breakdown: HashMap<(String, Option<u32>, Option<u32>), CellAggregate>,
 ) -> Vec<ReportMoveCell> {
     let mut totals: HashMap<&str, u32> = HashMap::new();
-    for ((san, _, _), results) in &breakdown {
-        *totals.entry(san.as_str()).or_default() += results.total();
+    for ((san, _, _), cell) in &breakdown {
+        *totals.entry(san.as_str()).or_default() += cell.results.total();
     }
     let mut ranked: Vec<(&str, u32)> = totals.into_iter().collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
@@ -665,11 +710,14 @@ fn top_move_breakdown(
     let mut cells: Vec<ReportMoveCell> = breakdown
         .into_iter()
         .filter(|((san, _, _), _)| kept.contains(san))
-        .map(|((san, year, band), results)| ReportMoveCell {
+        .map(|((san, year, band), cell)| ReportMoveCell {
             san,
             year,
             band,
-            results,
+            results: cell.results,
+            rated_games: cell.rated_games,
+            expected_white: cell.expected_white,
+            score_white: cell.score_white,
         })
         .collect();
     cells.sort_by(|a, b| (&a.san, a.year, a.band).cmp(&(&b.san, b.year, b.band)));
@@ -706,7 +754,7 @@ fn build_report(
     let has_metadata_filters = metadata_filter(&options.event).is_some()
         || metadata_filter(&options.time_control).is_some();
     let mut filtered_openings: BTreeMap<String, ReportResults> = BTreeMap::new();
-    let mut breakdown: HashMap<(String, Option<u32>, Option<u32>), ReportResults> = HashMap::new();
+    let mut breakdown: HashMap<(String, Option<u32>, Option<u32>), CellAggregate> = HashMap::new();
     let mut matching_games = 0_u32;
     let connection = rusqlite::Connection::open_with_flags(
         &snapshot.database,
@@ -757,7 +805,7 @@ fn build_report(
             breakdown
                 .entry((continuation, year, band))
                 .or_default()
-                .add(entry.result);
+                .add(&entry);
             statistics.add(&entry);
             if entry.white_id != 0 {
                 players
@@ -1189,7 +1237,7 @@ fn build_report(
     let report_event = metadata_filter(&options.event).map(str::to_string);
     let report_time_control = metadata_filter(&options.time_control).map(str::to_string);
     Ok(OpeningReport {
-        version: 4,
+        version: 5,
         generated_at: chrono::Utc::now().to_rfc3339(),
         database_name: snapshot
             .database
@@ -1442,6 +1490,15 @@ mod tests {
             );
         }
         assert!(report.move_breakdown.iter().all(|cell| cell.band.is_some()));
+        // Every fixture game is rated with a known result, so each feeds the expected score.
+        for cell in &report.move_breakdown {
+            let known = cell.results.white + cell.results.draw + cell.results.black;
+            assert_eq!(cell.rated_games, known);
+            let score = cell.results.white as f64 + cell.results.draw as f64 / 2.0;
+            assert!((cell.score_white - score).abs() < 1e-9);
+            assert!(cell.expected_white >= 0.0 && cell.expected_white <= cell.rated_games as f64);
+            assert_eq!(cell.expected_white == 0.0, cell.rated_games == 0);
+        }
         assert_eq!((ana.first_year, ana.last_year), (Some(2022), Some(2024)));
         let convergence = report
             .transpositions

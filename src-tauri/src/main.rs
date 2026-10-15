@@ -3,16 +3,21 @@
     windows_subsystem = "windows"
 )]
 
+#[cfg(test)]
+mod analysis_benchmark;
+mod analysis_cache;
 mod analysis_library;
 mod bot_league;
 mod chess;
 mod db;
 mod engine;
+mod engine_budget;
 mod error;
 mod game;
 
 mod fs;
 mod lexer;
+mod lichess_cloud;
 mod managed_engine;
 mod model_game_batch;
 mod model_game_experiment;
@@ -71,10 +76,10 @@ use crate::chess::{
     kill_engine, kill_engines, stop_engine,
 };
 use crate::db::{
-    cancel_position_search, clear_games, convert_pgn, create_indexes, delete_database,
-    delete_db_game, delete_empty_games, delete_indexes, export_to_pgn, get_database_quality,
-    get_player, get_players_game_info, get_tournaments, preload_reference_db, search_position,
-    MmapSearchIndex,
+    cancel_database_quality, cancel_position_search, clear_games, convert_pgn, create_indexes,
+    delete_database, delete_db_game, delete_empty_games, delete_indexes, export_to_pgn,
+    get_database_quality, get_database_quality_details, get_player, get_players_game_info,
+    get_tournaments, preload_reference_db, search_position, MmapSearchIndex,
 };
 use crate::fs::set_file_as_executable;
 use crate::game::{
@@ -152,6 +157,8 @@ async fn close_splashscreen(window: Window) -> Result<(), String> {
         .expect("no window labeled 'main' found")
         .show()
         .unwrap();
+    let startup = engine_budget::record_startup();
+    log::info!("startup: main window shown after {startup} ms");
     Ok(())
 }
 
@@ -188,6 +195,12 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             delete_duplicated_games,
             delete_empty_games,
             get_database_quality,
+            engine_budget::get_engine_budget,
+            engine_budget::get_startup_ms,
+            analysis_cache::get_analysis_cache_info,
+            analysis_cache::clear_analysis_cache,
+            get_database_quality_details,
+            cancel_database_quality,
             clear_games,
             set_file_as_executable,
             delete_indexes,
@@ -297,6 +310,8 @@ fn export_frontend_bindings() {
 }
 
 fn main() {
+    // Starts the clock of the startup measurement.
+    let _ = *engine_budget::PROCESS_STARTED;
     let specta_builder = bindings_builder();
 
     #[cfg(debug_assertions)]

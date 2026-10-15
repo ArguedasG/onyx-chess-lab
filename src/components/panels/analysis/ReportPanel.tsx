@@ -14,6 +14,7 @@ import { activeTabAtom, currentReportModalOpenAtom } from "@/state/atoms";
 import { ANNOTATION_INFO, isBasicAnnotation } from "@/utils/annotation";
 import { getGameStats, getMainLine } from "@/utils/chess";
 import classes from "./AnalysisPanel.module.css";
+import KeyMoments from "./KeyMoments";
 import ReportModal, { isReportRunning } from "./ReportModal";
 import RetroPanel from "./RetroPanel";
 
@@ -81,6 +82,8 @@ function ReportPanel() {
           inProgress={inProgress}
           setInProgress={setInProgress}
         />
+
+        {!inProgress && <KeyMoments />}
 
         {!inProgress && (
           <RetroPanel

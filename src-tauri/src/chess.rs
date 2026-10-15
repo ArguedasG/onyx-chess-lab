@@ -28,11 +28,13 @@ use vampirc_uci::{
 };
 
 use crate::{
+    analysis_cache::{self, AnalysisCache, CachedLine},
     db::{positions_in_db, NoveltyReference},
     engine::{
         parse_fen_and_apply_moves, BaseEngine, EngineLog, EngineOption, EngineReader, GoMode,
     },
     error::Error,
+    lichess_cloud,
     progress::update_progress,
     AppState,
 };
@@ -176,6 +178,60 @@ pub struct BestMovesPayload {
     pub fen: String,
     pub moves: Vec<String>,
     pub progress: f64,
+}
+
+impl BestMoves {
+    /// `(is_mate, value)` from White's perspective.
+    #[cfg(test)]
+    pub(crate) fn score_value(&self) -> (bool, i32) {
+        match self.score.value {
+            ScoreValue::Cp(cp) => (false, cp),
+            ScoreValue::Mate(moves) => (true, moves),
+        }
+    }
+}
+
+impl From<&BestMoves> for CachedLine {
+    fn from(line: &BestMoves) -> Self {
+        let (mate, value) = match line.score.value {
+            ScoreValue::Cp(cp) => (false, cp),
+            ScoreValue::Mate(moves) => (true, moves),
+        };
+        CachedLine {
+            multipv: line.multipv,
+            depth: line.depth,
+            nodes: line.nodes,
+            nps: line.nps,
+            mate,
+            value,
+            wdl: line.score.wdl,
+            uci: line.uci_moves.clone(),
+            san: line.san_moves.clone(),
+        }
+    }
+}
+
+impl From<CachedLine> for BestMoves {
+    fn from(line: CachedLine) -> Self {
+        BestMoves {
+            nodes: line.nodes,
+            depth: line.depth,
+            score: Score {
+                value: if line.mate {
+                    ScoreValue::Mate(line.value)
+                } else {
+                    ScoreValue::Cp(line.value)
+                },
+                wdl: line.wdl,
+                lower_bound: None,
+                upper_bound: None,
+            },
+            uci_moves: line.uci,
+            san_moves: line.san,
+            multipv: line.multipv,
+            nps: line.nps,
+        }
+    }
 }
 
 fn invert_score(score: Score) -> Score {
@@ -452,16 +508,23 @@ pub async fn get_best_moves(
                                     && cur_depth >= proc.last_depth
                                     && lim.check().is_ok()
                                 {
-                                    let progress = match proc.go_mode {
+                                    let progress = match &proc.go_mode {
                                         GoMode::Depth(depth) => {
-                                            (cur_depth as f64 / depth as f64) * 100.0
+                                            (cur_depth as f64 / *depth as f64) * 100.0
                                         }
                                         GoMode::Time(time) => {
-                                            (proc.start.elapsed().as_millis() as f64 / time as f64)
+                                            (proc.start.elapsed().as_millis() as f64 / *time as f64)
                                                 * 100.0
                                         }
                                         GoMode::Nodes(nodes) => {
-                                            (cur_nodes as f64 / nodes as f64) * 100.0
+                                            (cur_nodes as f64 / *nodes as f64) * 100.0
+                                        }
+                                        GoMode::DepthTime(limit) => {
+                                            ((cur_depth as f64 / limit.depth as f64).max(
+                                                proc.start.elapsed().as_millis() as f64
+                                                    / limit.time as f64,
+                                            ) * 100.0)
+                                                .min(99.99)
                                         }
                                         GoMode::PlayersTime(_) => 99.99,
                                         GoMode::Infinite => 99.99,
@@ -594,7 +657,7 @@ pub async fn get_best_moves_once(
 
 #[derive(Serialize, Debug, Default, Type)]
 pub struct MoveAnalysis {
-    best: Vec<BestMoves>,
+    pub(crate) best: Vec<BestMoves>,
     novelty: bool,
     is_sacrifice: bool,
 }
@@ -618,6 +681,181 @@ pub struct AnalysisOptions {
     #[serde(default)]
     #[specta(optional)]
     pub black: Option<String>,
+    /// Batch analyses wait for a slot of the engine budget and use its threads and hash.
+    #[serde(default)]
+    #[specta(optional)]
+    pub priority: Option<AnalysisPriority>,
+    /// Reuse and store evaluations in the analysis cache (on unless `false`).
+    #[serde(default)]
+    #[specta(optional)]
+    pub use_cache: Option<bool>,
+    /// Second, deeper pass only around the moves the first pass judged doubtful.
+    #[serde(default)]
+    #[specta(optional)]
+    pub refine: Option<GoMode>,
+    /// Take the evaluations of the opening from the Lichess cloud when it has them (sends the
+    /// positions to Lichess; off unless `true`).
+    #[serde(default)]
+    #[specta(optional)]
+    pub cloud_openings: Option<bool>,
+}
+
+/// A cloud evaluation as the engine would have reported it. `None` if a line is not legal here.
+fn cloud_analysis(fen: &Fen, evaluation: &lichess_cloud::CloudEval) -> Option<MoveAnalysis> {
+    let mut best = Vec::new();
+    for (index, pv) in evaluation.pvs.iter().enumerate() {
+        let mut position: Chess = fen
+            .clone()
+            .into_position(CastlingMode::detect(fen.as_setup()))
+            .ok()?;
+        let mut line = BestMoves {
+            depth: evaluation.depth,
+            multipv: index as u16 + 1,
+            score: Score {
+                value: match (pv.mate, pv.cp) {
+                    (Some(mate), _) => ScoreValue::Mate(mate),
+                    (None, Some(cp)) => ScoreValue::Cp(cp),
+                    (None, None) => return None,
+                },
+                ..Score::default()
+            },
+            ..BestMoves::default()
+        };
+        for uci in pv.moves.split_whitespace() {
+            let uci: UciMove = uci.parse().ok()?;
+            let chess_move = uci.to_move(&position).ok()?;
+            // Lichess writes castling as king takes rook (e1h1); the rest of Onyx uses e1g1.
+            line.uci_moves
+                .push(UciMove::from_move(&chess_move, CastlingMode::Standard).to_string());
+            line.san_moves.push(
+                SanPlus::from_move_and_play_unchecked(&mut position, &chess_move).to_string(),
+            );
+        }
+        if line.uci_moves.is_empty() {
+            return None;
+        }
+        best.push(line);
+    }
+    Some(MoveAnalysis {
+        best,
+        ..MoveAnalysis::default()
+    })
+}
+
+#[derive(Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum AnalysisPriority {
+    #[default]
+    Interactive,
+    Batch,
+}
+
+/// Live-analysis engines searching right now (a busy, locked one counts as searching) plus bot
+/// engines thinking in games.
+fn running_live_engines(state: &AppState) -> u32 {
+    state.game_manager.thinking_engines()
+        + state
+            .engine_processes
+            .iter()
+            .filter(|entry| {
+                entry
+                    .value()
+                    .try_lock()
+                    .map_or(true, |process| process.running)
+            })
+            .count() as u32
+}
+
+/// Moves losing more winning chances than this (points, 0–100) are looked at again in the second
+/// pass: everything the report would annotate (?!, ?, ??), with a little margin below.
+pub(crate) const REFINE_MIN_LOSS: f64 = 4.0;
+/// At most this many positions are refined per game, the largest losses first, so the second
+/// pass stays within a few seconds per game.
+pub(crate) const MAX_REFINED_POSITIONS: usize = 12;
+
+fn win_chance(cp: f64) -> f64 {
+    50.0 + 50.0 * (2.0 / (1.0 + (-0.003_682_08 * cp).exp()) - 1.0)
+}
+
+/// White's evaluation of a position in centipawns, mates at ±1000 like the report.
+fn white_centipawns(analysis: &MoveAnalysis) -> Option<f64> {
+    let line = analysis.best.first()?;
+    Some(match line.score.value {
+        ScoreValue::Cp(cp) => (cp as f64).clamp(-1000.0, 1000.0),
+        ScoreValue::Mate(moves) => 1000.0 * (moves as f64).signum(),
+    })
+}
+
+/// Positions (in game order) to analyze again: both sides of every move whose loss of winning
+/// chances exceeds `REFINE_MIN_LOSS`, largest losses first, at most `MAX_REFINED_POSITIONS`.
+/// `white_to_move[i]` tells who moves in position `i`.
+pub(crate) fn refinement_targets(analysis: &[MoveAnalysis], white_to_move: &[bool]) -> Vec<usize> {
+    let mut moves: Vec<(f64, usize)> = (0..analysis.len().saturating_sub(1))
+        .filter_map(|ply| {
+            let before = white_centipawns(&analysis[ply])?;
+            let after = white_centipawns(&analysis[ply + 1])?;
+            let sign = if *white_to_move.get(ply)? { 1.0 } else { -1.0 };
+            let loss = win_chance(sign * before) - win_chance(sign * after);
+            (loss > REFINE_MIN_LOSS).then_some((loss, ply))
+        })
+        .collect();
+    moves.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut targets: Vec<usize> = Vec::new();
+    for (_, ply) in moves {
+        for position in [ply, ply + 1] {
+            if targets.len() < MAX_REFINED_POSITIONS && !targets.contains(&position) {
+                targets.push(position);
+            }
+        }
+    }
+    targets.sort_unstable();
+    targets
+}
+
+/// Second pass: analyzes `targets` again with `refine` and keeps those results.
+pub(crate) async fn refine_positions(
+    run: &AnalysisRun<'_>,
+    refine: &GoMode,
+    positions: &[(Fen, Vec<String>)],
+    analysis: &mut [MoveAnalysis],
+    targets: &[usize],
+    cancelled: &AtomicBool,
+    progress: &mut (dyn FnMut(usize) + Send),
+) -> Result<AnalysisRunStats, Error> {
+    let subset: Vec<(Fen, Vec<String>)> = targets
+        .iter()
+        .map(|&index| positions[index].clone())
+        .collect();
+    let deep = AnalysisRun {
+        go_mode: refine,
+        ..*run
+    };
+    let (refined, stats) = analyze_positions(&deep, &subset, cancelled, progress).await?;
+    for (&index, result) in targets.iter().zip(refined) {
+        if !result.best.is_empty() {
+            analysis[index].best = result.best;
+        }
+    }
+    Ok(stats)
+}
+
+/// Engine lines per analyzed position (the best move and the second best).
+const ANALYSIS_LINES: u16 = 2;
+
+/// Sets `name` to `value`, replacing it if the engine settings already had it.
+fn set_engine_option(options: &mut Vec<EngineOption>, name: &str, value: String) {
+    options.retain(|option| !option.name.eq_ignore_ascii_case(name));
+    options.push(EngineOption {
+        name: name.to_string(),
+        value,
+    });
+}
+
+/// Statistics of one analysis run, kept for the logs and the benchmark.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct AnalysisRunStats {
+    pub positions: usize,
+    pub cache_hits: usize,
 }
 
 /// Grace period on top of the requested move time before a silent engine counts as hung.
@@ -646,123 +884,77 @@ impl Drop for CancelFlagGuard<'_> {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn analyze_game(
-    id: String,
-    engine: String,
-    engine_args: Vec<String>,
-    go_mode: GoMode,
-    options: AnalysisOptions,
-    uci_options: Vec<EngineOption>,
-    state: tauri::State<'_, AppState>,
-    app: tauri::AppHandle,
-) -> Result<Vec<MoveAnalysis>, Error> {
-    if options.annotate_novelties && options.reference_db.is_none() {
-        return Err(Error::MissingReferenceDatabase);
-    }
+/// What `analyze_positions` needs to know about the engine and the search.
+pub(crate) struct AnalysisRun<'a> {
+    pub engine: &'a std::path::Path,
+    pub engine_args: &'a [String],
+    pub go_mode: &'a GoMode,
+    /// Final options, `MultiPV` included.
+    pub uci_options: &'a [EngineOption],
+    /// FEN the `moves` of every position start from.
+    pub start_fen: &'a str,
+    pub cache: Option<&'a AnalysisCache>,
+}
 
-    let cancel_flag = Arc::new(AtomicBool::new(false));
-    // A new report for the same tab replaces the old one; otherwise the old run could no longer
-    // be cancelled and would keep the engine and the database busy.
-    if let Some(previous) = state
-        .analysis_cancel_flags
-        .insert(id.clone(), cancel_flag.clone())
-    {
-        previous.store(true, Ordering::SeqCst);
-    }
-    let _cancel_guard = CancelFlagGuard {
-        flags: &state.analysis_cancel_flags,
-        id: id.clone(),
-        flag: cancel_flag.clone(),
-    };
+/// Analyzes each position (its FEN and the moves that lead to it), answering from the cache when
+/// it can and starting the engine only for the rest. `progress` receives the positions done.
+pub(crate) async fn analyze_positions(
+    run: &AnalysisRun<'_>,
+    positions: &[(Fen, Vec<String>)],
+    cancelled: &AtomicBool,
+    progress: &mut (dyn FnMut(usize) + Send),
+) -> Result<(Vec<MoveAnalysis>, AnalysisRunStats), Error> {
+    let identity = analysis_cache::engine_identity(run.engine, run.engine_args, run.uci_options);
+    let limit = serde_json::to_string(run.go_mode).unwrap_or_default();
+    let mut stats = AnalysisRunStats::default();
+    let mut analysis: Vec<MoveAnalysis> = Vec::with_capacity(positions.len());
+    // Started on the first position the cache cannot answer.
+    let mut engine_process: Option<(EngineProcess, EngineReader)> = None;
 
-    let path = PathBuf::from(&engine);
-    let mut analysis: Vec<MoveAnalysis> = Vec::new();
-
-    let (mut proc, mut reader) = EngineProcess::new(path, &engine_args).await?;
-
-    let fen = Fen::from_ascii(options.fen.as_bytes())?;
-    let setup = fen.as_setup().clone();
-    let castling_mode = CastlingMode::detect(&setup);
-
-    let mut chess: Chess = setup.position(castling_mode)?;
-    let mut fens: Vec<(Fen, Vec<String>, bool)> = vec![(fen, vec![], false)];
-
-    options
-        .moves
-        .iter()
-        .enumerate()
-        .try_for_each(|(i, m)| -> Result<(), Error> {
-            let uci = UciMove::from_ascii(m.as_bytes())?;
-            let m = uci.to_move(&chess)?;
-            let previous_pos = chess.clone();
-            chess.play_unchecked(&m);
-            let current_pos = chess.clone();
-            if !chess.is_game_over() {
-                let prev_eval = naive_eval(&previous_pos);
-                let cur_eval = -naive_eval(&current_pos);
-                fens.push((
-                    Fen::from_position(current_pos, EnPassantMode::Legal),
-                    options.moves.clone().into_iter().take(i + 1).collect(),
-                    prev_eval > cur_eval + 100,
-                ));
+    for (i, (position_fen, moves)) in positions.iter().enumerate() {
+        if cancelled.load(Ordering::SeqCst) {
+            if let Some((proc, _)) = engine_process.as_mut() {
+                let _ = proc.kill().await;
             }
-            Ok(())
-        })?;
-
-    if options.reversed {
-        fens.reverse();
-    }
-
-    // Leave room in the progress bar for the database pass that finds the novelty.
-    let engine_share = if options.annotate_novelties {
-        90.0
-    } else {
-        100.0
-    };
-
-    for (i, (_, moves, _)) in fens.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            let _ = proc.kill().await;
             return Err(Error::AnalysisCancelled);
         }
 
-        update_progress(
-            &state.progress_state,
-            &app,
-            id.clone(),
-            (i as f32 / fens.len() as f32) * engine_share,
-            false,
-        )?;
+        progress(i);
 
-        let mut extra_options = uci_options.clone();
-        if !extra_options.iter().any(|x| x.name == "MultiPV") {
-            extra_options.push(EngineOption {
-                name: "MultiPV".to_string(),
-                value: "2".to_string(),
+        stats.positions += 1;
+        let cache_key =
+            analysis_cache::entry_key(&identity, &limit, ANALYSIS_LINES, &position_fen.to_string());
+        if let Some(lines) = run.cache.and_then(|cache| cache.get(&cache_key)) {
+            stats.cache_hits += 1;
+            analysis.push(MoveAnalysis {
+                best: lines.into_iter().map(BestMoves::from).collect(),
+                ..MoveAnalysis::default()
             });
-        } else {
-            extra_options.iter_mut().for_each(|x| {
-                if x.name == "MultiPV" {
-                    x.value = "2".to_string();
-                }
-            });
+            continue;
         }
 
+        if engine_process.is_none() {
+            engine_process =
+                Some(EngineProcess::new(run.engine.to_path_buf(), run.engine_args).await?);
+        }
+        let (proc, reader) = engine_process.as_mut().expect("started above");
+
         proc.set_options(EngineOptions {
-            fen: options.fen.clone(),
+            fen: run.start_fen.to_string(),
             moves: moves.clone(),
-            extra_options,
+            extra_options: run.uci_options.to_vec(),
         })
         .await?;
 
-        proc.go(&go_mode).await?;
-        // Only a fixed move time says how long a search should take; depth or nodes can
-        // legitimately take minutes, so those are never cut off.
-        let hang_deadline = match go_mode {
+        proc.go(run.go_mode).await?;
+        // Only a time limit says how long a search should take; depth or nodes can legitimately
+        // take minutes, so those are never cut off.
+        let hang_deadline = match run.go_mode {
             GoMode::Time(ms) => {
-                Some(Instant::now() + Duration::from_millis(ms.into()) + ENGINE_HANG_MARGIN)
+                Some(Instant::now() + Duration::from_millis((*ms).into()) + ENGINE_HANG_MARGIN)
+            }
+            GoMode::DepthTime(limit) => {
+                Some(Instant::now() + Duration::from_millis(limit.time.into()) + ENGINE_HANG_MARGIN)
             }
             _ => None,
         };
@@ -773,7 +965,7 @@ pub async fn analyze_game(
             let line =
                 match tokio::time::timeout(Duration::from_millis(250), reader.next_line()).await {
                     Err(_) => {
-                        if cancel_flag.load(Ordering::SeqCst) {
+                        if cancelled.load(Ordering::SeqCst) {
                             let _ = proc.kill().await;
                             return Err(Error::AnalysisCancelled);
                         }
@@ -782,7 +974,7 @@ pub async fn analyze_game(
                             return Err(Error::EngineTimeout(format!(
                                 "no answer in position {} of {}",
                                 i + 1,
-                                fens.len()
+                                positions.len()
                             )));
                         }
                         continue;
@@ -819,12 +1011,237 @@ pub async fn analyze_game(
                 _ => {}
             }
         }
+        if let Some(cache) = run.cache {
+            if !current_analysis.best.is_empty() {
+                let lines: Vec<CachedLine> =
+                    current_analysis.best.iter().map(CachedLine::from).collect();
+                cache.put(&cache_key, &lines);
+            }
+        }
         analysis.push(current_analysis);
     }
+    if let Some((proc, _)) = engine_process.as_mut() {
+        let _ = proc.kill().await;
+    }
+    if let Some(cache) = run.cache {
+        cache.prune(analysis_cache::MAX_ENTRIES);
+    }
+    Ok((analysis, stats))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn analyze_game(
+    id: String,
+    engine: String,
+    engine_args: Vec<String>,
+    go_mode: GoMode,
+    options: AnalysisOptions,
+    uci_options: Vec<EngineOption>,
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<Vec<MoveAnalysis>, Error> {
+    if options.annotate_novelties && options.reference_db.is_none() {
+        return Err(Error::MissingReferenceDatabase);
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    // A new report for the same tab replaces the old one; otherwise the old run could no longer
+    // be cancelled and would keep the engine and the database busy.
+    if let Some(previous) = state
+        .analysis_cancel_flags
+        .insert(id.clone(), cancel_flag.clone())
+    {
+        previous.store(true, Ordering::SeqCst);
+    }
+    let _cancel_guard = CancelFlagGuard {
+        flags: &state.analysis_cancel_flags,
+        id: id.clone(),
+        flag: cancel_flag.clone(),
+    };
+
+    let path = PathBuf::from(&engine);
+
+    // Batch work waits for a slot so several analyses never saturate the machine.
+    let priority = options.priority.unwrap_or_default();
+    let _batch_slot = if priority == AnalysisPriority::Batch {
+        Some(crate::engine_budget::acquire_batch_slot(|| running_live_engines(&state)).await)
+    } else {
+        None
+    };
+    let mut uci_options = uci_options;
+    if priority == AnalysisPriority::Batch {
+        let budget = *crate::engine_budget::BUDGET;
+        set_engine_option(
+            &mut uci_options,
+            "Threads",
+            budget.threads_per_process.to_string(),
+        );
+        set_engine_option(
+            &mut uci_options,
+            "Hash",
+            budget.hash_mb_per_process.to_string(),
+        );
+    }
+    set_engine_option(&mut uci_options, "MultiPV", ANALYSIS_LINES.to_string());
+
+    // The cache never decides whether the analysis runs: any failure just disables it.
+    let cache = if options.use_cache != Some(false) {
+        analysis_cache::cache_path(&app)
+            .and_then(|cache_path| AnalysisCache::open(&cache_path))
+            .map_err(|error| warn!("Analysis cache unavailable: {error}"))
+            .ok()
+    } else {
+        None
+    };
+
+    let fen = Fen::from_ascii(options.fen.as_bytes())?;
+    let setup = fen.as_setup().clone();
+    let castling_mode = CastlingMode::detect(&setup);
+
+    let mut chess: Chess = setup.position(castling_mode)?;
+    let mut fens: Vec<(Fen, Vec<String>, bool)> = vec![(fen, vec![], false)];
+
+    options
+        .moves
+        .iter()
+        .enumerate()
+        .try_for_each(|(i, m)| -> Result<(), Error> {
+            let uci = UciMove::from_ascii(m.as_bytes())?;
+            let m = uci.to_move(&chess)?;
+            let previous_pos = chess.clone();
+            chess.play_unchecked(&m);
+            let current_pos = chess.clone();
+            if !chess.is_game_over() {
+                let prev_eval = naive_eval(&previous_pos);
+                let cur_eval = -naive_eval(&current_pos);
+                fens.push((
+                    Fen::from_position(current_pos, EnPassantMode::Legal),
+                    options.moves.clone().into_iter().take(i + 1).collect(),
+                    prev_eval > cur_eval + 100,
+                ));
+            }
+            Ok(())
+        })?;
+
+    // Opening positions from the Lichess cloud, if the user asked for it. The last one is left to
+    // the engine as well, so the move that leaves the cloud compares two engine evaluations.
+    let mut cloud_prefix: Vec<MoveAnalysis> = Vec::new();
+    if options.cloud_openings == Some(true) {
+        let fen_strings: Vec<String> = fens.iter().map(|(fen, _, _)| fen.to_string()).collect();
+        let evaluations =
+            lichess_cloud::opening_prefix(&fen_strings, ANALYSIS_LINES, &cancel_flag).await;
+        for (index, evaluation) in evaluations.iter().enumerate() {
+            match cloud_analysis(&fens[index].0, evaluation) {
+                Some(analysis) => cloud_prefix.push(analysis),
+                None => break,
+            }
+        }
+        cloud_prefix.pop();
+        info!(
+            "Analysis {id}: {} positions from the Lichess cloud",
+            cloud_prefix.len()
+        );
+    }
+
+    // Leave room in the progress bar for the database pass that finds the novelty.
+    let engine_share = if options.annotate_novelties {
+        90.0
+    } else {
+        100.0
+    };
+
+    // The engine analyzes the positions after the cloud prefix, last first when reversed.
+    let mut positions: Vec<(Fen, Vec<String>)> = fens[cloud_prefix.len()..]
+        .iter()
+        .map(|(fen, moves, _)| (fen.clone(), moves.clone()))
+        .collect();
+    if options.reversed {
+        positions.reverse();
+    }
+    let total = positions.len().max(1);
+    // The second pass, if any, takes the last part of the engine's share of the progress bar.
+    let first_share = if options.refine.is_some() {
+        engine_share * 0.85
+    } else {
+        engine_share
+    };
+    let run = AnalysisRun {
+        engine: &path,
+        engine_args: &engine_args,
+        go_mode: &go_mode,
+        uci_options: &uci_options,
+        start_fen: &options.fen,
+        cache: cache.as_ref(),
+    };
+    let (mut analysis, stats) = analyze_positions(&run, &positions, &cancel_flag, &mut |done| {
+        let _ = update_progress(
+            &state.progress_state,
+            &app,
+            id.clone(),
+            (done as f32 / total as f32) * first_share,
+            false,
+        );
+    })
+    .await?;
+    info!(
+        "Analysis {id}: {} positions, {} from the cache",
+        stats.positions, stats.cache_hits
+    );
 
     if options.reversed {
         analysis.reverse();
-        fens.reverse();
+    }
+    // Back in game order, after the positions taken from the cloud.
+    let mut analysis = {
+        let mut full = cloud_prefix;
+        full.extend(analysis);
+        full
+    };
+
+    if let Some(refine) = options.refine.as_ref() {
+        let white_to_move: Vec<bool> = fens
+            .iter()
+            .map(|(fen, _, _)| fen.as_setup().turn == Color::White)
+            .collect();
+        let targets = refinement_targets(&analysis, &white_to_move);
+        if !targets.is_empty() {
+            let positions: Vec<(Fen, Vec<String>)> = fens
+                .iter()
+                .map(|(fen, moves, _)| (fen.clone(), moves.clone()))
+                .collect();
+            let run = AnalysisRun {
+                engine: &path,
+                engine_args: &engine_args,
+                go_mode: &go_mode,
+                uci_options: &uci_options,
+                start_fen: &options.fen,
+                cache: cache.as_ref(),
+            };
+            let total = targets.len();
+            let stats = refine_positions(
+                &run,
+                refine,
+                &positions,
+                &mut analysis,
+                &targets,
+                &cancel_flag,
+                &mut |done| {
+                    let _ = update_progress(
+                        &state.progress_state,
+                        &app,
+                        id.clone(),
+                        engine_share * (0.85 + 0.15 * done as f32 / total as f32),
+                        false,
+                    );
+                },
+            )
+            .await?;
+            info!(
+                "Analysis {id}: second pass on {} positions, {} from the cache",
+                stats.positions, stats.cache_hits
+            );
+        }
     }
 
     for (i, analysis) in analysis.iter_mut().enumerate() {
@@ -860,16 +1277,41 @@ pub async fn analyze_game(
             date: options.game_date.clone(),
             players: known(&options.white).zip(known(&options.black)),
         };
-        let found = positions_in_db(
-            reference,
-            positions,
-            novelty_reference,
-            id.clone(),
-            state.clone(),
-            &cancel_flag,
-            &report_progress,
-        )
-        .await?;
+        let novelty_key = analysis_cache::novelty_key(
+            &reference,
+            novelty_reference.date.as_deref(),
+            novelty_reference
+                .players
+                .as_ref()
+                .map(|(white, black)| (white.as_str(), black.as_str())),
+            &fens
+                .iter()
+                .map(|(fen, _, _)| fen.to_string())
+                .collect::<Vec<_>>(),
+        );
+        let cached = cache
+            .as_ref()
+            .and_then(|cache| cache.get_novelty(&novelty_key))
+            .filter(|found| found.len() == positions.len());
+        let found = match cached {
+            Some(found) => found,
+            None => {
+                let found = positions_in_db(
+                    reference,
+                    positions,
+                    novelty_reference,
+                    id.clone(),
+                    state.clone(),
+                    &cancel_flag,
+                    &report_progress,
+                )
+                .await?;
+                if let Some(cache) = cache.as_ref() {
+                    cache.put_novelty(&novelty_key, &found);
+                }
+                found
+            }
+        };
         if let Some(first_new) = found.iter().position(|found| !found) {
             analysis[first_new].novelty = true;
         }
@@ -1097,6 +1539,68 @@ mod tests {
     fn pos(fen: &str) -> Chess {
         let fen: Fen = fen.parse().unwrap();
         Chess::from_setup(fen.into_setup(), CastlingMode::Chess960).unwrap()
+    }
+
+    #[test]
+    fn cloud_lines_become_engine_lines_with_standard_castling() {
+        let fen: Fen = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+            .parse()
+            .unwrap();
+        let pv = |moves: &str, cp: Option<i32>, mate: Option<i32>| crate::lichess_cloud::CloudPv {
+            moves: moves.to_string(),
+            cp,
+            mate,
+        };
+        let evaluation = crate::lichess_cloud::CloudEval {
+            depth: 40,
+            pvs: vec![pv("e1h1 f8c5", Some(25), None), pv("f3g5", None, Some(-7))],
+        };
+        let analysis = cloud_analysis(&fen, &evaluation).unwrap();
+        assert_eq!(analysis.best[0].uci_moves, vec!["e1g1", "f8c5"]);
+        assert_eq!(analysis.best[0].san_moves, vec!["O-O", "Bc5"]);
+        assert_eq!(analysis.best[0].score_value(), (false, 25));
+        assert_eq!(analysis.best[1].multipv, 2);
+        assert_eq!(analysis.best[1].score_value(), (true, -7));
+        // A line that is not legal in the position is rejected.
+        let broken = crate::lichess_cloud::CloudEval {
+            depth: 40,
+            pvs: vec![pv("e1e5", Some(0), None)],
+        };
+        assert!(cloud_analysis(&fen, &broken).is_none());
+    }
+
+    fn scored(cp: i32) -> MoveAnalysis {
+        MoveAnalysis {
+            best: vec![BestMoves {
+                score: Score {
+                    value: ScoreValue::Cp(cp),
+                    ..Score::default()
+                },
+                ..BestMoves::default()
+            }],
+            ..MoveAnalysis::default()
+        }
+    }
+
+    #[test]
+    fn second_pass_targets_both_sides_of_doubtful_moves() {
+        // White to move first. 1. 0 → +20 (fine), 1... +20 → +250 (Black loses ~20 points),
+        // 2. +250 → +240 (fine), 2... +240 → +260 (fine).
+        let analysis: Vec<MoveAnalysis> = [0, 20, 250, 240, 260].map(scored).into();
+        let white_to_move = [true, false, true, false, true];
+        assert_eq!(refinement_targets(&analysis, &white_to_move), vec![1, 2]);
+        // Nothing doubtful, nothing to refine.
+        let quiet: Vec<MoveAnalysis> = [0, 10, 0, 10].map(scored).into();
+        assert!(refinement_targets(&quiet, &[true, false, true, false]).is_empty());
+        // A game full of errors is capped, keeping the largest losses.
+        let wild: Vec<MoveAnalysis> = (0..40)
+            .map(|ply| scored(if ply % 2 == 0 { 300 } else { -300 }))
+            .collect();
+        let white_to_move: Vec<bool> = (0..40).map(|ply| ply % 2 == 0).collect();
+        assert_eq!(
+            refinement_targets(&wild, &white_to_move).len(),
+            MAX_REFINED_POSITIONS
+        );
     }
 
     #[test]

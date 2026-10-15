@@ -78,9 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Versión en preparación: **0.19.1** (repaso de errores tras el reporte de análisis, selección
-  múltiple y menú contextual en las partidas de referencia, enlaces a partidas en los comentarios,
-  avisos de poco tiempo y de fin de partida contra bots, y correcciones del tablero).
+- Última versión publicada: **0.20.0** (mantenimiento del estudio de mercado, 8.2 Motor y análisis
+  y 8.3 Bases de referencia). Detalle: `docs/release-notes-0.20.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -90,8 +89,8 @@ prueban y comunican problemas.
 - Usuarios: estudiantes y miembros de un grupo de ajedrez; es probable que pronto la utilicen un
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
 - Trabajo actual: **Fase 8 replanificada a partir del estudio de mercado**
-  (`docs/market-study.es.md`, 2026-10-14): mantenimiento derivado del estudio, **8.2 Motor y
-  análisis** y **8.3 Bases de referencia**. La reestructuración de la interfaz inspirada en ChessBase
+  (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
+  0.20.0; la siguiente subfase es **8.4 Jugadores: ficha y estadísticas**. La reestructuración de la interfaz inspirada en ChessBase
   para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -364,7 +363,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 y 8.3 en curso.**
+**Estado: En curso. 8.0, 8.1 y 8.3 implementadas; 8.2 con su primera versión implementada.**
 
 Desde el 2026-10-15 las subfases 8.2–8.10 siguen el estudio de mercado (`docs/market-study.es.md`):
 cada viñeta cita su idea (`I-xx`), cuya ficha en el estudio contiene el problema, la referencia y la
@@ -425,39 +424,87 @@ Contrato y validación técnica: `docs/position-actions-phase-8-1.es.md`.
 
 ### 8.2. Motor y análisis
 
-**Estado: En curso.** Ideas: I-53, I-14, I-15, I-24, I-46, I-54 (primera versión).
+**Estado: Implementada y validada automáticamente (2026-10-15); validación manual nativa de la
+segunda entrega pendiente.** Ideas: I-53, I-14, I-15, I-24, I-46, I-54 (primera versión). Contrato, método y
+mediciones: `docs/engine-analysis-phase-8-2.es.md`.
 
-- **planificador global de motores (I-53):** un único coordinador para análisis en vivo, reportes,
-  Player Analysis, bots y lotes, con límite de procesos y de hash total según la máquina,
-  prioridades, cancelación y reutilización de procesos; ninguna función nueva lanza motores por su
-  cuenta;
-- **análisis más rápido sin perder veredictos (I-14):** caché persistente de evaluaciones por
-  posición (con versión, tamaño acotado, borrado y procedencia, fuera del JSON de arranque),
-  profundidad objetivo con tope de tiempo, segunda pasada dirigida a los candidatos a error, varios
-  procesos en lotes y perfiles con calidad declarada; la nube de Lichess para aperturas es opcional y
-  posterior;
-- **validación obligatoria:** con un conjunto fijo de partidas se mide el tiempo y el acuerdo de
-  clasificación (error grave, error, imprecisión) frente al método actual; si no se mantiene, el
-  predeterminado no cambia;
-- **probabilidad de victoria, momentos clave y reglas explicables (I-15):** clasificación unificada
-  por pérdida de probabilidad (fórmula de Lichess) en Player Analysis y en el reporte, «oportunidad
-  perdida», 2–3 momentos clave por partida y, si se añade «brillante», reglas explícitas con motivo de
-  rechazo; los perfiles guardados se migran por versión de esquema;
-- **explicación factual por plantilla (I-24)** y **flechas y casillas que explican el error (I-46)**
-  en los ejercicios generados desde errores;
-- **primer presupuesto de rendimiento (I-54):** arranque en frío, abrir una ficha con 5.000 partidas,
-  primera página de una búsqueda, analizar 50 partidas, memoria máxima en lote y tamaño del bundle,
-  medidos en la máquina de referencia y registrados por release.
+- **presupuesto de motores (I-53, primera versión):** procesos por lotes = núcleos físicos − 1, con
+  sus hilos y hash repartidos (3 motores de 2 hilos y 256 MB en el i5 de referencia); los análisis
+  por lotes esperan turno en un semáforo global y usan esos `Threads`/`Hash`; el reporte de la
+  partida abierta conserva la configuración del usuario. Cada motor de análisis en vivo activo ocupa
+  un turno, y también cada bot que esté pensando en una partida (los lotes nunca bajan de uno);
+- **caché persistente de evaluaciones (I-14):** SQLite propia en los datos privados (nunca en una
+  base de partidas), clave por posición sin contadores + motor (ejecutable, argumentos y opciones
+  salvo `Threads`/`Hash`) + límite + líneas, 200.000 posiciones con poda por uso, versión de esquema,
+  tamaño y botón para vaciarla en Ajustes → Directorios. El motor solo se arranca para las posiciones
+  que la caché no conoce;
+- **límite «profundidad con tope de tiempo»** (`go depth D movetime T`), disponible en el reporte;
+  el predeterminado sigue siendo 500 ms por jugada;
+- **Player Analysis en paralelo:** varias partidas a la vez según el presupuesto;
+- **benchmark reproducible (I-14, I-54):** prueba ignorada con motor y PGN reales que mide tiempo y
+  acuerdo de clasificación frente a la referencia y frente a su propio ruido. Con 8 partidas propias
+  (548 jugadas, Stockfish, i5-1135G7): la referencia de 500 ms repetida acuerda en el 94,8 % de los
+  errores (ruido); profundidad 16 con tope de 500 ms es un 14 % más rápida y queda dentro del ruido;
+  la caché en caliente reduce 276 s a 0,2 s; 3 motores de 2 hilos en paralelo son 2,8 veces más rápidos (99 s frente a 276 s) y, en una segunda medición, quedan dentro del ruido (97,8 % de los errores de la referencia; en la primera, 90,6 %). Ninguna configuración perdió un error
+  grave (61/61). No se cambió ningún predeterminado;
+- **probabilidad de victoria y momentos clave (I-15):** Player Analysis clasifica como el reporte
+  (más de 5, 10 y 20 puntos de probabilidad perdidos; ACPL como dato), con la versión de la
+  clasificación en el límite guardado para recalcular perfiles anteriores; el reporte muestra hasta 3
+  **momentos clave** con la probabilidad antes y después y una etiqueta (vuelco, victoria escapada o
+  error costoso). No se añadieron reglas nuevas de «brillante»;
+- **explicación factual (I-24) y flechas (I-46)** en «Aprende de tus errores»: tras acertar o ver la
+  solución, el motor busca cómo se castigaba la jugada y Onyx dice solo hechos («permite mate en 1:
+  Qxf7#», «permite Bxf7+, que captura el peón en f7», cambio de evaluación, mejor jugada); el tablero
+  marca la jugada en rojo, la mejor en verde y la pieza perdida con un círculo;
+- **novedades en caché:** la búsqueda de la primera jugada nueva recorre toda la base de referencia
+  (20–30 s en la Gigabase) y era lo único lento al repetir un reporte; su resultado se guarda en la
+  misma caché, ligado al estado de la base;
+- **primer presupuesto de rendimiento (I-54):** bundle web de 5,67 MB (1,71 MB comprimido) y 340 kB
+  de CSS como línea base del 2026-10-15, además de las mediciones de análisis;
+- **segunda pasada dirigida (I-14):** tras la primera pasada, las posiciones a ambos lados de cada
+  jugada que pierde más de 4 puntos de probabilidad se analizan otra vez con profundidad 22 y tope de
+  1,5 s (como mucho 12 por partida, las mayores pérdidas primero). Medida contra una referencia de
+  2 s por jugada: 500 ms pasan de 94,6 % a 97,8 % de los errores encontrados (+49 % de tiempo) y
+  250 ms con segunda pasada (95,7 % de recall y de precisión) superan a 500 ms sin ella en el mismo
+  tiempo. Por eso el reporte usa ahora **250 ms + segunda pasada** por defecto (solo para quien no
+  tenga ajustes del reporte guardados);
+- **apertura desde la nube de Lichess (I-14, opcional):** casilla del reporte, desactivada por
+  defecto porque envía las posiciones a Lichess. Toma las evaluaciones de las primeras 36 medias
+  jugadas mientras la nube las tenga con profundidad ≥ 20 (una petición a la vez, pausa de 80 ms,
+  presupuesto de 12 s, se detiene en la primera ausencia o en un `429`); la última posición de la
+  nube la analiza también el motor para no comparar fuentes distintas en la jugada que sale de ella;
+- **presupuesto de rendimiento (I-54):** el arranque de cada sesión se mide (Ajustes → Directorios
+  → «Caché de análisis» y el registro) y abrir la ficha de un jugador registra partidas y
+  milisegundos. Falta tomar esas cifras en la máquina de referencia y la memoria máxima durante un
+  lote, que hoy se acota por diseño (3 × 256 MB de hash).
 
 ### 8.3. Bases de referencia
 
-**Estado: En curso; en paralelo a 8.2.** Ideas: I-26 (completa), I-28. El catálogo propio y las
-bases alojadas (I-25) pasan a la Fase 10 (decisión del autor, 2026-10-15): mientras tanto se
-conserva intacto el catálogo de En Croissant, con sus bases y motores descargables.
+**Estado: Implementada y validada automáticamente (2026-10-15); validación manual nativa
+pendiente.** Ideas: I-26 (completa), I-28 y la primera parte de I-25. Las bases alojadas por el
+autor (resto de I-25) pasan a la Fase 10 (decisión del autor, 2026-10-15).
 
-- **informe de calidad completo (I-26):** amplía la versión mínima con duplicados exactos y
-  probables, nombres sospechosos y Elo incoherente por jugador, en segundo plano y cancelable;
-- **rendimiento frente a lo esperado y tendencia por jugada (I-28)** en el informe de posición;
+- **catálogo propio que conserva el de En Croissant (I-25, primera parte):** los JSON de
+  `src/data/catalog` viajan con la aplicación y reflejan el catálogo de En Croissant (5 bases, 1
+  base de puzzles y 23 motores). El catálogo en vivo de `encroissant.org` se sigue consultando y se
+  combina encima (sus entradas primero, sin duplicados por enlace y ruta), así que sus novedades
+  siguen apareciendo; si su servidor falla o desaparece, la copia incluida sigue ofreciendo todas
+  las descargas. Las entradas propias de Onyx se añadirán en esos mismos archivos;
+- **informe de calidad completo (I-26):** «Revisión completa» en los ajustes avanzados de una base,
+  en segundo plano, con progreso y botón para detenerla, sin cambiar nada: duplicados exactos
+  (mismos jugadores, jugadas, torneo, ronda y fecha) y probables (mismos jugadores y jugadas con
+  otros datos), nombres sospechosos (vacíos, de relleno, menos de tres letras o con dígitos) y
+  jugadores con ratings que difieren en más de 1000 puntos dentro del rango plausible, con ejemplos.
+  Un único recorrido de las jugadas con huellas ordenadas en vez de `GROUP BY` sobre el movetexto:
+  **53 s en la Gigabase de 10,3 M de partidas (debug)**, frente a ~6 min de las consultas SQL
+  equivalentes. Resultado en esa base: 0 duplicados, 2.007 nombres sospechosos y 1.706 jugadores con
+  ratings incoherentes;
+- **rendimiento frente a lo esperado y tendencia por jugada (I-28)** en el informe de posición: la
+  columna «vs. esperado» resta a la puntuación de cada jugada la que predice la diferencia de Elo
+  (fórmula de Elo, partidas con ambos ratings y resultado; al menos 10), con detalle en el tooltip, y
+  una flecha marca las jugadas que ganan o pierden 5 puntos o más de cuota en los últimos 3 años
+  frente a los anteriores (al menos 30 partidas en cada periodo). Los informes pasan a la versión 5;
+  los guardados antes muestran «—» en esa columna;
 - **restablecer enlaces a partidas rotos:** cuando un enlace `onyx://game` de un comentario ya no
   apunta a la partida correcta (la base se actualizó, se reemplazó o cambió de archivo), un botón
   «Restablecer enlace» busca primero por los datos de la partida (jugadores y año, guardados en el
@@ -780,6 +827,50 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-15 — Release 0.20.0
+
+- Publica el mantenimiento del estudio de mercado (búsqueda de jugadores, informe de calidad,
+  repeticiones de memoria, jerarquía de aperturas), 8.2 (caché, presupuesto de motores, segunda
+  pasada, nube de Lichess opcional, momentos clave, explicaciones y flechas) y 8.3 (catálogo propio
+  que conserva el de En Croissant, revisión completa de calidad, rendimiento frente a lo esperado y
+  restablecer enlaces).
+- El reporte pasa a 250 ms por jugada con segunda pasada por defecto: encontró tantos errores como
+  500 ms sin ella en la mitad de tiempo frente a una referencia de 2 s.
+- Validado manualmente por el autor antes de publicar.
+- Detalle: `docs/release-notes-0.20.0.es.md`.
+
+### 2026-10-15 — Correcciones tras la validación manual de 8.2 y 8.3
+
+- Guardar una partida en una base borraba su índice de posiciones aunque solo cambiaran los
+  comentarios, y en la Gigabase eso obligaba a reconstruir 1,8 GB en la siguiente búsqueda (la
+  «carga infinita» observada). Ahora el índice se conserva si no cambian jugadores, fecha,
+  resultado, ratings, posición inicial ni línea principal, y el sello de la base se reescribe en el
+  propio índice (también al editar título o descripción, que antes tampoco lo conservaba). Cuando sí
+  hay que reconstruirlo, el panel lo dice con el número de partidas procesadas.
+- La búsqueda de jugadores al filtrar partidas por color aplicaba además el filtro de texto del
+  propio campo, que ocultaba «Cabezas Solano, David» al escribir «David Cabezas».
+- Las aperturas del análisis de jugador salían como «Unknown opening»: los metadatos no leían las
+  jugadas. Ahora se nombran desde las jugadas codificadas (sin convertirlas a PGN) y el nombre de
+  apertura se busca en un índice en vez de recorrer ~3.500 aperturas por jugada.
+- El informe de posición sobresalía por la derecha y tapaba el botón de cerrar.
+
+### 2026-10-15 — 8.3 y primera versión de 8.2
+
+- 8.3: catálogo propio incluido en la aplicación que conserva todas las descargas de En Croissant y
+  sigue combinando su catálogo en vivo; informe de calidad completo en segundo plano (53 s en 10,3 M
+  de partidas); rendimiento frente a lo esperado por Elo y tendencia por jugada en el informe de
+  posición (versión 5 del informe).
+- 8.2: presupuesto de motores para lotes, caché persistente de evaluaciones, límite de profundidad
+  con tope, Player Analysis en paralelo y clasificado por probabilidad de victoria, momentos clave
+  en el reporte y explicaciones y flechas en «Aprende de tus errores».
+- 8.2, segunda entrega: segunda pasada dirigida (activada por defecto en el reporte tras medirla
+  contra una referencia de 2 s), apertura opcional desde la nube de Lichess, bots dentro del
+  presupuesto de motores y medición del arranque y de la ficha de jugador.
+- Análisis del jugador → Aperturas agrupa por familia, variante y subvariante, con partidas,
+  puntuación, V-T-D y Elo del rival exactos en cada nivel.
+- Benchmark reproducible con 8 partidas propias: ningún predeterminado cambia sin superar el ruido
+  medido entre dos ejecuciones iguales. Detalle: `docs/engine-analysis-phase-8-2.es.md`.
 
 ### 2026-10-15 — Fases replanificadas desde el estudio de mercado
 

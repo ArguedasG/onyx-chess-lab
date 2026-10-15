@@ -15,6 +15,14 @@ pub enum GoMode {
     Time(u32),
     Nodes(u32),
     Infinite,
+    /// Target depth with a time cap: easy positions finish early, hard ones stop at `time` ms.
+    DepthTime(DepthTime),
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Type, PartialEq, Eq)]
+pub struct DepthTime {
+    pub depth: u32,
+    pub time: u32,
 }
 
 impl GoMode {
@@ -30,6 +38,7 @@ impl GoMode {
                 )
             }
             GoMode::Infinite => "go infinite".to_string(),
+            GoMode::DepthTime(limit) => format!("go depth {} movetime {}", limit.depth, limit.time),
         }
     }
 }

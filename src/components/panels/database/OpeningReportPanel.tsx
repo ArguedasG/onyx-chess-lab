@@ -340,7 +340,10 @@ export default function OpeningReportPanel({
           cancel();
           setOpened(false);
         }}
-        size="calc(100vw - 3rem)"
+        // Mantine centres the modal inside a 5vw side gutter by default, so a width close to 100vw
+        // pushed its right edge (and the close button) off screen. Width and gutter now add up.
+        size="94vw"
+        xOffset="3vw"
         title={t("OpeningReport.Title")}
         scrollAreaComponent={ModalScrollArea}
       >

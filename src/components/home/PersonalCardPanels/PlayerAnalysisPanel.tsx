@@ -37,6 +37,7 @@ import { useTranslation } from "react-i18next";
 import type { AnalysisArtifactDocument, EngineOption, GameMetadata, GoMode } from "@/bindings";
 import { commands } from "@/bindings";
 import { PlayerSearchInput } from "@/components/databases/PlayerSearchInput";
+import PlayerOpeningsTable from "./PlayerOpeningsTable";
 import AnalysisLibraryModal from "@/components/analysis/AnalysisLibraryModal";
 import PlayerPeriodComparison from "./PlayerPeriodComparison";
 import PlayerVerifiableInsights from "./PlayerVerifiableInsights";
@@ -60,6 +61,7 @@ import {
   criticalPositionForPerspective,
   DEFAULT_PLAYER_ANALYSIS_FILTERS,
   getPlayerAnalysisTimeControl,
+  PLAYER_ANALYSIS_CLASSIFICATION,
   PLAYER_ANALYSIS_SCHEMA_VERSION,
   PLAYER_ANALYSIS_TIME_CONTROLS,
   playerAnalysisTimeControlCounts,
@@ -365,7 +367,7 @@ export default function PlayerAnalysisPanel({
     null,
   );
   const cancelled = useRef(false);
-  const activeAnalysisId = useRef<string | null>(null);
+  const activeAnalysisIds = useRef<Set<string>>(new Set());
   const loadRequestId = useRef(0);
   const profileSnapshot = useRef({
     sources: analysisSources,
@@ -652,7 +654,7 @@ export default function PlayerAnalysisPanel({
       name: setting.name,
       value: setting.value == null ? "" : String(setting.value),
     }));
-    const limit = `time:${engineTimeMs}ms`;
+    const limit = `time:${engineTimeMs}ms|${PLAYER_ANALYSIS_CLASSIFICATION}`;
     const reusable =
       stored.engine?.engine.path === engine.path && stored.engine.engine.limit === limit
         ? new Map(stored.engine.games.map((game) => [game.key, game]))
@@ -665,10 +667,13 @@ export default function PlayerAnalysisPanel({
     setEngineLoading(true);
     setEngineProgress(selected.length ? (analyzed.length / selected.length) * 100 : 0);
     try {
-      for (const item of selected) {
-        if (cancelled.current || reusable.has(item.key)) continue;
+      // Several games at once, as many as the engine budget allows (see `get_engine_budget`).
+      const budget = await commands.getEngineBudget();
+      const pending = selected.filter((item) => !reusable.has(item.key));
+      let next = 0;
+      const analyzeOne = async (item: (typeof selected)[number]) => {
         const analysisId = `player-analysis-${profileId}-${item.game.id}`;
-        activeAnalysisId.current = analysisId;
+        activeAnalysisIds.current.add(analysisId);
         try {
           const gameResponse = unwrap(
             await commands.getGames(item.source.databasePath, {
@@ -700,6 +705,8 @@ export default function PlayerAnalysisPanel({
               annotateNovelties: false,
               referenceDb: null,
               reversed: false,
+              // Waits for a slot of the engine budget and uses its threads and hash.
+              priority: "batch",
             },
             options,
           );
@@ -716,12 +723,29 @@ export default function PlayerAnalysisPanel({
             }),
           );
         } catch (error) {
-          if (cancelled.current) break;
+          if (cancelled.current) return;
           skipped += 1;
           console.warn("Player analysis skipped a game", item.key, error);
+        } finally {
+          activeAnalysisIds.current.delete(analysisId);
         }
-        setEngineProgress((analyzed.length / selected.length) * 100);
-      }
+      };
+      const worker = async () => {
+        while (!cancelled.current && next < pending.length) {
+          const item = pending[next];
+          next += 1;
+          await analyzeOne(item);
+          setEngineProgress((analyzed.length / selected.length) * 100);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.max(1, Math.min(budget.batchProcesses, pending.length)) }, () =>
+          worker(),
+        ),
+      );
+      // Workers finish in any order; keep the games in their selection order.
+      const order = new Map(selected.map((item, index) => [item.key, index]));
+      analyzed.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
       const result = aggregateEngineAnalysis({
         engine: {
           name: engine.name,
@@ -750,7 +774,7 @@ export default function PlayerAnalysisPanel({
       });
       saveProfile({ ...stored, updatedAt: result.analyzedAt, engine: result });
     } finally {
-      activeAnalysisId.current = null;
+      activeAnalysisIds.current.clear();
       setEngineLoading(false);
     }
   }, [
@@ -769,8 +793,7 @@ export default function PlayerAnalysisPanel({
 
   const cancelEngine = useCallback(() => {
     cancelled.current = true;
-    const id = activeAnalysisId.current;
-    if (id) void commands.cancelAnalysis(id);
+    for (const id of activeAnalysisIds.current) void commands.cancelAnalysis(id);
   }, []);
 
   const addCriticalToSet = useCallback(
@@ -1284,9 +1307,9 @@ export default function PlayerAnalysisPanel({
               viewportRef={openingsViewport}
               onScrollPositionChange={({ y }) => rememberScroll("openings", y)}
             >
-              <BucketTable
-                rows={metadata.openings}
-                label={t("PlayerAnalysis.Opening", "Opening")}
+              <PlayerOpeningsTable
+                openings={metadata.openings}
+                groups={metadata.openingGroups}
                 onOpen={openReference}
               />
             </ScrollArea>

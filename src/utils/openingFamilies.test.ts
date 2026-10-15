@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildOpeningFamilies, openingNameLevels, visibleOpeningRows } from "./openingFamilies";
+import {
+    buildOpeningFamilies,
+    buildOpeningTree,
+    openingNameLevels,
+    visibleOpeningRows,
+    visibleOpeningTreeRows,
+} from "./openingFamilies";
 
 const result = (name: string, won: number, draw: number, lost: number) => ({
     name,
@@ -71,5 +77,51 @@ describe("opening families", () => {
         expect(labels(["french defense", "french defense › advance variation"])).toContain(
             "2:Milner-Barry Gambit",
         );
+    });
+});
+
+describe("opening tree from exact groups", () => {
+    const bucket = (key: string, games: number) => ({ key, games });
+
+    it("nests full names under the exact family and variation results", () => {
+        const leaves = [
+            bucket("French Defense: Advance Variation, Milner-Barry Gambit", 2),
+            bucket("French Defense: Advance Variation", 3),
+            bucket("French Defence: Exchange Variation", 1),
+            bucket("French Defense", 1),
+            bucket("Unknown opening", 4),
+        ];
+        const groups = [
+            bucket("French Defense", 7),
+            bucket("French Defense: Advance Variation", 5),
+            bucket("French Defense: Exchange Variation", 1),
+        ];
+        const tree = buildOpeningTree(leaves, groups);
+        expect(tree.map((node) => [node.label, node.value.games])).toEqual([
+            ["French Defense", 7],
+            ["Unknown opening", 4],
+        ]);
+        const french = tree[0];
+        expect(french.own?.games).toBe(1);
+        expect(french.children.map((node) => [node.label, node.value.games])).toEqual([
+            ["Advance Variation", 5],
+            ["Exchange Variation", 1],
+        ]);
+        const advance = french.children[0];
+        expect(advance.own?.games).toBe(3);
+        expect(advance.children.map((node) => node.label)).toEqual(["Milner-Barry Gambit"]);
+
+        const rows = visibleOpeningTreeRows(tree, new Set([french.key, advance.key]));
+        expect(
+            rows.map(({ node, depth, ownOnly }) => `${depth}:${node.label}${ownOnly ? "*" : ""}`),
+        ).toEqual([
+            "0:French Defense",
+            "1:French Defense*",
+            "1:Advance Variation",
+            "2:Advance Variation*",
+            "2:Milner-Barry Gambit",
+            "1:Exchange Variation",
+            "0:Unknown opening",
+        ]);
     });
 });

@@ -510,6 +510,35 @@ impl MmapSearchIndex {
     }
 }
 
+/// Rewrites the source stamp of an index in place, so a change to the database that does not
+/// affect the index (its title, a game's comments) keeps the index instead of rebuilding it.
+/// Only possible when the new stamp fits the space of the old one (same 8-byte padded length);
+/// returns `false` otherwise, or for indexes without a stamp.
+pub fn restamp(index_path: &Path, source: &str) -> io::Result<bool> {
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(index_path)?;
+    let mut header = [0u8; 24];
+    if file.read_exact(&mut header).is_err()
+        || verify_header(&header[..HEADER_SIZE]).is_err()
+        || u32::from_le_bytes(header[4..8].try_into().unwrap()) != VERSION
+    {
+        return Ok(false);
+    }
+    let padded = |length: usize| length + (8 - length % 8) % 8;
+    let old = u64::from_le_bytes(header[16..24].try_into().unwrap()) as usize;
+    if old == 0 || old > 4096 || source.len() > 4096 || padded(old) != padded(source.len()) {
+        return Ok(false);
+    }
+    file.seek(SeekFrom::Start(16))?;
+    file.write_all(&(source.len() as u64).to_le_bytes())?;
+    file.write_all(source.as_bytes())?;
+    file.write_all(&[0; 8][..padded(source.len()) - source.len()])?;
+    file.sync_all()?;
+    Ok(true)
+}
+
 pub fn get_index_path(db_path: &Path) -> PathBuf {
     db_path.with_extension("ecsi")
 }

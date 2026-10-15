@@ -7,7 +7,9 @@ import {
     filteredBands,
     filteredMoves,
     filteredTotal,
+    moverPerformance,
     moverScore,
+    moveTrends,
     reportYearRange,
     trendSeries,
 } from "./openingReportFilters";
@@ -19,7 +21,66 @@ const result = (white: number, draw: number, black: number) => ({
     unknown: 0,
 });
 
+const cell = (
+    move: string,
+    year: number | null,
+    results: ReturnType<typeof result>,
+    rated = { ratedGames: 0, expectedWhite: 0, scoreWhite: 0 },
+): ReportMoveCell => ({ move, year, band: 1, results, ...rated });
+
 describe("opening report filters", () => {
+    it("compares the mover's score with the score the Elo difference predicts", () => {
+        const report = openingReportFixture();
+        const rich: OpeningReport = {
+            ...report,
+            moveBreakdown: [
+                // 20 rated games: White expected 12 points (60 %), scored 14 (70 %).
+                cell("e4", 2020, result(10, 8, 2), {
+                    ratedGames: 20,
+                    expectedWhite: 12,
+                    scoreWhite: 14,
+                }),
+                cell("d4", 2020, result(2, 0, 1), {
+                    ratedGames: 3,
+                    expectedWhite: 1.5,
+                    scoreWhite: 2,
+                }),
+            ],
+        };
+        const rows = filteredMoves(rich, { band: null, from: 2019, to: 2021 });
+        const e4 = rows.find((row) => row.move === "e4")!;
+        expect(moverPerformance(e4.rated, true)).toEqual({
+            games: 20,
+            score: 70,
+            expected: 60,
+            delta: 10,
+        });
+        expect(moverPerformance(e4.rated, false)!.delta).toBeCloseTo(-10);
+        // Too few rated games for d4; reports without rated sums show nothing.
+        expect(moverPerformance(rows.find((row) => row.move === "d4")!.rated, true)).toBeNull();
+        expect(moverPerformance(undefined, true)).toBeNull();
+    });
+
+    it("marks moves gaining or losing popularity in the last three years", () => {
+        const report = openingReportFixture();
+        const cells: ReportMoveCell[] = [];
+        for (let year = 2015; year <= 2024; year++) {
+            const recent = year >= 2022;
+            cells.push(cell("e4", year, result(recent ? 4 : 8, 0, 0)));
+            cells.push(cell("c4", year, result(recent ? 6 : 2, 0, 0)));
+        }
+        const trends = moveTrends({ ...report, moveBreakdown: cells }, ALL_GAMES);
+        expect(trends.get("c4")).toMatchObject({
+            direction: "up",
+            recentShare: 60,
+            earlierShare: 20,
+        });
+        expect(trends.get("e4")?.direction).toBe("down");
+        // Not enough recent games: nothing is marked.
+        const thin = cells.filter((entry) => entry.year! < 2022 || entry.year === 2024);
+        expect(moveTrends({ ...report, moveBreakdown: thin.slice(0, 16) }, ALL_GAMES).size).toBe(0);
+    });
+
     it("uses the complete move list when nothing is filtered", () => {
         const report = openingReportFixture();
         expect(filteredMoves(report, ALL_GAMES).map((row) => row.move)).toEqual([
@@ -70,8 +131,8 @@ describe("opening report filters", () => {
 
         const cells: ReportMoveCell[] = [];
         for (let year = 2000; year <= 2009; year++) {
-            cells.push({ move: "e4", year, band: 1, results: result(6, 2, 2) });
-            cells.push({ move: "d4", year, band: 1, results: result(1, 0, 1) });
+            cells.push(cell("e4", year, result(6, 2, 2)));
+            cells.push(cell("d4", year, result(1, 0, 1)));
         }
         const rich = { ...report, moveBreakdown: cells };
         const trend = trendSeries(rich, ALL_GAMES, true)!;

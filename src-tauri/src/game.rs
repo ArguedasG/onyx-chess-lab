@@ -1079,6 +1079,18 @@ impl GameManager {
         Ok(())
     }
 
+    /// Bot engines thinking right now, for the engine budget. A game being updated counts as idle.
+    pub fn thinking_engines(&self) -> u32 {
+        self.games
+            .iter()
+            .filter(|game| {
+                game.value().try_read().is_ok_and(|controller| {
+                    controller.engine_thinking && matches!(controller.status, GameStatus::Playing)
+                })
+            })
+            .count() as u32
+    }
+
     pub fn kill_all_sync(&self) {
         for entry in self.games.iter() {
             if let Ok(controller) = entry.value().try_read() {
