@@ -75,6 +75,7 @@ import {
   learnedOpeningPrefixLength,
   markOpeningLineLearned,
   openingLearnMoveDelay,
+  openingLearnRecallCount,
   openingLearnStartPly,
   isOpeningLineLearned,
   nextOpeningLine,
@@ -174,6 +175,13 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     : undefined;
   const learning = practiceUnit === "line" && openingQueue?.mode === "learn";
   const learnMoveDelay = openingLearnMoveDelay(trainingAreas.openings);
+  const learnRecallsRequired = openingLearnRecallCount(trainingAreas.openings);
+  const learnRecallPending =
+    learning &&
+    practiceState.phase === "correct" &&
+    practiceState.learnStage === "recall" &&
+    (practiceState.mistakes ?? 0) === 0 &&
+    (practiceState.learnRecalls ?? 0) < learnRecallsRequired;
   const [learnFinished, setLearnFinished] = useState(false);
   const learnHandledRef = useRef<string | null>(null);
 
@@ -395,6 +403,11 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
         learnStage: stage,
         learnStep: stage === "guided" ? "play" : undefined,
         learnShownPly: undefined,
+        // Consecutive flawless recalls only carry over into another recall; a mistake restarts them.
+        learnRecalls:
+          stage === "recall" && previous.phase === "correct" && (previous.mistakes ?? 0) === 0
+            ? previous.learnRecalls
+            : 0,
         currentFen: getNodeAtPath(root, start).fen,
         mistakes: 0,
         feedback: undefined,
@@ -693,7 +706,8 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     else finishLearnSession();
   }, [advanceOpeningChapter, finishLearnSession, openingQueue]);
 
-  // A flawless recall marks the line as learned; the final position stays until the student moves on.
+  // Enough flawless recalls in a row mark the line as learned; the final position stays until the
+  // student moves on.
   useEffect(() => {
     if (!learning || practiceState.phase !== "correct" || practiceState.learnStage !== "recall") {
       return;
@@ -702,6 +716,9 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     const attemptKey = `${practiceState.openingLineId}:${practiceState.lineStartedAt}`;
     if (learnHandledRef.current === attemptKey) return;
     learnHandledRef.current = attemptKey;
+    const recalls = (practiceState.learnRecalls ?? 0) + 1;
+    setPracticeState((previous) => ({ ...previous, learnRecalls: recalls }));
+    if (recalls < learnRecallsRequired) return;
     const lineId = practiceState.openingLineId;
     if (lineId) {
       setTrainingAreas((previous) => ({
@@ -717,11 +734,14 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     setSessionStats((previous) => ({ ...previous, correct: previous.correct + 1 }));
   }, [
     learning,
+    learnRecallsRequired,
+    practiceState.learnRecalls,
     practiceState.learnStage,
     practiceState.lineStartedAt,
     practiceState.mistakes,
     practiceState.openingLineId,
     practiceState.phase,
+    setPracticeState,
     setSessionStats,
     setTrainingAreas,
   ]);
@@ -931,7 +951,9 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   useHotkeys(
     "enter, space",
     () => {
-      if ((practiceState.mistakes ?? 0) === 0) moveToNextLearnLine();
+      if ((practiceState.mistakes ?? 0) > 0) return;
+      if (learnRecallPending) restartLearnLine("recall");
+      else moveToNextLearnLine();
     },
     {
       enabled:
@@ -1221,6 +1243,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                       onNextLine={moveToNextLearnLine}
                       onRestartGuided={() => restartLearnLine("guided")}
                       onRestartRecall={() => restartLearnLine("recall")}
+                      recallsRequired={learnRecallsRequired}
                       onSkip={moveToNextLearnLine}
                     />
                   ) : (

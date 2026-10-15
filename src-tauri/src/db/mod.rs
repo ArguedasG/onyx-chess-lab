@@ -2,7 +2,9 @@ mod encoding;
 mod models;
 mod opening_report;
 mod ops;
+mod player_search;
 mod position_query;
+mod quality;
 mod schema;
 mod search;
 mod search_index;
@@ -10,6 +12,7 @@ pub use opening_report::generate_opening_report;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };
+pub use quality::get_database_quality;
 
 use crate::{
     db::{
@@ -151,6 +154,7 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
             if self.enable_foreign_keys {
                 conn.batch_execute("PRAGMA foreign_keys = ON;")?;
             }
+            player_search::register_name_key(conn)?;
             Ok(())
         })()
         .map_err(diesel::r2d2::Error::QueryError)
@@ -1635,6 +1639,8 @@ pub enum PlayerSort {
     Name,
     #[serde(rename = "elo")]
     Elo,
+    #[serde(rename = "games")]
+    Games,
 }
 
 #[tauri::command]
@@ -1667,9 +1673,20 @@ pub async fn get_players(
     sql_query = sql_query.filter(players::name.is_not("Unknown"));
     count_query = count_query.filter(players::name.is_not("Unknown"));
 
-    if let Some(name) = query.name {
-        sql_query = sql_query.filter(players::name.like(format!("%{}%", name)));
-        count_query = count_query.filter(players::name.like(format!("%{}%", name)));
+    // Every token of the search must appear in the name, in any order and ignoring accents.
+    // Players without games are left out of searches.
+    let tokens = query
+        .name
+        .as_deref()
+        .map(player_search::search_tokens)
+        .unwrap_or_default();
+    if !tokens.is_empty() {
+        for token in &tokens {
+            sql_query = sql_query.filter(player_search::name_contains(token));
+            count_query = count_query.filter(player_search::name_contains(token));
+        }
+        sql_query = sql_query.filter(player_search::has_games());
+        count_query = count_query.filter(player_search::has_games());
     }
 
     if let Some(range) = query.range {
@@ -1701,6 +1718,12 @@ pub async fn get_players(
         PlayerSort::Elo => match query.options.direction {
             SortDirection::Asc => sql_query.order(players::elo.asc()),
             SortDirection::Desc => sql_query.order(players::elo.desc()),
+        },
+        PlayerSort::Games => match query.options.direction {
+            SortDirection::Asc => sql_query.order((player_search::game_count().asc(), players::id)),
+            SortDirection::Desc => {
+                sql_query.order((player_search::game_count().desc(), players::id))
+            }
         },
     };
 

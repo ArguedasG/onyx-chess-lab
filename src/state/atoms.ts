@@ -671,6 +671,8 @@ export type PracticeState = {
     learnStep?: "demo" | "play" | "end";
     /** Guided Learn: ply whose line move was already demonstrated. */
     learnShownPly?: number;
+    /** Learn mode: flawless recalls of the current line in a row. */
+    learnRecalls?: number;
     /** Where the current line attempt starts; Learn mode restarts from here. */
     lineStartPath?: number[];
 };

@@ -8,6 +8,7 @@ import {
     nextOpeningLine,
     openingLearnBatchSize,
     openingLearnMoveDelay,
+    openingLearnRecallCount,
     openingLearnStartPly,
     trainableOpeningLines,
 } from "./openingLearning";
@@ -138,6 +139,19 @@ describe("opening learning", () => {
         expect(withDelay(300)).toBe(300);
         expect(withDelay(0)).toBe(0);
         expect(withDelay(60_000)).toBe(5000);
+    });
+
+    it("requires two flawless recalls by default and keeps the setting within its limits", () => {
+        const current = state([]);
+        expect(openingLearnRecallCount(current)).toBe(2);
+        const withCount = (learnRecallCount: number) =>
+            openingLearnRecallCount({
+                ...current,
+                settings: { ...current.settings, learnRecallCount },
+            });
+        expect(withCount(1)).toBe(1);
+        expect(withCount(3)).toBe(3);
+        expect(withCount(40)).toBe(5);
     });
 
     it("finds the prefix already covered by learned lines of the repertoire", () => {

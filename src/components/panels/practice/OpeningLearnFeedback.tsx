@@ -96,6 +96,7 @@ export default function OpeningLearnFeedback({
   onRestartGuided,
   onRestartRecall,
   onSkip,
+  recallsRequired,
 }: {
   practiceState: PracticeState;
   /** Comment of the position on the board; shown only while guiding. */
@@ -110,11 +111,14 @@ export default function OpeningLearnFeedback({
   onRestartGuided: () => void;
   onRestartRecall: () => void;
   onSkip: () => void;
+  /** Flawless recalls in a row that mark the line as learned. */
+  recallsRequired: number;
 }) {
   const { t } = useTranslation();
   const guided = practiceState.learnStage === "guided";
   const step = practiceState.learnStep ?? "play";
   const mistakes = practiceState.mistakes ?? 0;
+  const recalls = practiceState.learnRecalls ?? 0;
 
   if (practiceState.phase === "waiting" && guided && step === "demo" && demo) {
     const { previous, shown, viewingPrevious } = demo;
@@ -197,10 +201,16 @@ export default function OpeningLearnFeedback({
             icon={<IconBulb size={16} />}
             title={t("OpeningLearn.RecallTitle", "Now from memory")}
           >
-            {t(
-              "OpeningLearn.RecallBody",
-              "Repeat the line without help. If you complete it without mistakes it will be marked as learned.",
-            )}
+            {recallsRequired > 1
+              ? t(
+                  "OpeningLearn.RecallBodyCount",
+                  "Repeat the line without help. It is marked as learned after {{total}} flawless repetitions in a row (done: {{done}}).",
+                  { total: recallsRequired, done: recalls },
+                )
+              : t(
+                  "OpeningLearn.RecallBody",
+                  "Repeat the line without help. If you complete it without mistakes it will be marked as learned.",
+                )}
           </Alert>
         )}
         {practiceState.feedback === "guided-wrong" && (
@@ -220,6 +230,32 @@ export default function OpeningLearnFeedback({
   }
 
   if (practiceState.phase === "correct" && practiceState.learnStage === "recall") {
+    if (mistakes === 0 && recalls < recallsRequired) {
+      return (
+        <Stack gap="xs">
+          <Alert
+            color="teal"
+            icon={<IconRepeat size={16} />}
+            title={t("OpeningLearn.RecallDoneTitle", "Flawless: {{done}} of {{total}}", {
+              done: recalls,
+              total: recallsRequired,
+            })}
+          >
+            {t(
+              "OpeningLearn.RecallDoneBody",
+              "Repeat it from memory again. A mistake restarts the count.",
+            )}
+          </Alert>
+          <ContinueButton
+            label={t("OpeningLearn.RepeatRecallAgain", "Repeat from memory")}
+            onClick={onRestartRecall}
+          />
+          <Button size="compact-sm" variant="subtle" color="gray" onClick={onSkip}>
+            {t("OpeningLearn.Skip", "Skip for now")}
+          </Button>
+        </Stack>
+      );
+    }
     return mistakes === 0 ? (
       <Stack gap="xs">
         <Alert

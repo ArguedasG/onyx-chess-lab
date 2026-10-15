@@ -1,13 +1,21 @@
-import { Box, Divider, Group, ScrollArea, Stack, Text } from "@mantine/core";
+import { ActionIcon, Divider, Group, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Color } from "chessops";
-import { useAtom, useAtomValue } from "jotai";
-import { useRef, useState } from "react";
+import { useAtom } from "jotai";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PlayerGameInfo } from "@/bindings";
 import { commands, type GameOutcome } from "@/bindings";
-import { activeTabAtom, fontSizeAtom, tabsAtom } from "@/state/atoms";
+import { activeTabAtom, tabsAtom } from "@/state/atoms";
 import { parsePGN } from "@/utils/chess";
+import {
+  buildOpeningFamilies,
+  type OpeningFamilyNode,
+  type OpeningFamilyRow,
+  type OpeningResultCounts,
+  visibleOpeningRows,
+} from "@/utils/openingFamilies";
 import { createTab } from "@/utils/tabs";
 import { getTimeControl } from "@/utils/timeControl";
 import { countMainPly, defaultTree } from "@/utils/treeReducer";
@@ -17,13 +25,7 @@ import ResultsChart from "./ResultsChart";
 import TimeControlSelector from "./TimeControlSelector";
 import WebsiteAccountSelector from "./WebsiteAccountSelector";
 
-type OpeningStats = {
-  name: string;
-  games: number;
-  won: number;
-  draw: number;
-  lost: number;
-};
+type OpeningStats = OpeningResultCounts & { name: string };
 
 function aggregateOpenings(
   data: { opening: string; result: GameOutcome; is_player_white: boolean }[],
@@ -91,17 +93,10 @@ function OpeningsPanel({
   const whiteGames = openingData.filter((g) => g.is_player_white).length;
   const blackGames = openingData.filter((g) => !g.is_player_white).length;
 
-  const whiteOpenings = aggregateOpenings(openingData, "white");
-  const blackOpenings = aggregateOpenings(openingData, "black");
+  const whiteFamilies = buildOpeningFamilies(aggregateOpenings(openingData, "white"));
+  const blackFamilies = buildOpeningFamilies(aggregateOpenings(openingData, "black"));
 
-  const fontSize = useAtomValue(fontSizeAtom);
-
-  const parentRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: Math.max(whiteOpenings.length, blackOpenings.length),
-    estimateSize: () => 120 * (fontSize / 100),
-    getScrollElement: () => parentRef.current,
-  });
+  const { t } = useTranslation();
 
   return (
     <Stack gap={0} h="100%">
@@ -123,101 +118,139 @@ function OpeningsPanel({
         />
       </Group>
 
-      <Group grow pt="xl">
+      <SimpleGrid cols={2} pt="xl">
         <Text ta="center" fw="bold">
-          White
+          {t("Common.White", "White")}
         </Text>
         <Text ta="center" fw="bold">
-          Black
+          {t("Common.Black", "Black")}
         </Text>
-      </Group>
+      </SimpleGrid>
       <Divider mt="md" />
-      <ScrollArea viewportRef={parentRef} flex={1}>
-        <Box
-          style={{
-            height: rowVirtualizer.getTotalSize(),
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const white = whiteOpenings[virtualRow.index];
-            const black = blackOpenings[virtualRow.index];
-            return (
-              <Box
-                key={virtualRow.index}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: virtualRow.size,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <Group grow>
-                  {white ? (
-                    <OpeningDetail opening={white} totalGames={whiteGames} color="white" />
-                  ) : (
-                    <div />
-                  )}
-                  {black ? (
-                    <OpeningDetail opening={black} totalGames={blackGames} color="black" />
-                  ) : (
-                    <div />
-                  )}
-                </Group>
-                <Divider />
-              </Box>
-            );
-          })}
-        </Box>
+      <ScrollArea flex={1}>
+        <SimpleGrid cols={2} spacing="md">
+          <OpeningFamilyColumn families={whiteFamilies} totalGames={whiteGames} color="white" />
+          <OpeningFamilyColumn families={blackFamilies} totalGames={blackGames} color="black" />
+        </SimpleGrid>
       </ScrollArea>
     </Stack>
   );
 }
 
-function OpeningDetail({
-  opening,
+/** Families first; each level unfolds into its variations and subvariations. */
+function OpeningFamilyColumn({
+  families,
   totalGames,
   color,
 }: {
-  opening: OpeningStats;
+  families: OpeningFamilyNode[];
   totalGames: number;
   color: Color;
 }) {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const rows = useMemo(() => visibleOpeningRows(families, expanded), [families, expanded]);
+  const toggle = (key: string) =>
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
+  return (
+    <Stack gap={0}>
+      {rows.map((row) => (
+        <OpeningDetail
+          key={`${row.node.key}${row.ownOnly ? ":own" : ""}`}
+          row={row}
+          expanded={expanded.has(row.node.key)}
+          onToggle={() => toggle(row.node.key)}
+          totalGames={totalGames}
+          color={color}
+        />
+      ))}
+    </Stack>
+  );
+}
+
+function OpeningDetail({
+  row,
+  expanded,
+  onToggle,
+  totalGames,
+  color,
+}: {
+  row: OpeningFamilyRow;
+  expanded: boolean;
+  onToggle: () => void;
+  totalGames: number;
+  color: Color;
+}) {
+  const { t } = useTranslation();
   const [, setTabs] = useAtom(tabsAtom);
   const [, setActiveTab] = useAtom(activeTabAtom);
   const navigate = useNavigate();
 
-  const openingRate = opening.games / totalGames;
+  const { node, depth, ownOnly } = row;
+  const counts = ownOnly ? node.own : node;
+  const foldable = !ownOnly && node.children.length > 0;
+  const openingName = ownOnly || !foldable ? node.fullName : undefined;
+  const openingRate = totalGames > 0 ? counts.games / totalGames : 0;
+
+  async function openOnBoard(name: string) {
+    const pgn = unwrap(await commands.getOpeningFromName(name));
+    const headers = defaultTree().headers;
+    const tree = await parsePGN(pgn);
+    headers.orientation = color;
+    createTab({
+      tab: { name, type: "analysis" },
+      pgn,
+      headers,
+      setTabs,
+      setActiveTab,
+      position: Array(countMainPly(tree.root)).fill(0),
+    });
+    navigate({ to: "/" });
+  }
+
   return (
-    <Stack py="sm" justify="space-between">
-      <Group justify="space-between" wrap="nowrap">
-        <Text
-          lineClamp={2}
-          className={classes.link}
-          onClick={async () => {
-            const pgn = unwrap(await commands.getOpeningFromName(opening.name));
-            const headers = defaultTree().headers;
-            const tree = await parsePGN(pgn);
-            headers.orientation = color;
-            createTab({
-              tab: { name: opening.name, type: "analysis" },
-              pgn,
-              headers,
-              setTabs,
-              setActiveTab,
-              position: Array(countMainPly(tree.root)).fill(0),
-            });
-            navigate({ to: "/" });
-          }}
-        >
-          {opening.name}
+    <Stack py="xs" gap={6} pl={`calc(${depth} * var(--mantine-spacing-md))`}>
+      <Group justify="space-between" wrap="nowrap" gap="xs">
+        <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+          {foldable ? (
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="gray"
+              onClick={onToggle}
+              aria-label={
+                expanded ? t("Common.Collapse", "Collapse") : t("Common.Expand", "Expand")
+              }
+            >
+              {expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+            </ActionIcon>
+          ) : (
+            depth > 0 && <span style={{ width: 22, flexShrink: 0 }} />
+          )}
+          <Text
+            lineClamp={2}
+            fw={depth === 0 ? 600 : undefined}
+            c={ownOnly ? "dimmed" : undefined}
+            fs={ownOnly ? "italic" : undefined}
+            className={classes.link}
+            title={node.fullName}
+            onClick={() => (openingName ? void openOnBoard(openingName) : onToggle())}
+          >
+            {ownOnly
+              ? t("Openings.Family.WithoutVariation", "Without a more specific variation")
+              : node.label}
+          </Text>
+        </Group>
+        <Text size="sm" style={{ flexShrink: 0 }}>
+          {counts.games} · {(openingRate * 100).toFixed(1)}%
         </Text>
-        <Text>{(openingRate * 100).toFixed(2)}%</Text>
       </Group>
-      <ResultsChart won={opening.won} draw={opening.draw} lost={opening.lost} size="1.5rem" />
+      <ResultsChart won={counts.won} draw={counts.draw} lost={counts.lost} size="1.25rem" />
+      <Divider />
     </Stack>
   );
 }

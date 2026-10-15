@@ -62,6 +62,8 @@ export interface TreeStoreState extends TreeState {
 
     setAnnotation: (payload: Annotation) => void;
     setComment: (payload: string) => void;
+    /** Sets the comment of the move at `path`, wherever the board is. */
+    setCommentAt: (path: number[], payload: string) => void;
     setHeaders: (payload: GameHeaders) => void;
     setResult: (payload: Outcome) => void;
     setShapes: (shapes: DrawShape[]) => void;
@@ -446,6 +448,16 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                     state.dirty = true;
                     const node = getNodeAtPath(state.root, state.position);
                     if (node) {
+                        node.comment = payload;
+                    }
+                }),
+            ),
+        setCommentAt: (path, payload) =>
+            set(
+                produce((state) => {
+                    const node = getNodeAtPath(state.root, path);
+                    if (node) {
+                        state.dirty = true;
                         node.comment = payload;
                     }
                 }),

@@ -219,6 +219,9 @@ async deleteGame(file: string, n: number) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Returns how many games were removed.
+ */
 async deleteDuplicatedGames(file: string) : Promise<Result<number, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_duplicated_games", { file }) };
@@ -227,9 +230,20 @@ async deleteDuplicatedGames(file: string) : Promise<Result<number, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Returns how many games were removed.
+ */
 async deleteEmptyGames(file: string) : Promise<Result<number, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_empty_games", { file }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getDatabaseQuality(file: string) : Promise<Result<DatabaseQualityReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_database_quality", { file }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -930,6 +944,39 @@ export type BotLeagueSummary = { leagueId: string; ownerId: string; status: BotL
 export type ClockUpdateEvent = { gameId: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type DatabaseInfo = { title: string; description: string; player_count: number; event_count: number; game_count: number; storage_size: bigint; filename: string; indexed: boolean }
 export type DatabaseProgress = { id: string; progress: number }
+export type DatabaseQualityReport = { games: bigint; 
+/**
+ * No moves at all.
+ */
+empty: bigint; 
+/**
+ * Decisive result with fewer than `SHORT_DECISIVE_MAX_PLIES` plies.
+ */
+shortDecisive: bigint; 
+/**
+ * Result missing or `*`.
+ */
+unknownResult: bigint; 
+/**
+ * Date missing or without a known year.
+ */
+missingDate: bigint; 
+/**
+ * Date after today.
+ */
+futureDate: bigint; 
+/**
+ * The same player on both sides.
+ */
+samePlayers: bigint; 
+/**
+ * A rating outside `PLAUSIBLE_ELO`.
+ */
+implausibleElo: bigint; 
+/**
+ * Starts from a custom position (FEN tag): not standard chess from the initial position.
+ */
+customStart: bigint }
 export type DrawReason = "stalemate" | "insufficientMaterial" | "threefoldRepetition" | "fiftyMoveRule" | "agreement"
 export type EmpiricalWdlCalibration = { meanAbsoluteError: number; brierScore: number }
 export type EmpiricalWdlEvaluator = { engine: string; engineArgs: string[]; goMode: GoMode; uciOptions: EngineOption[] }
@@ -1001,7 +1048,7 @@ export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; n
 export type PlayerGameInfo = { site_stats_data: SiteStatsData[] }
 export type PlayerPresetCategory = "custom" | "humanLike" | "limited" | "strong" | "reference"
 export type PlayerQuery = { options: QueryOptions<PlayerSort>; name?: string | null; range?: [number, number] | null }
-export type PlayerSort = "id" | "name" | "elo"
+export type PlayerSort = "id" | "name" | "elo" | "games"
 export type PlayersTime = { white: number; black: number; winc: number; binc: number }
 export type PositionGame = { game: NormalizedGame; ply: number }
 export type PositionGameMetadata = { snapshotOffset: number; id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; date: string | null; result: string; event: string; ply: number; nextMove: string }

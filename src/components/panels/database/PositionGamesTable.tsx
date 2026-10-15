@@ -36,7 +36,7 @@ import AddToStudyModal from "@/components/studies/AddToStudyModal";
 import { activeTabAtom, positionGamesViewFamily, tabsAtom } from "@/state/atoms";
 import { getPGN, parsePGN } from "@/utils/chess";
 import { isTransientPositionError } from "@/utils/db";
-import { appendGameLink, gameLinkLabel, gameLinkMarkdown } from "@/utils/gameLinks";
+import { appendGameLink, gameLinkFor, gameLinkLabel, gameLinkMarkdown } from "@/utils/gameLinks";
 import { createTab } from "@/utils/tabs";
 import type { ReferencePreview } from "./ReferenceGamePreview";
 
@@ -323,11 +323,7 @@ export default function PositionGamesTable({
                     (text, { game, ply }) =>
                       appendGameLink(
                         text,
-                        gameLinkMarkdown(gameLinkLabel(game), {
-                          database: databasePath,
-                          gameId: game.id,
-                          ply,
-                        }),
+                        gameLinkMarkdown(gameLinkLabel(game), gameLinkFor(game, databasePath, ply)),
                       ),
                     state.currentNode().comment,
                   );
@@ -344,11 +340,7 @@ export default function PositionGamesTable({
         onClick: () =>
           void withGames(targets, async (games) => {
             const links = games.map(({ game, ply }) =>
-              gameLinkMarkdown(gameLinkLabel(game), {
-                database: databasePath,
-                gameId: game.id,
-                ply,
-              }),
+              gameLinkMarkdown(gameLinkLabel(game), gameLinkFor(game, databasePath, ply)),
             );
             await navigator.clipboard.writeText(links.join("\n\n"));
             notifications.show({ message: t("GameLink.Copied") });

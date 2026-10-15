@@ -46,6 +46,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import GenericCard from "../common/GenericCard";
 import OpenFolderButton from "../common/OpenFolderButton";
 import AddDatabase from "./AddDatabase";
+import DatabaseQualityReport from "./DatabaseQualityReport";
 import { PlayerSearchInput } from "./PlayerSearchInput";
 
 export default function DatabasesPage() {
@@ -534,6 +535,7 @@ function AdvancedSettings({
   return (
     <Stack>
       <PlayerMerger selectedDatabase={selectedDatabase} />
+      <DatabaseQualityReport file={selectedDatabase.file} />
       <DuplicateRemover selectedDatabase={selectedDatabase} reload={reload} />
     </Stack>
   );

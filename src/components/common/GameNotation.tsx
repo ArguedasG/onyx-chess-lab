@@ -48,6 +48,9 @@ import CompleteMoveCell from "./CompleteMoveCell";
 import styles from "./GameNotation.module.css";
 import OpeningName from "./OpeningName";
 
+/** The root comment belongs to the starting position. */
+const ROOT_PATH: number[] = [];
+
 function GameNotation({
   topBar,
   controls,
@@ -125,7 +128,7 @@ function GameNotation({
                 )}
                 {showComments && rootComment && (
                   <Box p="sm" fz="sm">
-                    <Comment comment={rootComment} />
+                    <Comment comment={rootComment} path={ROOT_PATH} />
                   </Box>
                 )}
                 {tableView ? (
@@ -346,6 +349,7 @@ type VariationItem = {
 type CommentItem = {
   type: "comment";
   comment: string;
+  path: number[];
 };
 type Segment = RowItem | VariationItem | CommentItem;
 
@@ -404,7 +408,7 @@ const TableNotation = memo(function TableNotation({
           splitRow: !!blackNode,
         });
         if (hasWhiteComment) {
-          segments.push({ type: "comment", comment: child.comment });
+          segments.push({ type: "comment", comment: child.comment, path: childPath });
         }
         if (hasWhiteVars) {
           segments.push({
@@ -425,7 +429,7 @@ const TableNotation = memo(function TableNotation({
               blackPath: blackPath,
             });
             if (hasBlackComment) {
-              segments.push({ type: "comment", comment: blackNode.comment });
+              segments.push({ type: "comment", comment: blackNode.comment, path: blackPath });
             }
             if (hasBlackVars) {
               segments.push({
@@ -460,7 +464,7 @@ const TableNotation = memo(function TableNotation({
           blackPath: blackPath,
         });
         if (hasBlackComment) {
-          segments.push({ type: "comment", comment: blackNode!.comment });
+          segments.push({ type: "comment", comment: blackNode!.comment, path: blackPath });
         }
         if (hasBlackVars) {
           segments.push({
@@ -500,7 +504,7 @@ const TableNotation = memo(function TableNotation({
         blackPath: childPath,
       });
       if (hasBlackComment) {
-        segments.push({ type: "comment", comment: child.comment });
+        segments.push({ type: "comment", comment: child.comment, path: childPath });
       }
       if (hasBlackVars) {
         segments.push({
@@ -523,7 +527,7 @@ const TableNotation = memo(function TableNotation({
               <tr key={`comment-${idx}`}>
                 <td colSpan={3}>
                   <Box pl="sm" pt="xs">
-                    <Comment comment={seg.comment} />
+                    <Comment comment={seg.comment} path={seg.path} />
                   </Box>
                 </td>
               </tr>

@@ -197,7 +197,7 @@ function CompleteMoveCell({
           </Tooltip>
         )}
       </Box>
-      {showComments && !tableLayout && comment && <Comment comment={comment} />}
+      {showComments && !tableLayout && comment && <Comment comment={comment} path={movePath} />}
     </>
   );
 }

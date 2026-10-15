@@ -50,8 +50,9 @@ export function PlayerSearchInput({
         page: 1,
         pageSize: 5,
         skipCount: true,
-        sort: "elo",
-        direction: "asc",
+        // The best-known match first: homonyms with a handful of games go after it.
+        sort: "games",
+        direction: "desc",
       },
     });
     setData(res.data);

@@ -35,6 +35,18 @@ export function openingLearnBatchSize(state: OpeningsState): number {
     return state.settings.learnBatchSize ?? DEFAULT_OPENING_LEARN_BATCH;
 }
 
+/**
+ * Flawless repetitions from memory, in a row, needed to mark a line as learned. A mistake restarts
+ * the count of that line.
+ */
+export const DEFAULT_OPENING_LEARN_RECALLS = 2;
+export const MAX_OPENING_LEARN_RECALLS = 5;
+
+export function openingLearnRecallCount(state: OpeningsState): number {
+    const count = state.settings.learnRecallCount ?? DEFAULT_OPENING_LEARN_RECALLS;
+    return Math.min(MAX_OPENING_LEARN_RECALLS, Math.max(1, Math.round(count)));
+}
+
 /** Learn mode: pause after the opponent's reply before the next move is shown. */
 export const DEFAULT_OPENING_LEARN_MOVE_DELAY_MS = 900;
 export const MAX_OPENING_LEARN_MOVE_DELAY_MS = 5000;

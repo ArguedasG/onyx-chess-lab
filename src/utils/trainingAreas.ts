@@ -253,6 +253,8 @@ const openingsStateSchema = z.object({
         learnBatchSize: z.number().int().positive().optional(),
         /** Learn mode pause between automatic moves; defaults to `DEFAULT_OPENING_LEARN_MOVE_DELAY_MS`. */
         learnMoveDelayMs: z.number().int().nonnegative().optional(),
+        /** Flawless recalls in a row that mark a line as learned; defaults to `DEFAULT_OPENING_LEARN_RECALLS`. */
+        learnRecallCount: z.number().int().positive().optional(),
     }),
 });
 export type OpeningsState = z.infer<typeof openingsStateSchema>;

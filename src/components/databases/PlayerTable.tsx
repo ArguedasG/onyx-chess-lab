@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { useDebouncedValue } from "@mantine/hooks";
 import { IconDotsVertical, IconSearch } from "@tabler/icons-react";
 import { DataTable } from "mantine-datatable";
 import { useContext, useState } from "react";
@@ -22,6 +23,22 @@ import GridLayout from "./GridLayout";
 import PlayerCard from "./PlayerCard";
 import classes from "./styles.module.css";
 
+/**
+ * A search starts sorted by number of games, so the best-known namesake comes first. Counting games
+ * for every player of a large base is slow, so that order is dropped when the search is cleared.
+ */
+function searchSort(
+  previous: string | null | undefined,
+  next: string,
+  options: { sort: PlayerSort; direction: "asc" | "desc" },
+): { sort: PlayerSort; direction: "asc" | "desc" } {
+  const searching = next.trim().length > 0;
+  const wasSearching = (previous ?? "").trim().length > 0;
+  if (searching && !wasSearching) return { sort: "games", direction: "desc" };
+  if (!searching && options.sort === "games") return { sort: "name", direction: "desc" };
+  return { sort: options.sort, direction: options.direction };
+}
+
 function PlayerTable() {
   const { t } = useTranslation();
   const store = useContext(DatabaseViewStateContext)!;
@@ -33,8 +50,10 @@ function PlayerTable() {
   const selectedPlayer = useStore(store, (s) => s.players.selectedPlayer);
   const setSelectedPlayer = useStore(store, (s) => s.setPlayersSelectedPlayer);
 
-  const { data, error, isLoading } = useSWR(["players", file, query], () =>
-    query_players(file, query),
+  // Each search scans the players table, so it waits until typing pauses.
+  const [debouncedQuery] = useDebouncedValue(query, 250);
+  const { data, error, isLoading } = useSWR(["players", file, debouncedQuery], () =>
+    query_players(file, debouncedQuery),
   );
   const players = data?.data ?? [];
   const count = data?.count;
@@ -71,16 +90,18 @@ function PlayerTable() {
               placeholder={t("Common.Search")}
               leftSection={<IconSearch size="1rem" />}
               value={query.name ?? undefined}
-              onChange={(e) =>
+              onChange={(e) => {
+                const name = e.currentTarget.value;
                 setQuery({
                   ...query,
-                  name: e.currentTarget.value,
+                  name,
                   options: {
                     ...query.options,
                     page: 1,
+                    ...searchSort(query.name, name, query.options),
                   },
-                })
-              }
+                });
+              }}
             />
             <ActionIcon style={{ flexGrow: 0 }} onClick={() => setOpen((prev) => !prev)}>
               <IconDotsVertical size="1rem" />

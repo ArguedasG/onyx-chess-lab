@@ -100,8 +100,10 @@ import {
 } from "./OpeningManageForms";
 import {
   MAX_OPENING_LEARN_MOVE_DELAY_MS,
+  MAX_OPENING_LEARN_RECALLS,
   openingLearnBatchSize,
   openingLearnMoveDelay,
+  openingLearnRecallCount,
 } from "@/utils/openingLearning";
 import {
   createOpeningImportDraft,
@@ -866,6 +868,29 @@ export default function OpeningDashboardPage() {
                     ...previous,
                     openings: updateOpeningPracticeSettings(previous.openings, {
                       learnBatchSize: Math.min(30, size),
+                    }),
+                  }));
+                }}
+              />
+              <NumberInput
+                size="xs"
+                maw={260}
+                min={1}
+                max={MAX_OPENING_LEARN_RECALLS}
+                allowDecimal={false}
+                label={t("OpeningLearn.RecallCount", "Repetitions from memory to learn a line")}
+                description={t(
+                  "OpeningLearn.RecallCountDescription",
+                  "Flawless repetitions in a row; a mistake restarts the count.",
+                )}
+                value={openingLearnRecallCount(areas.openings)}
+                onChange={(value) => {
+                  const count = Math.round(Number(value));
+                  if (!Number.isFinite(count) || count < 1) return;
+                  setAreas((previous) => ({
+                    ...previous,
+                    openings: updateOpeningPracticeSettings(previous.openings, {
+                      learnRecallCount: Math.min(MAX_OPENING_LEARN_RECALLS, count),
                     }),
                   }));
                 }}

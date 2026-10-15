@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-14.
+> Última actualización: 2026-10-15.
 
 ## 1. Cómo utilizar este documento
 
@@ -89,9 +89,10 @@ prueban y comunican problemas.
 - Estado de producto: **alpha/beta pública temprana con mantenimiento continuo basado en uso real**.
 - Usuarios: estudiantes y miembros de un grupo de ajedrez; es probable que pronto la utilicen un
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
-- Trabajo actual: **reestructuración de la interfaz inspirada en ChessBase para Mac** (adaptar sus
-  patrones, no copiarlos), hecha por fases revisadas por el autor. La Fase 8 conserva 8.0 y 8.1
-  implementadas y 8.2 pendiente.
+- Trabajo actual: **Fase 8 replanificada a partir del estudio de mercado**
+  (`docs/market-study.es.md`, 2026-10-14): mantenimiento derivado del estudio, **8.2 Motor y
+  análisis** y **8.3 Bases de referencia**. La reestructuración de la interfaz inspirada en ChessBase
+  para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
@@ -105,7 +106,7 @@ su gravedad lo justifica.
 - confirmar mediante uso independiente una instalación administrada limpia de Maia 3 en Windows sin
   Python ni Git preinstalados; el flujo se considera disponible, pero todavía no se presenta como
   validado externamente;
-- decidir en Fase 9 cómo migrar de forma segura el identificador heredado `org.encroissant.app` y el
+- decidir en Fase 10 cómo migrar de forma segura el identificador heredado `org.encroissant.app` y el
   campo de publisher sin ocultar ni perder datos de instalaciones existentes; no deben cambiarse de
   manera aislada;
 - terminar la limpieza pública de `CONTRIBUTING.md`, plantillas de issues y otros textos heredados de
@@ -120,27 +121,52 @@ su gravedad lo justifica.
   datos comunicada por usuarios;
 - conservar documentación de release, licencias y recuperación junto con cada versión pública.
 
+#### Mantenimiento derivado del estudio de mercado
+
+**Estado: Implementado y validado automáticamente (2026-10-15); validación manual nativa pendiente.**
+Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
+
+- **Búsqueda de jugadores por tokens normalizados (I-01):** cada palabra de la búsqueda debe aparecer
+  en el nombre, en cualquier orden y sin distinguir acentos, mayúsculas ni puntuación («David
+  Cabezas» encuentra «Cabezas Solano, David Alejandro»). La normalización corre en Rust como función
+  SQL registrada en cada conexión, sin cambiar el esquema de las bases. Las búsquedas ocultan
+  jugadores sin partidas y el autocompletado y la tabla de jugadores ordenan por número de partidas
+  (la tabla, solo mientras hay búsqueda; la búsqueda espera a que se deje de escribir). Medido en la
+  Gigabase local (545 k jugadores, compilación debug): 0,32–0,45 s por búsqueda, incluido el orden.
+- **Informe de calidad mínimo (I-26):** en los ajustes avanzados de una base, «Revisar calidad»
+  cuenta sin borrar nada partidas sin jugadas, decisivas de menos de 20 medias jugadas, con resultado
+  desconocido, sin año, con fecha futura, con el mismo jugador en ambos bandos, con rating fuera de
+  100–2900 y desde posición propia. Es un único recorrido de `Games` (12–20 s en 10 M de partidas).
+  Los duplicados exactos y probables quedan para la versión completa de 8.3.
+- **Repeticiones de memoria configurables (I-37):** el modo Aprender exige por defecto **2
+  repeticiones seguidas sin errores** para dar una línea por aprendida (antes, 1); configurable de 1
+  a 5 en los ajustes de Aperturas. Un error reinicia la cuenta de esa línea.
+- **Jerarquía de aperturas (I-42):** el panel de aperturas de la ficha de jugador agrupa por
+  **Familia → Variante → Subvariante**, plegable, con partidas, porcentaje y resultados en cada nivel;
+  normaliza «Defence/Defense». Las partidas con el nombre exacto de un nivel desplegado aparecen como
+  «Sin una variante más concreta». El rating par (I-30) se añadirá en 8.4.
+
 ---
 
 ## 4. Estado de las fases
 
-| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                         |
-| ------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                  |
-| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                              |
-| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                        |
-| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                              |
-| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 10.                                                             |
-| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 9. |
-| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                      |
-| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.               |
-| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                    |
-| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                    |
-| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                         |
-| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.       |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; 8.2 pendiente y sujeta a la demanda de usuarios.                                        |
-| 9 — Consolidación pública y MLOps           | Pendiente                                | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                       |
-| 10 — Expansión avanzada                     | Pendiente                                | Amplía fases cerradas, especialmente bots, torneos e interpretación estratégica.                                 |
+| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                          |
+| ------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                   |
+| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                               |
+| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                         |
+| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                               |
+| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                               |
+| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10. |
+| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                       |
+| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                |
+| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                     |
+| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
+| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
+| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                |
+| 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
+| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
 ### Documentación de fases cerradas
 
@@ -152,6 +178,7 @@ su gravedad lo justifica.
 - Bases e informes: `docs/database-queries-phase-7-0.es.md` y
   `docs/opening-reports-phase-7-1.es.md`.
 - Player Analysis: `docs/player-analysis-phase-7-2.es.md`.
+- Estudio de mercado (insumo de 8.2–10, identificadores `I-xx`): `docs/market-study.es.md`.
 - Release y actualizador: `docs/phase-5-brand-release-alpha-plan.es.md`,
   `docs/updater-phase-5-2.es.md` y `docs/managed-maia3.es.md`.
 
@@ -164,18 +191,26 @@ Producto público + mantenimiento continuo
         ↓
 Necesidades de usuarios reales (entrenamiento diario, plataformas, bugs)
         ↓
-8.2 — Preparación individual y de equipo
+Mantenimiento del estudio de mercado (I-01, I-26 mínima, I-37, I-42)
         ↓
-9 — Consolidación pública, multiplataforma y MLOps
+8.2 Motor y análisis  ‖  8.3 Bases de referencia (calidad, rendimiento esperado, enlaces)
         ↓
-10 — Expansión avanzada de fases anteriores
+8.4 Jugadores → 8.5 Generador de repertorios → 8.6 Preparación contra rivales
+        ↓
+8.7 Entrenamiento desde errores
+        ↓
+8.8 Táctica · 8.9 Finales · 8.10 Aperturas   (independientes; pueden adelantarse)
+        ↓
+9 — Expansión avanzada (bots, torneos, interpretación estratégica)
+        ↓
+10 — Consolidación pública, multiplataforma y MLOps (la última)
 ```
 
 El orden es orientativo. Las prioridades se deciden así:
 
 1. defectos críticos, riesgos de datos y seguridad de actualización;
 2. lo que bloquea a personas que ya usan o van a usar Onyx: por ejemplo, un instalador de macOS o
-   Linux se adelanta a 8.2 si un profesor o el grupo lo necesita;
+   Linux se adelanta a la Fase 8 si un profesor o el grupo lo necesita;
 3. mejoras en las experiencias de uso frecuente, especialmente el entrenamiento;
 4. el resto de fases en el orden listado.
 
@@ -187,7 +222,7 @@ reabrir su cierre. El trabajo correctivo se registra como mantenimiento.
 
 ## 6. Fase 7.3 — Mejoras de inteligencia de aperturas y jugadores
 
-**Estado: Cerrada para su alcance; ampliaciones posteriores pasan a Fase 10.**
+**Estado: Cerrada para su alcance; ampliaciones posteriores pasan a las Fases 8 y 9.**
 
 Progreso vigente:
 
@@ -329,7 +364,14 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 pendiente y sujeta a la demanda de usuarios.**
+**Estado: En curso. 8.0 y 8.1 implementadas; 8.2 y 8.3 en curso.**
+
+Desde el 2026-10-15 las subfases 8.2–8.10 siguen el estudio de mercado (`docs/market-study.es.md`):
+cada viñeta cita su idea (`I-xx`), cuya ficha en el estudio contiene el problema, la referencia y la
+propuesta de implementación. La antigua 8.2 «Preparación individual y de equipo» se reparte entre
+8.4 (ficha y estadísticas) y 8.6 (preparación contra rivales). Las reglas de rendimiento de la
+sección 7 del estudio (un solo planificador de motores, trabajo pesado en Rust y en segundo plano,
+ningún escaneo por celda, datos grandes fuera del JSON de arranque) se aplican a todas.
 
 ### 8.0. Biblioteca personal de estudios
 
@@ -381,12 +423,117 @@ Contrato y validación técnica: `docs/position-actions-phase-8-1.es.md`.
 - los ejercicios sin solución PGN consultan un motor local objetivo y no registran el fallo si el
   motor no está disponible o no devuelve una línea.
 
-### 8.2. Preparación individual y de equipo
+### 8.2. Motor y análisis
 
-- preparación de rival y repertorio probable por color;
-- desviaciones recientes, posiciones críticas y partidas modelo;
-- líneas específicas de preparación;
+**Estado: En curso.** Ideas: I-53, I-14, I-15, I-24, I-46, I-54 (primera versión).
+
+- **planificador global de motores (I-53):** un único coordinador para análisis en vivo, reportes,
+  Player Analysis, bots y lotes, con límite de procesos y de hash total según la máquina,
+  prioridades, cancelación y reutilización de procesos; ninguna función nueva lanza motores por su
+  cuenta;
+- **análisis más rápido sin perder veredictos (I-14):** caché persistente de evaluaciones por
+  posición (con versión, tamaño acotado, borrado y procedencia, fuera del JSON de arranque),
+  profundidad objetivo con tope de tiempo, segunda pasada dirigida a los candidatos a error, varios
+  procesos en lotes y perfiles con calidad declarada; la nube de Lichess para aperturas es opcional y
+  posterior;
+- **validación obligatoria:** con un conjunto fijo de partidas se mide el tiempo y el acuerdo de
+  clasificación (error grave, error, imprecisión) frente al método actual; si no se mantiene, el
+  predeterminado no cambia;
+- **probabilidad de victoria, momentos clave y reglas explicables (I-15):** clasificación unificada
+  por pérdida de probabilidad (fórmula de Lichess) en Player Analysis y en el reporte, «oportunidad
+  perdida», 2–3 momentos clave por partida y, si se añade «brillante», reglas explícitas con motivo de
+  rechazo; los perfiles guardados se migran por versión de esquema;
+- **explicación factual por plantilla (I-24)** y **flechas y casillas que explican el error (I-46)**
+  en los ejercicios generados desde errores;
+- **primer presupuesto de rendimiento (I-54):** arranque en frío, abrir una ficha con 5.000 partidas,
+  primera página de una búsqueda, analizar 50 partidas, memoria máxima en lote y tamaño del bundle,
+  medidos en la máquina de referencia y registrados por release.
+
+### 8.3. Bases de referencia
+
+**Estado: En curso; en paralelo a 8.2.** Ideas: I-26 (completa), I-28. El catálogo propio y las
+bases alojadas (I-25) pasan a la Fase 10 (decisión del autor, 2026-10-15): mientras tanto se
+conserva intacto el catálogo de En Croissant, con sus bases y motores descargables.
+
+- **informe de calidad completo (I-26):** amplía la versión mínima con duplicados exactos y
+  probables, nombres sospechosos y Elo incoherente por jugador, en segundo plano y cancelable;
+- **rendimiento frente a lo esperado y tendencia por jugada (I-28)** en el informe de posición;
+- **restablecer enlaces a partidas rotos:** cuando un enlace `onyx://game` de un comentario ya no
+  apunta a la partida correcta (la base se actualizó, se reemplazó o cambió de archivo), un botón
+  «Restablecer enlace» busca primero por los datos de la partida (jugadores y año, guardados en el
+  enlace o tomados de su texto), que es inmediato, y comprueba que las candidatas pasan por la
+  posición del comentario; la búsqueda por posición queda como respaldo, con progreso. El usuario
+  elige la partida (también en otra base) y el enlace se reescribe. **Implementado (2026-10-15);
+  validación manual pendiente.** Se ofrece al abrir un enlace cuya partida ya no existe o cuyos
+  jugadores no coinciden; los enlaces nuevos guardan jugadores y año (`w`, `b`, `y`) y los antiguos
+  los toman de su texto «Blancas - Negras (año)».
+
+### 8.4. Jugadores: ficha y estadísticas
+
+**Estado: Pendiente.** Modifica la antigua 8.2. Ideas: I-02, I-03 (opcional), I-13, I-22, I-30,
+I-42, I-44, I-45.
+
+- sección lateral «Jugadores», separada de «Usuario», con la ficha propia como un caso más; antes,
+  dividir `PlayerAnalysisPanel.tsx`;
+- ficha para cualquier jugador (I-02), vinculación FIDE manual opcional (I-03) y lista de partidas
+  de cada cuenta con actualizar y abrir (I-13);
+- momentos destacados (I-22), rating par en toda tabla de resultados (I-30), aperturas por familias
+  con rating par (I-42), psicología, reloj y tramos de error (I-44), rivales frecuentes y cara a cara
+  (I-45).
+
+### 8.5. Generador de repertorios
+
+**Estado: Pendiente.** Ideas: I-40 e I-33 (como criterio «líneas difíciles para el rival»).
+
+- repertorio nuevo y editable desde la posición del tablero, con estadísticas de la base local o de
+  Lichess, enfoques medibles, respuestas del rival por frecuencia o por Maia, verificación con motor,
+  anotaciones automáticas, partidas modelo enlazadas y procedencia.
+
+### 8.6. Preparación contra rivales
+
+**Estado: Pendiente.** Modifica la antigua 8.2. Ideas: I-19, I-31 (ocho estructuras), I-32, I-33,
+I-41, I-43 (gemelo, versión 1), I-04 (solo retransmisiones para rivales, opcional).
+
+- **fuentes de partidas del rival:** su cuenta de Lichess o Chess.com (como ya permite «Usuario»), un
+  PGN cargado por el usuario o una base local, con filtros de ritmo, periodo y últimas N partidas; la
+  preparación no depende de una base de referencia;
+- repertorio contra realidad (I-19), veredicto «cómo jugarle» (I-32), dificultad práctica de las
+  posiciones clave del rival (I-33) y líneas de preparación generadas (I-41);
+- ocho estructuras de peones validadas con ejemplos etiquetados (I-31);
+- bot gemelo: libro del jugador + Maia a su Elo, con medición de fidelidad (I-43);
+- opcional: retransmisiones de Lichess para rivales OTB sin cuenta online (I-04);
 - paquetes locales exportables antes de cuentas, nube o colaboración en tiempo real.
+
+### 8.7. Entrenamiento desde errores
+
+**Estado: Pendiente.** Ideas: I-17, I-18, I-21, I-29.
+
+- cola automática **Mis errores** con repaso espaciado (I-17; es el antiguo set táctico automático);
+- diagnóstico con prioridades sin LLM (I-18), práctica de conversión y defensa desde posiciones
+  propias (I-21) y catálogo de fugas con coste y evolución (I-29).
+
+### 8.8. Táctica: modos y sets
+
+**Estado: Pendiente; amplía la Fase 6 y puede adelantarse.** Ideas: I-05, I-06, I-20, I-38.
+
+- modos de sesión (tormenta, racha, contrarreloj, profundidad, candidatas), FSRS y Elo táctico local,
+  constructor de sets desde los puzzles de Lichess y visualización a ciegas y sin piezas.
+
+### 8.9. Finales: evaluación por jugada
+
+**Estado: Pendiente; amplía la Fase 6 y puede adelantarse.** Ideas: I-07, I-08, I-09; opcional:
+mates básicos cronometrados (parte de I-52).
+
+- tras cada jugada se comprueba si el objetivo sigue siendo alcanzable contra la mejor defensa, con
+  aviso, reintento y botón Veredicto; la mejor defensa es el rival predeterminado y Maia una opción;
+- al importar, familia y objetivo calculados desde la posición; filtro solo por tema.
+
+### 8.10. Aperturas: repaso continuo y huecos
+
+**Estado: Pendiente; amplía 6.A y puede adelantarse.** Ideas: I-36, I-34.
+
+- modo «Repaso continuo» por dominio de cada jugada, aparte del FSRS (I-36), y huecos del repertorio
+  por frecuencia real (I-34).
 
 ---
 
@@ -446,7 +593,8 @@ estudiante todavía no vio.
    en posiciones o jugadas con comentarios o flechas PGN y en la posición final. Desde 0.18.4 hay una
    sola pausa por jugada: la jugada del rival y la del estudiante se muestran juntas, cada una con su
    comentario y con clic para ver su posición, y la pausa entre jugadas es configurable. Al terminar, la línea
-   se repite una vez sin ayudas; si se completa, queda aprendida. Los errores en este modo no alteran
+   se repite sin ayudas; queda aprendida tras N repeticiones seguidas sin errores (2 por defecto,
+   configurable de 1 a 5 desde 2026-10-15; antes, 1). Los errores en este modo no alteran
    las estadísticas por jugada.
 4. **Aprovechar lo ya aprendido:** el tramo compartido con líneas aprendidas se reproduce
    automáticamente y la enseñanza empieza en la divergencia.
@@ -473,19 +621,31 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ### 9.1. Bots humanos y calibración
 
+Ideas: I-47, I-48 (puede adelantarse), I-49, I-50, I-52 (partida guiada).
+
 - retomar la expansión de la Fase 4;
-- calibrar fuerza relativa y diferencias de estilo con muestras reproducibles;
-- ampliar progresivamente el catálogo solo cuando los perfiles sean distinguibles;
-- evolucionar repertorios, muestreo, timing y selección mediante evidencia.
+- personalidades de juego reales y medidas: reordenar las candidatas de Maia según el estilo dentro
+  de un margen de Stockfish y medir el resultado antes de anunciarlo (I-47);
+- bots fuertes con candidatas de Maia verificadas con Stockfish (I-48);
+- catálogo de 80–100 bots curados, jugadores generados con semilla fija y explorador de bots (I-49);
+- rating local del usuario contra bots y escala calibrada con la liga (I-50);
+- partida guiada que avisa en los momentos críticos (I-52);
+- ampliar el catálogo solo cuando los perfiles sean distinguibles.
 
 ### 9.2. Torneos interactivos
 
-- formatos configurables y participación del usuario;
-- visualización en vivo, reloj, progreso y logs;
-- recuperación, pausa, cancelación y navegación de rondas;
-- separar la experiencia de torneos del Generador cuando el flujo esté validado.
+Ideas: I-51. **El usuario es el protagonista**; los torneos solo de bots son experimentos del
+Generador.
+
+- formatos round-robin, suizo, eliminación directa y doble, con plantillas (soy favorito, todos de
+  mi nivel, todos mejores que yo…) y autorrelleno con filtros;
+- calendario local rotativo opcional, generado sin servidor;
+- tableros sin el usuario resueltos por modelo o en segundo plano con baja prioridad;
+- visualización en vivo, reloj, recuperación, pausa, cancelación, desempates y exportación PGN.
 
 ### 9.3. Interpretación estratégica avanzada
+
+Ideas: I-31 (ampliación y entrenamiento por estructura), I-43 (gemelo con estilo medido).
 
 - temas estratégicos y planes en Opening Reports;
 - estructuras y rupturas mediante reglas demostrables;
@@ -511,11 +671,27 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ### Datos, automatización y MLOps
 
+Ideas: I-04 (pipeline completo), I-11, I-16, I-23, I-25, I-27, I-43 (versión 2, Maia
+personalizada), I-54 (en CI).
+
 - versionado de modelos, perfiles, binarios, pesos y datasets;
 - pipelines de evaluación reproducibles;
 - pruebas de calidad de datos y pequeñas corridas en CI;
 - comparación de experimentos y artefactos exportables;
-- model cards, dataset cards, ADRs, benchmarks y caso de estudio reproducible.
+- model cards, dataset cards, ADRs, benchmarks y caso de estudio reproducible;
+- catálogo propio de descargas (I-25): un JSON en el repositorio que **conserva todas las entradas
+  de En Croissant** (bases y motores) y añade entradas propias, como LumbrasGigaBase OTB y Online
+  por separado; opcionalmente alojadas por el autor. Es independiente del resto de fases y puede
+  ir de las últimas;
+- pipeline de bases con procedencia, deduplicación y versiones (I-04), clasificación automática de
+  ejercicios (I-11), rendimiento estimado calibrado (I-16), objetivos medidos en partidas reales
+  (I-23), índice de árbol de aperturas precalculado si las mediciones lo justifican (I-27), gemelo
+  con Maia ajustada al jugador (I-43 v2) y presupuesto de rendimiento integrado en CI (I-54).
+
+### Aplazadas, sin fase
+
+I-10 (fichas de técnica verificadas), I-12 (servicio web de coste cero), I-35 (búsqueda en lenguaje
+natural) e I-39 (fuentes libres de finales).
 
 No se añadirá un modelo decorativo. Un entrenamiento nuevo solo se justifica por una pregunta que los
 modelos existentes no puedan responder y por datos con procedencia y licencia utilizables.
@@ -563,14 +739,19 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - Táctica, Aperturas y Finales conservan experiencias y progreso independientes.
 - Los alias se seleccionan manualmente; no se infieren identidades reales.
 - Las métricas de reloj declaran cobertura y no ocultan partidas sin `[%clk]`.
-- El set táctico automático queda fuera de 7.3 y pasa como opción futura a 10.4.
+- El set táctico automático pasa a 8.7 como cola **Mis errores** con repaso espaciado (I-17).
+- Finales: la mejor defensa es el rival predeterminado; Maia queda como opción práctica (I-07).
+- No se incluyen libros de finales en Onyx; se prioriza la importación del usuario (I-08).
+- Los torneos se diseñan con el usuario como participante (I-51).
 
 ### Distribución y licencias
 
 - El código continúa bajo GPLv3 y conserva atribución a En Croissant.
 - Recursos, modelos y contenido requieren procedencia y licencia revisadas antes de redistribuirse.
 - El canal Windows x64 utiliza artefactos y firma propios de Onyx.
-- macOS y Linux no se presentan como soportados hasta completar Fase 9.
+- macOS y Linux no se presentan como soportados hasta completar la Fase 10.
+- Las bases convertidas que Onyx ofrezca alojadas respetan la licencia de su fuente (atribución,
+  uso no comercial e indicación de cambios para LumbrasGigaBase, CC BY-NC 4.0).
 
 ---
 
@@ -585,7 +766,11 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - ¿Qué estrategia de migración conservará los datos existentes al sustituir el bundle identifier
   heredado y los metadatos de publisher?
 - ¿Qué pregunta medible se convertirá en el caso de estudio reproducible de MLOps?
-- ¿Qué formatos de torneo aportan más valor en Fase 10 antes de investigar funciones online?
+- ¿Qué plantillas y formatos de torneo aportan más valor en 9.2 antes de investigar funciones online?
+- En Fase 10: ¿se alojan las bases convertidas (Hugging Face Datasets recomendado) o el catálogo
+  propio solo enlaza la página oficial de LumbrasGigaBase? Antes, escribir al autor de Lumbras.
+- ¿Se adopta SQLite para la caché de evaluaciones y la cola de errores, con archivos y conexiones
+  propios que nunca compartan las bases de partidas?
 - ¿Qué reglas o fuentes permitirán hablar honestamente de planes estratégicos y finales típicos?
 
 Cada pregunta debe resolverse dentro de su fase y convertirse en una decisión documentada. Las
@@ -595,6 +780,23 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-15 — Fases replanificadas desde el estudio de mercado
+
+- El autor pasa al roadmap las fases del estudio de mercado (`docs/market-study.es.md`): Fase 9 =
+  expansión avanzada y Fase 10 = consolidación pública y MLOps, la última; la tabla de estado se
+  corrige.
+- La antigua 8.2 se reparte en 8.4 (ficha y estadísticas) y 8.6 (preparación contra rivales); se
+  añaden 8.2 Motor y análisis, 8.3 Bases de referencia (en paralelo), 8.5 Generador de repertorios,
+  8.7 Entrenamiento desde errores y 8.8–8.10 (Táctica, Finales y Aperturas, independientes).
+- 8.3 incluye restablecer enlaces `onyx://game` rotos eligiendo entre las partidas de la posición.
+- El catálogo propio y las bases alojadas (I-25) pasan a la Fase 10: la prioridad actual es la
+  utilidad para entrenar y el portafolio se trabajará en 2027. El catálogo de En Croissant se
+  conserva; 8.6 toma las partidas del rival de su cuenta de Lichess o Chess.com, de un PGN o de una
+  base local, sin depender de una base de referencia.
+- Mantenimiento del estudio implementado: búsqueda de jugadores por tokens normalizados, informe de
+  calidad mínimo, dos repeticiones de memoria por defecto en Aprender y jerarquía de aperturas en la
+  ficha de jugador.
 
 ### 2026-09-15 — Reestructuración del roadmap
 
