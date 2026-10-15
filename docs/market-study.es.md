@@ -39,17 +39,17 @@ Jugadores, no a ese informe.
 
 ## 1. Punto de partida de Onyx (relevante para la comparación)
 
-| Área | Lo que existe hoy | Dónde |
-| --- | --- | --- |
-| Búsqueda de jugadores en bases | Subcadena literal `name LIKE '%texto%'`: depende del orden y de los acentos. | `src-tauri/src/db/mod.rs:1671` |
-| Ficha de jugador en base | Reutiliza la tarjeta personal (Resumen, Ratings, Aperturas, Análisis). | `src/components/databases/PlayerCard.tsx` |
-| Player Analysis | Perfil local, motor, errores, motivos verificables, relojes, versiones. Panel de 1.704 líneas. | `src/components/home/PersonalCardPanels/PlayerAnalysisPanel.tsx` |
-| FIDE | Consulta puntual por nombre a través de la API de Lichess. | `src/components/databases/FideInfo.tsx` |
-| Puzzles Lichess | Base de puzzles heredada de En Croissant con filtro por rating y tema. | `src-tauri/src/puzzle.rs` |
-| Táctica propia | Sets PGN, guiado/Woodpecker, timer, pista, ver solución, estadísticas, FSRS no aplicado a táctica. | `docs/training-phase-6-*.es.md` |
-| Finales | 180 posiciones incluidas por familia de material; se juzga el resultado **al final** de la partida; tablebase remota; rival inicial Maia máximo. | `src/components/training/EndgameTraining*.tsx` |
-| Familias de finales y tablebase | Clasificación por material y tablebase bajo demanda (≤7 piezas) en Player Analysis. | Fase 7.3.4 |
-| Repaso espaciado | FSRS por línea en Aperturas. | Fase 6.A |
+| Área                            | Lo que existe hoy                                                                                                                                | Dónde                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Búsqueda de jugadores en bases  | Subcadena literal `name LIKE '%texto%'`: depende del orden y de los acentos.                                                                     | `src-tauri/src/db/mod.rs:1671`                                   |
+| Ficha de jugador en base        | Reutiliza la tarjeta personal (Resumen, Ratings, Aperturas, Análisis).                                                                           | `src/components/databases/PlayerCard.tsx`                        |
+| Player Analysis                 | Perfil local, motor, errores, motivos verificables, relojes, versiones. Panel de 1.704 líneas.                                                   | `src/components/home/PersonalCardPanels/PlayerAnalysisPanel.tsx` |
+| FIDE                            | Consulta puntual por nombre a través de la API de Lichess.                                                                                       | `src/components/databases/FideInfo.tsx`                          |
+| Puzzles Lichess                 | Base de puzzles heredada de En Croissant con filtro por rating y tema.                                                                           | `src-tauri/src/puzzle.rs`                                        |
+| Táctica propia                  | Sets PGN, guiado/Woodpecker, timer, pista, ver solución, estadísticas, FSRS no aplicado a táctica.                                               | `docs/training-phase-6-*.es.md`                                  |
+| Finales                         | 180 posiciones incluidas por familia de material; se juzga el resultado **al final** de la partida; tablebase remota; rival inicial Maia máximo. | `src/components/training/EndgameTraining*.tsx`                   |
+| Familias de finales y tablebase | Clasificación por material y tablebase bajo demanda (≤7 piezas) en Player Analysis.                                                              | Fase 7.3.4                                                       |
+| Repaso espaciado                | FSRS por línea en Aperturas.                                                                                                                     | Fase 6.A                                                         |
 
 Numeración vigente de las fases (confirmada por el autor el 2026-10-14): **Fase 9 = expansión
 avanzada** (9.1 bots, 9.2 torneos, 9.3 interpretación estratégica) y **Fase 10 = consolidación
@@ -98,7 +98,7 @@ confirman que vamos por buen camino.
   tamaño. Deduplicación por «huella / identidad de contenido».
 - El manifiesto dice «local database unchanged by web export»: **el autor mantiene una base local y
   exporta índices precalculados a R2**. La web no consulta una base de datos SQL viva para el
-  corpus; sirve fragmentos ya calculados (búsqueda de jugadores por *shard*, perfil por clave).
+  corpus; sirve fragmentos ya calculados (búsqueda de jugadores por _shard_, perfil por clave).
 - Cuentas (progreso, rankings) en un almacenamiento aparte, con cookie de sesión `HttpOnly`.
 - **Stockfish 18 lite en WASM corre en el navegador del visitante**; el servidor nunca ejecuta
   motor. Las jugadas candidatas a veces usan `chess-api.com` (servicio externo gratuito).
@@ -113,14 +113,14 @@ petición sea barata, y anuncios para el resto. El coste marginal por usuario es
 
 **Datos de partidas**
 
-| Fuente | Partidas | Licencia | Interés para Onyx |
-| --- | --- | --- | --- |
-| Ajedrez Data AJ-OTB | 3,75 M | Dominio público según el proveedor | Alto: OTB histórico y reciente. |
-| Chess Database · Figshare | 3,54 M | CC BY 4.0 | Medio: histórico, solapa con otras bases. |
-| AJ-CORR (ICCF, IECG, LSS) | 1,64 M | Uso gratuito con atribución | Bajo para el público de Onyx. |
-| Lichess Broadcast | 1,12 M | CC BY-SA 4.0 | **Muy alto**: torneos OTB recientes, actualización mensual, incluye torneos latinoamericanos. |
-| Lichess Titled Arena | 0,81 M | CC0 | Medio. |
-| Chess-Results | 110 k | **Sin licencia** (raspado de PGN público) | No replicar: riesgo legal. |
+| Fuente                    | Partidas | Licencia                                  | Interés para Onyx                                                                             |
+| ------------------------- | -------- | ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Ajedrez Data AJ-OTB       | 3,75 M   | Dominio público según el proveedor        | Alto: OTB histórico y reciente.                                                               |
+| Chess Database · Figshare | 3,54 M   | CC BY 4.0                                 | Medio: histórico, solapa con otras bases.                                                     |
+| AJ-CORR (ICCF, IECG, LSS) | 1,64 M   | Uso gratuito con atribución               | Bajo para el público de Onyx.                                                                 |
+| Lichess Broadcast         | 1,12 M   | CC BY-SA 4.0                              | **Muy alto**: torneos OTB recientes, actualización mensual, incluye torneos latinoamericanos. |
+| Lichess Titled Arena      | 0,81 M   | CC0                                       | Medio.                                                                                        |
+| Chess-Results             | 110 k    | **Sin licencia** (raspado de PGN público) | No replicar: riesgo legal.                                                                    |
 
 - Normalización de nombres (minúsculas, sin diacríticos) para unificar grafías.
 - La búsqueda devuelve `key: "cabezas solano david alejandro"`: **búsqueda por tokens normalizados
@@ -142,12 +142,12 @@ petición sea barata, y anuncios para el resto. El coste marginal por usuario es
   Croissant, con filtro por rating y tema). Lo que ChessCorpus añade son **modos de sesión** encima
   de esos datos, no contenido.
 - Modos inferidos:
-  - *Profundidad*: filtra por longitud de la solución (`moves`), equivalente a los temas
+  - _Profundidad_: filtra por longitud de la solución (`moves`), equivalente a los temas
     `mateInN`/`short`/`long`.
-  - *Jugadas candidatas*: Stockfish (local o `chess-api.com`) calcula varias jugadas plausibles y el
+  - _Jugadas candidatas_: Stockfish (local o `chess-api.com`) calcula varias jugadas plausibles y el
     usuario elige entre ellas.
-  - *Tormenta / Contrarreloj / Racha*: variaciones de tiempo global, tiempo por problema y vidas.
-  - *Repetición espaciada*: FSRS sobre los puzzles fallados.
+  - _Tormenta / Contrarreloj / Racha_: variaciones de tiempo global, tiempo por problema y vidas.
+  - _Repetición espaciada_: FSRS sobre los puzzles fallados.
 
 **Finales**
 
@@ -170,7 +170,7 @@ No hay ninguna llamada de red al pulsarlo: **todo el texto viene precalculado de
    en dos idiomas. Es el párrafo específico que sorprendía por lo personalizado.
 2. **Fichas de técnica** por categoría o motivo: `{ title, concept, goal, steps[], keyAdvice }`, con
    claves como `queens`, `mixed` o un número de motivo (`14: "Ahogado de caballo y peón de
-   torre"`). Son el «Objetivo / pasos / Consejo clave».
+torre"`). Son el «Objetivo / pasos / Consejo clave».
 
 Conclusiones:
 
@@ -399,14 +399,14 @@ apunta a `https://encroissant.org`, que publica `databases.json` y `puzzle_datab
 entrada enlaza un `.db3` **ya convertido y alojado por el autor de En Croissant** en
 `db.encroissant.org`. Contenido actual del catálogo:
 
-| Base | Partidas | Tamaño |
-| --- | --- | --- |
-| Lumbra's Gigabase (2025-06) | 9,57 M | 2,8 GB |
-| Caissabase 2024 | 5,40 M | 1,3 GB |
-| Ajedrez Data OTB | 4,28 M | 1,0 GB |
-| MillionBase | 3,45 M | 0,8 GB |
-| Ajedrez Data Correspondencia | 1,52 M | 0,3 GB |
-| Lichess Puzzles 2026 (puzzles) | 5,75 M | 1,2 GB |
+| Base                           | Partidas | Tamaño |
+| ------------------------------ | -------- | ------ |
+| Lumbra's Gigabase (2025-06)    | 9,57 M   | 2,8 GB |
+| Caissabase 2024                | 5,40 M   | 1,3 GB |
+| Ajedrez Data OTB               | 4,28 M   | 1,0 GB |
+| MillionBase                    | 3,45 M   | 0,8 GB |
+| Ajedrez Data Correspondencia   | 1,52 M   | 0,3 GB |
+| Lichess Puzzles 2026 (puzzles) | 5,75 M   | 1,2 GB |
 
 Es decir, la «opción 2» de abajo ya existe, pero la mantiene otra persona: Onyx no controla cuándo se
 actualiza ni qué contiene, y si ese servidor cambia o desaparece, el catálogo de Onyx se queda vacío.
@@ -455,10 +455,10 @@ en el servidor. Stockfish 18 en WASM.
 
 **Leakfinder: por qué es tan rápido.** Perfiles de análisis en el código:
 
-| Perfil | Pasada gruesa | Pasada fina (solo si la evaluación cambia) | Umbral de cambio | Límite por partida |
-| --- | --- | --- | --- | --- |
-| Estándar (por defecto) | profundidad 8 (tope 400 ms) | profundidad 12 (tope 1,5 s) | 30 cp | 25 s |
-| Profundo | profundidad 14 (tope 2,5 s) | profundidad 18 (tope 6 s) | 20 cp | 7 min |
+| Perfil                 | Pasada gruesa               | Pasada fina (solo si la evaluación cambia) | Umbral de cambio | Límite por partida |
+| ---------------------- | --------------------------- | ------------------------------------------ | ---------------- | ------------------ |
+| Estándar (por defecto) | profundidad 8 (tope 400 ms) | profundidad 12 (tope 1,5 s)                | 30 cp            | 25 s               |
+| Profundo               | profundidad 14 (tope 2,5 s) | profundidad 18 (tope 6 s)                  | 20 cp            | 7 min              |
 
 Con 6 motores en paralelo (uno por núcleo, de ahí la RAM). **Respuesta a tu pregunta: sí, el
 análisis estándar es de menor calidad que el de Onyx a 500 ms**: Stockfish nativo en 500 ms llega
@@ -469,24 +469,24 @@ dos pasadas y paralelismo. Onyx puede tomar las dos últimas sin bajar la calida
 **Catálogo de fugas (literal del código, con umbrales).** Cada error se asigna a la categoría más
 específica; «Unforced errors» es el cajón de sastre:
 
-| Clave | Nombre | Regla |
-| --- | --- | --- |
-| `hung_piece` | Piezas colgadas | Tras tu jugada el rival puede capturar una pieza sin defensa suficiente que antes no estaba colgada. |
-| `missed_tactic_fork` | Horquillas no vistas | La mejor jugada era una horquilla y la jugada hecha perdió ≥ 0,8. |
-| `missed_tactic_pin_skewer` | Clavadas y enfiladas no vistas | La mejor creaba clavada/enfilada y la hecha perdió ≥ 0,5. |
-| `allowed_tactic` | Caer en tácticas | Tu jugada permitió una horquilla, clavada o enfilada nueva, costando ≥ 1,2. |
-| `back_rank` | Última fila | Quitaste la casilla de escape o la cobertura de la última fila, costando ≥ 0,8. |
-| `king_safety` | Rey expuesto | Empeoraste el escudo del rey (peón perdido o columna abierta junto a él), costando ≥ 0,5. |
-| `pawn_structure` | Concesiones estructurales | Nuevo peón aislado, doblado o retrasado, costando ≥ 0,5. |
-| `bad_exchange` | Malos cambios | Captura sin pérdida material que deja la posición ≥ 0,7 peor. |
-| `opening_eval_loss` | Fugas de apertura | En las primeras 20 medias jugadas, pérdida ≥ 0,5 sin categoría más específica. |
-| `endgame_technique` | Desliz en el final | En el final, pérdida ≥ 0,6 sin categoría más específica. |
-| `time_trouble_collapse` | Errores de apuro de tiempo | Pérdida ≥ 0,5 con poco reloj según los relojes de la partida. |
-| `lost_won_position` | Conversiones fallidas | Con +4,7 o más, una jugada te deja por debajo del 35 % de tu mejor evaluación de la partida. |
-| `missed_win` | Victorias tiradas | Con ≥ 90 % de puntuación esperada, una jugada te baja de 75 % o pierde 6+ peones. |
-| `conversion_drift` | Ventaja que se escapa | Con +2 o más, la ventaja se diluye a igualdad en 4+ jugadas sin ningún error aislado. |
-| `low_resourcefulness` | Derrumbe al estar peor | Peor pero defendible (−1,2 a −7) y pierdes otros 1,2+. |
-| `costly_mistake` | Errores no forzados | Pérdida ≥ 0,5 (o error/error grave) que no encaja en ninguna anterior. |
+| Clave                      | Nombre                         | Regla                                                                                                |
+| -------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `hung_piece`               | Piezas colgadas                | Tras tu jugada el rival puede capturar una pieza sin defensa suficiente que antes no estaba colgada. |
+| `missed_tactic_fork`       | Horquillas no vistas           | La mejor jugada era una horquilla y la jugada hecha perdió ≥ 0,8.                                    |
+| `missed_tactic_pin_skewer` | Clavadas y enfiladas no vistas | La mejor creaba clavada/enfilada y la hecha perdió ≥ 0,5.                                            |
+| `allowed_tactic`           | Caer en tácticas               | Tu jugada permitió una horquilla, clavada o enfilada nueva, costando ≥ 1,2.                          |
+| `back_rank`                | Última fila                    | Quitaste la casilla de escape o la cobertura de la última fila, costando ≥ 0,8.                      |
+| `king_safety`              | Rey expuesto                   | Empeoraste el escudo del rey (peón perdido o columna abierta junto a él), costando ≥ 0,5.            |
+| `pawn_structure`           | Concesiones estructurales      | Nuevo peón aislado, doblado o retrasado, costando ≥ 0,5.                                             |
+| `bad_exchange`             | Malos cambios                  | Captura sin pérdida material que deja la posición ≥ 0,7 peor.                                        |
+| `opening_eval_loss`        | Fugas de apertura              | En las primeras 20 medias jugadas, pérdida ≥ 0,5 sin categoría más específica.                       |
+| `endgame_technique`        | Desliz en el final             | En el final, pérdida ≥ 0,6 sin categoría más específica.                                             |
+| `time_trouble_collapse`    | Errores de apuro de tiempo     | Pérdida ≥ 0,5 con poco reloj según los relojes de la partida.                                        |
+| `lost_won_position`        | Conversiones fallidas          | Con +4,7 o más, una jugada te deja por debajo del 35 % de tu mejor evaluación de la partida.         |
+| `missed_win`               | Victorias tiradas              | Con ≥ 90 % de puntuación esperada, una jugada te baja de 75 % o pierde 6+ peones.                    |
+| `conversion_drift`         | Ventaja que se escapa          | Con +2 o más, la ventaja se diluye a igualdad en 4+ jugadas sin ningún error aislado.                |
+| `low_resourcefulness`      | Derrumbe al estar peor         | Peor pero defendible (−1,2 a −7) y pierdes otros 1,2+.                                               |
+| `costly_mistake`           | Errores no forzados            | Pérdida ≥ 0,5 (o error/error grave) que no encaja en ninguna anterior.                               |
 
 Las categorías se ordenan por **coste total en peones** («8,9 peones devueltos por partida») y por
 cuántas partidas convirtieron una posición ganada o igualada en derrota. Cada una trae un remedio en
@@ -500,8 +500,8 @@ el mismo perfil de motor**.
 
 **Analyze player: cómo calcula cada cosa**
 
-- **Estilo «Sharp/Balanced/Solid»** (literal del código): *agudo* si los enroques opuestos son
-  ≥ 25 % o las partidas decisivas ≥ 60 %; *sólido* si las decisivas son ≤ 42 %; si no, *equilibrado*.
+- **Estilo «Sharp/Balanced/Solid»** (literal del código): _agudo_ si los enroques opuestos son
+  ≥ 25 % o las partidas decisivas ≥ 60 %; _sólido_ si las decisivas son ≤ 42 %; si no, _equilibrado_.
   Es tosco: el porcentaje de partidas decisivas depende mucho del Elo y del ritmo, y la etiqueta no
   usa el «esperado» que sí muestra la tabla.
 - **«Expected» / «Rating par»:** puntuación esperada por la diferencia de Elo con cada rival (fórmula
@@ -609,21 +609,21 @@ ronda (lista al final de la ficha).
 
 Parámetros, con su definición literal resumida:
 
-| Parámetro | Qué hace |
-| --- | --- |
-| Foco: Best Winrate | En tu turno elige la jugada con mayor porcentaje de victorias. |
-| Foco: Best Score | Igual, pero contando tablas como medio punto. |
-| Foco: Low Theory | Elige **las jugadas más raras** para reducir el número de líneas que aprender. |
-| Color y profundidad | Bando y profundidad máxima (por defecto 8). |
-| User Move Range | Solo considera tus N jugadas más jugadas (por defecto 3) y elige la mejor de ellas. |
-| Opponent Move Range | Añade las N respuestas más jugadas del rival (por defecto 3). |
-| User / Opponent Game Amount | Mínimo de partidas para considerar una jugada (por defecto 30). |
-| Avoidance Moves + Avoidance Time | Jugadas prohibidas (p. ej. `d6,e6,f6`) durante las primeras N jugadas. |
-| Engine-proof + umbral | Descarta jugadas con buenas estadísticas pero mala evaluación según la nube de **chessdb.cn**. |
-| Top Move Deviation Threshold | Pérdida máxima frente a la mejor jugada del motor (0,3 por defecto; 0 = siempre la del motor). |
-| Usar Lichess para rival / usuario | Toma estadísticas de Lichess en vez de su base (mucho más lento). |
-| Auto Annotate PGN | Glifos (?!, ?, ??) y símbolos de evaluación (=, ±, +−) a partir de evaluaciones guardadas en su base. |
-| Transposition comments | Comenta las transposiciones dentro del árbol. |
+| Parámetro                         | Qué hace                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Foco: Best Winrate                | En tu turno elige la jugada con mayor porcentaje de victorias.                                        |
+| Foco: Best Score                  | Igual, pero contando tablas como medio punto.                                                         |
+| Foco: Low Theory                  | Elige **las jugadas más raras** para reducir el número de líneas que aprender.                        |
+| Color y profundidad               | Bando y profundidad máxima (por defecto 8).                                                           |
+| User Move Range                   | Solo considera tus N jugadas más jugadas (por defecto 3) y elige la mejor de ellas.                   |
+| Opponent Move Range               | Añade las N respuestas más jugadas del rival (por defecto 3).                                         |
+| User / Opponent Game Amount       | Mínimo de partidas para considerar una jugada (por defecto 30).                                       |
+| Avoidance Moves + Avoidance Time  | Jugadas prohibidas (p. ej. `d6,e6,f6`) durante las primeras N jugadas.                                |
+| Engine-proof + umbral             | Descarta jugadas con buenas estadísticas pero mala evaluación según la nube de **chessdb.cn**.        |
+| Top Move Deviation Threshold      | Pérdida máxima frente a la mejor jugada del motor (0,3 por defecto; 0 = siempre la del motor).        |
+| Usar Lichess para rival / usuario | Toma estadísticas de Lichess en vez de su base (mucho más lento).                                     |
+| Auto Annotate PGN                 | Glifos (?!, ?, ??) y símbolos de evaluación (=, ±, +−) a partir de evaluaciones guardadas en su base. |
+| Transposition comments            | Comenta las transposiciones dentro del árbol.                                                         |
 
 - Base: «elite database» propia, ~4 M de partidas OTB 2010–2025, **sin partidas por correspondencia
   ni rápidas** (por eso los porcentajes difieren de Lichess Masters).
@@ -683,19 +683,20 @@ reglas geométricas muy toscas. Útil sobre todo como ejemplo de qué no promete
   baja, igual que FlexiChess estándar.
 - **Temas posicionales: reglas literales del código.** Se aplican a la jugada jugada frente a la
   mejor del motor, con una pérdida mínima en centipeones:
-  - *Released Tension*: la jugada es un peón que captura un peón, la mejor no capturaba, pérdida
+  - _Released Tension_: la jugada es un peón que captura un peón, la mejor no capturaba, pérdida
     ≥ 0,15.
-  - *Premature Pawn Break*: cualquier avance de peón (columnas b–g) que no captura, cuando la mejor
+  - _Premature Pawn Break_: cualquier avance de peón (columnas b–g) que no captura, cuando la mejor
     no era de peón, pérdida ≥ 0,20–0,25.
-  - *King Exposure*: mover un peón a dos columnas o menos del rey con pérdida ≥ 0,40, o mover el rey
+  - _King Exposure_: mover un peón a dos columnas o menos del rey con pérdida ≥ 0,40, o mover el rey
     con pérdida ≥ 0,50.
-  - *Center Neglect*: la mejor jugada iba cerca del centro y la jugada hecha lejos, pérdida ≥ 0,15.
-  - *Passive Retreat*: una pieza retrocede con pérdida ≥ 0,20. También *Unnecessary Capture*,
-    *Premature Trade*, *Greedy Pawn Grab*, *Aimless Move*, *Overextended Pawn*, *Missed Outpost*…
+  - _Center Neglect_: la mejor jugada iba cerca del centro y la jugada hecha lejos, pérdida ≥ 0,15.
+  - _Passive Retreat_: una pieza retrocede con pérdida ≥ 0,20. También _Unnecessary Capture_,
+    _Premature Trade_, _Greedy Pawn Grab_, _Aimless Move_, _Overextended Pawn_, _Missed Outpost_…
 
   Es decir: **etiquetan la forma de la jugada, no la razón del error.** Si un peón junto al rey
   pierde 0,4 porque permite una táctica, se llama «King Exposure». No hay verificación de que el
   tema explique la pérdida.
+
 - **Textos:** plantillas. Una frase factual sobre la mejor jugada («g5+ era mejor, no Bb1: da jaque y
   toma la iniciativa»; «e5 cae en Nf5+, horquilla al rey y la torre»), un consejo fijo por tema (de
   ahí las frases repetidas) y una cita célebre asociada a cada tema. No hay indicios de IA en vivo.
@@ -819,7 +820,7 @@ Onyx; lo que más interesa copiar es la experiencia de torneos.
   usuarios reales. Chats de personalidad redactados con ChatGPT a partir de eventos de la partida.
 - **Bots de más de 3.000:** su artículo dice que la escala «pasa de 3.000», pero **no explica cómo**.
   Maia-2 por sí solo no llega ahí; tiene que haber algo encima (búsqueda, un motor que filtra para
-  los niveles altos o una escala inflada). No verificable. Referencia pública relacionada: *Allie*,
+  los niveles altos o una escala inflada). No verificable. Referencia pública relacionada: _Allie_,
   un bot de investigación disponible en Lichess que combina un modelo humano con búsqueda adaptativa
   y alcanza nivel de maestro sin dejar de parecer humano.
 - **Otros:** «Guided Play» (avisa del momento crítico mientras juegas, con ayuda ajustable), «Mate
@@ -855,62 +856,62 @@ Sí, pero en dos pasos y solo con estilos que de verdad cambien las jugadas:
 
 ## 3. Catálogo de ideas
 
-| ID | Idea | Origen | Estado | Esfuerzo | Fase recomendada |
-| --- | --- | --- | --- | --- | --- |
-| I-01 | Búsqueda de jugadores por tokens normalizados | ChessCorpus | Propuesta | S | Mantenimiento |
-| I-02 | Ficha de jugador completa para cualquier jugador | ChessCorpus | **Aceptada** (dirección) | M | 8.4 |
-| I-03 | Vinculación FIDE manual con historial Elo | ChessCorpus | En duda | M | 8.4 |
-| I-04 | Nuevas bases descargables con procedencia y deduplicación | ChessCorpus | Propuesta | M | 8.6 y 10 |
-| I-05 | Modos de sesión táctica (tormenta, racha, contrarreloj, profundidad, candidatas) | ChessCorpus | Propuesta | M | 8.8 |
-| I-06 | FSRS para errores tácticos y Elo táctico local | ChessCorpus | Propuesta | M | 8.8 |
-| I-07 | Finales: comprobar tras cada jugada si el objetivo sigue siendo alcanzable | ChessCorpus / autor | **Aceptada** (cambio principal de Finales) | M | 8.9 |
-| I-08 | Importación de finales: familia y objetivo calculados | ChessCorpus / autor | **Simplificada** (sin libros, sin dificultad) | S | 8.9 |
-| I-09 | Filtro de finales por tema | ChessCorpus / autor | **Simplificada** | S | 8.9 |
-| I-10 | Fichas de técnica verificadas y campo de explicación con procedencia | ChessCorpus | **Aplazada** | M | Futuro |
-| I-11 | Clasificación automática de ejercicios propios (temas y dificultad) | Investigación propia | Propuesta | L | 10 |
-| I-12 | Arquitectura de coste cero para un futuro servicio web | ChessCorpus | Aplazada | — | Futuro |
-| I-13 | Lista de partidas de cada cuenta con actualizar y abrir | ChessRamp | Propuesta | S | 8.4 |
-| I-14 | Análisis más rápido sin perder veredictos | ChessRamp / FlexiChess | **Aceptada** (fase) | M | 8.2 |
-| I-15 | Clasificación por probabilidad de victoria, momentos clave y reglas explicables | ChessRamp | Propuesta | M | 8.2 |
-| I-16 | Rendimiento estimado calibrado | ChessRamp | Aplazada | L | 10 |
-| I-17 | Cola automática de errores con repaso espaciado | ChessRamp | **Aceptada** (se adelanta desde la fase de expansión) | M | 8.7 |
-| I-18 | Diagnóstico y prioridades de entrenamiento sin LLM | ChessRamp | Propuesta | M–L | 8.7 |
-| I-19 | Repertorio contra realidad | ChessRamp | Propuesta | M | 8.6 |
-| I-20 | Constructor de sets desde la base de puzzles por tema y banda | ChessRamp | Propuesta | S–M | 8.8 |
-| I-21 | Practicar conversión y defensa desde posiciones propias | ChessRamp + Onyx | Propuesta | M | 8.7 |
-| I-22 | Momentos destacados del jugador | King Takes King | Propuesta | S | 8.4 |
-| I-23 | Objetivos medidos en partidas reales | King Takes King | Propuesta | M | 10 |
-| I-24 | Explicación factual de cada error por plantilla | King Takes King / ChessRamp | Propuesta | S–M | 8.2 |
-| I-25 | LumbrasGigaBase OTB y Online por separado en el catálogo | Chess.ceo / autor | **Aceptada** (antes de 8.2) | M | 8.3 |
-| I-26 | Informe de calidad al importar o descargar una base | Chess.ceo / autor | Propuesta | S–M | Mantenimiento y 8.3 |
-| I-27 | Índice de árbol de aperturas precalculado | Chess.ceo / FlexiChess | En duda (medir) | L | 10 |
-| I-28 | Rendimiento frente a lo esperado y tendencia por jugada en el informe de posición | Chess.ceo | Propuesta | S | 8.3 |
-| I-29 | Catálogo de fugas con reglas, coste y evolución | FlexiChess | Propuesta | M | 8.7 |
-| I-30 | «Rating par»: resultados frente a lo esperado por Elo | FlexiChess | Propuesta | S–M | 8.4 |
-| I-31 | Estructuras de peones con nombre | FlexiChess / autor | Propuesta (8 iniciales, validadas con Flores Rios) | M–L | 8.6 y 9.3 |
-| I-32 | Veredicto «cómo jugarle» | FlexiChess | Propuesta | M | 8.6 |
-| I-33 | Dificultad práctica de una posición para el rival (Maia + Stockfish) | FlexiChess / Onyx | Propuesta (redefinida) | M | 8.5 y 8.6 |
-| I-34 | Huecos del repertorio por frecuencia real | FlexiChess | Propuesta | S–M | 8.10 |
-| I-35 | Búsqueda de partidas en lenguaje natural | FlexiChess | Aplazada (IA) | M | Futuro (IA) |
-| I-36 | Modo «Repaso continuo» por dominio de cada jugada | Listudy | Propuesta | M | 8.10 |
-| I-37 | Repeticiones de memoria configurables para dar una línea por aprendida | Autor / Chessable | Propuesta | S | Mantenimiento |
-| I-38 | Visualización: tácticas a ciegas y sin piezas | Listudy | Propuesta | M | 8.8 |
-| I-39 | Fuentes libres de finales (puzzles de Lichess, tablebase) | Listudy / autor | Aplazada | M | Futuro |
-| I-40 | Generador de repertorios desde estadísticas | qchess / ChessBase | **Aceptada** (entre ficha y preparación) | L | 8.5 |
-| I-41 | Generador de líneas de preparación contra un rival | qchess + Onyx | Propuesta | M (sobre I-40) | 8.6 |
-| I-42 | Jerarquía de aperturas Familia → Variante → Subvariante | ChessStalker / autor | **Aceptada** | S | 8.4 o mantenimiento |
-| I-43 | Bot gemelo: libro del jugador + Maia a su Elo | ChessStalker | Propuesta | M (L con modelo propio) | 8.6 y 10 |
-| I-44 | Psicología, reloj y tramos de error del jugador | FireChess / ChessStalker | Propuesta | S–M | 8.4 |
-| I-45 | Rivales frecuentes y cara a cara | ChessStalker | Propuesta | S | 8.4 |
-| I-46 | Ejercicios con flechas y casillas que explican el error | FireChess | Propuesta | S | 8.2 |
-| I-47 | Personalidades de bot reales y medidas (mapa de dos ejes) | Chessiverse / autor | Propuesta | M–L | 9.1 |
-| I-48 | Bots fuertes: candidatas de Maia verificadas con Stockfish | Chessiverse v3 | Propuesta | M | 9.1 |
-| I-49 | Catálogo de 80–100 bots curados, jugadores generados y explorador de bots | Chessiverse / autor | **Aceptada** (cifra y escalones) | M | 9.1 |
-| I-50 | Rating local del usuario contra bots y escala de bots calibrada | Chessiverse | Propuesta | M | 9.1 |
-| I-51 | Torneos con el usuario: formatos, plantillas y calendario | Chessiverse / autor | Propuesta | L | 9.2 |
-| I-52 | Partida guiada y mates básicos cronometrados | Chessiverse | Propuesta | S–M | 8.9 y 9.1 |
-| I-53 | Planificador global de motores | Rendimiento | Propuesta | M | 8.2 |
-| I-54 | Presupuesto de rendimiento con benchmarks | Rendimiento | Propuesta | S–M | 8.2 y 10 |
+| ID   | Idea                                                                              | Origen                      | Estado                                                | Esfuerzo                | Fase recomendada    |
+| ---- | --------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------- | ----------------------- | ------------------- |
+| I-01 | Búsqueda de jugadores por tokens normalizados                                     | ChessCorpus                 | Propuesta                                             | S                       | Mantenimiento       |
+| I-02 | Ficha de jugador completa para cualquier jugador                                  | ChessCorpus                 | **Aceptada** (dirección)                              | M                       | 8.4                 |
+| I-03 | Vinculación FIDE manual con historial Elo                                         | ChessCorpus                 | En duda                                               | M                       | 8.4                 |
+| I-04 | Nuevas bases descargables con procedencia y deduplicación                         | ChessCorpus                 | Propuesta                                             | M                       | 8.6 y 10            |
+| I-05 | Modos de sesión táctica (tormenta, racha, contrarreloj, profundidad, candidatas)  | ChessCorpus                 | Propuesta                                             | M                       | 8.8                 |
+| I-06 | FSRS para errores tácticos y Elo táctico local                                    | ChessCorpus                 | Propuesta                                             | M                       | 8.8                 |
+| I-07 | Finales: comprobar tras cada jugada si el objetivo sigue siendo alcanzable        | ChessCorpus / autor         | **Aceptada** (cambio principal de Finales)            | M                       | 8.9                 |
+| I-08 | Importación de finales: familia y objetivo calculados                             | ChessCorpus / autor         | **Simplificada** (sin libros, sin dificultad)         | S                       | 8.9                 |
+| I-09 | Filtro de finales por tema                                                        | ChessCorpus / autor         | **Simplificada**                                      | S                       | 8.9                 |
+| I-10 | Fichas de técnica verificadas y campo de explicación con procedencia              | ChessCorpus                 | **Aplazada**                                          | M                       | Futuro              |
+| I-11 | Clasificación automática de ejercicios propios (temas y dificultad)               | Investigación propia        | Propuesta                                             | L                       | 10                  |
+| I-12 | Arquitectura de coste cero para un futuro servicio web                            | ChessCorpus                 | Aplazada                                              | —                       | Futuro              |
+| I-13 | Lista de partidas de cada cuenta con actualizar y abrir                           | ChessRamp                   | Propuesta                                             | S                       | 8.4                 |
+| I-14 | Análisis más rápido sin perder veredictos                                         | ChessRamp / FlexiChess      | **Aceptada** (fase)                                   | M                       | 8.2                 |
+| I-15 | Clasificación por probabilidad de victoria, momentos clave y reglas explicables   | ChessRamp                   | Propuesta                                             | M                       | 8.2                 |
+| I-16 | Rendimiento estimado calibrado                                                    | ChessRamp                   | Aplazada                                              | L                       | 10                  |
+| I-17 | Cola automática de errores con repaso espaciado                                   | ChessRamp                   | **Aceptada** (se adelanta desde la fase de expansión) | M                       | 8.7                 |
+| I-18 | Diagnóstico y prioridades de entrenamiento sin LLM                                | ChessRamp                   | Propuesta                                             | M–L                     | 8.7                 |
+| I-19 | Repertorio contra realidad                                                        | ChessRamp                   | Propuesta                                             | M                       | 8.6                 |
+| I-20 | Constructor de sets desde la base de puzzles por tema y banda                     | ChessRamp                   | Propuesta                                             | S–M                     | 8.8                 |
+| I-21 | Practicar conversión y defensa desde posiciones propias                           | ChessRamp + Onyx            | Propuesta                                             | M                       | 8.7                 |
+| I-22 | Momentos destacados del jugador                                                   | King Takes King             | Propuesta                                             | S                       | 8.4                 |
+| I-23 | Objetivos medidos en partidas reales                                              | King Takes King             | Propuesta                                             | M                       | 10                  |
+| I-24 | Explicación factual de cada error por plantilla                                   | King Takes King / ChessRamp | Propuesta                                             | S–M                     | 8.2                 |
+| I-25 | LumbrasGigaBase OTB y Online por separado en el catálogo                          | Chess.ceo / autor           | **Aceptada** (antes de 8.2)                           | M                       | 8.3                 |
+| I-26 | Informe de calidad al importar o descargar una base                               | Chess.ceo / autor           | Propuesta                                             | S–M                     | Mantenimiento y 8.3 |
+| I-27 | Índice de árbol de aperturas precalculado                                         | Chess.ceo / FlexiChess      | En duda (medir)                                       | L                       | 10                  |
+| I-28 | Rendimiento frente a lo esperado y tendencia por jugada en el informe de posición | Chess.ceo                   | Propuesta                                             | S                       | 8.3                 |
+| I-29 | Catálogo de fugas con reglas, coste y evolución                                   | FlexiChess                  | Propuesta                                             | M                       | 8.7                 |
+| I-30 | «Rating par»: resultados frente a lo esperado por Elo                             | FlexiChess                  | Propuesta                                             | S–M                     | 8.4                 |
+| I-31 | Estructuras de peones con nombre                                                  | FlexiChess / autor          | Propuesta (8 iniciales, validadas con Flores Rios)    | M–L                     | 8.6 y 9.3           |
+| I-32 | Veredicto «cómo jugarle»                                                          | FlexiChess                  | Propuesta                                             | M                       | 8.6                 |
+| I-33 | Dificultad práctica de una posición para el rival (Maia + Stockfish)              | FlexiChess / Onyx           | Propuesta (redefinida)                                | M                       | 8.5 y 8.6           |
+| I-34 | Huecos del repertorio por frecuencia real                                         | FlexiChess                  | Propuesta                                             | S–M                     | 8.10                |
+| I-35 | Búsqueda de partidas en lenguaje natural                                          | FlexiChess                  | Aplazada (IA)                                         | M                       | Futuro (IA)         |
+| I-36 | Modo «Repaso continuo» por dominio de cada jugada                                 | Listudy                     | Propuesta                                             | M                       | 8.10                |
+| I-37 | Repeticiones de memoria configurables para dar una línea por aprendida            | Autor / Chessable           | Propuesta                                             | S                       | Mantenimiento       |
+| I-38 | Visualización: tácticas a ciegas y sin piezas                                     | Listudy                     | Propuesta                                             | M                       | 8.8                 |
+| I-39 | Fuentes libres de finales (puzzles de Lichess, tablebase)                         | Listudy / autor             | Aplazada                                              | M                       | Futuro              |
+| I-40 | Generador de repertorios desde estadísticas                                       | qchess / ChessBase          | **Aceptada** (entre ficha y preparación)              | L                       | 8.5                 |
+| I-41 | Generador de líneas de preparación contra un rival                                | qchess + Onyx               | Propuesta                                             | M (sobre I-40)          | 8.6                 |
+| I-42 | Jerarquía de aperturas Familia → Variante → Subvariante                           | ChessStalker / autor        | **Aceptada**                                          | S                       | 8.4 o mantenimiento |
+| I-43 | Bot gemelo: libro del jugador + Maia a su Elo                                     | ChessStalker                | Propuesta                                             | M (L con modelo propio) | 8.6 y 10            |
+| I-44 | Psicología, reloj y tramos de error del jugador                                   | FireChess / ChessStalker    | Propuesta                                             | S–M                     | 8.4                 |
+| I-45 | Rivales frecuentes y cara a cara                                                  | ChessStalker                | Propuesta                                             | S                       | 8.4                 |
+| I-46 | Ejercicios con flechas y casillas que explican el error                           | FireChess                   | Propuesta                                             | S                       | 8.2                 |
+| I-47 | Personalidades de bot reales y medidas (mapa de dos ejes)                         | Chessiverse / autor         | Propuesta                                             | M–L                     | 9.1                 |
+| I-48 | Bots fuertes: candidatas de Maia verificadas con Stockfish                        | Chessiverse v3              | Propuesta                                             | M                       | 9.1                 |
+| I-49 | Catálogo de 80–100 bots curados, jugadores generados y explorador de bots         | Chessiverse / autor         | **Aceptada** (cifra y escalones)                      | M                       | 9.1                 |
+| I-50 | Rating local del usuario contra bots y escala de bots calibrada                   | Chessiverse                 | Propuesta                                             | M                       | 9.1                 |
+| I-51 | Torneos con el usuario: formatos, plantillas y calendario                         | Chessiverse / autor         | Propuesta                                             | L                       | 9.2                 |
+| I-52 | Partida guiada y mates básicos cronometrados                                      | Chessiverse                 | Propuesta                                             | S–M                     | 8.9 y 9.1           |
+| I-53 | Planificador global de motores                                                    | Rendimiento                 | Propuesta                                             | M                       | 8.2                 |
+| I-54 | Presupuesto de rendimiento con benchmarks                                         | Rendimiento                 | Propuesta                                             | S–M                     | 8.2 y 10            |
 
 ### I-01. Búsqueda de jugadores por tokens normalizados
 
@@ -1064,7 +1065,7 @@ Ordenado por relación beneficio/riesgo:
 4. **Varios procesos en lotes:** en Player Analysis, N partidas en paralelo con pocos hilos cada
    una, según los núcleos disponibles (FlexiChess usa 6 motores a la vez). Limitar la memoria total
    de hash para no repetir sus 1,3 GB.
-4b. **Perfiles de análisis con calidad declarada** (rápido / estándar / profundo), como FlexiChess,
+   4b. **Perfiles de análisis con calidad declarada** (rápido / estándar / profundo), como FlexiChess,
    pero sin bajar el predeterminado por debajo de la calidad actual: el perfil rápido sirve para
    detectar errores graves en muchas partidas y se etiqueta como tal en el resultado.
 5. **Evaluaciones de la nube de Lichess** para posiciones de apertura, opcional y con el
@@ -1189,17 +1190,17 @@ El índice puede construirlo Onyx en local si tarda poco; si no, se sube tambié
 
 **Dónde alojar** (comparación del 2026-10-14):
 
-| | Cloudflare R2 | Hugging Face Datasets |
-| --- | --- | --- |
-| Gratis | 10 GB de almacenamiento, 1 M de escrituras y 10 M de lecturas al mes. | Almacenamiento público «best-effort» (sin cifra garantizada; se pide uso responsable más allá de unos GB). |
-| Descargas | Sin coste de salida. | Gratis, servidas por CDN. |
-| Alta | Cuenta de Cloudflare; activar R2 suele pedir un método de pago (verificar). | Cuenta gratuita, sin tarjeta. |
-| URL pública | `r2.dev` (limitada, pensada para desarrollo) o dominio propio en Cloudflare. | Fija: `huggingface.co/datasets/<usuario>/<repo>/resolve/main/<archivo>`. |
-| Subida | `rclone`, `wrangler` o API S3 (multiparte). | `hf upload` (biblioteca `huggingface_hub`), reanudable. |
-| Versiones | Manuales (nombres de archivo). | Historial de commits; las versiones viejas ocupan espacio hasta que se borran o se compacta el historial. |
-| Requisitos | Ninguno sobre el contenido. | Ficha del conjunto de datos (licencia, atribución, procedencia) y que sea útil para otros; prefieren formatos como Parquet. |
-| Riesgo | Pasar de 10 GB (dos versiones a la vez no caben sin comprimir). | «Best-effort»: sin garantía formal; un `.db3` solo útil para Onyx encaja peor con su política. |
-| Portafolio | Neutro. | Suma: conjunto de datos público con ficha, encaja con la Fase 10. |
+|             | Cloudflare R2                                                                | Hugging Face Datasets                                                                                                       |
+| ----------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Gratis      | 10 GB de almacenamiento, 1 M de escrituras y 10 M de lecturas al mes.        | Almacenamiento público «best-effort» (sin cifra garantizada; se pide uso responsable más allá de unos GB).                  |
+| Descargas   | Sin coste de salida.                                                         | Gratis, servidas por CDN.                                                                                                   |
+| Alta        | Cuenta de Cloudflare; activar R2 suele pedir un método de pago (verificar).  | Cuenta gratuita, sin tarjeta.                                                                                               |
+| URL pública | `r2.dev` (limitada, pensada para desarrollo) o dominio propio en Cloudflare. | Fija: `huggingface.co/datasets/<usuario>/<repo>/resolve/main/<archivo>`.                                                    |
+| Subida      | `rclone`, `wrangler` o API S3 (multiparte).                                  | `hf upload` (biblioteca `huggingface_hub`), reanudable.                                                                     |
+| Versiones   | Manuales (nombres de archivo).                                               | Historial de commits; las versiones viejas ocupan espacio hasta que se borran o se compacta el historial.                   |
+| Requisitos  | Ninguno sobre el contenido.                                                  | Ficha del conjunto de datos (licencia, atribución, procedencia) y que sea útil para otros; prefieren formatos como Parquet. |
+| Riesgo      | Pasar de 10 GB (dos versiones a la vez no caben sin comprimir).              | «Best-effort»: sin garantía formal; un `.db3` solo útil para Onyx encaja peor con su política.                              |
+| Portafolio  | Neutro.                                                                      | Suma: conjunto de datos público con ficha, encaja con la Fase 10.                                                           |
 
 **Recomendación:** **Hugging Face Datasets**, por no pedir tarjeta ni dominio, URLs fijas, subida
 sencilla y valor de portafolio. Mitigación del riesgo: el catálogo de Onyx solo guarda URLs, así que
@@ -1263,16 +1264,16 @@ línea» en algo interpretable.
 **Conjunto inicial propuesto** (los más frecuentes, cada uno con su versión para blancas y negras
 cuando aplique), tal como los describe el autor:
 
-| Estructura | Regla aproximada (a precisar con ejemplos) |
-| --- | --- |
-| IQP (peón aislado de dama) | Peón d aislado sin peones c ni e propios; columna c o e semiabierta. |
-| Carlsbad | Blancas d4/e3 sin c; negras c6/d5 sin e (o la simétrica); típica del Gambito de Dama y de la Caro-Kann. |
-| Peones colgantes | Peones c y d propios en la cuarta fila, sin peones b ni e de apoyo. |
-| Caro-Kann / Eslava | Negras con peones en la séptima salvo c6 y e6, sin peón d; la Caro-Kann cuando a las blancas les falta el peón e, la Eslava cuando les falta el c. |
-| Francesa | Cadena e6/d5 contra d4/e5 (y variantes con el centro cambiado). |
-| Maróczy | Peones blancos c4/e4 sin peón d, contra la estructura siciliana. |
-| Erizo | Peones negros a6/b6/d6/e6 frente a c4/e4. |
-| India de rey | Cadena d5/e4 contra d6/e5 (y centro cerrado). |
+| Estructura                 | Regla aproximada (a precisar con ejemplos)                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IQP (peón aislado de dama) | Peón d aislado sin peones c ni e propios; columna c o e semiabierta.                                                                               |
+| Carlsbad                   | Blancas d4/e3 sin c; negras c6/d5 sin e (o la simétrica); típica del Gambito de Dama y de la Caro-Kann.                                            |
+| Peones colgantes           | Peones c y d propios en la cuarta fila, sin peones b ni e de apoyo.                                                                                |
+| Caro-Kann / Eslava         | Negras con peones en la séptima salvo c6 y e6, sin peón d; la Caro-Kann cuando a las blancas les falta el peón e, la Eslava cuando les falta el c. |
+| Francesa                   | Cadena e6/d5 contra d4/e5 (y variantes con el centro cambiado).                                                                                    |
+| Maróczy                    | Peones blancos c4/e4 sin peón d, contra la estructura siciliana.                                                                                   |
+| Erizo                      | Peones negros a6/b6/d6/e6 frente a c4/e4.                                                                                                          |
+| India de rey               | Cadena d5/e4 contra d6/e5 (y centro cerrado).                                                                                                      |
 
 **Dónde poner el límite:** empezar con estas ocho y no añadir más hasta que pasen la validación.
 
@@ -1382,12 +1383,12 @@ Acción del tablero («Generar repertorio desde aquí») que crea un repertorio 
 - **Fuente de estadísticas:** base local (con filtros de ritmo, Elo y periodo) o Lichess (Masters o
   por banda de Elo).
 - **Mis jugadas, enfoques medibles:**
-  - *Mejor resultado práctico:* mayor rendimiento frente a lo esperado por Elo, ordenado de forma
+  - _Mejor resultado práctico:_ mayor rendimiento frente a lo esperado por Elo, ordenado de forma
     prudente según la muestra (no porcentaje bruto);
-  - *Mejor puntuación* y *menos derrotas* (equivalente a «drawrate» para torneos donde no se puede
+  - _Mejor puntuación_ y _menos derrotas_ (equivalente a «drawrate» para torneos donde no se puede
     perder);
-  - *Menos teoría:* minimiza las respuestas del rival que hay que cubrir;
-  - *Más fiel al motor:* la mejor del motor entre las jugadas jugadas al menos N veces.
+  - _Menos teoría:_ minimiza las respuestas del rival que hay que cubrir;
+  - _Más fiel al motor:_ la mejor del motor entre las jugadas jugadas al menos N veces.
 - **Respuestas del rival:** las N más jugadas con mínimo de partidas, o **las que Maia predice para
   un Elo dado** (qué jugará realmente un rival de 1600), o una mezcla.
 - **Filtros:** profundidad, mínimo de partidas propio y del rival, jugadas a evitar durante N
@@ -1457,11 +1458,11 @@ resolverlo. Onyx ya dibuja flechas y casillas del PGN; basta generarlas.
 
 **Cómo lo hace Chessiverse (sección 2.10 y su captura de los dos mapas):**
 
-- **Estilo de juego**: dos ejes, *agresivo ↔ defensivo* y *simplificar ↔ complicar*, que forman cinco
+- **Estilo de juego**: dos ejes, _agresivo ↔ defensivo_ y _simplificar ↔ complicar_, que forman cinco
   personalidades: **Hunter** (agresivo y simplificador), **Savage** (agresivo y complicador),
   **Guardian** (defensivo y simplificador), **Observer** (defensivo y complicador) y **Mediator**
   (centro).
-- **Estilo de apertura**: dos ejes, *aguda ↔ sólida* y *poco preparado ↔ teórico*: **Gambler**,
+- **Estilo de apertura**: dos ejes, _aguda ↔ sólida_ y _poco preparado ↔ teórico_: **Gambler**,
   **Duelist**, **Pragmatist** y **Classic**.
 - **De dónde sale el estilo:** no hay un parámetro «juega agresivo». Sale de (1) la red neuronal o
   los datos con que se entrenó cada bot, (2) su repertorio y (3) el filtro de candidatas. Después se
@@ -1477,10 +1478,10 @@ entrenar redes distintas): el bot pide a Maia sus jugadas candidatas y **reorden
 probabilidades según el estilo, solo entre candidatas humanas y dentro de un margen de pérdida
 según Stockfish:
 
-| Eje | Rasgos de la jugada que se favorecen (y lo contrario en el otro extremo) |
-| --- | --- |
-| Agresivo ↔ defensivo | Jaques, capturas, avances hacia el rey rival, ataques a piezas cerca del rey, sacrificios verificados ↔ jugadas que defienden, refuerzan el propio rey o retiran piezas amenazadas. |
-| Simplificar ↔ complicar | Cambios de piezas, liberar la tensión, posiciones con menos jugadas razonables ↔ mantener la tensión, evitar cambios, posiciones donde el rival tiene pocas jugadas buenas (I-33). |
+| Eje                     | Rasgos de la jugada que se favorecen (y lo contrario en el otro extremo)                                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agresivo ↔ defensivo    | Jaques, capturas, avances hacia el rey rival, ataques a piezas cerca del rey, sacrificios verificados ↔ jugadas que defienden, refuerzan el propio rey o retiran piezas amenazadas. |
+| Simplificar ↔ complicar | Cambios de piezas, liberar la tensión, posiciones con menos jugadas razonables ↔ mantener la tensión, evitar cambios, posiciones donde el rival tiene pocas jugadas buenas (I-33).  |
 
 **Cómo se mide** (lo que convierte la etiqueta `editorial` en `measured`): partidas del bot contra un
 bot neutro del mismo Elo y comparación de partidas decisivas, enroques opuestos, cambios por partida,
@@ -1501,7 +1502,7 @@ ajuste de pesos hasta que las cinco personalidades se separen, después la recal
   Atlas en partidas lentas. Es el «Move Curator» de Chessiverse, viable en local porque Stockfish
   nativo responde en milisegundos y cabe dentro del tiempo de reflexión simulado.
 - Calibrar el resultado con la liga (I-50) antes de anunciar un Elo. Alternativa de investigación
-  para la Fase 9 (bots) o la 10 (investigación): modelo humano + búsqueda adaptativa (como *Allie*).
+  para la Fase 9 (bots) o la 10 (investigación): modelo humano + búsqueda adaptativa (como _Allie_).
 
 ### I-49. Catálogo de bots: cuántos y cómo elegirlos
 
@@ -1629,15 +1630,15 @@ finales y estrategia) y anotar:
 Objetivo: documentar cómo lo hacen otros para preparar una base escalable sin implementar algo que
 todavía no funcione.
 
-| Página | Qué hace con IA | Cómo | Coste | Problemas observados |
-| --- | --- | --- | --- | --- |
-| ChessCorpus | Explicaciones de finales | Generación offline, una vez, guardada como datos estáticos bilingües. Dos capas: resumen por posición y fichas por categoría. | Único, al generar | Fichas asignadas por categoría que contradicen la posición; nada verificado contra la tablebase. |
-| ChessRamp | «Coach» por jugada e informe de patrones (premium) | Por jugada: burbujas por plantilla según la categoría, sin LLM en el cliente. Informe: lógica en el servidor, no verificable; lo descrito es reproducible con reglas sobre métricas del motor. | Bajo o desconocido | Promete «AI» donde lo visible son plantillas. |
-| King Takes King | «Un coach explica cada error» | Ejemplo mostrado: frase construida con hechos del motor («permite mate en 1: 4.Qxf7#»). | Nulo si es plantilla | Entrenamiento aún no publicado. |
-| FireChess | Textos de cada ejercicio e informe | Plantillas: frase factual sobre la mejor jugada + consejo fijo por tema + cita célebre. Sin IA en vivo. | Nulo | Temas asignados por forma de la jugada, no por causa. |
-| ChessStalker | Bot gemelo | Libro de aperturas del jugador + Maia 3 en servidor al Elo estimado. No es IA generativa. | Servidor de Maia | No imita el estilo individual fuera del libro. |
-| Chessiverse | Bots y chats de personalidad | Maia-2 como generador de candidatas; antes, filtro con motor fuerte. Chats redactados con ChatGPT a partir de eventos de la partida. | Servidor | No explica cómo llegan a más de 3.000. |
-| FlexiChess (Pallas) | Preguntas libres sobre la posición; búsqueda en lenguaje natural | **LLM en vivo + verificación:** cada jugada o táctica citada se reproduce y comprueba con Stockfish antes de mostrarse. La búsqueda traduce la frase a filtros y dice qué entendió. | Real; lo controlan con cuotas semanales | No verificable sin cuenta; la verificación no cubre afirmaciones de plan. |
+| Página              | Qué hace con IA                                                  | Cómo                                                                                                                                                                                           | Coste                                   | Problemas observados                                                                             |
+| ------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ChessCorpus         | Explicaciones de finales                                         | Generación offline, una vez, guardada como datos estáticos bilingües. Dos capas: resumen por posición y fichas por categoría.                                                                  | Único, al generar                       | Fichas asignadas por categoría que contradicen la posición; nada verificado contra la tablebase. |
+| ChessRamp           | «Coach» por jugada e informe de patrones (premium)               | Por jugada: burbujas por plantilla según la categoría, sin LLM en el cliente. Informe: lógica en el servidor, no verificable; lo descrito es reproducible con reglas sobre métricas del motor. | Bajo o desconocido                      | Promete «AI» donde lo visible son plantillas.                                                    |
+| King Takes King     | «Un coach explica cada error»                                    | Ejemplo mostrado: frase construida con hechos del motor («permite mate en 1: 4.Qxf7#»).                                                                                                        | Nulo si es plantilla                    | Entrenamiento aún no publicado.                                                                  |
+| FireChess           | Textos de cada ejercicio e informe                               | Plantillas: frase factual sobre la mejor jugada + consejo fijo por tema + cita célebre. Sin IA en vivo.                                                                                        | Nulo                                    | Temas asignados por forma de la jugada, no por causa.                                            |
+| ChessStalker        | Bot gemelo                                                       | Libro de aperturas del jugador + Maia 3 en servidor al Elo estimado. No es IA generativa.                                                                                                      | Servidor de Maia                        | No imita el estilo individual fuera del libro.                                                   |
+| Chessiverse         | Bots y chats de personalidad                                     | Maia-2 como generador de candidatas; antes, filtro con motor fuerte. Chats redactados con ChatGPT a partir de eventos de la partida.                                                           | Servidor                                | No explica cómo llegan a más de 3.000.                                                           |
+| FlexiChess (Pallas) | Preguntas libres sobre la posición; búsqueda en lenguaje natural | **LLM en vivo + verificación:** cada jugada o táctica citada se reproduce y comprueba con Stockfish antes de mostrarse. La búsqueda traduce la frase a filtros y dice qué entendió.            | Real; lo controlan con cuotas semanales | No verificable sin cuenta; la verificación no cubre afirmaciones de plan.                        |
 
 **Patrón que se repite:** lo que las páginas llaman «IA» es, en la parte que se puede comprobar,
 **plantillas sobre hechos del motor** o **texto generado una vez offline**. La única que usa un LLM
@@ -1717,8 +1718,9 @@ dentro de «Usuario» no escala si también hay que analizar rivales y crear mat
 motor (aperturas, resultados, psicología, rivales) se calculan al instante con miles de partidas; el
 análisis de motor (errores, fugas, ejercicios) se lanza aparte sobre una muestra elegida. La interfaz
 debe dejar claro qué conclusiones vienen de cada nivel.
-  - **Fugas** (ficha propia y alumnos; puede ir dentro de Análisis): catálogo de I-29 con coste y
-    evolución.
+
+- **Fugas** (ficha propia y alumnos; puede ir dentro de Análisis): catálogo de I-29 con coste y
+  evolución.
 - **«Usuario»** queda para conectar cuentas y preferencias.
 - Ajuste técnico: `PlayerAnalysisPanel.tsx` tiene 1.704 líneas y hay que dividirlo antes de
   moverlo, según la regla vigente.
@@ -1733,15 +1735,15 @@ reales están concentrados en pocos sitios.
 
 ### Dónde está el riesgo
 
-| Riesgo | Ideas afectadas | Qué pasaría si se hace mal |
-| --- | --- | --- |
-| **Varios motores a la vez** | I-14, I-17, I-40, I-41, I-43, I-48, I-51 | Stockfish y Maia compitiendo por CPU y RAM; interfaz y tablero lentos, ventilador al máximo. |
-| **Escaneos completos de la base** | I-19, I-28, I-30, I-40, preparación | ~26 s por cada posición nueva en 10 M de partidas; si una pantalla dispara muchos, se congela la experiencia. |
-| **Archivos JSON que crecen** | I-14 (caché), I-17, perfiles, torneos | `training-areas-v1` se carga **antes de mostrar la aplicación**; si se le añaden datos grandes, el arranque se vuelve lento. |
-| **Cálculos pesados en la interfaz** | I-42, I-44, I-45, tablas de preparación | Agregar miles de partidas en JavaScript bloquea la interfaz. |
-| **Paquete web grande** | Todas las pantallas nuevas | El bundle principal ya supera 5 MB (anotado en 7.0); más secciones lo agravan. |
-| **Simular torneos jugando todas las partidas** | I-51 | Decenas de partidas de Maia por ronda. |
-| **Conversiones y descargas largas** | I-25, I-26, I-27 | Horas de CPU y GB de disco si no se avisa y no corre en segundo plano. |
+| Riesgo                                         | Ideas afectadas                          | Qué pasaría si se hace mal                                                                                                   |
+| ---------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Varios motores a la vez**                    | I-14, I-17, I-40, I-41, I-43, I-48, I-51 | Stockfish y Maia compitiendo por CPU y RAM; interfaz y tablero lentos, ventilador al máximo.                                 |
+| **Escaneos completos de la base**              | I-19, I-28, I-30, I-40, preparación      | ~26 s por cada posición nueva en 10 M de partidas; si una pantalla dispara muchos, se congela la experiencia.                |
+| **Archivos JSON que crecen**                   | I-14 (caché), I-17, perfiles, torneos    | `training-areas-v1` se carga **antes de mostrar la aplicación**; si se le añaden datos grandes, el arranque se vuelve lento. |
+| **Cálculos pesados en la interfaz**            | I-42, I-44, I-45, tablas de preparación  | Agregar miles de partidas en JavaScript bloquea la interfaz.                                                                 |
+| **Paquete web grande**                         | Todas las pantallas nuevas               | El bundle principal ya supera 5 MB (anotado en 7.0); más secciones lo agravan.                                               |
+| **Simular torneos jugando todas las partidas** | I-51                                     | Decenas de partidas de Maia por ronda.                                                                                       |
+| **Conversiones y descargas largas**            | I-25, I-26, I-27                         | Horas de CPU y GB de disco si no se avisa y no corre en segundo plano.                                                       |
 
 ### Reglas para que no ocurra
 
@@ -1905,13 +1907,13 @@ I-39 (fuentes libres de finales).
    Antes, escribir al autor de LumbrasGigaBase.
 2. **SQLite para datos grandes.** Ventajas y desventajas:
 
-   | Ventajas | Desventajas |
-   | --- | --- |
-   | Onyx ya lo usa en todas sus bases (no es una dependencia nueva). | No se lee ni se edita a mano como un JSON. |
-   | Escribe solo lo que cambia; un JSON se reescribe entero. | Exige migraciones de esquema versionadas. |
-   | Búsquedas con índice sin cargar todo en memoria. | Exportación y backup deben implementarse aparte. |
+   | Ventajas                                                             | Desventajas                                                        |
+   | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+   | Onyx ya lo usa en todas sus bases (no es una dependencia nueva).     | No se lee ni se edita a mano como un JSON.                         |
+   | Escribe solo lo que cambia; un JSON se reescribe entero.             | Exige migraciones de esquema versionadas.                          |
+   | Búsquedas con índice sin cargar todo en memoria.                     | Exportación y backup deben implementarse aparte.                   |
    | Transacciones: un cierre a mitad de escritura no corrompe los datos. | En Windows requiere WAL y `busy_timeout`, como las bases actuales. |
-   | Escala a millones de filas. | |
+   | Escala a millones de filas.                                          |                                                                    |
 
    **Relación con el error «No se pudo completar la consulta de esta posición»:** ese mensaje es el
    aviso genérico de cualquier fallo en la consulta de posición del panel de base de datos
@@ -1950,15 +1952,15 @@ Conviene no presentarlas como hechos al pasar ideas al roadmap:
 Con la decisión de no incluir libros, el inventario sirve para **diseñar los importadores**, no para
 elegir contenido. Basta con 3–5 archivos representativos de cada tipo:
 
-| Tipo | Para qué ideas | Qué mirar |
-| --- | --- | --- |
-| **Libros de táctica** con capítulos por tema | I-11, I-20, I-38 | Si el tema está en el nombre del capítulo, `Event`, `Round` o comentarios; si la primera jugada es del rival; dónde está la solución. |
-| **Libros de táctica sin orden** (miles de ejercicios, como Woodpecker) | I-11 (temas y dificultad automáticos) | Si traen partida previa o solo FEN; longitud de las soluciones; variantes. |
-| **Finales** | I-07, I-08 | Si el objetivo (ganar/tablas) está indicado y cómo; cuántas posiciones tienen ≤ 7 piezas (verificación exacta con tablebase). |
-| **Ejercicios estratégicos o de plan** | Importación a Táctica | Si la solución es una jugada concreta o un plan explicado en texto; si se pueden validar con motor. |
-| **Cursos de aperturas** | I-36, I-37, I-40 | Ya probados con 6.A; solo anotar formatos nuevos. |
-| **Colecciones de partidas comentadas** | Partidas modelo para I-40 y la preparación | Si tienen `WhiteElo`/`BlackElo`, fechas y comentarios. |
-| **Libro de estructuras de Flores Rios** | I-31 | Si cada capítulo/estructura se distingue en las cabeceras, para usarlo como ejemplos etiquetados. |
+| Tipo                                                                   | Para qué ideas                             | Qué mirar                                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Libros de táctica** con capítulos por tema                           | I-11, I-20, I-38                           | Si el tema está en el nombre del capítulo, `Event`, `Round` o comentarios; si la primera jugada es del rival; dónde está la solución. |
+| **Libros de táctica sin orden** (miles de ejercicios, como Woodpecker) | I-11 (temas y dificultad automáticos)      | Si traen partida previa o solo FEN; longitud de las soluciones; variantes.                                                            |
+| **Finales**                                                            | I-07, I-08                                 | Si el objetivo (ganar/tablas) está indicado y cómo; cuántas posiciones tienen ≤ 7 piezas (verificación exacta con tablebase).         |
+| **Ejercicios estratégicos o de plan**                                  | Importación a Táctica                      | Si la solución es una jugada concreta o un plan explicado en texto; si se pueden validar con motor.                                   |
+| **Cursos de aperturas**                                                | I-36, I-37, I-40                           | Ya probados con 6.A; solo anotar formatos nuevos.                                                                                     |
+| **Colecciones de partidas comentadas**                                 | Partidas modelo para I-40 y la preparación | Si tienen `WhiteElo`/`BlackElo`, fechas y comentarios.                                                                                |
+| **Libro de estructuras de Flores Rios**                                | I-31                                       | Si cada capítulo/estructura se distingue en las cabeceras, para usarlo como ejemplos etiquetados.                                     |
 
 ---
 
