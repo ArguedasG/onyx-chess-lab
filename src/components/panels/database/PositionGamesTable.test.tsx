@@ -266,7 +266,7 @@ it("requests a fresh snapshot once when a cached token expires", async () => {
 
 it("retries a lifecycle cancellation without showing a database failure", async () => {
   vi.mocked(commands.getPositionGames)
-    .mockResolvedValueOnce({ status: "error", error: "Search cancelled" })
+    .mockResolvedValueOnce({ status: "error", error: "Search stopped" })
     .mockResolvedValueOnce({ status: "ok", data: [row(1)] });
   await mount();
   await act(async () => {});

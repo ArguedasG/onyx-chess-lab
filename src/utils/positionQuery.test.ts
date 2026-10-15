@@ -120,6 +120,8 @@ describe("position query lifecycle", () => {
 
 describe("isTransientPositionError", () => {
     it("treats cancelled searches and requests as transient", () => {
+        // The exact message the backend sends for Error::SearchCancelled.
+        expect(isTransientPositionError(new Error("Search stopped"))).toBe(true);
         expect(isTransientPositionError(new Error("Search cancelled"))).toBe(true);
         expect(isTransientPositionError(new DOMException("Aborted", "AbortError"))).toBe(true);
         // Tauri's HTTP plugin: aborted in JS, aborted in Rust and aborted while reading the body.

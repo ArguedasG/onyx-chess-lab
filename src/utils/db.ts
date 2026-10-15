@@ -44,6 +44,8 @@ export function isTransientPositionError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error ?? "");
     const normalized = message.toLowerCase();
     return (
+        // The backend reports `Error::SearchCancelled` as "Search stopped" (src-tauri/src/error.rs).
+        normalized.includes("search stopped") ||
         normalized.includes("search cancelled") ||
         normalized.includes("search preempted") ||
         // Tauri's HTTP plugin rejects aborted Lichess requests with these messages.
