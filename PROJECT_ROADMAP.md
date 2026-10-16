@@ -90,7 +90,8 @@ prueban y comunican problemas.
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
 - Trabajo actual: **Fase 8 replanificada a partir del estudio de mercado**
   (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
-  0.20.0; la siguiente subfase es **8.4 Jugadores: ficha y estadísticas**. La reestructuración de la interfaz inspirada en ChessBase
+  0.20.0; **8.4 Jugadores: ficha y estadísticas** está implementada y pendiente de validación
+  manual; la siguiente es **8.5 Generador de repertorios**. La reestructuración de la interfaz inspirada en ChessBase
   para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -143,7 +144,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 - **Jerarquía de aperturas (I-42):** el panel de aperturas de la ficha de jugador agrupa por
   **Familia → Variante → Subvariante**, plegable, con partidas, porcentaje y resultados en cada nivel;
   normaliza «Defence/Defense». Las partidas con el nombre exacto de un nivel desplegado aparecen como
-  «Sin una variante más concreta». El rating par (I-30) se añadirá en 8.4.
+  «Sin una variante más concreta». El rating par (I-30) se añadió en 8.4.
 
 ---
 
@@ -163,7 +164,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0 y 8.1 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.4 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
 | 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
@@ -176,7 +177,8 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 - Entrenamiento: `docs/training-phase-6-*.es.md`.
 - Bases e informes: `docs/database-queries-phase-7-0.es.md` y
   `docs/opening-reports-phase-7-1.es.md`.
-- Player Analysis: `docs/player-analysis-phase-7-2.es.md`.
+- Player Analysis: `docs/player-analysis-phase-7-2.es.md`; ficha de jugador:
+  `docs/players-phase-8-4.es.md`.
 - Estudio de mercado (insumo de 8.2–10, identificadores `I-xx`): `docs/market-study.es.md`.
 - Release y actualizador: `docs/phase-5-brand-release-alpha-plan.es.md`,
   `docs/updater-phase-5-2.es.md` y `docs/managed-maia3.es.md`.
@@ -363,7 +365,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0, 8.1 y 8.3 implementadas; 8.2 con su primera versión implementada.**
+**Estado: En curso. 8.0, 8.1, 8.3 y 8.4 implementadas; 8.2 con su primera versión implementada.**
 
 Desde el 2026-10-15 las subfases 8.2–8.10 siguen el estudio de mercado (`docs/market-study.es.md`):
 cada viñeta cita su idea (`I-xx`), cuya ficha en el estudio contiene el problema, la referencia y la
@@ -517,16 +519,31 @@ autor (resto de I-25) pasan a la Fase 10 (decisión del autor, 2026-10-15).
 
 ### 8.4. Jugadores: ficha y estadísticas
 
-**Estado: Pendiente.** Modifica la antigua 8.2. Ideas: I-02, I-03 (opcional), I-13, I-22, I-30,
-I-42, I-44, I-45.
+**Estado: Implementada y validada automáticamente (2026-10-15); validación manual nativa
+pendiente.** Modifica la antigua 8.2. Ideas: I-02, I-03 (consulta puntual), I-13, I-22, I-30, I-42,
+I-44, I-45. Contrato, definiciones y mediciones: `docs/players-phase-8-4.es.md`.
 
-- sección lateral «Jugadores», separada de «Usuario», con la ficha propia como un caso más; antes,
-  dividir `PlayerAnalysisPanel.tsx`;
-- ficha para cualquier jugador (I-02), vinculación FIDE manual opcional (I-03) y lista de partidas
-  de cada cuenta con actualizar y abrir (I-13);
-- momentos destacados (I-22), rating par en toda tabla de resultados (I-30), aperturas por familias
-  con rating par (I-42), psicología, reloj y tramos de error (I-44), rivales frecuentes y cara a cara
-  (I-45).
+- **sección «Jugadores»** separada de «Cuentas» (que queda para conectar cuentas): búsqueda en todas
+  las bases locales y fichas guardadas de cuentas propias, «Yo» con otras fuentes, rivales, alumnos
+  y otros; la ficha propia es un caso más. `PlayerAnalysisPanel.tsx` se dividió antes de moverlo;
+- **ficha para cualquier jugador (I-02)**, también desde Bases de datos, con alias manuales por
+  ficha, notas y **FIDE por consulta puntual (I-03)**: candidatos vía Lichess y confirmación manual;
+  sin descargar listas ni historial (decisión del autor, 2026-10-15);
+- **datos en una llamada por base** (`get_player_games`): apertura desde las jugadas, final en el
+  tablero (mate, ahogado…) y últimos relojes, decodificados en Rust y en paralelo. Carlsen en la
+  Gigabase (3.934 partidas): 0,95 s;
+- **Partidas (I-13):** lista filtrable y paginada con actualizar (sincronización de 7.3.3), abrir,
+  analizar con motor las elegidas, añadir a un estudio y exportar PGN;
+- **rating par (I-30)** en toda tabla de resultados de la ficha y de Player Analysis; **aperturas por
+  familia → variante → subvariante con rating par (I-42)**;
+- **momentos destacados (I-22)**: error más costoso (la antigua «jugada más cara»: la que más
+  probabilidad de ganar perdió) y mayor remontada con motor; mayor sorpresa, rival más fuerte
+  vencido, rachas, mate más rápido y partida más larga sin motor;
+- **psicología, reloj y tramos de error (I-44)**: siguiente partida del mismo día tras cada
+  resultado, cómo terminan derrotas y victorias (mate, probable tiempo, otra causa) y, con motor,
+  errores por tramo de jugadas, por reloj, jugadas rápidas y derrotas en posiciones no perdidas;
+- **rivales (I-45)**: más enfrentado, némesis y rival favorable por rating par, lista con partidas y
+  «Contra ti» en la ficha de un rival.
 
 ### 8.5. Generador de repertorios
 
@@ -827,6 +844,20 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-15 — 8.4 Jugadores: ficha y estadísticas
+
+- Nueva sección «Jugadores» con la ficha de cualquier jugador (cuentas, rivales, alumnos y
+  resultados de búsqueda en todas las bases locales); «Cuentas» solo conecta cuentas y enlaza a la
+  ficha propia. Bases de datos → Jugadores muestra la misma ficha.
+- Ficha con Resumen (cifras, evolución del rating, actividad, momentos destacados y hábitos),
+  Partidas, Aperturas por familias, Rivales y Análisis (Player Analysis, dividido en componentes).
+- Rating par en todas las tablas de resultados. Vinculación FIDE manual por consulta puntual.
+- «Jugada más cara» pasa a llamarse **error más costoso**: la jugada que más puntos de probabilidad
+  de ganar perdió en las partidas analizadas.
+- La base no guarda cómo terminó una partida: las derrotas por tiempo se leen como «probables»
+  desde el tablero y el último reloj, y así se dice en la interfaz.
+- Detalle: `docs/players-phase-8-4.es.md`.
 
 ### 2026-10-15 — Release 0.20.0
 

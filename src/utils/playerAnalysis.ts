@@ -2,6 +2,12 @@ import type { GameMetadata, MoveAnalysis, ScoreValue } from "@/bindings";
 import { getCPLoss, getWinChance, normalizeScore } from "@/utils/score";
 import { positionFromFen } from "@/utils/chessops";
 import { openingLevelKey, openingNameLevels } from "@/utils/openingFamilies";
+import {
+    addRatingParGame,
+    emptyRatingPar,
+    finishRatingPar,
+    type RatingPar,
+} from "@/utils/ratingPar";
 import { getTimeControl } from "@/utils/timeControl";
 
 export const PLAYER_ANALYSIS_SCHEMA_VERSION = 3;
@@ -61,7 +67,7 @@ export type PlayerAnalysisBucket = {
     averagePlayerElo: number | null;
     averageOpponentElo: number | null;
     references: PlayerAnalysisReference[];
-};
+} & Partial<RatingPar>;
 
 export type PlayerAnalysisFinding = {
     id: string;
@@ -109,6 +115,8 @@ export type PlayerAnalysisCriticalPosition = PlayerAnalysisReference & {
     punishmentLine: string[];
     playerColor: "white" | "black";
     cpLoss: number;
+    /** Points of winning chances lost by the move. Missing in analyses made before 8.4. */
+    winChanceLoss?: number;
     classification: PlayerAnalysisClassification;
     phase: PlayerAnalysisPhase;
     opening: string;
@@ -146,7 +154,50 @@ export type PlayerEngineGameMetrics = {
         lowTimeMoves: number;
         criticalErrorsInLowTime: number;
     };
+    /** Lowest and final winning chances of the player, 0–100. Missing before 8.4. */
+    lowestWinChance?: number;
+    finalWinChance?: number;
+    /** Player moves and mistakes or blunders by remaining clock (see `clockBand`). */
+    clockBands?: Record<PlayerClockBand, PlayerMoveErrors>;
+    /** Moves decided in `FAST_MOVE_SECONDS` or less after the opening moves, and the rest. */
+    fastMoves?: { fast: PlayerMoveErrors; other: PlayerMoveErrors };
+    /** Player moves and mistakes or blunders in each range of `PLAYER_MOVE_RANGES`. */
+    moveRanges?: PlayerMoveErrors[];
 };
+
+export type PlayerMoveErrors = { moves: number; errors: number };
+export type PlayerClockBand = "low" | "middle" | "high";
+
+/** Move-number ranges of the error distribution: 1–10, 11–20, 21–30, 31–40, 41–60 and 61+. */
+export const PLAYER_MOVE_RANGES: ReadonlyArray<readonly [number, number | null]> = [
+    [1, 10],
+    [11, 20],
+    [21, 30],
+    [31, 40],
+    [41, 60],
+    [61, null],
+];
+/** A decision this quick, from move `FAST_MOVE_FROM` on, counts as a fast move. */
+export const FAST_MOVE_SECONDS = 2;
+export const FAST_MOVE_FROM = 11;
+
+/**
+ * Clock before a move as a share of the base time: under 10 % is "low", over a third is "high".
+ * Only for a known base time; the bands describe, they do not judge time management.
+ */
+export function clockBand(remainingSeconds: number, baseSeconds: number): PlayerClockBand {
+    const share = remainingSeconds / baseSeconds;
+    if (share < 0.1) return "low";
+    if (share > 1 / 3) return "high";
+    return "middle";
+}
+
+function moveRangeIndex(moveNumber: number): number {
+    const index = PLAYER_MOVE_RANGES.findIndex(
+        ([from, to]) => moveNumber >= from && (to === null || moveNumber <= to),
+    );
+    return index < 0 ? PLAYER_MOVE_RANGES.length - 1 : index;
+}
 
 export type PlayerEngineAnalysis = {
     schemaVersion: number;
@@ -284,11 +335,21 @@ function bucket(key: string, games: PlayerAnalysisGame[]): PlayerAnalysisBucket 
     let losses = 0;
     let unknown = 0;
     const views = games.map(perspective);
+    const par = emptyRatingPar();
     for (const view of views) {
         if (view.outcome === "win") wins += 1;
         else if (view.outcome === "draw") draws += 1;
         else if (view.outcome === "loss") losses += 1;
         else unknown += 1;
+        const points =
+            view.outcome === "win"
+                ? 1
+                : view.outcome === "draw"
+                  ? 0.5
+                  : view.outcome === "loss"
+                    ? 0
+                    : null;
+        addRatingParGame(par, view.playerElo, view.opponentElo, points);
     }
     const known = wins + draws + losses;
     return {
@@ -302,6 +363,7 @@ function bucket(key: string, games: PlayerAnalysisGame[]): PlayerAnalysisBucket 
         averagePlayerElo: mean(views.map((view) => view.playerElo)),
         averageOpponentElo: mean(views.map((view) => view.opponentElo)),
         references: games.slice(0, 100).map((game) => reference(game)),
+        ...finishRatingPar(par),
     };
 }
 
@@ -386,14 +448,22 @@ export function selectPlayerEngineGames(
 }
 
 export function getPlayerAnalysisTimeControl(item: PlayerAnalysisGame): PlayerAnalysisTimeControl {
-    const raw = item.game.time_control?.trim() ?? "";
+    return timeControlCategory(item.game.time_control, item.game.site);
+}
+
+/** Category of a TimeControl header ("180+2", "blitz", Chess.com "1/86400"…). */
+export function timeControlCategory(
+    timeControl: string | null | undefined,
+    site: string,
+): PlayerAnalysisTimeControl {
+    const raw = timeControl?.trim() ?? "";
     const direct = raw.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
     if (direct === "ultrabullet") return "ultra_bullet";
     if (PLAYER_ANALYSIS_TIME_CONTROLS.includes(direct as PlayerAnalysisTimeControl)) {
         return direct as PlayerAnalysisTimeControl;
     }
     if (!raw || raw === "?") return "unknown";
-    const website = item.game.site.toLowerCase().includes("chess.com") ? "Chess.com" : null;
+    const website = site.toLowerCase().includes("chess.com") ? "Chess.com" : null;
     const isDaily = website === "Chess.com" && /^\d+\/\d+$/.test(raw);
     if (raw !== "-" && !isDaily && !/^\d+(?:\+\d+)?$/.test(raw)) return "unknown";
     const category = getTimeControl(website, raw);
@@ -594,6 +664,29 @@ export function buildEngineGameMetrics(input: {
     const simpleTimeControl = item.game.time_control?.match(/^(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)$/);
     const initialSeconds = simpleTimeControl ? Number(simpleTimeControl[1]) : null;
     const incrementSeconds = simpleTimeControl ? Number(simpleTimeControl[2]) : null;
+    // The clock bands also accept a base without increment ("600", as Chess.com writes it).
+    const baseOnly = item.game.time_control?.match(/^(\d+(?:\.\d+)?)(?:\+\d+(?:\.\d+)?)?$/);
+    const baseSeconds = baseOnly && Number(baseOnly[1]) > 0 ? Number(baseOnly[1]) : null;
+    const playerColor = item.game.white_id === item.source.playerId ? "white" : "black";
+    const empty = (): PlayerMoveErrors => ({ moves: 0, errors: 0 });
+    const clockBands: Record<PlayerClockBand, PlayerMoveErrors> = {
+        low: empty(),
+        middle: empty(),
+        high: empty(),
+    };
+    const fastMoves = { fast: empty(), other: empty() };
+    let fastMeasured = false;
+    const moveRanges = PLAYER_MOVE_RANGES.map(empty);
+    let lowestWinChance: number | undefined;
+    let finalWinChance: number | undefined;
+    for (let index = 0; index <= uciMoves.length; index += 1) {
+        const score = analysis[index]?.best[0]?.score.value;
+        if (!score) continue;
+        const chance = getWinChance(normalizeScore(score, playerColor));
+        lowestWinChance =
+            lowestWinChance === undefined ? chance : Math.min(lowestWinChance, chance);
+        finalWinChance = chance;
+    }
     for (let ply = 0; ply < uciMoves.length; ply += 1) {
         const preFen = preMoveFens[ply];
         const [position] = positionFromFen(preFen);
@@ -603,15 +696,19 @@ export function buildEngineGameMetrics(input: {
             (position.turn === "black" && item.game.black_id === item.source.playerId);
         if (!playerTurn) continue;
         const currentClock = input.clockSeconds?.[ply];
+        // Clock before this move (the one after the previous player move), for its band.
+        const clockBefore = previousPlayerClock ?? baseSeconds;
+        let decisionSeconds: number | null = null;
         if (currentClock != null && Number.isFinite(currentClock) && currentClock >= 0) {
             clockedMoves += 1;
             if (currentClock <= 30) lowTimeMoves += 1;
             const previous = previousPlayerClock ?? initialSeconds;
             if (previous != null && incrementSeconds != null) {
-                const decisionSeconds = previous + incrementSeconds - currentClock;
-                if (decisionSeconds >= 0 && decisionSeconds <= 86_400) {
+                const seconds = previous + incrementSeconds - currentClock;
+                if (seconds >= 0 && seconds <= 86_400) {
                     measuredDecisions += 1;
-                    totalDecisionSeconds += decisionSeconds;
+                    totalDecisionSeconds += seconds;
+                    decisionSeconds = seconds;
                 }
             }
             previousPlayerClock = currentClock;
@@ -632,6 +729,22 @@ export function buildEngineGameMetrics(input: {
             position.turn,
         );
         losses.push({ loss, phase, label });
+        const isError = label === "mistake" || label === "blunder";
+        const moveNumber = Math.floor(ply / 2) + 1;
+        const range = moveRanges[moveRangeIndex(moveNumber)];
+        range.moves += 1;
+        if (isError) range.errors += 1;
+        if (currentClock != null && clockBefore != null && baseSeconds != null) {
+            const band = clockBands[clockBand(clockBefore, baseSeconds)];
+            band.moves += 1;
+            if (isError) band.errors += 1;
+        }
+        if (decisionSeconds != null && moveNumber >= FAST_MOVE_FROM) {
+            fastMeasured = true;
+            const bucket = decisionSeconds <= FAST_MOVE_SECONDS ? fastMoves.fast : fastMoves.other;
+            bucket.moves += 1;
+            if (isError) bucket.errors += 1;
+        }
         if (label) {
             if (currentClock != null && currentClock <= 30) criticalErrorsInLowTime += 1;
             const postMoveFen = preMoveFens[ply + 1];
@@ -646,6 +759,11 @@ export function buildEngineGameMetrics(input: {
                 punishmentLine,
                 playerColor: position.turn,
                 cpLoss: loss,
+                winChanceLoss:
+                    getWinChance(normalizeScore(analysis[ply].best[0].score.value, position.turn)) -
+                    getWinChance(
+                        normalizeScore(analysis[ply + 1].best[0].score.value, position.turn),
+                    ),
                 classification: label,
                 phase,
                 opening: item.game.opening || item.game.eco || "Unknown opening",
@@ -691,6 +809,11 @@ export function buildEngineGameMetrics(input: {
                       criticalErrorsInLowTime,
                   }
                 : undefined,
+        lowestWinChance,
+        finalWinChance,
+        clockBands: clockedMoves > 0 && baseSeconds != null ? clockBands : undefined,
+        fastMoves: fastMeasured ? fastMoves : undefined,
+        moveRanges,
     };
 }
 

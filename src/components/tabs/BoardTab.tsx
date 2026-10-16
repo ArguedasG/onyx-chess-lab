@@ -105,10 +105,15 @@ export function BoardTab({
                       }
                       void navigate({ to: "/" });
                     } else if (returnPath) {
-                      if (returnPath === "/accounts" && tab.returnPlayerAnalysis) {
+                      // Player cards moved from Accounts to Players in 8.4.
+                      const target =
+                        returnPath === "/accounts" && tab.returnPlayerAnalysis
+                          ? "/players"
+                          : returnPath;
+                      if (tab.returnPlayerAnalysis && target === "/players") {
                         atomStore.set(playerAnalysisReturnTargetAtom, tab.returnPlayerAnalysis);
                       }
-                      void navigate({ to: returnPath });
+                      void navigate({ to: target });
                     }
                     event.stopPropagation();
                   }}

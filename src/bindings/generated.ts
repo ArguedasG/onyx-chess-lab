@@ -128,9 +128,9 @@ async getOpeningFromName(name: string) : Promise<Result<string, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getPlayersGameInfo(file: string, id: number) : Promise<Result<PlayerGameInfo, string>> {
+async getPlayerGames(file: string, playerIds: number[]) : Promise<Result<PlayerGameRow[], string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_players_game_info", { file, id }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_player_games", { file, playerIds }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -987,6 +987,11 @@ cloudOpenings?: boolean | null }
 export type AnalysisPriority = "interactive" | "batch"
 export type BestMoves = { nodes: number; depth: number; score: Score; uciMoves: string[]; sanMoves: string[]; multipv: number; nps: number }
 export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: string; fen: string; moves: string[]; progress: number }
+/**
+ * How the mainline ends on the board. Resignations, time losses and agreed draws are not stored
+ * in the database, so they all read as `Open`.
+ */
+export type BoardEnding = "checkmate" | "stalemate" | "insufficientMaterial" | "open"
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }
 export type BotLeagueDetail = { summary: BotLeagueSummary; config: BotLeagueConfig; results: BotLeagueGameResult[]; standings: BotLeagueStanding[] }
 export type BotLeagueEvent = { state: BotLeagueState }
@@ -1095,7 +1100,6 @@ export type GameMetadata = { id: number; fen: string; event: string; event_id: n
 export type GameMove = { uci: string; san: string; fenAfter: string; clock: bigint | null; whiteTime: bigint | null; blackTime: bigint | null; color: string; source: GameMoveSource; thinkTimeMs: bigint | null }
 export type GameMoveEvent = { gameId: string; moves: GameMove[]; fen: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type GameMoveSource = "human" | "engine" | "profileRepertoire" | "polyglot" | "initial"
-export type GameOutcome = "Won" | "Drawn" | "Lost"
 export type GameOverEvent = { gameId: string; result: GameResult; moves: GameMove[] }
 export type GameQuery = { options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; after_game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
 export type GameResult = { type: "whiteWins"; reason: GameEndReason } | { type: "blackWins"; reason: GameEndReason } | { type: "draw"; reason: DrawReason }
@@ -1139,7 +1143,35 @@ export type OutOpening = { name: string; fen: string }
 export type Outcome = "1-0" | "0-1" | "1/2-1/2" | "*"
 export type Player = { id: number; name: string | null; elo: number | null }
 export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; go: GoMode | null }
-export type PlayerGameInfo = { site_stats_data: SiteStatsData[] }
+export type PlayerGameRow = { id: number; 
+/**
+ * Which of the requested player records played this game.
+ */
+playerId: number; isWhite: boolean; opponent: string; opponentId: number; playerElo: number | null; opponentElo: number | null; 
+/**
+ * "1-0", "0-1", "1/2-1/2" or "*".
+ */
+result: string; date: string | null; time: string | null; event: string; site: string; timeControl: string | null; eco: string | null; 
+/**
+ * Deepest catalog opening reached by the mainline.
+ */
+opening: string | null; 
+/**
+ * Mainline length.
+ */
+plies: number; 
+/**
+ * Starts from a position other than the standard one.
+ */
+customStart: boolean; ending: BoardEnding; 
+/**
+ * The side to move in the final position is the player.
+ */
+playerToMoveAtEnd: boolean; 
+/**
+ * Last `[%clk]` after a move of each side, in seconds.
+ */
+playerLastClock: number | null; opponentLastClock: number | null }
 export type PlayerPresetCategory = "custom" | "humanLike" | "limited" | "strong" | "reference"
 export type PlayerQuery = { options: QueryOptions<PlayerSort>; name?: string | null; range?: [number, number] | null }
 export type PlayerSort = "id" | "name" | "elo" | "games"
@@ -1207,9 +1239,7 @@ export type ScoreValue =
  */
 { type: "mate"; value: number }
 export type Sides = "BlackWhite" | "WhiteBlack" | "Any"
-export type SiteStatsData = { site: string; player: string; data: StatsData[] }
 export type SortDirection = "asc" | "desc"
-export type StatsData = { date: string; is_player_white: boolean; player_elo: number; result: GameOutcome; time_control: string; opening: string }
 export type TimeControl = { initialTime: bigint; increment: bigint }
 export type Token = { type: "ParenOpen" } | { type: "ParenClose" } | { type: "Comment"; value: string } | { type: "San"; value: string } | { type: "Header"; value: { tag: string; value: string } } | { type: "Nag"; value: string } | { type: "Outcome"; value: string }
 export type TournamentQuery = { options: QueryOptions<TournamentSort>; name: string | null }

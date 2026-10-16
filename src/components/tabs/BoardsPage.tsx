@@ -144,10 +144,15 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
           } else if (closedTab.returnPath) {
             const nextTab = tabs[index === tabs.length - 1 ? index - 1 : index + 1];
             setActiveTab(nextTab?.value ?? null);
-            if (closedTab.returnPath === "/accounts" && closedTab.returnPlayerAnalysis) {
+            // Player cards moved from Accounts to Players in 8.4.
+            const target =
+              closedTab.returnPath === "/accounts" && closedTab.returnPlayerAnalysis
+                ? "/players"
+                : closedTab.returnPath;
+            if (closedTab.returnPlayerAnalysis && target === "/players") {
               atomStore.set(playerAnalysisReturnTargetAtom, closedTab.returnPlayerAnalysis);
             }
-            void navigate({ to: closedTab.returnPath });
+            void navigate({ to: target });
           } else if (tabs.length > 1) {
             activateTab(tabs[index === tabs.length - 1 ? index - 1 : index + 1]);
           } else {

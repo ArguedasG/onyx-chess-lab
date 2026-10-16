@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
 import { Route as StudiesRouteImport } from './routes/studies'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PlayersRouteImport } from './routes/players'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as EnginesRouteImport } from './routes/engines'
 import { Route as AccountsRouteImport } from './routes/accounts'
@@ -44,6 +45,11 @@ const StudiesRoute = StudiesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayersRoute = PlayersRouteImport.update({
+  id: '/players',
+  path: '/players',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FilesRoute = FilesRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
   '/training': typeof TrainingRouteWithChildren
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
   '/training': typeof TrainingRouteWithChildren
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/engines'
     | '/files'
+    | '/players'
     | '/settings'
     | '/studies'
     | '/training'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/engines'
     | '/files'
+    | '/players'
     | '/settings'
     | '/studies'
     | '/databases/$databaseId'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/engines'
     | '/files'
+    | '/players'
     | '/settings'
     | '/studies'
     | '/training'
@@ -280,6 +292,7 @@ export interface RootRouteChildren {
   AccountsRoute: typeof AccountsRoute
   EnginesRoute: typeof EnginesRoute
   FilesRoute: typeof FilesRoute
+  PlayersRoute: typeof PlayersRoute
   SettingsRoute: typeof SettingsRoute
   StudiesRoute: typeof StudiesRoute
   TrainingRoute: typeof TrainingRouteWithChildren
@@ -308,6 +321,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/players': {
+      id: '/players'
+      path: '/players'
+      fullPath: '/players'
+      preLoaderRoute: typeof PlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/files': {
@@ -512,6 +532,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsRoute: AccountsRoute,
   EnginesRoute: EnginesRoute,
   FilesRoute: FilesRoute,
+  PlayersRoute: PlayersRoute,
   SettingsRoute: SettingsRoute,
   StudiesRoute: StudiesRoute,
   TrainingRoute: TrainingRouteWithChildren,

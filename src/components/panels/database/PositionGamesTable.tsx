@@ -34,25 +34,13 @@ import {
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import AddToStudyModal from "@/components/studies/AddToStudyModal";
 import { activeTabAtom, positionGamesViewFamily, tabsAtom } from "@/state/atoms";
-import { getPGN, parsePGN } from "@/utils/chess";
+import { databaseGamePgn } from "@/utils/databaseGamePgn";
 import { isTransientPositionError } from "@/utils/db";
 import { appendGameLink, gameLinkFor, gameLinkLabel, gameLinkMarkdown } from "@/utils/gameLinks";
 import { createTab } from "@/utils/tabs";
 import type { ReferencePreview } from "./ReferenceGamePreview";
 
 const PAGE_SIZE = 20;
-
-/** Full PGN of a database game, headers included. */
-async function databaseGamePgn(game: NormalizedGame) {
-  const tree = await parsePGN(game.moves, game.fen);
-  return getPGN(tree.root, {
-    headers: game,
-    glyphs: true,
-    comments: true,
-    variations: true,
-    extraMarkups: true,
-  });
-}
 
 const gameTitle = (game: NormalizedGame) => `${game.white} - ${game.black}`;
 

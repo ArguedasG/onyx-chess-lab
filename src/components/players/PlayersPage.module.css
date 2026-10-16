@@ -1,0 +1,37 @@
+.sidebar {
+  width: 300px;
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid transparent;
+}
+
+.item:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+}
+
+.active,
+.active:hover {
+  background-color: var(--mantine-color-blue-light);
+  border-color: light-dark(var(--mantine-color-blue-2), var(--mantine-color-blue-9));
+}
+
+.highlight {
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.highlight:hover {
+  border-color: var(--mantine-color-blue-5);
+  transform: translateY(-1px);
+}

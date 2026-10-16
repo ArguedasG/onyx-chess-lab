@@ -473,3 +473,28 @@ export async function getFidePlayer(query: string) {
   }
   throw new Error("Player not found");
 }
+
+/** FIDE profile as the Lichess API returns it (only the fields Onyx uses). */
+export type LichessFidePlayer = {
+  id: number;
+  name: string;
+  title?: string | null;
+  federation?: string | null;
+  year?: number | null;
+  standard?: number | null;
+  rapid?: number | null;
+  blitz?: number | null;
+};
+
+/**
+ * Candidates for a name in the FIDE list, for the user to confirm one (I-03). A single lookup
+ * through the Lichess API; nothing is downloaded or kept beyond the confirmed profile.
+ */
+export async function searchFidePlayers(query: string, limit = 8): Promise<LichessFidePlayer[]> {
+  const res = await fetch(`${baseURL}/fide/player?q=${encodeURIComponent(query)}`, {
+    headers: apiHeaders({ Accept: "application/json" }),
+  });
+  if (!res.ok) throw new Error(`FIDE search failed (${res.status})`);
+  const data = (await res.json()) as LichessFidePlayer[];
+  return data.slice(0, limit);
+}

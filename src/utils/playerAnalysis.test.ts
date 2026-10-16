@@ -14,6 +14,7 @@ import {
     type PlayerAnalysisSource,
     winChanceClassification,
 } from "./playerAnalysis";
+import { getWinChance } from "./score";
 
 describe("clock coverage levels", () => {
     it("requires both the agreed sample and coverage thresholds", () => {
@@ -286,6 +287,11 @@ describe("player engine analysis", () => {
         expect(metrics.blunders).toBe(1);
         expect(metrics.mistakes).toBe(1);
         expect(metrics.criticalPositions).toHaveLength(2);
+        expect(metrics.criticalPositions[0].winChanceLoss).toBeGreaterThan(20);
+        expect(metrics.moveRanges?.[0]).toEqual({ moves: 2, errors: 2 });
+        expect(metrics.clockBands?.high).toEqual({ moves: 2, errors: 2 });
+        expect(metrics.lowestWinChance).toBeCloseTo(getWinChance(-150));
+        expect(metrics.finalWinChance).toBeCloseTo(getWinChance(-100));
         expect(metrics.clock).toMatchObject({
             clockedMoves: 2,
             measuredDecisions: 2,

@@ -2,6 +2,7 @@ mod encoding;
 mod models;
 mod opening_report;
 mod ops;
+mod player_games;
 mod player_search;
 mod position_query;
 mod quality;
@@ -10,6 +11,7 @@ mod schema;
 mod search;
 mod search_index;
 pub use opening_report::generate_opening_report;
+pub use player_games::get_player_games;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };
@@ -28,7 +30,6 @@ use crate::{
     AppState,
 };
 use chrono::{NaiveDate, NaiveTime};
-use dashmap::DashMap;
 use diesel::{
     connection::{DefaultLoadingMode, SimpleConnection},
     insert_into,
@@ -38,7 +39,6 @@ use diesel::{
     sql_types::Text,
 };
 use pgn_reader::{BufferedReader, Nag, RawHeader, SanPlus, Skip, Visitor};
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use shakmaty::{
     fen::Fen, Board, ByColor, CastlingMode, Chess, EnPassantMode, FromSetup, Piece, Position,
@@ -48,7 +48,6 @@ use specta::Type;
 use std::{
     fs::{remove_file, File, OpenOptions},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
 use std::{
@@ -58,7 +57,6 @@ use std::{
 use tauri::Emitter;
 
 use log::info;
-use tauri_specta::Event as _;
 
 use self::encoding::{
     encode_comment, encode_move, encode_nag, VARIATION_END_MARKER, VARIATION_START_MARKER,
@@ -1815,222 +1813,10 @@ pub async fn get_tournaments(
     })
 }
 
-#[derive(Debug, Clone, Serialize, Type, Default)]
-pub struct PlayerGameInfo {
-    pub site_stats_data: Vec<SiteStatsData>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, Type)]
-#[repr(u8)] // Ensure minimal memory usage (as u8)
-pub enum GameOutcome {
-    #[default]
-    Won = 0,
-    Drawn = 1,
-    Lost = 2,
-}
-
-impl GameOutcome {
-    pub fn from_str(result_str: &str, is_white: bool) -> Option<Self> {
-        match result_str {
-            "1-0" => Some(if is_white {
-                GameOutcome::Won
-            } else {
-                GameOutcome::Lost
-            }),
-            "1/2-1/2" => Some(GameOutcome::Drawn),
-            "0-1" => Some(if is_white {
-                GameOutcome::Lost
-            } else {
-                GameOutcome::Won
-            }),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Type, Default)]
-pub struct SiteStatsData {
-    pub site: String,
-    pub player: String,
-    pub data: Vec<StatsData>,
-}
-
-#[derive(Debug, Clone, Serialize, Type, Default)]
-pub struct StatsData {
-    pub date: String,
-    pub is_player_white: bool,
-    pub player_elo: i32,
-    pub result: GameOutcome,
-    pub time_control: String,
-    pub opening: String,
-}
-
 #[derive(Serialize, Debug, Clone, Type, tauri_specta::Event)]
 pub struct DatabaseProgress {
     pub id: String,
     pub progress: f64,
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn get_players_game_info(
-    file: PathBuf,
-    id: i32,
-    state: tauri::State<'_, AppState>,
-    app: tauri::AppHandle,
-) -> Result<PlayerGameInfo, Error> {
-    let db = &mut get_db_or_create(&state, file.to_str().unwrap(), ConnectionOptions::default())?;
-    let timer = Instant::now();
-
-    let sql_query = games::table
-        .inner_join(sites::table.on(games::site_id.eq(sites::id)))
-        .inner_join(players::table.on(players::id.eq(id)))
-        .select((
-            games::white_id,
-            games::black_id,
-            games::result,
-            games::date,
-            games::moves,
-            games::white_elo,
-            games::black_elo,
-            games::time_control,
-            sites::name,
-            players::name,
-        ))
-        .filter(games::white_id.eq(id).or(games::black_id.eq(id)))
-        .filter(games::fen.is_null());
-
-    type GameInfo = (
-        i32,
-        i32,
-        Option<String>,
-        Option<String>,
-        Vec<u8>,
-        Option<i32>,
-        Option<i32>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    );
-    let info: Vec<GameInfo> = sql_query.load(db)?;
-
-    let mut game_info = PlayerGameInfo::default();
-    let progress = AtomicUsize::new(0);
-    game_info.site_stats_data = info
-        .par_iter()
-        .filter_map(
-            |(
-                white_id,
-                black_id,
-                outcome,
-                date,
-                moves,
-                white_elo,
-                black_elo,
-                time_control,
-                site,
-                player,
-            )| {
-                let is_white = *white_id == id;
-                let is_black = *black_id == id;
-                let result = GameOutcome::from_str(outcome.as_deref()?, is_white);
-
-                if !is_white && !is_black
-                    || is_white && white_elo.is_none()
-                    || is_black && black_elo.is_none()
-                    || result.is_none()
-                    || date.is_none()
-                    || site.is_none()
-                    || player.is_none()
-                {
-                    return None;
-                }
-
-                let site = site.as_deref().map(|s| {
-                    if s.starts_with("https://lichess.org/") {
-                        "Lichess".to_string()
-                    } else {
-                        s.to_string()
-                    }
-                })?;
-
-                let mut setups = vec![];
-                let mut chess = Chess::default();
-                for (i, byte) in iter_mainline_move_bytes(moves).enumerate() {
-                    if i > 54 {
-                        // max length of opening in data
-                        break;
-                    }
-                    let Some(m) = decode_move(byte, &chess) else {
-                        break;
-                    };
-                    chess.play_unchecked(&m);
-                    setups.push(chess.clone().into_setup(EnPassantMode::Legal));
-                }
-
-                setups.reverse();
-                let opening = setups
-                    .iter()
-                    .find_map(|setup| get_opening_from_setup(setup.clone()).ok())
-                    .unwrap_or_default();
-
-                let p = progress.fetch_add(1, Ordering::Relaxed);
-                if p.is_multiple_of(1000) || p == info.len() - 1 {
-                    let _ = DatabaseProgress {
-                        id: id.to_string(),
-                        progress: (p as f64 / info.len() as f64) * 100_f64,
-                    }
-                    .emit(&app);
-                }
-
-                Some(SiteStatsData {
-                    site: site.clone(),
-                    player: player.clone().unwrap(),
-                    data: vec![StatsData {
-                        date: date.clone().unwrap(),
-                        is_player_white: is_white,
-                        player_elo: if is_white {
-                            white_elo.unwrap()
-                        } else {
-                            black_elo.unwrap()
-                        },
-                        result: result.unwrap(),
-                        time_control: time_control.clone().unwrap_or_default(),
-                        opening,
-                    }],
-                })
-            },
-        )
-        .fold(DashMap::new, |acc, data| {
-            acc.entry((data.site.clone(), data.player.clone()))
-                .or_insert_with(Vec::new)
-                .extend(data.data);
-            acc
-        })
-        .reduce(DashMap::new, |acc1, acc2| {
-            for ((site, player), data) in acc2 {
-                acc1.entry((site, player))
-                    .or_insert_with(Vec::new)
-                    .extend(data);
-            }
-            acc1
-        })
-        .into_iter()
-        .map(|((site, player), data)| SiteStatsData { site, player, data })
-        .collect();
-
-    // Logged for the performance budget (I-54): opening a player card.
-    info!(
-        "player card: {} games of player {id} in {} ms",
-        game_info
-            .site_stats_data
-            .iter()
-            .map(|site| site.data.len())
-            .sum::<usize>(),
-        timer.elapsed().as_millis()
-    );
-
-    Ok(game_info)
 }
 
 #[tauri::command]

@@ -15,6 +15,7 @@ import {
   IconTarget,
   IconNotebook,
   IconUser,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import cx from "clsx";
@@ -124,6 +125,12 @@ export function SideBar() {
             icon={IconNotebook}
             label={t("SideBar.Studies", "Studies")}
             url="/studies"
+            expanded={expanded}
+          />
+          <NavbarLink
+            icon={IconUsersGroup}
+            label={t("SideBar.Players", "Players")}
+            url="/players"
             expanded={expanded}
           />
           <Divider my={4} />
