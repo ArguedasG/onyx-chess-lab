@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import type { EngineHighlights, PlayerHighlights } from "@/utils/players/highlights";
 import type { ProfileGame } from "@/utils/players/profileGames";
 import { nemesisAndFavourite, rivals } from "@/utils/players/rivals";
-import { EngineBadge, formatDay, SectionTitle } from "../common";
+import { EngineAnalysisButton, EngineBadge, formatDay, SectionTitle } from "../common";
 import classes from "../PlayersPage.module.css";
 
 type Card = {
@@ -238,6 +238,7 @@ export default function HighlightsSection({
                   "They need an engine analysis of the games: run one in the Analysis tab.",
                 )}
               </Text>
+              <EngineAnalysisButton />
             </Stack>
           </Paper>
         )}

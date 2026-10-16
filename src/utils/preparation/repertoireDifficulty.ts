@@ -17,7 +17,7 @@ export type RepertoirePosition = {
     path: string[];
     /** The prepared move(s) of the user in the position. */
     prepared: Array<{ uci: string; san: string }>;
-    /** Lines of the repertoire through the position, and one of them to practise. */
+    /** Lines of the repertoire through the position, and one of them to practice. */
     lines: number;
     lineId: string;
     variantId: string;

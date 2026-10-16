@@ -71,7 +71,8 @@ export type PlayerCardTab =
     | "openings"
     | "rivals"
     | "analysis"
-    | "preparation";
+    | "preparation"
+    | "training";
 
 /** Session-only: the tab of each card, so coming back from a game keeps the view. */
 export const playerCardTabAtom = atom<Record<string, PlayerCardTab>>({});

@@ -32,7 +32,13 @@ import {
 } from "@/utils/players/habits";
 import type { ProfileGame } from "@/utils/players/profileGames";
 import type { ResultBucket } from "@/utils/players/results";
-import { EngineBadge, formatDay, RatingParValue, SectionTitle } from "../common";
+import {
+  EngineAnalysisButton,
+  EngineBadge,
+  formatDay,
+  RatingParValue,
+  SectionTitle,
+} from "../common";
 import { formatScore } from "../labels";
 
 const rangeLabel = ([from, to]: readonly [number, number | null]) =>
@@ -289,12 +295,15 @@ export default function HabitsSection({
         </SimpleGrid>
       ) : (
         <Paper withBorder radius="md" p="md" style={{ borderStyle: "dashed" }}>
-          <Text size="sm" c="dimmed">
-            {t(
-              "Players.Habits.EngineMissing",
-              "Errors by move range, errors with little clock, fast moves and losses in positions that were not lost need an engine analysis of the games (Analysis tab).",
-            )}
-          </Text>
+          <Stack gap="xs">
+            <Text size="sm" c="dimmed">
+              {t(
+                "Players.Habits.EngineMissing",
+                "Errors by move range, errors with little clock, fast moves and losses in positions that were not lost need an engine analysis of the games (Analysis tab).",
+              )}
+            </Text>
+            <EngineAnalysisButton />
+          </Stack>
         </Paper>
       )}
     </Stack>

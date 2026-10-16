@@ -9,7 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { HowToPlay } from "@/utils/preparation/howToPlay";
 import type { ResultBucket } from "@/utils/players/results";
-import { EngineBadge, RatingParValue } from "../common";
+import { EngineAnalysisButton, EngineBadge, RatingParValue } from "../common";
 import { formatScore } from "../labels";
 import { EmptyState, SectionHeader, SuggestionNote } from "./common";
 import { colorName, phaseName, structureName } from "./labels";
@@ -212,15 +212,18 @@ export default function HowToPlaySection({ data, name }: { data: HowToPlay; name
             {data.engine && <EngineBadge games={data.engine.games} />}
           </Group>
           {!data.engine ? (
-            <Group gap="xs" wrap="nowrap">
-              <IconCpu size={16} color="var(--mantine-color-dimmed)" />
-              <Text size="sm" c="dimmed">
-                {t(
-                  "Preparation.HowTo.NeedsEngine",
-                  "Needs an engine analysis of these games (Analysis tab).",
-                )}
-              </Text>
-            </Group>
+            <Stack gap="xs">
+              <Group gap="xs" wrap="nowrap">
+                <IconCpu size={16} color="var(--mantine-color-dimmed)" />
+                <Text size="sm" c="dimmed">
+                  {t(
+                    "Preparation.HowTo.NeedsEngine",
+                    "Needs an engine analysis of these games (Analysis tab).",
+                  )}
+                </Text>
+              </Group>
+              <EngineAnalysisButton />
+            </Stack>
           ) : (
             <Stack gap={6}>
               {data.engine.worstPhase ? (

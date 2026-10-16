@@ -69,6 +69,7 @@ export default function AnalysisEngineSection({
   selectedSetId,
   setSelectedSetId,
   onAddCritical,
+  onAddToMistakes,
 }: {
   controls: EngineControls;
   engine: PlayerEngineAnalysis | null;
@@ -78,6 +79,8 @@ export default function AnalysisEngineSection({
   selectedSetId: string | null;
   setSelectedSetId: (value: string | null) => void;
   onAddCritical: (critical: PlayerAnalysisCriticalPosition) => void;
+  /** Adds the position to the card's "My mistakes" queue (8.7), when the card has one. */
+  onAddToMistakes?: (critical: PlayerAnalysisCriticalPosition) => void;
 }) {
   const { t } = useTranslation();
   const {
@@ -416,6 +419,16 @@ export default function AnalysisEngineSection({
                       >
                         {t("PlayerAnalysis.AddToSet", "Add to set")}
                       </Button>
+                      {onAddToMistakes && (
+                        <Button
+                          size="compact-xs"
+                          variant="light"
+                          disabled={critical.bestLine.length === 0}
+                          onClick={() => onAddToMistakes(critical)}
+                        >
+                          {t("PlayerAnalysis.AddToMistakes", "To My mistakes")}
+                        </Button>
+                      )}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

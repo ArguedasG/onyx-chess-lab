@@ -89,6 +89,7 @@ export default function PlayerAnalysisPanel({
   onOpenReference,
   explicitGameKeys = null,
   onClearExplicitGames,
+  onAddToMistakes,
 }: {
   playerName: string;
   profileId: string;
@@ -96,6 +97,7 @@ export default function PlayerAnalysisPanel({
   onOpenReference: (reference: PlayerAnalysisReference) => void;
   /** Games chosen in the Games tab to analyze with the engine instead of the newest ones. */
   explicitGameKeys?: string[] | null;
+  onAddToMistakes?: (critical: PlayerAnalysisCriticalPosition) => void;
   onClearExplicitGames?: () => void;
 }) {
   const { t } = useTranslation();
@@ -930,6 +932,7 @@ export default function PlayerAnalysisPanel({
               selectedSetId={selectedSetId}
               setSelectedSetId={setSelectedSetId}
               onAddCritical={setPendingCritical}
+              onAddToMistakes={onAddToMistakes}
             />,
           )}
         </Tabs>

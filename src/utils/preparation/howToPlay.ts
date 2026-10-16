@@ -95,7 +95,7 @@ function pick(buckets: ResultBucket[], direction: "weak" | "strong"): ResultBuck
     return chosen;
 }
 
-function phaseFindings(engine: PlayerEngineAnalysis, keys: Set<string>) {
+export function phaseFindings(engine: PlayerEngineAnalysis, keys: ReadonlySet<string>) {
     const games = engine.games.filter((game) => keys.has(game.key));
     if (games.length === 0) return null;
     const phases = (["opening", "middlegame", "endgame"] as const).map((phase) => {

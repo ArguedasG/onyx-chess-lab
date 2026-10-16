@@ -117,6 +117,12 @@ export type PlayerAnalysisCriticalPosition = PlayerAnalysisReference & {
     cpLoss: number;
     /** Points of winning chances lost by the move. Missing in analyses made before 8.4. */
     winChanceLoss?: number;
+    /** Winning chances of the player before the move, 0–100. Missing before 8.7. */
+    winChanceBefore?: number;
+    /** Clock before the move as a share of the base time, when known (8.7). */
+    clockShare?: number;
+    /** The engine's best line was a forced mate for the player (8.7). */
+    bestWasMate?: boolean;
     classification: PlayerAnalysisClassification;
     phase: PlayerAnalysisPhase;
     opening: string;
@@ -163,7 +169,15 @@ export type PlayerEngineGameMetrics = {
     fastMoves?: { fast: PlayerMoveErrors; other: PlayerMoveErrors };
     /** Player moves and mistakes or blunders in each range of `PLAYER_MOVE_RANGES`. */
     moveRanges?: PlayerMoveErrors[];
+    /**
+     * First position of the player at +1.5 or better and at −1.5 or worse, with their winning
+     * chances, for conversion and defence practice (I-21). Missing before 8.7.
+     */
+    advantagePosition?: PlayerPracticePosition;
+    inferiorPosition?: PlayerPracticePosition;
 };
+
+export type PlayerPracticePosition = { fen: string; ply: number; winChance: number };
 
 export type PlayerMoveErrors = { moves: number; errors: number };
 export type PlayerClockBand = "low" | "middle" | "high";
@@ -679,6 +693,8 @@ export function buildEngineGameMetrics(input: {
     const moveRanges = PLAYER_MOVE_RANGES.map(empty);
     let lowestWinChance: number | undefined;
     let finalWinChance: number | undefined;
+    let advantagePosition: PlayerPracticePosition | undefined;
+    let inferiorPosition: PlayerPracticePosition | undefined;
     for (let index = 0; index <= uciMoves.length; index += 1) {
         const score = analysis[index]?.best[0]?.score.value;
         if (!score) continue;
@@ -715,8 +731,15 @@ export function buildEngineGameMetrics(input: {
         }
         if (!analysis[ply]?.best[0] || !analysis[ply + 1]?.best[0]) continue;
         const playerScore = normalizeScore(analysis[ply].best[0].score.value, position.turn);
-        if (playerScore >= 150) hadAdvantage = true;
-        if (playerScore <= -150) wasInferior = true;
+        const chanceBefore = getWinChance(playerScore);
+        if (playerScore >= 150) {
+            hadAdvantage = true;
+            advantagePosition ??= { fen: preFen, ply, winChance: chanceBefore };
+        }
+        if (playerScore <= -150) {
+            wasInferior = true;
+            inferiorPosition ??= { fen: preFen, ply, winChance: chanceBefore };
+        }
         const loss = getCPLoss(
             analysis[ply].best[0].score.value,
             analysis[ply + 1].best[0].score.value,
@@ -766,6 +789,12 @@ export function buildEngineGameMetrics(input: {
                     ),
                 classification: label,
                 phase,
+                winChanceBefore: chanceBefore,
+                clockShare:
+                    currentClock != null && clockBefore != null && baseSeconds != null
+                        ? clockBefore / baseSeconds
+                        : undefined,
+                bestWasMate: analysis[ply].best[0].score.value.type === "mate" && playerScore > 0,
                 opening: item.game.opening || item.game.eco || "Unknown opening",
                 gameLabel: `${item.game.white} – ${item.game.black}`,
                 gameDate: item.game.date,
@@ -811,6 +840,8 @@ export function buildEngineGameMetrics(input: {
                 : undefined,
         lowestWinChance,
         finalWinChance,
+        advantagePosition,
+        inferiorPosition,
         clockBands: clockedMoves > 0 && baseSeconds != null ? clockBands : undefined,
         fastMoves: fastMeasured ? fastMoves : undefined,
         moveRanges,

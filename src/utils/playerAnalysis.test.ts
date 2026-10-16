@@ -292,6 +292,15 @@ describe("player engine analysis", () => {
         expect(metrics.clockBands?.high).toEqual({ moves: 2, errors: 2 });
         expect(metrics.lowestWinChance).toBeCloseTo(getWinChance(-150));
         expect(metrics.finalWinChance).toBeCloseTo(getWinChance(-100));
+        // 8.7: the position of the advantage, and the chances before each error.
+        expect(metrics.advantagePosition).toEqual({
+            fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            ply: 0,
+            winChance: getWinChance(200),
+        });
+        expect(metrics.inferiorPosition).toBeUndefined();
+        expect(metrics.criticalPositions[0].winChanceBefore).toBeCloseTo(getWinChance(200));
+        expect(metrics.criticalPositions[0].bestWasMate).toBe(false);
         expect(metrics.clock).toMatchObject({
             clockedMoves: 2,
             measuredDecisions: 2,

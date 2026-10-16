@@ -1,4 +1,6 @@
-import { Badge, Group, Paper, Progress, Stack, Text, Tooltip } from "@mantine/core";
+import { Badge, Button, Group, Paper, Progress, Stack, Text, Tooltip } from "@mantine/core";
+import { IconArrowRight, IconCpu } from "@tabler/icons-react";
+import { createContext, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { formatParDelta, MIN_RATING_PAR_GAMES, type RatingPar } from "@/utils/ratingPar";
 import { formatScore } from "./labels";
@@ -121,13 +123,63 @@ export function StatTile({
   );
 }
 
-/** Marks figures that need an engine analysis, so both levels are never mixed up. */
+/**
+ * Opens the engine view of the card's Analysis tab, from anywhere inside the card. Provided by
+ * `PlayerCardView`; outside a card the engine marks are plain labels.
+ */
+export const EngineAnalysisContext = createContext<(() => void) | null>(null);
+
+/**
+ * Marks figures that need an engine analysis, so both levels are never mixed up. Inside a card it
+ * is also the way to that analysis: to see it, or to analyze more games.
+ */
 export function EngineBadge({ games }: { games: number }) {
   const { t } = useTranslation();
-  return (
-    <Badge size="xs" variant="light" color="violet">
+  const open = useContext(EngineAnalysisContext);
+  const badge = (
+    <Badge
+      size="xs"
+      variant="light"
+      color="violet"
+      rightSection={open ? <IconArrowRight size={10} /> : undefined}
+      style={open ? { cursor: "pointer" } : undefined}
+      onClick={open ?? undefined}
+    >
       {t("Players.EngineBadge", "Engine · {{count}} games", { count: games })}
     </Badge>
+  );
+  if (!open) return badge;
+  return (
+    <Tooltip
+      multiline
+      w={260}
+      withArrow
+      label={t(
+        "Players.EngineBadge.Open",
+        "Open the engine analysis: see its games or analyze more of them.",
+      )}
+    >
+      {badge}
+    </Tooltip>
+  );
+}
+
+/** Button to the card's engine analysis, for the places that still lack one. */
+export function EngineAnalysisButton({ label }: { label?: string }) {
+  const { t } = useTranslation();
+  const open = useContext(EngineAnalysisContext);
+  if (!open) return null;
+  return (
+    <Button
+      size="xs"
+      variant="light"
+      color="violet"
+      leftSection={<IconCpu size={14} />}
+      onClick={open}
+      w="fit-content"
+    >
+      {label ?? t("Players.EngineAnalysis.Button", "Analyze with the engine")}
+    </Button>
   );
 }
 

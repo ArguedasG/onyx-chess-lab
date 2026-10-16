@@ -51,9 +51,13 @@ import RepertoireRealitySection from "./RepertoireRealitySection";
 import StructuresSection from "./StructuresSection";
 import TwinSection from "./TwinSection";
 
-type Section = "howTo" | "book" | "key" | "structures" | "reality" | "twin";
+export type PreparationSection = "howTo" | "book" | "key" | "structures" | "reality" | "twin";
+type Section = PreparationSection;
 
-const sectionAtom = atomWithStorage<Section>("player-preparation-section", "howTo");
+export const preparationSectionAtom = atomWithStorage<Section>(
+  "player-preparation-section",
+  "howTo",
+);
 
 type GeneratorRequest = {
   mode: "repertoire" | "surprises";
@@ -98,7 +102,7 @@ export default function PreparationTab({
   onOpenGame: (game: ProfileGame, ply: number | null) => void;
 }) {
   const { t } = useTranslation();
-  const [stored, setSection] = useAtom(sectionAtom);
+  const [stored, setSection] = useAtom(preparationSectionAtom);
   const section: Section = isSelf && stored === "howTo" ? "book" : stored;
   const [generator, setGenerator] = useState<GeneratorRequest | null>(null);
   const documentDir = useAtomValue(storedDocumentDirAtom);
@@ -281,7 +285,7 @@ export default function PreparationTab({
         />
       )}
 
-      <Paper withBorder radius="md" p="xs" w={220} style={{ flexShrink: 0 }}>
+      <Paper withBorder radius="md" p="xs" w={240} style={{ flexShrink: 0 }}>
         <Stack gap={4} h="100%">
           {sections
             .filter((item) => !item.hidden)
@@ -300,6 +304,10 @@ export default function PreparationTab({
             <Button
               variant="light"
               leftSection={<IconWand size={16} />}
+              fullWidth
+              h="auto"
+              py={8}
+              styles={{ label: { whiteSpace: "normal", textAlign: "left", lineHeight: 1.3 } }}
               disabled={!books}
               onClick={() => setGenerator({ mode: "repertoire", path: [], color: userColor })}
             >

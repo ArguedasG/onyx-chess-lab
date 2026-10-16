@@ -52,7 +52,7 @@ function accountRating(sessions: readonly Session[]) {
 /**
  * Where my own repertoire is hard for me (I-33): the positions where it is my move, with the
  * chance that a player of my level keeps the evaluation (Stockfish marks the good moves, Maia at
- * my rating says how often they are found). The hardest ones come first, ready to practise.
+ * my rating says how often they are found). The hardest ones come first, ready to practice.
  */
 export default function RepertoireDifficultyModal({
   repertoire,
@@ -136,7 +136,7 @@ export default function RepertoireDifficultyModal({
         <Text size="sm" c="dimmed">
           {t(
             "RepertoireDifficulty.Description",
-            "The positions of this repertoire where it is your move, and the chance that a player of your level finds a move that keeps the evaluation. The lowest ones are the first to practise. An estimate from Maia and the engine, not a measure of your own memory.",
+            "The positions of this repertoire where it is your move, and the chance that a player of your level finds a move that keeps the evaluation. The lowest ones are the first to practice. An estimate from Maia and the engine, not a measure of your own memory.",
           )}
         </Text>
         <Group gap="md" align="flex-end" wrap="wrap">
@@ -249,7 +249,7 @@ export default function RepertoireDifficultyModal({
                       )}
                     </Table.Td>
                     <Table.Td>
-                      <Tooltip label={t("RepertoireDifficulty.Practice", "Practise this line")}>
+                      <Tooltip label={t("RepertoireDifficulty.Practice", "Practice this line")}>
                         <ActionIcon
                           variant="light"
                           onClick={() => onPractice(position.variantId, position.lineId)}
