@@ -148,9 +148,7 @@ fn matches(structure: PawnStructure, own: &Side, opp: &Side) -> bool {
                 && opp.at(C, 4)
                 && opp.at(E, 4)
         }
-        PawnStructure::KingsIndian => {
-            own.at(D, 3) && own.at(E, 4) && opp.at(D, 5) && opp.at(E, 4)
-        }
+        PawnStructure::KingsIndian => own.at(D, 3) && own.at(E, 4) && opp.at(D, 5) && opp.at(E, 4),
     }
 }
 
@@ -316,14 +314,26 @@ mod tests {
     fn label_of(text: &str) -> Option<PawnStructure> {
         let text = text.to_lowercase();
         let pairs = [
-            (["isolated", "iqp", "aislado"].as_slice(), PawnStructure::Iqp),
+            (
+                ["isolated", "iqp", "aislado"].as_slice(),
+                PawnStructure::Iqp,
+            ),
             (["carlsbad"].as_slice(), PawnStructure::Carlsbad),
-            (["hanging", "colgantes"].as_slice(), PawnStructure::HangingPawns),
-            (["caro", "slav", "eslava"].as_slice(), PawnStructure::CaroSlav),
+            (
+                ["hanging", "colgantes"].as_slice(),
+                PawnStructure::HangingPawns,
+            ),
+            (
+                ["caro", "slav", "eslava"].as_slice(),
+                PawnStructure::CaroSlav,
+            ),
             (["french", "francesa"].as_slice(), PawnStructure::French),
             (["maroczy", "maróczy"].as_slice(), PawnStructure::Maroczy),
             (["hedgehog", "erizo"].as_slice(), PawnStructure::Hedgehog),
-            (["king's indian", "kings indian", "india de rey"].as_slice(), PawnStructure::KingsIndian),
+            (
+                ["king's indian", "kings indian", "india de rey"].as_slice(),
+                PawnStructure::KingsIndian,
+            ),
         ];
         pairs
             .iter()
@@ -366,8 +376,10 @@ mod tests {
             .flatten()
             .flatten()
             .collect();
-        let mut stats: std::collections::BTreeMap<String, (u32, u32, std::collections::BTreeMap<String, u32>)> =
-            Default::default();
+        let mut stats: std::collections::BTreeMap<
+            String,
+            (u32, u32, std::collections::BTreeMap<String, u32>),
+        > = Default::default();
         for (game, label) in games.iter().zip(labels) {
             let Some(label) = label else { continue };
             let start = game
@@ -390,7 +402,11 @@ mod tests {
         for (label, (games, found, others)) in stats {
             println!(
                 "{label}: {found}/{games} found ({:.0}%), also marked: {others:?}",
-                if games > 0 { found as f64 * 100.0 / games as f64 } else { 0.0 }
+                if games > 0 {
+                    found as f64 * 100.0 / games as f64
+                } else {
+                    0.0
+                }
             );
         }
     }
@@ -428,7 +444,11 @@ mod tests {
             }
             for hit in hits {
                 let entry = counts
-                    .entry(format!("{:?}/{}", hit.structure, if hit.owner_white { "W" } else { "B" }))
+                    .entry(format!(
+                        "{:?}/{}",
+                        hit.structure,
+                        if hit.owner_white { "W" } else { "B" }
+                    ))
                     .or_default();
                 entry.0 += 1;
                 if entry.1.len() < 3 {
@@ -460,8 +480,11 @@ mod tests {
                     })
                     .map_or(0, |hit| hit.ply);
                 let mut chess = shakmaty::Chess::default();
-                for byte in crate::db::encoding::iter_mainline_move_bytes(moves).take(ply as usize) {
-                    let Some(movement) = crate::db::encoding::decode_move(byte, &chess) else { break };
+                for byte in crate::db::encoding::iter_mainline_move_bytes(moves).take(ply as usize)
+                {
+                    let Some(movement) = crate::db::encoding::decode_move(byte, &chess) else {
+                        break;
+                    };
                     shakmaty::Position::play_unchecked(&mut chess, &movement);
                 }
                 let setup = shakmaty::Position::into_setup(chess, shakmaty::EnPassantMode::Legal);
@@ -470,4 +493,3 @@ mod tests {
         }
     }
 }
-

@@ -72,21 +72,21 @@ contadores): el mismo error en varias partidas se repasa una vez y recuerda toda
 `utils/mistakes/leaks.ts`. Cada error va a la **primera** categoría cuya regla se cumple. Las
 tácticas exigen una pérdida de 10 puntos de probabilidad o más (umbral de «error»):
 
-| Categoría | Regla |
-| --- | --- |
-| Permitió mate | La línea de respuesta del motor termina en mate contra el jugador |
-| Mate no visto | La mejor línea del motor era mate para el jugador |
-| Pieza colgada | La mejor respuesta captura una pieza propia (caballo o más) que nada puede recapturar |
+| Categoría              | Regla                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| Permitió mate          | La línea de respuesta del motor termina en mate contra el jugador                          |
+| Mate no visto          | La mejor línea del motor era mate para el jugador                                          |
+| Pieza colgada          | La mejor respuesta captura una pieza propia (caballo o más) que nada puede recapturar      |
 | Permitió una horquilla | La mejor respuesta pone una pieza que ataca dos piezas propias de caballo o más (o el rey) |
-| Horquilla no vista | La mejor jugada del motor era esa horquilla para el jugador |
-| Captura no vista | La mejor jugada del motor capturaba una pieza rival de caballo o más |
-| Coronación no vista | La mejor jugada del motor coronaba |
-| Ventaja tirada | Desde 80 % de probabilidad o más, la jugada deja por debajo del 60 % |
-| Derrumbe al estar peor | Entre 10 % y 40 % de probabilidad, un error o peor |
-| Apuro de tiempo | Menos del 10 % del tiempo base en el reloj |
-| Desliz de apertura | En las diez primeras jugadas, sin categoría más específica |
-| Desliz en el final | En el final, sin categoría más específica |
-| Sin clasificar | Ninguna regla se puede comprobar: conserva su pérdida, sin causa |
+| Horquilla no vista     | La mejor jugada del motor era esa horquilla para el jugador                                |
+| Captura no vista       | La mejor jugada del motor capturaba una pieza rival de caballo o más                       |
+| Coronación no vista    | La mejor jugada del motor coronaba                                                         |
+| Ventaja tirada         | Desde 80 % de probabilidad o más, la jugada deja por debajo del 60 %                       |
+| Derrumbe al estar peor | Entre 10 % y 40 % de probabilidad, un error o peor                                         |
+| Apuro de tiempo        | Menos del 10 % del tiempo base en el reloj                                                 |
+| Desliz de apertura     | En las diez primeras jugadas, sin categoría más específica                                 |
+| Desliz en el final     | En el final, sin categoría más específica                                                  |
+| Sin clasificar         | Ninguna regla se puede comprobar: conserva su pérdida, sin causa                           |
 
 Respecto al catálogo de FlexiChess se dejaron fuera las que no se pueden verificar con un hecho
 del tablero o del motor sin interpretar (escudo del rey, concesiones estructurales, malos cambios,

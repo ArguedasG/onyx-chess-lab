@@ -9,8 +9,8 @@ Nueva entrada de la barra lateral (`/players`), separada de «Cuentas», que que
 Lichess y Chess.com (ahí un aviso lleva a la ficha propia).
 
 - **Columna izquierda:** búsqueda de jugadores en **todas** las bases locales (tokens normalizados de
-  I-01, seis resultados por base, ordenados por partidas) y fichas agrupadas: *Mis cuentas*
-  (derivadas de las cuentas conectadas), *Yo (otras fuentes)*, *Rivales*, *Alumnos* y *Otros*.
+  I-01, seis resultados por base, ordenados por partidas) y fichas agrupadas: _Mis cuentas_
+  (derivadas de las cuentas conectadas), _Yo (otras fuentes)_, _Rivales_, _Alumnos_ y _Otros_.
 - **Ficha:** la misma vista para el usuario, un rival o un alumno (I-02). Un resultado de búsqueda se
   ve completo sin guardarlo y se guarda con **Guardar ficha** (nombre, tipo y notas).
 - **Bases de datos → Jugadores** muestra la misma ficha. Si una ficha guardada ya contiene ese
@@ -68,17 +68,17 @@ ritmos), **actividad** por meses o años, momentos destacados y hábitos.
 
 Hechos de las partidas visibles, cada uno abre su partida:
 
-| Momento                   | Definición                                                              | Nivel |
-| ------------------------- | ----------------------------------------------------------------------- | ----- |
-| Error más costoso         | Jugada que más puntos de probabilidad de ganar perdió (antes: «jugada más cara») | Motor |
-| Mayor remontada           | Victoria (o, si no hay, tablas) desde la menor probabilidad, por debajo de 25 % | Motor |
-| Mayor sorpresa            | Victoria con la mayor diferencia de Elo en contra                       | Sin motor |
-| Rival más fuerte vencido  | Victoria contra el Elo más alto                                         | Sin motor |
-| Mejor racha de victorias  | Más victorias seguidas en orden de juego (al menos dos)                 | Sin motor |
-| Racha actual              | Resultados iguales seguidos hasta la última partida (desde dos)         | Sin motor |
-| Mate más rápido           | Mate dado en menos jugadas, desde la posición inicial                   | Sin motor |
-| Partida más larga         | Más jugadas                                                             | Sin motor |
-| Rival más difícil         | La némesis de la pestaña Rivales                                        | Sin motor |
+| Momento                  | Definición                                                                       | Nivel     |
+| ------------------------ | -------------------------------------------------------------------------------- | --------- |
+| Error más costoso        | Jugada que más puntos de probabilidad de ganar perdió (antes: «jugada más cara») | Motor     |
+| Mayor remontada          | Victoria (o, si no hay, tablas) desde la menor probabilidad, por debajo de 25 %  | Motor     |
+| Mayor sorpresa           | Victoria con la mayor diferencia de Elo en contra                                | Sin motor |
+| Rival más fuerte vencido | Victoria contra el Elo más alto                                                  | Sin motor |
+| Mejor racha de victorias | Más victorias seguidas en orden de juego (al menos dos)                          | Sin motor |
+| Racha actual             | Resultados iguales seguidos hasta la última partida (desde dos)                  | Sin motor |
+| Mate más rápido          | Mate dado en menos jugadas, desde la posición inicial                            | Sin motor |
+| Partida más larga        | Más jugadas                                                                      | Sin motor |
+| Rival más difícil        | La némesis de la pestaña Rivales                                                 | Sin motor |
 
 Los momentos de motor solo usan las partidas analizadas que están dentro de los filtros. Los
 análisis anteriores a 8.4 no guardan la pérdida de probabilidad: el error más costoso usa entonces
@@ -169,10 +169,10 @@ cierre). Las que se abrieron desde la antigua tarjeta de Cuentas vuelven ahora a
   tabla de abajo.
 - Las tablas largas están paginadas; las pestañas se montan solo al abrirlas.
 
-| Jugador y base                        | Partidas | Tiempo | Datos enviados |
-| ------------------------------------- | -------- | ------ | -------------- |
-| Carlsen, Magnus · Gigabase (10,3 M)   | 3.934    | 953 ms | 1,7 MB         |
-| Cuenta Chess.com propia (2.564)       | 2.564    | 99 ms  | 1,0 MB         |
+| Jugador y base                      | Partidas | Tiempo | Datos enviados |
+| ----------------------------------- | -------- | ------ | -------------- |
+| Carlsen, Magnus · Gigabase (10,3 M) | 3.934    | 953 ms | 1,7 MB         |
+| Cuenta Chess.com propia (2.564)     | 2.564    | 99 ms  | 1,0 MB         |
 
 En la Gigabase el tiempo lo dominan las lecturas dispersas de un archivo de 3 GB; en una base de
 cuenta, el trabajo completo cabe en una décima de segundo.

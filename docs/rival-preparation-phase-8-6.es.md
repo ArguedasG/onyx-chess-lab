@@ -116,13 +116,13 @@ El generador de 8.5 recibe ahora un **rival** (`GeneratorRival`): sus partidas, 
 
 ## Dificultad práctica (I-33) en todos los lugares
 
-| Lugar | Estado |
-| --- | --- |
+| Lugar                                                                            | Estado                      |
+| -------------------------------------------------------------------------------- | --------------------------- |
 | 8.5 Generador: enfoque «difícil para el rival» y orden del buscador de sorpresas | Ya estaba (8.5); no se tocó |
-| 8.6 Posiciones clave del rival | **Nuevo** |
-| 8.6 Generador y sorpresas contra un rival, con su rating | **Nuevo** |
-| 8.6 Ficha propia: «Dónde suelo equivocarme» | **Nuevo** |
-| Aperturas: «Posiciones difíciles para mí» en cada repertorio | **Nuevo** |
+| 8.6 Posiciones clave del rival                                                   | **Nuevo**                   |
+| 8.6 Generador y sorpresas contra un rival, con su rating                         | **Nuevo**                   |
+| 8.6 Ficha propia: «Dónde suelo equivocarme»                                      | **Nuevo**                   |
+| Aperturas: «Posiciones difíciles para mí» en cada repertorio                     | **Nuevo**                   |
 
 **Posiciones clave** (`utils/preparation/keyPositions.ts`): posiciones del árbol con el rival en
 turno, desde la jugada 3, alcanzadas por al menos 3 partidas y el 4 % de sus partidas con ese
@@ -164,16 +164,16 @@ abre en el tablero, donde «Añadir al repertorio» (6.A) la incorpora.
 peones escrita para el bando que la «tiene», con filas contadas desde ese bando; la misma regla se
 aplica a los dos colores, así que las versiones invertidas salen solas:
 
-| Estructura | Regla (bando que la tiene) |
-| --- | --- |
-| Peón aislado de dama | Un peón d en la cuarta fila sin peones c ni e propios; el rival sin peón d |
-| Carlsbad | d4 y e3/e2 sin peón c contra c6/c7 y d5 sin peón e (el bando del ataque de minorías) |
-| Peones colgantes | c4 y d4 sin peones b ni e propios; el rival sin peones c ni d |
-| Caro-Kann / Eslava | c6 y e6 sin peón d contra d4, al rival le falta el peón e o el c |
-| Cadena francesa | e6/d5 contra d4/e5 |
-| Maróczy | c4 y e4 sin peón d contra un peón d y sin peón c |
-| Erizo | a6, b6, d6 y e6 contra c4 y e4 |
-| India de rey | d6/e5 contra d5/e4 |
+| Estructura           | Regla (bando que la tiene)                                                           |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Peón aislado de dama | Un peón d en la cuarta fila sin peones c ni e propios; el rival sin peón d           |
+| Carlsbad             | d4 y e3/e2 sin peón c contra c6/c7 y d5 sin peón e (el bando del ataque de minorías) |
+| Peones colgantes     | c4 y d4 sin peones b ni e propios; el rival sin peones c ni d                        |
+| Caro-Kann / Eslava   | c6 y e6 sin peón d contra d4, al rival le falta el peón e o el c                     |
+| Cadena francesa      | e6/d5 contra d4/e5                                                                   |
+| Maróczy              | c4 y e4 sin peón d contra un peón d y sin peón c                                     |
+| Erizo                | a6, b6, d6 y e6 contra c4 y e4                                                       |
+| India de rey         | d6/e5 contra d5/e4                                                                   |
 
 Se mira entre las medias jugadas 23 y 50 (jugadas 12–25) y una estructura cuenta si se mantiene
 **6 medias jugadas seguidas**. Se calcula en Rust dentro de `get_player_games`, en el mismo
@@ -197,7 +197,7 @@ partidas tienen alguna).
   estructura que dicen ser.
 - **Pendiente: los ejemplos etiquetados del libro de Mauricio Flores Rios** (material privado del
   autor). La prueba ya está preparada: `ONYX_STRUCTURE_PGN=<pgn> cargo test --release
-  structure_validation -- --ignored --nocapture` lee la estructura de cada partida desde las
+structure_validation -- --ignored --nocapture` lee la estructura de cada partida desde las
   cabeceras `Structure`, `ChapterName` o `Event` (palabras como «Carlsbad», «IQP», «Hedgehog»,
   «King's Indian»…) y da, por capítulo, qué parte reconoce y qué otras estructuras marca. Hasta
   entonces la interfaz las presenta como **experimentales**.
@@ -225,7 +225,7 @@ exactamente con la escala de Maia; la interfaz lo dice).
 5, y 15 en total como mínimo) queda fuera del libro. En cada posición suya **dentro del libro** de
 esas partidas, se compara con qué probabilidad el gemelo jugaría la jugada real (la frecuencia del
 libro) y si es su primera opción, frente a **Maia sin más al mismo rating** (8 muestras por
-posición, hasta 120 posiciones, las de más partidas primero). Fuera del libro el gemelo *es* Maia,
+posición, hasta 120 posiciones, las de más partidas primero). Fuera del libro el gemelo _es_ Maia,
 así que ahí no hay nada que comparar y solo se cuentan esas jugadas. Si no mejora, se dice.
 
 ## Paquete exportable
@@ -246,10 +246,10 @@ estudio o a un repertorio. Sin cuentas, nube ni colaboración, como pedía la fa
   generador), con progreso y cancelación, a través del analizador por lotes y el presupuesto de
   motores de 8.2; Maia se cierra al terminar cada medición.
 
-| Medición (i5-1135G7) | Resultado |
-| --- | --- |
-| Estructuras en 20.000 partidas de la Gigabase (debug, una hebra) | 22,9 s (≈ 1,1 ms por partida, junto con apertura, final y relojes) |
-| Árbol de Carlsen en la Gigabase (3.934 partidas, release) | 634 ms de lectura + 236 ms de árbol; 17.740 + 15.619 posiciones y 1.914 + 1.736 secuencias, 12,5 MB enviados |
+| Medición (i5-1135G7)                                             | Resultado                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Estructuras en 20.000 partidas de la Gigabase (debug, una hebra) | 22,9 s (≈ 1,1 ms por partida, junto con apertura, final y relojes)                                           |
+| Árbol de Carlsen en la Gigabase (3.934 partidas, release)        | 634 ms de lectura + 236 ms de árbol; 17.740 + 15.619 posiciones y 1.914 + 1.736 secuencias, 12,5 MB enviados |
 
 Un rival típico tiene decenas o pocos cientos de partidas: su árbol es casi instantáneo. El caso
 de un jugador con miles de partidas pesa sobre todo por enviar el FEN de cada posición; si llega a

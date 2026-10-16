@@ -335,7 +335,11 @@ mod tests {
         assert_eq!(e4.games, 2);
         assert_eq!(e4.first_date.as_deref(), Some("2023.01.01"));
         assert_eq!(e4.last_date.as_deref(), Some("2024.06.01"));
-        assert_eq!(e4.model_game_id, Some(2), "the most recent game is the model");
+        assert_eq!(
+            e4.model_game_id,
+            Some(2),
+            "the most recent game is the model"
+        );
         assert_eq!(tree.black[0].moves[0].san, "d4");
         assert_eq!(
             tree.white_lines,

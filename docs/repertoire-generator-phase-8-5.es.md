@@ -43,15 +43,15 @@ defecto, como el «Top Move Deviation» de qchess) y, salvo en sorpresas, con al
 (30 por defecto). Las puntuaciones son **prudentes**: se usa el límite del intervalo de Wilson (90 %),
 de modo que 30 partidas al 65 % no ganan a 3.000 al 58 %.
 
-| Enfoque                 | Elige                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------- |
+| Enfoque                  | Elige                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
 | Mejor resultado práctico | Mayor rating par menos su incertidumbre (base local con ratings); si no, puntuación prudente |
-| Mejor puntuación        | Mayor límite inferior de la puntuación (tablas = medio punto)                             |
-| Menos derrotas          | Menor límite superior de la proporción de derrotas                                        |
-| Menos teoría            | Menos respuestas del rival necesarias para cubrir el 80 % de sus partidas                 |
-| Más fiel al motor       | La mejor del motor entre las jugadas con partidas suficientes                             |
-| Difícil para el rival   | La jugada tras la que un rival del Elo elegido tiene menos probabilidad de acertar (I-33) |
-| Sorpresas               | Entre las jugadas con como mucho 5 % de las partidas, la más difícil para el rival        |
+| Mejor puntuación         | Mayor límite inferior de la puntuación (tablas = medio punto)                                |
+| Menos derrotas           | Menor límite superior de la proporción de derrotas                                           |
+| Menos teoría             | Menos respuestas del rival necesarias para cubrir el 80 % de sus partidas                    |
+| Más fiel al motor        | La mejor del motor entre las jugadas con partidas suficientes                                |
+| Difícil para el rival    | La jugada tras la que un rival del Elo elegido tiene menos probabilidad de acertar (I-33)    |
+| Sorpresas                | Entre las jugadas con como mucho 5 % de las partidas, la más difícil para el rival           |
 
 Cuando la fuente no tiene partidas suficientes en una posición, se juega la mejor del motor y la línea
 lo indica («Motor»). En sorpresas, fuera del libro de la fuente tampoco hay sorpresa posible.
@@ -113,16 +113,15 @@ Diferencias con el original, como sugirió el autor:
 ## Motores
 
 `evaluate_positions` reutiliza el analizador por lotes de 8.2: un proceso, presupuesto de motores,
-caché persistente de evaluaciones (ahora con el número de líneas en la clave, que antes era siempre
-2) y cancelación con `cancel_analysis`. Una posición sin jugadas se envía con su propio FEN.
+caché persistente de evaluaciones (ahora con el número de líneas en la clave, que antes era siempre 2) y cancelación con `cancel_analysis`. Una posición sin jugadas se envía con su propio FEN.
 
 ## Rendimiento medido (i5-1135G7, compilación release)
 
-| Operación                                                   | Resultado                       |
-| ----------------------------------------------------------- | ------------------------------- |
-| Árbol local de la Gigabase desde la posición inicial        | 200.000 partidas × 12 medias jugadas: 22.544 posiciones en 1,7 s (+0,7 s de selección) |
-| Maia 3 5M: arranque                                         | ≈ 10 s, una vez por generación  |
-| Maia 3 5M: una muestra                                      | ≈ 0,1 s (16 por posición)       |
+| Operación                                            | Resultado                                                                              |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Árbol local de la Gigabase desde la posición inicial | 200.000 partidas × 12 medias jugadas: 22.544 posiciones en 1,7 s (+0,7 s de selección) |
+| Maia 3 5M: arranque                                  | ≈ 10 s, una vez por generación                                                         |
+| Maia 3 5M: una muestra                               | ≈ 0,1 s (16 por posición)                                                              |
 
 ## Fuera de alcance
 

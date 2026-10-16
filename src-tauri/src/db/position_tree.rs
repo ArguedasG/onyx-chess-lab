@@ -243,21 +243,30 @@ pub(crate) fn build_tree<'a>(
                 aggregate.rated_points += points;
                 aggregate.expected_points += expected(own, other);
             }
-            let date = entry.date.filter(|date| date.get(..4).is_some_and(|year| year.bytes().all(|b| b.is_ascii_digit())));
+            let date = entry.date.filter(|date| {
+                date.get(..4)
+                    .is_some_and(|year| year.bytes().all(|b| b.is_ascii_digit()))
+            });
             if let Some(date) = date {
-                if aggregate.first_date.as_deref().is_none_or(|first| date < first) {
+                if aggregate
+                    .first_date
+                    .as_deref()
+                    .is_none_or(|first| date < first)
+                {
                     aggregate.first_date = Some(date.to_string());
                 }
-                if aggregate.last_date.as_deref().is_none_or(|last| date > last) {
+                if aggregate
+                    .last_date
+                    .as_deref()
+                    .is_none_or(|last| date > last)
+                {
                     aggregate.last_date = Some(date.to_string());
                 }
             }
             if by_recent {
                 let newer = match (&aggregate.model, &aggregate.model_date) {
                     (None, _) => true,
-                    (Some((_, id)), current) => {
-                        (date, entry.id) > (current.as_deref(), *id)
-                    }
+                    (Some((_, id)), current) => (date, entry.id) > (current.as_deref(), *id),
                 };
                 if newer {
                     aggregate.model = Some((model_elo, entry.id));

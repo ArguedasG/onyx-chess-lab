@@ -2517,7 +2517,9 @@ mod tests {
             mode: OpeningRepertoireMode::Weighted,
             max_ply: 12,
             lines: vec![opening_line(
-                &["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1", "g8f6"],
+                &[
+                    "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1", "g8f6",
+                ],
                 1,
             )],
         };

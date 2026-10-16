@@ -73,14 +73,15 @@ use crate::bot_league::{
     read_bot_league_game, resume_bot_league, start_bot_league, BotLeagueEvent,
 };
 use crate::chess::{
-    analyze_game, cancel_analysis, evaluate_positions, get_best_moves_once, get_engine_config, get_engine_logs,
-    kill_engine, kill_engines, stop_engine,
+    analyze_game, cancel_analysis, evaluate_positions, get_best_moves_once, get_engine_config,
+    get_engine_logs, kill_engine, kill_engines, stop_engine,
 };
 use crate::db::{
     cancel_database_quality, cancel_position_search, clear_games, convert_pgn, create_indexes,
     delete_database, delete_db_game, delete_empty_games, delete_indexes, export_to_pgn,
-    get_database_quality, get_database_quality_details, get_player, get_player_games, get_player_tree, get_position_tree,
-    get_tournaments, preload_reference_db, search_position, MmapSearchIndex,
+    get_database_quality, get_database_quality_details, get_player, get_player_games,
+    get_player_tree, get_position_tree, get_tournaments, preload_reference_db, search_position,
+    MmapSearchIndex,
 };
 use crate::fs::set_file_as_executable;
 use crate::game::{

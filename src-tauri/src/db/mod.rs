@@ -4,10 +4,10 @@ mod opening_report;
 mod ops;
 mod pawn_structures;
 mod player_games;
-mod player_tree;
 mod player_search;
-mod position_tree;
+mod player_tree;
 mod position_query;
+mod position_tree;
 mod quality;
 mod quality_scan;
 mod schema;
@@ -16,10 +16,10 @@ mod search_index;
 pub use opening_report::generate_opening_report;
 pub use player_games::get_player_games;
 pub use player_tree::get_player_tree;
-pub use position_tree::get_position_tree;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };
+pub use position_tree::get_position_tree;
 pub use quality::get_database_quality;
 pub use quality_scan::{cancel_database_quality, get_database_quality_details};
 
