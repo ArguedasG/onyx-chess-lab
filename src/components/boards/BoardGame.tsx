@@ -76,6 +76,7 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { twinBooksAtom } from "@/state/twinBots";
 import { positionFromFen } from "@/utils/chessops";
 import { getPGN } from "@/utils/chess";
 import { serializeGameManifest } from "@/utils/gameManifest";
@@ -167,7 +168,7 @@ function toMeasurementPlayer(
   settings: OpponentSettings,
   humanTimingOverride?: boolean,
 ): HumanBotMeasurementPlayer | null {
-  if (settings.type !== "humanBot") return null;
+  if (settings.type !== "humanBot" || settings.twin) return null;
   return {
     profile: getHumanBotProfile(settings.profileId),
     modelVersion: settings.engine?.version ?? null,
@@ -177,6 +178,12 @@ function toMeasurementPlayer(
 }
 
 function getHumanBotHistoryMatch(players: { white: OpponentSettings; black: OpponentSettings }) {
+  // A twin is not a catalogue profile: its games stay out of the bot history.
+  if (
+    (players.white.type === "humanBot" && players.white.twin) ||
+    (players.black.type === "humanBot" && players.black.twin)
+  )
+    return null;
   if (players.white.type === "human" && players.black.type === "humanBot") {
     return {
       player: players.white,
@@ -314,6 +321,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const [blackTime, setBlackTime] = useState<number | null>(null);
   const [gameId, setGameId] = useAtom(currentGameIdAtom);
   const setHistory = useSetAtom(humanBotHistoryAtom);
+  const twinBooks = useAtomValue(twinBooksAtom);
   const setMeasurements = useSetAtom(humanBotMeasurementsAtom);
   const historySavedRef = useRef(false);
   const discardGameResultRef = useRef(false);
@@ -549,6 +557,47 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       return {
         type: "human",
         name: settings.name ?? "Player",
+      };
+    }
+
+    if (settings.type === "humanBot" && settings.twin) {
+      const twin = settings.twin;
+      const elo = clampMaiaElo(twin.elo);
+      const opponentElo =
+        opponentSettings.type === "humanBot"
+          ? (opponentSettings.twin?.elo ?? getHumanBotProfile(opponentSettings.profileId).elo)
+          : elo;
+      const book = twinBooks[twin.id];
+      // Plain sampling from Maia's policy: the twin should play as often as a player of that
+      // rating would, not a styled profile.
+      const options = [
+        ...(settings.engine?.settings ?? []).filter(
+          (setting) =>
+            !["Elo", "SelfElo", "OppoElo", "Temperature", "TopP", "MultiPV"].includes(setting.name),
+        ),
+        { name: "Elo", value: elo },
+        { name: "SelfElo", value: elo },
+        { name: "OppoElo", value: clampMaiaElo(opponentElo) },
+        { name: "Temperature", value: 1 },
+        { name: "TopP", value: 1 },
+        { name: "MultiPV", value: 1 },
+      ];
+      return {
+        type: "engine",
+        name: t("Preparation.Twin.Name", "Twin of {{name}}", { name: twin.name }),
+        path: settings.engine?.path ?? "",
+        version: settings.engine?.version ?? "",
+        presetCategory: "humanLike",
+        targetElo: elo,
+        seed: settings.seed ?? null,
+        args: buildHumanBotEngineArgs(settings.engine?.args ?? []),
+        options: options.map((setting) => ({
+          name: setting.name,
+          value: setting.value?.toString() ?? "",
+        })),
+        openingRepertoire: book ?? null,
+        humanTiming: null,
+        go: settings.timeControl ? null : { t: "Depth", c: 1 },
       };
     }
 
@@ -826,7 +875,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       );
       const humanBotHeaders: Record<string, string> = {};
 
-      if (playerSettings.white.type === "humanBot") {
+      if (playerSettings.white.type === "humanBot" && playerSettings.white.twin) {
+        humanBotHeaders.WhiteTwinOf = playerSettings.white.twin.name;
+      } else if (playerSettings.white.type === "humanBot") {
         Object.assign(
           humanBotHeaders,
           buildHumanBotTraceHeaders(
@@ -837,7 +888,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           ),
         );
       }
-      if (playerSettings.black.type === "humanBot") {
+      if (playerSettings.black.type === "humanBot" && playerSettings.black.twin) {
+        humanBotHeaders.BlackTwinOf = playerSettings.black.twin.name;
+      } else if (playerSettings.black.type === "humanBot") {
         Object.assign(
           humanBotHeaders,
           buildHumanBotTraceHeaders(
@@ -854,11 +907,13 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         black: state.blackPlayer,
         white_elo:
           playerSettings.white.type === "humanBot"
-            ? getHumanBotProfile(playerSettings.white.profileId).elo
+            ? (playerSettings.white.twin?.elo ??
+              getHumanBotProfile(playerSettings.white.profileId).elo)
             : undefined,
         black_elo:
           playerSettings.black.type === "humanBot"
-            ? getHumanBotProfile(playerSettings.black.profileId).elo
+            ? (playerSettings.black.twin?.elo ??
+              getHumanBotProfile(playerSettings.black.profileId).elo)
             : undefined,
         event: eventStr,
         site: "Onyx Chess Lab",

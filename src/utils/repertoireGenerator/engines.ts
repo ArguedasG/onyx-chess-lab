@@ -77,6 +77,7 @@ export class MaiaSampler {
         readonly engine: LocalEngine,
         private elo: number,
         private id: string,
+        private samples = MAIA_SAMPLES,
     ) {}
 
     async frequencies(fens: string[]): Promise<Array<Array<{ uci: string; count: number }>>> {
@@ -89,7 +90,7 @@ export class MaiaSampler {
                     this.engine.path,
                     this.engine.args ?? [],
                     missing,
-                    MAIA_SAMPLES,
+                    this.samples,
                     [
                         { name: "Elo", value: elo },
                         { name: "SelfElo", value: elo },

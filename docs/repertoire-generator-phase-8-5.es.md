@@ -128,7 +128,7 @@ caché persistente de evaluaciones (ahora con el número de líneas en la clave,
 
 - Jugadas prohibidas durante N jugadas y comentarios automáticos de planes (no hay reglas
   verificables, decisión vigente sobre evidencia).
-- Contra un rival concreto (I-41) y desde su ficha: 8.6.
+- Contra un rival concreto (I-41) y desde su ficha: hecho en 8.6 (`docs/rival-preparation-phase-8-6.es.md`).
 
 ## Validación
 

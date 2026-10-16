@@ -49,3 +49,21 @@ export const repertoireGeneratorSettingsAtom = atomWithStorage<RepertoireGenerat
     "repertoire-generator-v1",
     DEFAULT_GENERATOR_SETTINGS,
 );
+
+/**
+ * Settings of the generator against a rival (8.6, I-41): their games are few, so a move counts
+ * from two games and the surprise finder stops when the rival has fewer than two.
+ */
+export const DEFAULT_RIVAL_GENERATOR_SETTINGS: RepertoireGeneratorSettings = {
+    ...DEFAULT_GENERATOR_SETTINGS,
+    focus: "practical",
+    minGames: 2,
+    opponent: { mode: "popular", maxReplies: 3, minShare: 15, elo: 1600 },
+    maxPositions: 100,
+    surprises: { mySideOnly: true, firstMove: 3, stopGames: 2, maxShare: 5, maxLoss: 25 },
+};
+
+export const repertoireGeneratorRivalSettingsAtom = atomWithStorage<RepertoireGeneratorSettings>(
+    "repertoire-generator-rival-v1",
+    DEFAULT_RIVAL_GENERATOR_SETTINGS,
+);

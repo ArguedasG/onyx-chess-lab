@@ -9,6 +9,7 @@ import {
   Menu,
   ScrollArea,
   SegmentedControl,
+  Select,
   Stack,
   Tabs,
   Text,
@@ -20,6 +21,8 @@ import {
   IconAlignBoxLeftMiddle,
   IconBookmark,
   IconChartBar,
+  IconChess,
+  IconCloudDownload,
   IconCpu,
   IconDots,
   IconEdit,
@@ -51,6 +54,8 @@ import {
   timeControlsOf,
 } from "@/utils/players/profileGames";
 import PlayerAnalysisPanel from "./analysis/PlayerAnalysisPanel";
+import PreparationTab from "./preparation/PreparationTab";
+import RivalGamesModal from "./RivalGamesModal";
 import { initials } from "./common";
 import { timeControlLabel } from "./labels";
 import {
@@ -107,6 +112,7 @@ export default function PlayerCardView({
   const [saveOpened, setSaveOpened] = useState(false);
   const [sourcesOpened, setSourcesOpened] = useState(false);
   const [fideOpened, setFideOpened] = useState(false);
+  const [rivalGamesOpened, setRivalGamesOpened] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [databaseDir] = useAtom(storedDatabasesDirAtom);
   const [, setConversionState] = useAtom(databaseConversionStateAtom);
@@ -215,6 +221,18 @@ export default function PlayerCardView({
         />
       )}
       {update && (
+        <RivalGamesModal
+          opened={rivalGamesOpened}
+          onClose={() => setRivalGamesOpened(false)}
+          name={card.name}
+          sources={card.sources}
+          onAdd={async (sources) => {
+            update({ sources: [...card.sources, ...sources] });
+            await mutate();
+          }}
+        />
+      )}
+      {update && (
         <FideLinkModal
           opened={fideOpened}
           onClose={() => setFideOpened(false)}
@@ -302,6 +320,14 @@ export default function PlayerCardView({
                     count: card.sources.length,
                   })}
                 </Menu.Item>
+                {card.origin === "saved" && (
+                  <Menu.Item
+                    leftSection={<IconCloudDownload size={14} />}
+                    onClick={() => setRivalGamesOpened(true)}
+                  >
+                    {t("Players.RivalGames.Menu", "Add games (account, PGN, broadcasts)")}
+                  </Menu.Item>
+                )}
                 <Menu.Item leftSection={<IconId size={14} />} onClick={() => setFideOpened(true)}>
                   {card.fide
                     ? t("Players.Fide.Menu.Linked", "FIDE profile")
@@ -358,6 +384,9 @@ export default function PlayerCardView({
             </Tabs.Tab>
             <Tabs.Tab value="analysis" leftSection={<IconCpu size={16} />}>
               {t("Players.Tab.Analysis", "Analysis")}
+            </Tabs.Tab>
+            <Tabs.Tab value="preparation" leftSection={<IconChess size={16} />}>
+              {t("Players.Tab.Preparation", "Preparation")}
             </Tabs.Tab>
           </Tabs.List>
         </Group>
@@ -420,6 +449,17 @@ export default function PlayerCardView({
                   setGamesSearch((previous) => ({ value: opening, version: previous.version + 1 }));
                   setTab("games");
                 }}
+              />
+            </Tabs.Panel>
+            <Tabs.Panel value="preparation" style={{ flex: 1, minHeight: 0 }}>
+              <PreparationTab
+                games={games}
+                name={card.name}
+                cardId={card.id}
+                profileId={card.analysisProfileId}
+                isSelf={card.kind === "self"}
+                engine={engine}
+                onOpenGame={(game, ply) => openProfileGame(game, ply)}
               />
             </Tabs.Panel>
             <Tabs.Panel value="rivals" style={{ flex: 1, minHeight: 0 }}>
@@ -497,6 +537,20 @@ function FilterBar({
           { value: "any", label: t("Players.Filter.BothColors", "Both colors") },
           { value: "white", label: t("Fen.White", "White") },
           { value: "black", label: t("Fen.Black", "Black") },
+        ]}
+      />
+      <Select
+        size="xs"
+        w={150}
+        allowDeselect={false}
+        value={String(filters.last ?? 0)}
+        onChange={(value) => setFilters({ ...filters, last: Number(value) || null })}
+        data={[
+          { value: "0", label: t("Players.Filter.AllGames", "All games") },
+          ...[20, 50, 100, 200, 500].map((count) => ({
+            value: String(count),
+            label: t("Players.Filter.Last", "Last {{count}}", { count }),
+          })),
         ]}
       />
       {shown !== total && (

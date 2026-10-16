@@ -79,7 +79,7 @@ use crate::chess::{
 use crate::db::{
     cancel_database_quality, cancel_position_search, clear_games, convert_pgn, create_indexes,
     delete_database, delete_db_game, delete_empty_games, delete_indexes, export_to_pgn,
-    get_database_quality, get_database_quality_details, get_player, get_player_games, get_position_tree,
+    get_database_quality, get_database_quality_details, get_player, get_player_games, get_player_tree, get_position_tree,
     get_tournaments, preload_reference_db, search_position, MmapSearchIndex,
 };
 use crate::fs::set_file_as_executable;
@@ -185,6 +185,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_opening_from_fens,
             get_opening_from_name,
             get_player_games,
+            get_player_tree,
             get_position_tree,
             get_engine_config,
             file_exists,

@@ -65,7 +65,13 @@ export type PlayerCardSelection =
 
 export const playerCardSelectionAtom = atom<PlayerCardSelection | null>(null);
 
-export type PlayerCardTab = "summary" | "games" | "openings" | "rivals" | "analysis";
+export type PlayerCardTab =
+    | "summary"
+    | "games"
+    | "openings"
+    | "rivals"
+    | "analysis"
+    | "preparation";
 
 /** Session-only: the tab of each card, so coming back from a game keeps the view. */
 export const playerCardTabAtom = atom<Record<string, PlayerCardTab>>({});

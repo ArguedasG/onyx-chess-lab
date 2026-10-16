@@ -1,6 +1,7 @@
 import {
   Alert,
   Badge,
+  Button,
   Center,
   Divider,
   Group,
@@ -15,6 +16,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { IconAlertTriangle, IconCpu, IconRobot, IconUser } from "@tabler/icons-react";
+import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoMode } from "@/bindings";
@@ -45,6 +47,7 @@ import {
   type HumanBotStyleAxisLevel,
   isMaiaEngine,
 } from "@/utils/humanBots";
+import { twinBooksAtom } from "@/state/twinBots";
 import { EnginesSelect } from "./EnginesSelect";
 
 export type OpponentSettings =
@@ -76,7 +79,18 @@ export type OpponentSettings =
       seed?: number;
       timeUnit?: TimeType;
       incrementUnit?: TimeType;
+      /** A twin bot of a player card (I-43) instead of a catalogue profile. */
+      twin?: TwinOpponent;
     };
+
+/** The twin of a player: their book (in `twinBooksAtom`) and Maia at their level out of it. */
+export type TwinOpponent = {
+  id: string;
+  name: string;
+  elo: number;
+  games: number;
+  lines: number;
+};
 
 type OpponentType = OpponentSettings["type"];
 
@@ -510,55 +524,68 @@ export function OpponentForm({
             </Alert>
           )}
 
-          <Select
-            allowDeselect={false}
-            label={t("HumanBots.Profile", "Bot profile")}
-            data={HUMAN_BOT_PROFILES.map((profile) => ({
-              value: profile.id,
-              label: `${profile.name} · ${profile.elo} ELO`,
-            }))}
-            value={humanBotProfile.id}
-            onChange={(profileId) =>
-              setOpponent((prev) =>
-                prev.type === "humanBot" && profileId
-                  ? { ...prev, profileId: profileId as HumanBotProfileId }
-                  : prev,
-              )
-            }
-          />
+          {opponent.twin ? (
+            <TwinCard
+              twin={opponent.twin}
+              onRemove={() =>
+                setOpponent((prev) =>
+                  prev.type === "humanBot" ? { ...prev, twin: undefined } : prev,
+                )
+              }
+            />
+          ) : (
+            <>
+              <Select
+                allowDeselect={false}
+                label={t("HumanBots.Profile", "Bot profile")}
+                data={HUMAN_BOT_PROFILES.map((profile) => ({
+                  value: profile.id,
+                  label: `${profile.name} · ${profile.elo} ELO`,
+                }))}
+                value={humanBotProfile.id}
+                onChange={(profileId) =>
+                  setOpponent((prev) =>
+                    prev.type === "humanBot" && profileId
+                      ? { ...prev, profileId: profileId as HumanBotProfileId, twin: undefined }
+                      : prev,
+                  )
+                }
+              />
 
-          <Paper withBorder p="sm">
-            <Stack gap={6}>
-              <Group justify="space-between">
-                <Text fw={600}>{humanBotProfile.name}</Text>
-                <Badge variant="light">{humanBotProfile.elo} ELO</Badge>
-              </Group>
-              <Badge variant="outline" w="fit-content">
-                {getEditorialStyleLabel()}
-              </Badge>
-              <Text size="sm">{getEditorialStyleDescription()}</Text>
-              <Divider />
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Text size="xs" c="dimmed">
-                  {t("HumanBots.Repertoire", "Opening repertoire")}
-                </Text>
-                <Text size="sm" fw={500} ta="right">
-                  {getRepertoireLabel(humanBotProfile.repertoireId)}
-                </Text>
-              </Group>
-              <Text size="xs" c="dimmed">
-                {getRepertoireDescription()}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {t(
-                  "HumanBots.EloDisclaimer",
-                  "Profile ELO controls Maia's behavior and is also used as the human opponent ELO. It is not yet a calibrated playing-strength rating.",
-                )}
-              </Text>
-            </Stack>
-          </Paper>
+              <Paper withBorder p="sm">
+                <Stack gap={6}>
+                  <Group justify="space-between">
+                    <Text fw={600}>{humanBotProfile.name}</Text>
+                    <Badge variant="light">{humanBotProfile.elo} ELO</Badge>
+                  </Group>
+                  <Badge variant="outline" w="fit-content">
+                    {getEditorialStyleLabel()}
+                  </Badge>
+                  <Text size="sm">{getEditorialStyleDescription()}</Text>
+                  <Divider />
+                  <Group justify="space-between" align="flex-start" wrap="nowrap">
+                    <Text size="xs" c="dimmed">
+                      {t("HumanBots.Repertoire", "Opening repertoire")}
+                    </Text>
+                    <Text size="sm" fw={500} ta="right">
+                      {getRepertoireLabel(humanBotProfile.repertoireId)}
+                    </Text>
+                  </Group>
+                  <Text size="xs" c="dimmed">
+                    {getRepertoireDescription()}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {t(
+                      "HumanBots.EloDisclaimer",
+                      "Profile ELO controls Maia's behavior and is also used as the human opponent ELO. It is not yet a calibrated playing-strength rating.",
+                    )}
+                  </Text>
+                </Stack>
+              </Paper>
+            </>
+          )}
 
-          {humanTimingEnabled && (
+          {humanTimingEnabled && !opponent.twin && (
             <Switch
               checked={opponent.humanTiming ?? true}
               label={t("HumanBots.Timing", "Human thinking time")}
@@ -757,5 +784,42 @@ export function OpponentForm({
         </Stack>
       )}
     </Stack>
+  );
+}
+
+/** The twin of a player card in place of a catalogue profile (I-43). */
+function TwinCard({ twin, onRemove }: { twin: TwinOpponent; onRemove: () => void }) {
+  const { t } = useTranslation();
+  const books = useAtomValue(twinBooksAtom);
+  const loaded = Boolean(books[twin.id]);
+  return (
+    <Paper withBorder p="sm">
+      <Stack gap={6}>
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600} lineClamp={1}>
+            {t("Preparation.Twin.Name", "Twin of {{name}}", { name: twin.name })}
+          </Text>
+          <Badge variant="light">{twin.elo} ELO</Badge>
+        </Group>
+        <Text size="sm">
+          {t(
+            "Preparation.Twin.Summary",
+            "Plays {{name}}'s repertoire ({{lines}} sequences from {{games}} games) and, out of it, like a player of that rating (Maia).",
+            { name: twin.name, lines: twin.lines, games: twin.games },
+          )}
+        </Text>
+        {!loaded && (
+          <Alert color="yellow" icon={<IconAlertTriangle size={16} />} py={6}>
+            {t(
+              "Preparation.Twin.NotLoaded",
+              "The twin's book is no longer in memory: open it again from the player card, or it will play as plain Maia.",
+            )}
+          </Alert>
+        )}
+        <Button size="xs" variant="subtle" color="gray" onClick={onRemove}>
+          {t("Preparation.Twin.UseProfile", "Use a catalogue profile instead")}
+        </Button>
+      </Stack>
+    </Paper>
   );
 }

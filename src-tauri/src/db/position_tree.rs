@@ -55,6 +55,10 @@ pub struct PositionTreeOptions {
     /// When more games qualify, the ones with the highest average rating are read.
     #[specta(optional)]
     pub max_games: Option<u32>,
+    /// The model game of a move is its most recent game instead of the highest-rated one.
+    #[serde(default)]
+    #[specta(optional)]
+    pub model_by_recent: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Type)]
@@ -80,6 +84,11 @@ pub struct PositionTreeMove {
     /// Node after the move, when it is part of the tree.
     #[specta(optional)]
     pub child: Option<u32>,
+    /// Dates ("2024.05.01") of the first and last game with the move, when known.
+    #[specta(optional)]
+    pub first_date: Option<String>,
+    #[specta(optional)]
+    pub last_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Type)]
@@ -136,6 +145,9 @@ struct MoveAggregate {
     rated_points: f64,
     expected_points: f64,
     model: Option<(i32, i32)>,
+    model_date: Option<String>,
+    first_date: Option<String>,
+    last_date: Option<String>,
     child: Option<u64>,
     san: String,
     uci: String,
@@ -155,6 +167,7 @@ pub(crate) fn build_tree<'a>(
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(Vec<PositionTreeNode>, u32), Error> {
     let max_plies = options.max_plies.clamp(1, MAX_PLIES);
+    let by_recent = options.model_by_recent.unwrap_or(false);
     let mut nodes: HashMap<u64, NodeAggregate> = HashMap::new();
     let mut root_hash = None;
     let mut read = 0_u32;
@@ -230,7 +243,27 @@ pub(crate) fn build_tree<'a>(
                 aggregate.rated_points += points;
                 aggregate.expected_points += expected(own, other);
             }
-            if aggregate
+            let date = entry.date.filter(|date| date.get(..4).is_some_and(|year| year.bytes().all(|b| b.is_ascii_digit())));
+            if let Some(date) = date {
+                if aggregate.first_date.as_deref().is_none_or(|first| date < first) {
+                    aggregate.first_date = Some(date.to_string());
+                }
+                if aggregate.last_date.as_deref().is_none_or(|last| date > last) {
+                    aggregate.last_date = Some(date.to_string());
+                }
+            }
+            if by_recent {
+                let newer = match (&aggregate.model, &aggregate.model_date) {
+                    (None, _) => true,
+                    (Some((_, id)), current) => {
+                        (date, entry.id) > (current.as_deref(), *id)
+                    }
+                };
+                if newer {
+                    aggregate.model = Some((model_elo, entry.id));
+                    aggregate.model_date = date.map(str::to_string);
+                }
+            } else if aggregate
                 .model
                 .is_none_or(|(elo, id)| (model_elo, entry.id) > (elo, id))
             {
@@ -291,6 +324,8 @@ pub(crate) fn build_tree<'a>(
                     model_game_id: aggregate.model.map(|(_, id)| id),
                     model_game_elo: aggregate.model.map(|(elo, _)| elo).filter(|elo| *elo > 0),
                     child: aggregate.child.and_then(|child| index.get(&child).copied()),
+                    first_date: aggregate.first_date.clone(),
+                    last_date: aggregate.last_date.clone(),
                 })
                 .collect();
             moves.sort_by(|a, b| b.games.cmp(&a.games).then_with(|| a.san.cmp(&b.san)));
@@ -498,6 +533,7 @@ mod tests {
             since_year: None,
             until_year: None,
             max_games: None,
+            model_by_recent: None,
         };
         let (nodes, read) = build_tree(
             selected
@@ -532,6 +568,7 @@ mod tests {
             since_year: None,
             until_year: None,
             max_games: None,
+            model_by_recent: None,
         };
         let (nodes, read) = build_tree(entries.iter().map(reference), &options, &|| false).unwrap();
         assert_eq!(read, 4);

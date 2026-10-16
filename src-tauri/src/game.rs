@@ -1763,7 +1763,10 @@ fn select_repertoire_move(
                     .moves
                     .iter()
                     .zip(played_moves)
-                    .all(|(expected, played)| expected == played)
+                    // A castle may arrive as king-takes-rook ("e1h1") from the board.
+                    .all(|(expected, played)| {
+                        normalize_polyglot_uci(expected) == normalize_polyglot_uci(played)
+                    })
         })
         .filter_map(|line| {
             let uci = line.moves.get(played_moves.len())?;
@@ -2494,6 +2497,39 @@ mod tests {
         assert_eq!(
             select_repertoire_move(&repertoire, &["e2e4".to_string()], &position, &mut rng,),
             Some("e7e5".to_string())
+        );
+    }
+
+    #[test]
+    fn repertoire_matches_a_castle_written_as_king_takes_rook() {
+        let moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1"];
+        let mut position = initial_position();
+        for uci in moves {
+            let movement = UciMove::from_ascii(uci.as_bytes())
+                .expect("valid UCI")
+                .to_move(&position)
+                .expect("legal move");
+            position.play_unchecked(&movement);
+        }
+        let repertoire = OpeningRepertoireConfig {
+            id: "twin".to_string(),
+            version: 1,
+            mode: OpeningRepertoireMode::Weighted,
+            max_ply: 12,
+            lines: vec![opening_line(
+                &["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1", "g8f6"],
+                1,
+            )],
+        };
+        // The board sends the castle as the king taking its rook.
+        let played: Vec<String> = moves
+            .iter()
+            .map(|uci| if *uci == "e1g1" { "e1h1" } else { uci }.to_string())
+            .collect();
+        let mut rng = StdRng::seed_from_u64(7);
+        assert_eq!(
+            select_repertoire_move(&repertoire, &played, &position, &mut rng),
+            Some("g8f6".to_string())
         );
     }
 

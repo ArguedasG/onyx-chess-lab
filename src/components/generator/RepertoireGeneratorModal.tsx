@@ -33,14 +33,17 @@ import { commands } from "@/bindings";
 import { activeTabAtom, enginesAtom, sessionsAtom, tabsAtom } from "@/state/atoms";
 import {
   DEFAULT_GENERATOR_SETTINGS,
+  DEFAULT_RIVAL_GENERATOR_SETTINGS,
   type RepertoireGeneratorSettings,
+  repertoireGeneratorRivalSettingsAtom,
   repertoireGeneratorSettingsAtom,
 } from "@/state/repertoireGenerator";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { getDatabases } from "@/utils/db";
 import type { LocalEngine } from "@/utils/engines";
 import { gameLinkLabel, pliesReachingPosition } from "@/utils/gameLinks";
-import { isMaiaEngine } from "@/utils/humanBots";
+import { clampMaiaElo, isMaiaEngine } from "@/utils/humanBots";
+import { bookSource, mainLine, type PlayerBooks } from "@/utils/preparation/book";
 import { type ModelGameLabels, repertoirePgn, surprisesPgn } from "@/utils/repertoireGenerator/pgn";
 import { sideToMove } from "@/utils/repertoireGenerator/positions";
 import { createGeneratedRepertoire } from "@/utils/repertoireGenerator/save";
@@ -63,6 +66,14 @@ import { useGeneratorRun } from "./useGeneratorRun";
 
 export type GeneratorLine = Array<{ fen: string; played?: { uci: string; san: string } }>;
 
+/** Preparation against a rival (8.6, I-41): their games are the statistics of the generator. */
+export type GeneratorRival = {
+  name: string;
+  /** Rating used for Maia and for the difficulty of the positions. */
+  elo: number;
+  books: PlayerBooks;
+};
+
 function formatSeconds(ms: number) {
   return ms < 60_000
     ? `${Math.round(ms / 1000)} s`
@@ -82,6 +93,8 @@ export default function RepertoireGeneratorModal({
   line,
   documentDir,
   initialMode = "repertoire",
+  initialColor,
+  rival,
 }: {
   opened: boolean;
   onClose: () => void;
@@ -94,16 +107,39 @@ export default function RepertoireGeneratorModal({
   line: GeneratorLine;
   documentDir: string;
   initialMode?: "repertoire" | "surprises";
+  /** The side the user plays; by default the side to move on the board. */
+  initialColor?: GeneratorColor;
+  rival?: GeneratorRival;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const focusLabels = useFocusLabels();
-  const [stored, setStored] = useAtom(repertoireGeneratorSettingsAtom);
-  const settings: RepertoireGeneratorSettings = { ...DEFAULT_GENERATOR_SETTINGS, ...stored };
+  const [storedGeneral, setStoredGeneral] = useAtom(repertoireGeneratorSettingsAtom);
+  const [storedRival, setStoredRival] = useAtom(repertoireGeneratorRivalSettingsAtom);
+  const defaults = rival ? DEFAULT_RIVAL_GENERATOR_SETTINGS : DEFAULT_GENERATOR_SETTINGS;
+  const stored = rival ? storedRival : storedGeneral;
+  const setStored = rival ? setStoredRival : setStoredGeneral;
+  const settings: RepertoireGeneratorSettings = { ...defaults, ...stored };
   const update = (change: Partial<RepertoireGeneratorSettings>) =>
-    setStored((previous) => ({ ...DEFAULT_GENERATOR_SETTINGS, ...previous, ...change }));
+    setStored((previous) => ({ ...defaults, ...previous, ...change }));
   const [mode, setMode] = useState(initialMode);
-  const [color, setColor] = useState<GeneratorColor>(sideToMove(rootFen));
+  const [color, setColor] = useState<GeneratorColor>(initialColor ?? sideToMove(rootFen));
+  const rivalColor: GeneratorColor = color === "white" ? "black" : "white";
+  const rivalBook = rival ? rival.books[rivalColor] : null;
+  const rivalLabel = rival
+    ? t("Generator.Rival.Source", "Games of {{name}} with {{color}}", {
+        name: rival.name,
+        color: (rivalColor === "white"
+          ? t("Fen.White", "White")
+          : t("Fen.Black", "Black")
+        ).toLowerCase(),
+      })
+    : "";
+  // Against a rival without a board line, the surprises follow their most played line.
+  const surpriseLine = useMemo(
+    () => (rivalBook && line.length <= 1 ? mainLine(rivalBook) : line),
+    [line, rivalBook],
+  );
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const engines = useAtomValue(enginesAtom);
@@ -117,6 +153,23 @@ export default function RepertoireGeneratorModal({
   useEffect(() => {
     if (opened) setMode(initialMode);
   }, [initialMode, opened]);
+  useEffect(() => {
+    if (opened && initialColor) setColor(initialColor);
+  }, [initialColor, opened]);
+  // Against a rival, Maia and the difficulty use the rival's rating.
+  const rivalElo = rival ? clampMaiaElo(rival.elo) : null;
+  useEffect(() => {
+    if (opened && rivalElo != null)
+      setStoredRival((previous) => ({
+        ...DEFAULT_RIVAL_GENERATOR_SETTINGS,
+        ...previous,
+        opponent: {
+          ...DEFAULT_RIVAL_GENERATOR_SETTINGS.opponent,
+          ...previous.opponent,
+          elo: rivalElo,
+        },
+      }));
+  }, [opened, rivalElo, setStoredRival]);
 
   const { data: databases = [] } = useSWR(opened ? "generator-databases" : null, async () =>
     (await getDatabases()).flatMap((database) =>
@@ -134,12 +187,19 @@ export default function RepertoireGeneratorModal({
   const engine =
     referenceEngines.find((candidate) => candidate.id === settings.engineId) ?? referenceEngines[0];
   const running = state.status === "running";
-  const sourceNeedsToken = settings.source.kind !== "local";
+  const sourceNeedsToken = !rival && settings.source.kind !== "local";
   const canRun = Boolean(engine) && (!sourceNeedsToken || Boolean(token)) && !running;
 
   const start = () => {
     if (!engine) return;
-    const engineSetup = { engine, maia, maiaElo: settings.opponent.elo, token };
+    const engineSetup = {
+      engine,
+      maia,
+      maiaElo: settings.opponent.elo,
+      token,
+      preloaded: rivalBook ? bookSource(rivalBook, rivalLabel) : undefined,
+    };
+
     if (mode === "repertoire") {
       void runRepertoire(
         {
@@ -161,7 +221,7 @@ export default function RepertoireGeneratorModal({
     } else {
       void runSurprises(
         {
-          line,
+          line: surpriseLine,
           color: settings.surprises.mySideOnly ? color : null,
           firstMove: settings.surprises.firstMove,
           stopGames: settings.surprises.stopGames,
@@ -174,8 +234,9 @@ export default function RepertoireGeneratorModal({
     }
   };
 
-  const sourceLabel =
-    settings.source.kind === "local"
+  const sourceLabel = rival
+    ? rivalLabel
+    : settings.source.kind === "local"
       ? settings.source.databaseTitle
       : settings.source.kind === "masters"
         ? "Lichess Masters"
@@ -297,7 +358,7 @@ export default function RepertoireGeneratorModal({
 
   const openSurprise = (surprise: Surprise) => {
     const prefix: GeneratorLine = [
-      ...line.slice(0, surprise.index),
+      ...surpriseLine.slice(0, surprise.index),
       { fen: surprise.fen, played: { uci: surprise.uci, san: surprise.san } },
     ];
     const pgn = surprisesPgn(prefix, [], {
@@ -389,12 +450,30 @@ export default function RepertoireGeneratorModal({
             <ScrollArea.Autosize mah="62vh" offsetScrollbars>
               <Stack gap="sm">
                 <Paper withBorder radius="md" p="sm">
-                  <SourceSettings
-                    source={settings.source}
-                    onChange={(source) => update({ source })}
-                    databases={databases}
-                    hasToken={Boolean(token)}
-                  />
+                  {rival && rivalBook ? (
+                    <Stack gap={4}>
+                      <Text size="sm" fw={600}>
+                        {t("Generator.Rival.Title", "Against {{name}}", { name: rival.name })}
+                      </Text>
+                      <Text size="sm">
+                        {`${rivalLabel} · ${t("Players.GamesCount", "{{count}} games", { count: rivalBook.games })}`}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {t(
+                          "Generator.Rival.Hint",
+                          "Their replies come from their games (Maia at {{elo}} where they have too few). Your moves are chosen by how {{name}} did against each one, always checked with the engine.",
+                          { name: rival.name, elo: settings.opponent.elo },
+                        )}
+                      </Text>
+                    </Stack>
+                  ) : (
+                    <SourceSettings
+                      source={settings.source}
+                      onChange={(source) => update({ source })}
+                      databases={databases}
+                      hasToken={Boolean(token)}
+                    />
+                  )}
                 </Paper>
                 {mode === "repertoire" && (
                   <Paper withBorder radius="md" p="sm">
@@ -564,7 +643,9 @@ export default function RepertoireGeneratorModal({
                           "Generator.Surprises.Stopped",
                           "Stopped at move {{move}}: fewer than {{games}} games in the source.",
                           {
-                            move: Number(line[state.result.stoppedAt]?.fen.split(" ")[5] ?? 0),
+                            move: Number(
+                              surpriseLine[state.result.stoppedAt]?.fen.split(" ")[5] ?? 0,
+                            ),
                             games: settings.surprises.stopGames,
                           },
                         )}
@@ -590,7 +671,7 @@ export default function RepertoireGeneratorModal({
                             leftSection={<IconChessKnight size={16} />}
                             onClick={() =>
                               void openPgn(
-                                surprisesPgn(line, state.result.surprises, {
+                                surprisesPgn(surpriseLine, state.result.surprises, {
                                   name: t("Generator.Surprises.Title", "Surprises"),
                                   startFen,
                                   elo: settings.opponent.elo,

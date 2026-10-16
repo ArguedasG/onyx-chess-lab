@@ -26,6 +26,7 @@ import { remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArrowLeft,
   IconBook2,
+  IconBrain,
   IconChevronDown,
   IconChevronRight,
   IconDownload,
@@ -90,6 +91,7 @@ import { usePendingPgnImport } from "@/hooks/usePendingPgnImport";
 import PendingPgnNotice from "../files/PendingPgnNotice";
 import RepertoireAdditionModal from "./RepertoireAdditionModal";
 import OpeningExportModal from "./OpeningExportModal";
+import RepertoireDifficultyModal from "./RepertoireDifficultyModal";
 import OpeningConsolidationModal from "./OpeningConsolidationModal";
 import OpeningImportEditor from "./OpeningImportEditor";
 import {
@@ -136,6 +138,7 @@ export default function OpeningDashboardPage() {
     variantId?: string;
   } | null>(null);
   const [exportingRepertoireId, setExportingRepertoireId] = useState<string | null>(null);
+  const [difficultyRepertoireId, setDifficultyRepertoireId] = useState<string | null>(null);
   const [consolidatingRepertoireId, setConsolidatingRepertoireId] = useState<string | null>(null);
   const navigate = useNavigate();
   const locationHash = useLocation({ select: (location) => location.hash });
@@ -730,6 +733,18 @@ export default function OpeningDashboardPage() {
           onClose={() => setAdditionTarget(null)}
         />
       )}
+      {difficultyRepertoireId && areas.openings.repertoires[difficultyRepertoireId] && (
+        <RepertoireDifficultyModal
+          repertoire={areas.openings.repertoires[difficultyRepertoireId]}
+          onClose={() => setDifficultyRepertoireId(null)}
+          onPractice={(variantId, lineId) => {
+            const repertoire = areas.openings.repertoires[difficultyRepertoireId];
+            const variant = areas.openings.variants[variantId];
+            setDifficultyRepertoireId(null);
+            if (repertoire && variant) void openLinePractice(repertoire, variant, lineId);
+          }}
+        />
+      )}
       {exportingRepertoireId && (
         <OpeningExportModal
           repertoireId={exportingRepertoireId}
@@ -1060,6 +1075,23 @@ export default function OpeningDashboardPage() {
                                   "Practice repertoire",
                                 )}{" "}
                               </Button>
+                              <Tooltip
+                                multiline
+                                maw={320}
+                                label={t(
+                                  "RepertoireDifficulty.ButtonHint",
+                                  "Positions of this repertoire where a player of your level is most likely to go wrong (Stockfish and Maia).",
+                                )}
+                              >
+                                <Button
+                                  size="xs"
+                                  variant="default"
+                                  leftSection={<IconBrain size={14} />}
+                                  onClick={() => setDifficultyRepertoireId(repertoire.id)}
+                                >
+                                  {t("RepertoireDifficulty.Button", "Hard positions for me")}
+                                </Button>
+                              </Tooltip>
                               <Button
                                 size="xs"
                                 variant="default"

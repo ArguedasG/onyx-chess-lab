@@ -171,6 +171,14 @@ async getPlayerGames(file: string, playerIds: number[]) : Promise<Result<PlayerG
     else return { status: "error", error: e  as any };
 }
 },
+async getPlayerTree(file: string, playerIds: number[], gameIds: number[], maxPlies: number) : Promise<Result<PlayerTree, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_player_tree", { file, playerIds, gameIds, maxPlies }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getPositionTree(id: string, token: string, options: PositionTreeOptions) : Promise<Result<PositionTree, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_position_tree", { id, token, options }) };
@@ -1035,6 +1043,7 @@ export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: st
  * in the database, so they all read as `Open`.
  */
 export type BoardEnding = "checkmate" | "stalemate" | "insufficientMaterial" | "open"
+export type BookLine = { moves: string[]; games: number }
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }
 export type BotLeagueDetail = { summary: BotLeagueSummary; config: BotLeagueConfig; results: BotLeagueGameResult[]; standings: BotLeagueStanding[] }
 export type BotLeagueEvent = { state: BotLeagueState }
@@ -1184,6 +1193,48 @@ moveBreakdown: ReportMoveCell[]; mostPlayedPlayers: ReportPlayer[]; strongestPla
 export type OpeningReportOptions = { depth: number; theoryGames: number; maxLines: number; displayFen: string; event?: string | null; timeControl?: string | null }
 export type OutOpening = { name: string; fen: string }
 export type Outcome = "1-0" | "0-1" | "1/2-1/2" | "*"
+export type PawnStructure = 
+/**
+ * Isolated queen's pawn: a d-pawn on the fourth rank without own c- or e-pawns.
+ */
+"iqp" | 
+/**
+ * The side with d4/e3 against c6/d5 (the minority-attack side).
+ */
+"carlsbad" | 
+/**
+ * c- and d-pawns side by side on the fourth rank without b- or e-pawns.
+ */
+"hangingPawns" | 
+/**
+ * c6/e6 without a d-pawn against d4 (Caro-Kann: no white e-pawn; Slav: no white c-pawn).
+ */
+"caroSlav" | 
+/**
+ * The chain e6/d5 against d4/e5.
+ */
+"french" | 
+/**
+ * c4/e4 without a d-pawn against a Sicilian set-up (d-pawn, no c-pawn).
+ */
+"maroczy" | 
+/**
+ * a6/b6/d6/e6 against c4/e4.
+ */
+"hedgehog" | 
+/**
+ * The chain d6/e5 against d5/e4.
+ */
+"kingsIndian"
+export type PawnStructureHit = { structure: PawnStructure; 
+/**
+ * The side that owns the structure is White.
+ */
+ownerWhite: boolean; 
+/**
+ * First ply of the run that made it count.
+ */
+ply: number }
 export type Player = { id: number; name: string | null; elo: number | null }
 export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; go: GoMode | null }
 export type PlayerGameRow = { id: number; 
@@ -1214,10 +1265,31 @@ playerToMoveAtEnd: boolean;
 /**
  * Last `[%clk]` after a move of each side, in seconds.
  */
-playerLastClock: number | null; opponentLastClock: number | null }
+playerLastClock: number | null; opponentLastClock: number | null; 
+/**
+ * Named pawn structures of the middlegame (I-31).
+ */
+structures: PawnStructureHit[]; 
+/**
+ * First ply without queens on the board.
+ */
+queensOffPly: number | null; 
+/**
+ * First ply of the endgame as Player Analysis defines it: no queens, at most six pieces.
+ */
+endgamePly: number | null }
 export type PlayerPresetCategory = "custom" | "humanLike" | "limited" | "strong" | "reference"
 export type PlayerQuery = { options: QueryOptions<PlayerSort>; name?: string | null; range?: [number, number] | null }
 export type PlayerSort = "id" | "name" | "elo" | "games"
+export type PlayerTree = { 
+/**
+ * Games where the player had White, from the standard start (node 0 is the root).
+ */
+white: PositionTreeNode[]; black: PositionTreeNode[]; whiteGames: number; blackGames: number; 
+/**
+ * The first plies of every game (UCI), identical sequences merged: the twin's book.
+ */
+whiteLines: BookLine[]; blackLines: BookLine[]; elapsedMs: number }
 export type PlayersTime = { white: number; black: number; winc: number; binc: number }
 export type PositionGame = { game: NormalizedGame; ply: number }
 export type PositionGameMetadata = { snapshotOffset: number; id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; date: string | null; result: string; event: string; ply: number; nextMove: string }
@@ -1258,7 +1330,11 @@ modelGameId?: number | null; modelGameElo?: number | null;
 /**
  * Node after the move, when it is part of the tree.
  */
-child?: number | null }
+child?: number | null; 
+/**
+ * Dates ("2024.05.01") of the first and last game with the move, when known.
+ */
+firstDate?: string | null; lastDate?: string | null }
 export type PositionTreeNode = { 
 /**
  * Position with move counters reset ("… 0 1").
@@ -1280,7 +1356,11 @@ minElo?: number | null; sinceYear?: number | null; untilYear?: number | null;
 /**
  * When more games qualify, the ones with the highest average rating are read.
  */
-maxGames?: number | null }
+maxGames?: number | null; 
+/**
+ * The model game of a move is its most recent game instead of the highest-rated one.
+ */
+modelByRecent?: boolean | null }
 export type ProgressEvent = { id: string; progress: number; finished: boolean }
 export type ProgressItem = { id: string; progress: number; finished: boolean }
 export type Puzzle = { id: number; fen: string; moves: string; rating: number; rating_deviation: number; popularity: number; nb_plays: number }

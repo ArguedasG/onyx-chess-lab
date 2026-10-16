@@ -83,12 +83,15 @@ export type ProfileFilters = {
     timeControl: "all" | PlayerAnalysisTimeControl;
     period: ProfilePeriod;
     color: "any" | "white" | "black";
+    /** Only the most recent N games that pass the other filters (8.6); `null` for all. */
+    last?: number | null;
 };
 
 export const DEFAULT_PROFILE_FILTERS: ProfileFilters = {
     timeControl: "all",
     period: "all",
     color: "any",
+    last: null,
 };
 
 function periodStart(period: ProfilePeriod, today: Date): string | null {
@@ -104,12 +107,16 @@ export function filterProfileGames(
     today = new Date(),
 ): ProfileGame[] {
     const start = periodStart(filters.period, today);
-    return games.filter(
+    const filtered = games.filter(
         (game) =>
             (filters.timeControl === "all" || game.timeControlCategory === filters.timeControl) &&
             (filters.color === "any" || game.isWhite === (filters.color === "white")) &&
             (start === null || (game.day !== null && game.day >= start)),
     );
+    if (!filters.last || filtered.length <= filters.last) return filtered;
+    return [...filtered]
+        .sort((a, b) => chronologicalKey(b).localeCompare(chronologicalKey(a)))
+        .slice(0, filters.last);
 }
 
 /** Time-control categories present in the games, most played first. */

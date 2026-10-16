@@ -2,7 +2,9 @@ mod encoding;
 mod models;
 mod opening_report;
 mod ops;
+mod pawn_structures;
 mod player_games;
+mod player_tree;
 mod player_search;
 mod position_tree;
 mod position_query;
@@ -13,6 +15,7 @@ mod search;
 mod search_index;
 pub use opening_report::generate_opening_report;
 pub use player_games::get_player_games;
+pub use player_tree::get_player_tree;
 pub use position_tree::get_position_tree;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,

@@ -3,7 +3,7 @@ import { commands } from "@/bindings";
 import type { LocalEngine } from "@/utils/engines";
 import { EngineEvaluator, MaiaSampler } from "@/utils/repertoireGenerator/engines";
 import { generateRepertoire } from "@/utils/repertoireGenerator/generate";
-import { loadSource } from "@/utils/repertoireGenerator/sources";
+import { type LoadedSource, loadSource } from "@/utils/repertoireGenerator/sources";
 import {
     findSurprises,
     type SurpriseConfig,
@@ -23,7 +23,14 @@ export type RunState =
     | { status: "repertoire"; result: GeneratedRepertoire; elapsedMs: number }
     | { status: "surprises"; result: SurpriseResult; elapsedMs: number };
 
-type Engines = { engine: LocalEngine; maia?: LocalEngine; maiaElo: number; token?: string };
+type Engines = {
+    engine: LocalEngine;
+    maia?: LocalEngine;
+    maiaElo: number;
+    token?: string;
+    /** A source already in memory (a rival's games, 8.6) instead of the configured one. */
+    preloaded?: LoadedSource;
+};
 
 /** One generator or surprise run at a time, with its engines closed whatever happens. */
 export function useGeneratorRun() {
@@ -65,11 +72,13 @@ export function useGeneratorRun() {
             controller.current = { abort, evaluator, maia, id };
             const startedAt = Date.now();
             setState({ status: "running", progress: { phase: "source", positions: 0 }, startedAt });
-            const loaded = await loadSource(source, rootFen, depth, minGames, {
-                id,
-                token: engines.token,
-                signal: abort.signal,
-            });
+            const loaded =
+                engines.preloaded ??
+                (await loadSource(source, rootFen, depth, minGames, {
+                    id,
+                    token: engines.token,
+                    signal: abort.signal,
+                }));
             return { abort, evaluator, maia, startedAt, source: loaded };
         },
         [stop],

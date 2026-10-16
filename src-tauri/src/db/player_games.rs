@@ -18,6 +18,7 @@ use super::{
         decode_move, COMMENT_MARKER, NAG_MARKER, VARIATION_END_MARKER, VARIATION_START_MARKER,
     },
     get_db_or_create,
+    pawn_structures::{PawnStructureHit, StructureTracker},
     schema::{events, games, players, sites},
     ConnectionOptions,
 };
@@ -68,6 +69,12 @@ pub struct PlayerGameRow {
     /// Last `[%clk]` after a move of each side, in seconds.
     pub player_last_clock: Option<f32>,
     pub opponent_last_clock: Option<f32>,
+    /// Named pawn structures of the middlegame (I-31).
+    pub structures: Vec<PawnStructureHit>,
+    /// First ply without queens on the board.
+    pub queens_off_ply: Option<u32>,
+    /// First ply of the endgame as Player Analysis defines it: no queens, at most six pieces.
+    pub endgame_ply: Option<u32>,
 }
 
 /// What the encoded mainline says beyond the headers.
@@ -78,6 +85,9 @@ pub(crate) struct MainlineSummary {
     pub ending: BoardEnding,
     pub white_to_move_at_end: bool,
     pub last_clock: [Option<f32>; 2],
+    pub structures: Vec<PawnStructureHit>,
+    pub queens_off_ply: Option<u32>,
+    pub endgame_ply: Option<u32>,
 }
 
 /// Parses the `[%clk h:mm:ss(.f)]` command of a comment.
@@ -103,6 +113,9 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
     let mut last_clock = [None, None];
     let mut cursor = 0_usize;
     let mut broken = false;
+    let mut structures = StructureTracker::default();
+    let mut queens_off_ply = None;
+    let mut endgame_ply = None;
 
     while cursor < moves.len() {
         let byte = moves[cursor];
@@ -135,6 +148,18 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
                 last_mover = Some(chess.turn());
                 chess.play_unchecked(&next);
                 plies += 1;
+                structures.observe(plies, chess.board());
+                if queens_off_ply.is_none() && chess.board().queens().is_empty() {
+                    queens_off_ply = Some(plies);
+                }
+                if endgame_ply.is_none()
+                    && chess.board().queens().is_empty()
+                    && (chess.board().occupied() & !chess.board().pawns() & !chess.board().kings())
+                        .count()
+                        <= 6
+                {
+                    endgame_ply = Some(plies);
+                }
                 if (plies as usize) <= OPENING_PLIES {
                     if let Ok(name) =
                         get_opening_from_setup(chess.clone().into_setup(EnPassantMode::Legal))
@@ -162,6 +187,9 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
         ending,
         white_to_move_at_end: chess.turn() == Color::White,
         last_clock,
+        structures: structures.hits,
+        queens_off_ply,
+        endgame_ply,
     })
 }
 
@@ -295,6 +323,12 @@ pub(crate) fn load_player_games(
                 opponent_last_clock: summary
                     .as_ref()
                     .and_then(|summary| summary.last_clock[opponent_side]),
+                structures: summary
+                    .as_ref()
+                    .map(|summary| summary.structures.clone())
+                    .unwrap_or_default(),
+                queens_off_ply: summary.as_ref().and_then(|summary| summary.queens_off_ply),
+                endgame_ply: summary.as_ref().and_then(|summary| summary.endgame_ply),
             }
         })
         .collect();
