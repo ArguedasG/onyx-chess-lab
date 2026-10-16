@@ -21,6 +21,7 @@ mod lichess_cloud;
 mod managed_engine;
 mod model_game_batch;
 mod model_game_experiment;
+mod move_sampler;
 mod oauth;
 mod opening;
 mod pgn;
@@ -72,13 +73,13 @@ use crate::bot_league::{
     read_bot_league_game, resume_bot_league, start_bot_league, BotLeagueEvent,
 };
 use crate::chess::{
-    analyze_game, cancel_analysis, get_best_moves_once, get_engine_config, get_engine_logs,
+    analyze_game, cancel_analysis, evaluate_positions, get_best_moves_once, get_engine_config, get_engine_logs,
     kill_engine, kill_engines, stop_engine,
 };
 use crate::db::{
     cancel_database_quality, cancel_position_search, clear_games, convert_pgn, create_indexes,
     delete_database, delete_db_game, delete_empty_games, delete_indexes, export_to_pgn,
-    get_database_quality, get_database_quality_details, get_player, get_player_games,
+    get_database_quality, get_database_quality_details, get_player, get_player_games, get_position_tree,
     get_tournaments, preload_reference_db, search_position, MmapSearchIndex,
 };
 use crate::fs::set_file_as_executable;
@@ -169,6 +170,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_best_moves,
             get_best_moves_once,
             analyze_game,
+            evaluate_positions,
+            move_sampler::sample_engine_moves,
+            move_sampler::close_engine_sampler,
             cancel_analysis,
             stop_engine,
             kill_engine,
@@ -181,6 +185,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_opening_from_fens,
             get_opening_from_name,
             get_player_games,
+            get_position_tree,
             get_engine_config,
             file_exists,
             get_file_metadata,

@@ -906,6 +906,13 @@ pub(crate) async fn analyze_positions(
 ) -> Result<(Vec<MoveAnalysis>, AnalysisRunStats), Error> {
     let identity = analysis_cache::engine_identity(run.engine, run.engine_args, run.uci_options);
     let limit = serde_json::to_string(run.go_mode).unwrap_or_default();
+    // The number of lines is part of the cache key: two lines are not five.
+    let lines = run
+        .uci_options
+        .iter()
+        .find(|option| option.name.eq_ignore_ascii_case("MultiPV"))
+        .and_then(|option| option.value.parse::<u16>().ok())
+        .unwrap_or(ANALYSIS_LINES);
     let mut stats = AnalysisRunStats::default();
     let mut analysis: Vec<MoveAnalysis> = Vec::with_capacity(positions.len());
     // Started on the first position the cache cannot answer.
@@ -923,7 +930,7 @@ pub(crate) async fn analyze_positions(
 
         stats.positions += 1;
         let cache_key =
-            analysis_cache::entry_key(&identity, &limit, ANALYSIS_LINES, &position_fen.to_string());
+            analysis_cache::entry_key(&identity, &limit, lines, &position_fen.to_string());
         if let Some(lines) = run.cache.and_then(|cache| cache.get(&cache_key)) {
             stats.cache_hits += 1;
             analysis.push(MoveAnalysis {
@@ -939,8 +946,14 @@ pub(crate) async fn analyze_positions(
         }
         let (proc, reader) = engine_process.as_mut().expect("started above");
 
+        // A position without moves stands on its own (`evaluate_positions`); otherwise the moves
+        // from the start keep the history the engine needs for repetitions.
         proc.set_options(EngineOptions {
-            fen: run.start_fen.to_string(),
+            fen: if moves.is_empty() {
+                position_fen.to_string()
+            } else {
+                run.start_fen.to_string()
+            },
             moves: moves.clone(),
             extra_options: run.uci_options.to_vec(),
         })
@@ -1027,6 +1040,96 @@ pub(crate) async fn analyze_positions(
         cache.prune(analysis_cache::MAX_ENTRIES);
     }
     Ok((analysis, stats))
+}
+
+/// Lines `evaluate_positions` may ask for.
+const MAX_EVALUATION_LINES: u16 = 8;
+
+/// Evaluates unrelated positions with one engine process: the batch analyzer of the reports
+/// (engine budget, cache, cancellation with `cancel_analysis`), with `lines` principal variations.
+/// Used by the repertoire generator and the surprise finder (8.5).
+#[tauri::command]
+#[specta::specta]
+pub async fn evaluate_positions(
+    id: String,
+    engine: String,
+    engine_args: Vec<String>,
+    go_mode: GoMode,
+    fens: Vec<String>,
+    lines: u16,
+    uci_options: Vec<EngineOption>,
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<Vec<MoveAnalysis>, Error> {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    if let Some(previous) = state
+        .analysis_cancel_flags
+        .insert(id.clone(), cancel_flag.clone())
+    {
+        previous.store(true, Ordering::SeqCst);
+    }
+    let _cancel_guard = CancelFlagGuard {
+        flags: &state.analysis_cancel_flags,
+        id: id.clone(),
+        flag: cancel_flag.clone(),
+    };
+    let positions = fens
+        .iter()
+        .map(|fen| Fen::from_ascii(fen.as_bytes()).map(|fen| (fen, Vec::new())))
+        .collect::<Result<Vec<(Fen, Vec<String>)>, _>>()?;
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    let _batch_slot =
+        crate::engine_budget::acquire_batch_slot(|| running_live_engines(&state)).await;
+    let budget = *crate::engine_budget::BUDGET;
+    let mut uci_options = uci_options;
+    set_engine_option(
+        &mut uci_options,
+        "Threads",
+        budget.threads_per_process.to_string(),
+    );
+    set_engine_option(
+        &mut uci_options,
+        "Hash",
+        budget.hash_mb_per_process.to_string(),
+    );
+    set_engine_option(
+        &mut uci_options,
+        "MultiPV",
+        lines.clamp(1, MAX_EVALUATION_LINES).to_string(),
+    );
+    let cache = analysis_cache::cache_path(&app)
+        .and_then(|cache_path| AnalysisCache::open(&cache_path))
+        .map_err(|error| warn!("Analysis cache unavailable: {error}"))
+        .ok();
+    let path = PathBuf::from(&engine);
+    let start_fen = positions[0].0.to_string();
+    let run = AnalysisRun {
+        engine: &path,
+        engine_args: &engine_args,
+        go_mode: &go_mode,
+        uci_options: &uci_options,
+        start_fen: &start_fen,
+        cache: cache.as_ref(),
+    };
+    let total = positions.len();
+    let (analysis, stats) = analyze_positions(&run, &positions, &cancel_flag, &mut |done| {
+        let _ = update_progress(
+            &state.progress_state,
+            &app,
+            id.clone(),
+            (done as f32 / total as f32) * 100.0,
+            false,
+        );
+    })
+    .await?;
+    info!(
+        "Evaluation {id}: {} positions, {} from the cache",
+        stats.positions, stats.cache_hits
+    );
+    let _ = update_progress(&state.progress_state, &app, id.clone(), 100.0, true);
+    Ok(analysis)
 }
 
 #[tauri::command]

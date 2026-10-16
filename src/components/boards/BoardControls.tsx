@@ -15,7 +15,10 @@ import {
   IconBook2,
   IconNotebook,
   IconTarget,
+  IconBulb,
+  IconWand,
 } from "@tabler/icons-react";
+import { makeUci } from "chessops";
 import { useLoaderData } from "@tanstack/react-router";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
@@ -42,6 +45,9 @@ import type { TreeState } from "@/utils/treeReducer";
 import RepertoireAdditionModal from "../training/RepertoireAdditionModal";
 import AddToStudyModal from "../studies/AddToStudyModal";
 import PositionActionsModal from "./PositionActionsModal";
+import RepertoireGeneratorModal, {
+  type GeneratorLine,
+} from "../generator/RepertoireGeneratorModal";
 
 interface BoardControlsProps {
   editingMode: boolean;
@@ -95,6 +101,38 @@ function BoardControls({
     tree: TreeState;
     sourceLabel: string;
   } | null>(null);
+  const [generator, setGenerator] = useState<{
+    mode: "repertoire" | "surprises";
+    startFen: string;
+    rootFen: string;
+    rootMoves: string[];
+    line: GeneratorLine;
+  } | null>(null);
+
+  /** The board position, the moves to it and its line (the current branch to its end). */
+  function openGenerator(mode: "repertoire" | "surprises") {
+    const state = store.getState();
+    const line: GeneratorLine = [];
+    let node = state.root;
+    const rootMoves: string[] = [];
+    let rootFen = node.fen;
+    let depth = 0;
+    while (true) {
+      const index = depth < state.position.length ? state.position[depth] : 0;
+      const child = node.children[index];
+      if (depth === state.position.length) rootFen = node.fen;
+      if (!child?.move || !child.san) {
+        line.push({ fen: node.fen });
+        break;
+      }
+      const uci = makeUci(child.move);
+      line.push({ fen: node.fen, played: { uci, san: child.san } });
+      if (depth < state.position.length) rootMoves.push(uci);
+      node = child;
+      depth += 1;
+    }
+    setGenerator({ mode, startFen: state.root.fen, rootFen, rootMoves, line });
+  }
   const file = getTabFile(currentTab);
   const trainingAreas = useAtomValue(trainingAreasAtom);
 
@@ -204,6 +242,18 @@ function BoardControls({
           sourceLabel={studyAddition.sourceLabel}
         />
       )}
+      {generator && (
+        <RepertoireGeneratorModal
+          opened
+          onClose={() => setGenerator(null)}
+          initialMode={generator.mode}
+          startFen={generator.startFen}
+          rootFen={generator.rootFen}
+          rootMoves={generator.rootMoves}
+          line={generator.line}
+          documentDir={documentDir}
+        />
+      )}
       {positionActions && (
         <PositionActionsModal
           tree={positionActions.tree}
@@ -260,6 +310,18 @@ function BoardControls({
             }}
           >
             {t("PositionActions.Open", "Current-position actions")}
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconWand size={16} />}
+            onClick={() => openGenerator("repertoire")}
+          >
+            {t("Generator.MenuRepertoire", "Generate repertoire from here")}
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconBulb size={16} />}
+            onClick={() => openGenerator("surprises")}
+          >
+            {t("Generator.MenuSurprises", "Find surprises in this line")}
           </Menu.Item>
           <Menu.Item
             leftSection={<IconNotebook size={16} />}

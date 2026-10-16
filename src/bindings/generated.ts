@@ -45,6 +45,41 @@ async analyzeGame(id: string, engine: string, engineArgs: string[], goMode: GoMo
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Evaluates unrelated positions with one engine process: the batch analyzer of the reports
+ * (engine budget, cache, cancellation with `cancel_analysis`), with `lines` principal variations.
+ * Used by the repertoire generator and the surprise finder (8.5).
+ */
+async evaluatePositions(id: string, engine: string, engineArgs: string[], goMode: GoMode, fens: string[], lines: number, uciOptions: EngineOption[]) : Promise<Result<MoveAnalysis[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("evaluate_positions", { id, engine, engineArgs, goMode, fens, lines, uciOptions }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Samples per position, most frequent first. Options such as Maia's `Elo` come from the caller.
+ */
+async sampleEngineMoves(id: string, engine: string, engineArgs: string[], fens: string[], samples: number, uciOptions: EngineOption[]) : Promise<Result<SampledMove[][], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sample_engine_moves", { id, engine, engineArgs, fens, samples, uciOptions }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Ends the sampler process of a session.
+ */
+async closeEngineSampler(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("close_engine_sampler", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async cancelAnalysis(id: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cancel_analysis", { id }) };
@@ -131,6 +166,14 @@ async getOpeningFromName(name: string) : Promise<Result<string, string>> {
 async getPlayerGames(file: string, playerIds: number[]) : Promise<Result<PlayerGameRow[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_player_games", { file, playerIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getPositionTree(id: string, token: string, options: PositionTreeOptions) : Promise<Result<PositionTree, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_position_tree", { id, token, options }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1182,6 +1225,62 @@ export type PositionGameSort = "index" | "date" | "averageElo" | "whiteElo" | "b
 export type PositionQueryJs = { fen: string; type_: string }
 export type PositionStats = { move: string; white: number; draw: number; black: number; unknown: number }
 export type PositionSummary = { token: string; fingerprint: string; fen: string; total: number; openings: PositionStats[]; skippedGames: number; scanMs: number; cacheHit: boolean }
+export type PositionTree = { 
+/**
+ * Node 0 is the root.
+ */
+nodes: PositionTreeNode[]; 
+/**
+ * Games reaching the root that pass the filters.
+ */
+matchingGames: number; 
+/**
+ * Games read (the matching ones, or the highest-rated `maxGames` of them).
+ */
+readGames: number; elapsedMs: number }
+export type PositionTreeMove = { uci: string; san: string; games: number; white: number; draws: number; black: number; 
+/**
+ * Games with both ratings and a decisive or drawn result.
+ */
+ratedGames: number; 
+/**
+ * Points of the side that plays the move in those games.
+ */
+ratedPoints: number; 
+/**
+ * Points the Elo formula predicted for that side in those games.
+ */
+expectedPoints: number; 
+/**
+ * Highest-rated game with this move, to link as a model game.
+ */
+modelGameId?: number | null; modelGameElo?: number | null; 
+/**
+ * Node after the move, when it is part of the tree.
+ */
+child?: number | null }
+export type PositionTreeNode = { 
+/**
+ * Position with move counters reset ("… 0 1").
+ */
+fen: string; games: number; moves: PositionTreeMove[] }
+export type PositionTreeOptions = { 
+/**
+ * Plies below the root to read (at most 24).
+ */
+maxPlies: number; 
+/**
+ * Moves played fewer times than this are dropped, with the positions only they reach.
+ */
+minGames: number; 
+/**
+ * Only games whose two ratings average at least this.
+ */
+minElo?: number | null; sinceYear?: number | null; untilYear?: number | null; 
+/**
+ * When more games qualify, the ones with the highest average rating are read.
+ */
+maxGames?: number | null }
 export type ProgressEvent = { id: string; progress: number; finished: boolean }
 export type ProgressItem = { id: string; progress: number; finished: boolean }
 export type Puzzle = { id: number; fen: string; moves: string; rating: number; rating_deviation: number; popularity: number; nb_plays: number }
@@ -1224,6 +1323,7 @@ export type ReportRoute = { moves: string[]; results: ReportResults; exampleOffs
 export type ReportStatistics = { results: ReportResults; averageWhiteElo: number | null; averageBlackElo: number | null; ratedWhite: number; ratedBlack: number }
 export type ReportTransposition = { fen: string; ply: number; games: number; routeCount: number; routes: ReportRoute[] }
 export type ReportYear = { year: number; results: ReportResults }
+export type SampledMove = { uci: string; count: number }
 export type Score = { value: ScoreValue; 
 /**
  * The probability of each result (win, draw, loss).

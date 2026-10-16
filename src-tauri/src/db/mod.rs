@@ -4,6 +4,7 @@ mod opening_report;
 mod ops;
 mod player_games;
 mod player_search;
+mod position_tree;
 mod position_query;
 mod quality;
 mod quality_scan;
@@ -12,6 +13,7 @@ mod search;
 mod search_index;
 pub use opening_report::generate_opening_report;
 pub use player_games::get_player_games;
+pub use position_tree::get_position_tree;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };

@@ -90,8 +90,8 @@ prueban y comunican problemas.
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
 - Trabajo actual: **Fase 8 replanificada a partir del estudio de mercado**
   (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
-  0.20.0; **8.4 Jugadores: ficha y estadísticas** está implementada y pendiente de validación
-  manual; la siguiente es **8.5 Generador de repertorios**. La reestructuración de la interfaz inspirada en ChessBase
+  0.20.0; **8.4 Jugadores** (validada por el autor) y **8.5 Generador de repertorios** están
+  implementadas; la siguiente es **8.6 Preparación contra rivales**. La reestructuración de la interfaz inspirada en ChessBase
   para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -164,7 +164,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.4 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.5 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
 | 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
@@ -365,7 +365,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0, 8.1, 8.3 y 8.4 implementadas; 8.2 con su primera versión implementada.**
+**Estado: En curso. 8.0, 8.1, 8.3, 8.4 y 8.5 implementadas; 8.2 con su primera versión implementada.**
 
 Desde el 2026-10-15 las subfases 8.2–8.10 siguen el estudio de mercado (`docs/market-study.es.md`):
 cada viñeta cita su idea (`I-xx`), cuya ficha en el estudio contiene el problema, la referencia y la
@@ -519,8 +519,8 @@ autor (resto de I-25) pasan a la Fase 10 (decisión del autor, 2026-10-15).
 
 ### 8.4. Jugadores: ficha y estadísticas
 
-**Estado: Implementada y validada automáticamente (2026-10-15); validación manual nativa
-pendiente.** Modifica la antigua 8.2. Ideas: I-02, I-03 (consulta puntual), I-13, I-22, I-30, I-42,
+**Estado: Implementada y validada manualmente por el autor (2026-10-15).** Modifica la antigua
+8.2. Ideas: I-02, I-03 (consulta puntual), I-13, I-22, I-30, I-42,
 I-44, I-45. Contrato, definiciones y mediciones: `docs/players-phase-8-4.es.md`.
 
 - **sección «Jugadores»** separada de «Cuentas» (que queda para conectar cuentas): búsqueda en todas
@@ -547,11 +547,28 @@ I-44, I-45. Contrato, definiciones y mediciones: `docs/players-phase-8-4.es.md`.
 
 ### 8.5. Generador de repertorios
 
-**Estado: Pendiente.** Ideas: I-40 e I-33 (como criterio «líneas difíciles para el rival»).
+**Estado: Implementada y validada automáticamente (2026-10-15); validación manual nativa
+pendiente.** Ideas: I-40, I-33 (como criterio «difícil para el rival») y el buscador de sorpresas
+inspirado en el Novelty Grinder de Matthew Sadler (añadido por el autor). Contrato, definiciones y
+mediciones: `docs/repertoire-generator-phase-8-5.es.md`.
 
-- repertorio nuevo y editable desde la posición del tablero, con estadísticas de la base local o de
-  Lichess, enfoques medibles, respuestas del rival por frecuencia o por Maia, verificación con motor,
-  anotaciones automáticas, partidas modelo enlazadas y procedencia.
+- **generador desde el tablero** («Generar repertorio desde aquí»): una jugada propia por posición
+  según el enfoque —mejor resultado práctico (rating par), mejor puntuación, menos derrotas, menos
+  teoría, más fiel al motor, difícil para el rival o sorpresas—, con puntuaciones prudentes (límite
+  de Wilson) y siempre a pocos centipeones de la mejor del motor;
+- **fuentes:** Lichess por rating y ritmo, Lichess Masters o una base local, cuyo árbol completo se
+  lee en un solo recorrido (Gigabase desde la posición inicial: 200.000 partidas × 12 medias jugadas
+  en 1,7 s), con transposiciones y partida modelo por jugada;
+- **respuestas del rival** más jugadas o predichas por Maia al Elo elegido;
+- **dificultad práctica (I-33):** probabilidad de que un rival de ese Elo mantenga la evaluación,
+  desde las partidas o desde Maia por muestreo (Maia no publica sus probabilidades por UCI);
+- **salida:** repertorio editable con PGN fuente inmutable y procedencia, o pestaña para revisar o
+  añadir solo una rama a un repertorio existente; anotaciones con estadística, evaluación, símbolo
+  final, transposiciones y partida modelo enlazada;
+- **buscador de sorpresas** («Buscar sorpresas en esta línea»): desde la jugada 4 hasta que quedan
+  menos de 40 partidas, jugadas a 25 cp de la mejor con como mucho 5 % de las partidas, ordenadas por
+  dificultad para el rival y exportables como línea anotada con flechas roja (sin partidas) y verde
+  (rara). Contra un rival concreto queda para 8.6.
 
 ### 8.6. Preparación contra rivales
 
@@ -844,6 +861,19 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-15 — 8.5 Generador de repertorios y sorpresas
+
+- El autor validó 8.4 manualmente y añadió a 8.5 un buscador de sorpresas inspirado en el Novelty
+  Grinder de Matthew Sadler, con las sorpresas ordenadas por dificultad práctica para el rival en vez
+  del contempt de Leela.
+- Generador de repertorios desde el tablero con siete enfoques medibles, comprobación con motor,
+  respuestas populares o de Maia, Lichess, Masters o base local, y salida como repertorio editable
+  con procedencia o pestaña para revisar.
+- Nuevos comandos: árbol de posiciones de una base local en un recorrido, evaluación por lotes de
+  posiciones sueltas (caché de 8.2 con el número de líneas en la clave) y muestreo de Maia con un
+  proceso que dura toda la generación.
+- Detalle: `docs/repertoire-generator-phase-8-5.es.md`.
 
 ### 2026-10-15 — 8.4 Jugadores: ficha y estadísticas
 

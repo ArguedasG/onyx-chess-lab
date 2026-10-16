@@ -54,6 +54,10 @@ pub enum Error {
     #[error("No stdin")]
     NoStdin,
 
+    /// A request outside the bounds a command accepts.
+    #[error("{0}")]
+    InvalidRequest(String),
+
     #[error("No stdout")]
     NoStdout,
 

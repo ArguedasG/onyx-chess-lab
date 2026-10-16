@@ -184,4 +184,4 @@ cuenta, el trabajo completo cabe en una décima de segundo.
 - Frontend: `utils/players/players.test.ts` (rating par, fechas PGN, alias, filtros, aperturas,
   actividad, ratings, momentos, hábitos, rivales) y nuevas comprobaciones en
   `playerAnalysis.test.ts` para los campos de motor.
-- Validación manual nativa: pendiente.
+- Validación manual: hecha por el autor el 2026-10-15.
