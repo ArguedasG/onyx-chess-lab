@@ -78,8 +78,9 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.20.0** (mantenimiento del estudio de mercado, 8.2 Motor y análisis
-  y 8.3 Bases de referencia). Detalle: `docs/release-notes-0.20.0.es.md`.
+- Última versión publicada: **0.21.0** (8.4 Jugadores, 8.5 Generador de repertorios, 8.6
+  Preparación contra rivales y 8.7 Entrenamiento desde errores). Detalle:
+  `docs/release-notes-0.21.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -90,9 +91,9 @@ prueban y comunican problemas.
   profesor y otras personas. Sus plataformas y necesidades determinan la prioridad real.
 - Trabajo actual: **Fase 8 replanificada a partir del estudio de mercado**
   (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
-  0.20.0; **8.4 Jugadores** (validada por el autor), **8.5 Generador de repertorios** y **8.6
-  Preparación contra rivales** están implementadas; la siguiente es **8.7 Entrenamiento desde
-  errores**. La reestructuración de la interfaz inspirada en ChessBase
+  0.20.0; **8.4 Jugadores** (validada por el autor), **8.5 Generador de repertorios**, **8.6
+  Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
+  implementadas; siguen **8.8–8.10**, independientes entre sí. La reestructuración de la interfaz inspirada en ChessBase
   para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -165,7 +166,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.6 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.7 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
 | 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
@@ -180,7 +181,8 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
   `docs/opening-reports-phase-7-1.es.md`.
 - Player Analysis: `docs/player-analysis-phase-7-2.es.md`; ficha de jugador:
   `docs/players-phase-8-4.es.md`; generador: `docs/repertoire-generator-phase-8-5.es.md`;
-  preparación contra rivales: `docs/rival-preparation-phase-8-6.es.md`.
+  preparación contra rivales: `docs/rival-preparation-phase-8-6.es.md`; entrenamiento desde
+  errores: `docs/training-from-mistakes-phase-8-7.es.md`.
 - Estudio de mercado (insumo de 8.2–10, identificadores `I-xx`): `docs/market-study.es.md`.
 - Release y actualizador: `docs/phase-5-brand-release-alpha-plan.es.md`,
   `docs/updater-phase-5-2.es.md` y `docs/managed-maia3.es.md`.
@@ -367,7 +369,7 @@ Objetivo: sustituir agrupaciones amplias por hallazgos comprobables sin inventar
 
 ## 7. Fase 8 — Serious Preparation Tools
 
-**Estado: En curso. 8.0, 8.1, 8.3, 8.4, 8.5 y 8.6 implementadas; 8.2 con su primera versión implementada.**
+**Estado: En curso. 8.0, 8.1 y 8.3–8.7 implementadas; 8.2 con su primera versión implementada.**
 
 Desde el 2026-10-15 las subfases 8.2–8.10 siguen el estudio de mercado (`docs/market-study.es.md`):
 cada viñeta cita su idea (`I-xx`), cuya ficha en el estudio contiene el problema, la referencia y la
@@ -574,8 +576,8 @@ mediciones: `docs/repertoire-generator-phase-8-5.es.md`.
 
 ### 8.6. Preparación contra rivales
 
-**Estado: Implementada y validada automáticamente (2026-10-16); validación manual nativa
-pendiente.** Modifica la antigua 8.2. Ideas: I-19, I-31 (ocho estructuras), I-32, I-33, I-41,
+**Estado: Implementada y validada manualmente por el autor (2026-10-16).** Modifica la antigua
+8.2. Ideas: I-19, I-31 (ocho estructuras), I-32, I-33, I-41,
 I-43 (gemelo, versión 1) e I-04 (solo retransmisiones para rivales). Contrato, definiciones y
 mediciones: `docs/rival-preparation-phase-8-6.es.md`.
 
@@ -611,11 +613,26 @@ mediciones: `docs/rival-preparation-phase-8-6.es.md`.
 
 ### 8.7. Entrenamiento desde errores
 
-**Estado: Pendiente.** Ideas: I-17, I-18, I-21, I-29.
+**Estado: Implementada y validada manualmente por el autor (2026-10-16).** Ideas: I-17, I-18,
+I-21, I-29. Contrato, reglas y umbrales:
+`docs/training-from-mistakes-phase-8-7.es.md`.
 
-- cola automática **Mis errores** con repaso espaciado (I-17; es el antiguo set táctico automático);
-- diagnóstico con prioridades sin LLM (I-18), práctica de conversión y defensa desde posiciones
-  propias (I-21) y catálogo de fugas con coste y evolución (I-29).
+- **pestaña Entrenamiento** en la ficha propia y en las de alumnos (las fichas propias comparten
+  una cola);
+- **Mis errores (I-17)**, el antiguo set táctico automático: un elemento por posición y jugada,
+  FSRS, sesiones cortas con juicio del motor, explicación y flechas, filtros por fase y categoría,
+  regreso a la partida original; entrada manual o automática tras cada análisis (opcional), lo
+  quitado no vuelve; archivo propio cargado bajo demanda, con exportación y vaciado;
+- **prioridades sin LLM (I-18)** en orden fijo y escrito, cada una con evidencia, muestra y un paso
+  concreto (repasar, practicar, comparar con el repertorio);
+- **conversión y defensa (I-21):** posiciones propias a ±1,5 para jugar contra Maia al rating del
+  rival de esa partida;
+- **catálogo de fugas (I-29):** trece categorías con reglas verificables y «sin clasificar», coste,
+  partidas perdidas y evolución por trimestre, sin comparación con referencias no equivalentes;
+- el análisis con motor guarda ahora la probabilidad antes de cada error, el reloj relativo y las
+  posiciones de ventaja e inferioridad;
+- toda insignia «Motor · N partidas» de la ficha lleva a Análisis → Motor, y los avisos sin análisis
+  traen un botón «Analizar con el motor».
 
 ### 8.8. Táctica: modos y sets
 
@@ -844,7 +861,7 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - Táctica, Aperturas y Finales conservan experiencias y progreso independientes.
 - Los alias se seleccionan manualmente; no se infieren identidades reales.
 - Las métricas de reloj declaran cobertura y no ocultan partidas sin `[%clk]`.
-- El set táctico automático pasa a 8.7 como cola **Mis errores** con repaso espaciado (I-17).
+- El set táctico automático es la cola **Mis errores** de 8.7, con repaso espaciado (I-17).
 - Finales: la mejor defensa es el rival predeterminado; Maia queda como opción práctica (I-07).
 - No se incluyen libros de finales en Onyx; se prioriza la importación del usuario (I-08).
 - Los torneos se diseñan con el usuario como participante (I-51).
@@ -885,6 +902,25 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-16 — Release 0.21.0
+
+- Publica 8.4 (sección Jugadores y ficha completa), 8.5 (generador de repertorios y buscador de
+  sorpresas), 8.6 (preparación contra rivales, retransmisiones de Lichess y bot gemelo) y 8.7
+  (Mis errores, prioridades, conversión y defensa, fugas).
+- Validado manualmente por el autor antes de publicar; el tablero del repaso de errores se agrandó
+  tras esa prueba.
+- Detalle: `docs/release-notes-0.21.0.es.md`.
+
+### 2026-10-16 — 8.7 Entrenamiento desde errores
+
+- El autor validó 8.6 manualmente. Ajustes pedidos: el botón «Líneas contra este rival» ya no se
+  corta, y las insignias de motor y los avisos sin análisis llevan a Análisis → Motor.
+- Pestaña Entrenamiento: Mis errores con FSRS, prioridades, conversión y defensa, y fugas con coste
+  y evolución.
+- La cola vive en `mistake-queue-v1.json`, aparte del archivo de entrenamiento que se carga al
+  arrancar.
+- Detalle: `docs/training-from-mistakes-phase-8-7.es.md`.
 
 ### 2026-10-16 — 8.6 Preparación contra rivales
 
