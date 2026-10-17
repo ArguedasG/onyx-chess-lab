@@ -5,7 +5,7 @@ use std::{
     sync::Mutex,
 };
 
-use diesel::{dsl::max, Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use once_cell::sync::Lazy;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -130,9 +130,12 @@ fn max_puzzle_id(file: &str, db: &mut diesel::SqliteConnection) -> Result<i32, E
     {
         return Ok(*id);
     }
+    // `diesel::dsl::max` is an ambiguous import for newer compilers; the primary key is indexed.
     let id = puzzles::table
-        .select(max(puzzles::id))
-        .first::<Option<i32>>(db)?
+        .select(puzzles::id)
+        .order(puzzles::id.desc())
+        .first::<i32>(db)
+        .optional()?
         .unwrap_or(0);
     FACTS
         .lock()
