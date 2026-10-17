@@ -51,6 +51,7 @@ import {
   showArrowsAtom,
   showConsecutiveArrowsAtom,
   showCoordinatesAtom,
+  releaseFocusAfterClickAtom,
   showEngineStripAtom,
   showDestsAtom,
   showVariationArrowsAtom,
@@ -229,6 +230,17 @@ export default function Page() {
         description: t("Settings.VariationArrows.Desc"),
         keywords: ["arrows", "variations", "alternative"],
         render: () => <SettingsSwitch atom={showVariationArrowsAtom} />,
+      },
+      {
+        id: "release-focus-after-click",
+        category: "keybinds",
+        title: t("Settings.ReleaseFocus", "Arrow keys always move through the game"),
+        description: t(
+          "Settings.ReleaseFocus.Desc",
+          "Clicked tabs and buttons give the keyboard back, so the arrow keys and Space keep acting on the board instead of switching tabs. Controls reached with the Tab key keep it.",
+        ),
+        keywords: ["arrows", "keyboard", "focus", "tabs", "flechas", "teclado"],
+        render: () => <SettingsSwitch atom={releaseFocusAfterClickAtom} />,
       },
       {
         id: "move-notation",
@@ -944,6 +956,7 @@ export default function Page() {
                   <Text size="xs" c="dimmed" mt={3} mb="lg">
                     {t("Settings.Keybinds.Desc")}
                   </Text>
+                  {renderCategorySettings("keybinds")}
                   <Table>
                     <Table.Thead>
                       <Table.Tr>

@@ -251,5 +251,29 @@
     "path": "lc0-v0.30.0-windows-gpu-nvidia-cuda/lc0.exe",
     "elo": 3440,
     "downloadSize": 251872888
+  },
+  {
+    "name": "Leela Chess Zero (CPU)",
+    "version": "0.32.1",
+    "os": "windows",
+    "bmi2": true,
+    "image": "https://lczero.org/images/logo.svg",
+    "downloadLink": "https://github.com/LeelaChessZero/lc0/releases/download/v0.32.1/lc0-v0.32.1-windows-cpu-dnnl.zip",
+    "extractTo": "lc0-v0.32.1-windows-cpu-dnnl",
+    "path": "lc0-v0.32.1-windows-cpu-dnnl/lc0.exe",
+    "elo": 2600,
+    "downloadSize": 24001097
+  },
+  {
+    "name": "Leela Chess Zero (CPU)",
+    "version": "0.32.1",
+    "os": "windows",
+    "bmi2": false,
+    "image": "https://lczero.org/images/logo.svg",
+    "downloadLink": "https://github.com/LeelaChessZero/lc0/releases/download/v0.32.1/lc0-v0.32.1-windows-cpu-dnnl.zip",
+    "extractTo": "lc0-v0.32.1-windows-cpu-dnnl",
+    "path": "lc0-v0.32.1-windows-cpu-dnnl/lc0.exe",
+    "elo": 2600,
+    "downloadSize": 24001097
   }
 ]

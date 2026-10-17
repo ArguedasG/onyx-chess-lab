@@ -200,6 +200,11 @@ export const showVariationArrowsAtom = atomWithStorage<boolean>("show-variation-
 export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>("erase-drawables-on-click", true);
 export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", false);
 export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
+/** Clicked tabs and buttons give the keyboard back, so the arrows keep moving through the game. */
+export const releaseFocusAfterClickAtom = atomWithStorage<boolean>(
+    "release-focus-after-click",
+    true,
+);
 export const previewBoardOnHoverAtom = atomWithStorage<boolean>("preview-board-on-hover", true);
 export const flipBoardAfterMoveAtom = atomWithStorage<boolean>("flip-board-after-move", true);
 export const enableBoardScrollAtom = atomWithStorage<boolean>("board-scroll", true);
@@ -748,6 +753,12 @@ export const engineMovesFamily = atomFamily(
 
 export const engineProgressFamily = atomFamily(
     ({ tab: _tab, engine: _engine }: { tab: string; engine: string }) => atom<number>(0),
+    (a, b) => a.tab === b.tab && a.engine === b.engine,
+);
+
+/** Last `error` line of an engine that has not produced lines since; cleared by the next lines. */
+export const engineErrorFamily = atomFamily(
+    ({ tab: _tab, engine: _engine }: { tab: string; engine: string }) => atom<string | null>(null),
     (a, b) => a.tab === b.tab && a.engine === b.engine,
 );
 

@@ -26,6 +26,7 @@ import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { WorkspaceTabs } from "@/components/tabs/BoardsPage";
 import { requestAppUpdateCheck } from "@/utils/appUpdater";
+import { requestWhatsNew } from "@/utils/changelog";
 import { isTrainingPath } from "@/utils/trainingTabs";
 import {
   activeTabAtom,
@@ -35,6 +36,7 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
+import { useReleaseFocusAfterClick } from "@/hooks/useReleaseFocusAfterClick";
 import { TRAINING_AREAS_KEY, trainingAreasStorage } from "@/state/trainingAreas";
 import { openFile } from "@/utils/files";
 import { createTab, isEmptyAnalysisTab } from "@/utils/tabs";
@@ -146,6 +148,7 @@ function RootLayout() {
   }, []);
 
   const [keyMap] = useAtom(keyMapAtom);
+  useReleaseFocusAfterClick();
 
   useHotkeys(keyMap.NEW_TAB.keys, createNewTab);
   useHotkeys(keyMap.OPEN_FILE.keys, openNewFile);
@@ -158,6 +161,11 @@ function RootLayout() {
       label: t("Menu.Help.About"),
       id: "about",
       action: () => setOpened(true),
+    };
+    const whatsNewOption = {
+      label: t("Menu.Help.WhatsNew", "What's new"),
+      id: "whats_new",
+      action: requestWhatsNew,
     };
     const checkForUpdatesOption = {
       label: t("Menu.Help.CheckUpdate"),
@@ -175,6 +183,7 @@ function RootLayout() {
           action: aboutOption.action,
         },
         checkForUpdatesOption,
+        whatsNewOption,
         { label: "divider" },
         {
           label: t("SideBar.Settings") + "...",
@@ -295,7 +304,7 @@ function RootLayout() {
             },
           },
           { label: "divider" },
-          ...(!isMacOS ? [checkForUpdatesOption, aboutOption] : []),
+          ...(!isMacOS ? [checkForUpdatesOption, whatsNewOption, aboutOption] : []),
         ],
       },
     ];

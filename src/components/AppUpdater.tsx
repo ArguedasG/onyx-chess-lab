@@ -1,4 +1,4 @@
-import { Button, Group, Modal, Progress, Stack, Text } from "@mantine/core";
+import { Button, Group, Modal, Progress, ScrollArea, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { platform } from "@tauri-apps/plugin-os";
@@ -11,7 +11,9 @@ import {
   reduceUpdateProgress,
   type AppUpdateProgress,
 } from "@/utils/appUpdater";
+import { ReleaseNotesView } from "@/components/WhatsNewModal";
 import { trainingAreasStorage } from "@/state/trainingAreas";
+import { parseReleaseNotesMarkdown } from "@/utils/changelog";
 import { formatBytes } from "@/utils/format";
 
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
@@ -164,9 +166,9 @@ export default function AppUpdater() {
           )}
         </Text>
         {update?.body && (
-          <Text size="sm" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-            {update.body}
-          </Text>
+          <ScrollArea.Autosize mah="40vh" type="auto">
+            <ReleaseNotesView notes={parseReleaseNotesMarkdown(update.body)} />
+          </ScrollArea.Autosize>
         )}
         {installing && (
           <Stack gap={4}>

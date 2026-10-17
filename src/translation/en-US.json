@@ -3461,6 +3461,15 @@
     "Puzzle.ExcludeThemesDesc": "Puzzles with any of these themes never appear.",
     "Puzzle.ExcludeNone": "None",
     "OpeningBrowser.ShowPaused": "Show paused lines ({{count}})",
-    "OpeningBrowser.HidePaused": "Hide paused lines ({{count}})"
+    "OpeningBrowser.HidePaused": "Hide paused lines ({{count}})",
+    "EngineStrip.EngineError": "The engine reported an error",
+    "EngineStrip.CudaHint": "This Lc0 build needs an NVIDIA graphics card; install the CPU build from Engines → Add engine.",
+    "Engines.Add.NvidiaOnly": "Needs an NVIDIA graphics card (CUDA)",
+    "Settings.ReleaseFocus": "Arrow keys always move through the game",
+    "Settings.ReleaseFocus.Desc": "Clicked tabs and buttons give the keyboard back, so the arrow keys and Space keep acting on the board instead of switching tabs. Controls reached with the Tab key keep it.",
+    "WhatsNew.Title": "What's new in Onyx Chess Lab",
+    "WhatsNew.Version": "Version {{version}}",
+    "WhatsNew.Close": "Got it",
+    "Menu.Help.WhatsNew": "What's new"
   }
 }

@@ -3461,6 +3461,15 @@
     "Puzzle.ExcludeThemesDesc": "Los puzzles con alguno de estos temas no aparecen.",
     "Puzzle.ExcludeNone": "Ninguno",
     "OpeningBrowser.ShowPaused": "Mostrar líneas pausadas ({{count}})",
-    "OpeningBrowser.HidePaused": "Ocultar líneas pausadas ({{count}})"
+    "OpeningBrowser.HidePaused": "Ocultar líneas pausadas ({{count}})",
+    "EngineStrip.EngineError": "El motor informó de un error",
+    "EngineStrip.CudaHint": "Esta versión de Lc0 necesita una tarjeta gráfica NVIDIA; instala la versión para CPU desde Motores → Agregar motor.",
+    "Engines.Add.NvidiaOnly": "Necesita una tarjeta gráfica NVIDIA (CUDA)",
+    "Settings.ReleaseFocus": "Las flechas siempre recorren la partida",
+    "Settings.ReleaseFocus.Desc": "Las pestañas y botones en los que haces clic devuelven el teclado, así que las flechas y la barra espaciadora siguen actuando sobre el tablero en vez de cambiar de pestaña. Los controles a los que llegas con la tecla Tab lo conservan.",
+    "WhatsNew.Title": "Novedades de Onyx Chess Lab",
+    "WhatsNew.Version": "Versión {{version}}",
+    "WhatsNew.Close": "Entendido",
+    "Menu.Help.WhatsNew": "Novedades"
   }
 }

@@ -60,6 +60,7 @@ const keys: KeyMap = {
     ANNOTATION_BLACK_WINNING: { name: "Toggle black is winning (-+)", keys: "shift+8" },
     ANNOTATION_COUNTERPLAY: { name: "Toggle counterplay (⇆)", keys: "shift+9" },
     ANNOTATION_COMPENSATION: { name: "Toggle with compensation (=∞)", keys: "shift+0" },
+    PLAY_BEST_MOVE: { name: "Play the engine's best move", keys: "space" },
     TOGGLE_THREAT: { name: "Toggle opponent's threat in engine analysis", keys: "t" },
     TOGGLE_ALL_ENGINES: { name: "Toggle all engines", keys: "ctrl+a" },
     TOGGLE_BLUR: { name: "Toggle blur", keys: "ctrl+b" },

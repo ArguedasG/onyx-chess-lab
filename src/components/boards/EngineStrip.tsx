@@ -35,6 +35,7 @@ import {
   useState,
 } from "react";
 import { notifications } from "@mantine/notifications";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
@@ -47,6 +48,7 @@ import TablebaseInfo from "@/components/panels/analysis/TablebaseInfo";
 import {
   activeTabAtom,
   currentThreatAtom,
+  engineErrorFamily,
   engineMovesFamily,
   engineProgressFamily,
   enginesAtom,
@@ -75,6 +77,18 @@ const engineStripCollapsedAtom = atomWithStorage("engine-strip-collapsed", false
 
 /** Lines shown per engine before "+N"; more lines would take the board's room. */
 const VISIBLE_LINES = 2;
+
+/** What the strip shows when the engine reports an error before giving any line. */
+function engineErrorMessage(error: string, t: TFunction) {
+  const message = `${t("EngineStrip.EngineError", "The engine reported an error")}: ${error}`;
+  // The Lc0 build in the catalog used to be the CUDA one, which only starts on NVIDIA cards.
+  return /cuda/i.test(error)
+    ? `${message}. ${t(
+        "EngineStrip.CudaHint",
+        "This Lc0 build needs an NVIDIA graphics card; install the CPU build from Engines → Add engine.",
+      )}`
+    : message;
+}
 
 function engineColor(index: number) {
   return arrowColors[index]?.strong ?? "gray";
@@ -286,6 +300,7 @@ const EngineSection = memo(function EngineSection({
   const activeTab = useAtomValue(activeTabAtom)!;
   const ev = useAtomValue(engineMovesFamily({ engine: engine.id, tab: activeTab }));
   const progress = useAtomValue(engineProgressFamily({ engine: engine.id, tab: activeTab }));
+  const engineError = useAtomValue(engineErrorFamily({ engine: engine.id, tab: activeTab }));
   const [, setEngines] = useAtom(enginesAtom);
   const [settings, setTabSettings] = useAtom(
     tabEngineSettingsFamily({
@@ -358,7 +373,9 @@ const EngineSection = memo(function EngineSection({
         : variations && variations.length === 0
           ? t("EngineStrip.NoAnalysis", "No analysis available")
           : !variations
-            ? t("Common.Loading")
+            ? engineError
+              ? engineErrorMessage(engineError, t)
+              : t("Common.Loading")
             : null;
 
   const visible = showAll || wide ? (variations ?? []) : (variations ?? []).slice(0, VISIBLE_LINES);

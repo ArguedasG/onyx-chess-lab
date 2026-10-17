@@ -180,6 +180,16 @@ pub struct BestMovesPayload {
     pub progress: f64,
 }
 
+/// An `error ...` line from a running analysis engine. Lc0, for example, stays alive but never
+/// searches when its backend cannot start, so without this the panel would wait forever.
+#[derive(Serialize, Debug, Clone, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineErrorPayload {
+    pub engine: String,
+    pub tab: String,
+    pub message: String,
+}
+
 impl BestMoves {
     /// `(is_mate, value)` from White's perspective.
     #[cfg(test)]
@@ -566,13 +576,35 @@ pub async fn get_best_moves(
                 .emit(&app)?;
                 proc.last_progress = 100.0;
             }
-            _ => {}
+            _ => {
+                if let Some(message) = engine_error_message(&line) {
+                    warn!(
+                        "Engine reported an error: tab: {}, engine: {}, {}",
+                        tab, engine, message
+                    );
+                    EngineErrorPayload {
+                        engine: id.clone(),
+                        tab: tab.clone(),
+                        message: message.to_string(),
+                    }
+                    .emit(&app)?;
+                }
+            }
         }
         proc.base.log_engine(&line);
     }
     info!("Engine process finished: tab: {}, engine: {}", tab, engine);
     state.engine_processes.remove(&key);
     Ok(None)
+}
+
+/// Text of a UCI-style `error` line, which the protocol does not define but Lc0 and others send.
+fn engine_error_message(line: &str) -> Option<&str> {
+    let message = line.trim().strip_prefix("error")?;
+    if !message.is_empty() && !message.starts_with(char::is_whitespace) {
+        return None;
+    }
+    Some(message.trim()).filter(|message| !message.is_empty())
 }
 
 fn update_best_moves_snapshot(snapshot: &mut BTreeMap<u16, BestMoves>, best_moves: BestMoves) {
@@ -1683,6 +1715,17 @@ mod tests {
             }],
             ..MoveAnalysis::default()
         }
+    }
+
+    #[test]
+    fn engine_error_lines_are_recognised() {
+        assert_eq!(
+            engine_error_message("error No CUDA driver, or one older than the CUDA library"),
+            Some("No CUDA driver, or one older than the CUDA library")
+        );
+        assert_eq!(engine_error_message("errors are fine"), None);
+        assert_eq!(engine_error_message("error"), None);
+        assert_eq!(engine_error_message("info string error in eval"), None);
     }
 
     #[test]

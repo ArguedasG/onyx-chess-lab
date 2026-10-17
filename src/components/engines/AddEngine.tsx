@@ -190,12 +190,15 @@ function CloudCard({ engine }: { engine: RemoteEngine }) {
   );
 }
 
+/** A catalog entry; `extractTo` is the folder its archive is unpacked into, if not the root. */
+type CatalogEngine = LocalEngine & { extractTo?: string };
+
 function EngineCard({
   engine,
   engineId,
   initInstalled,
 }: {
-  engine: LocalEngine;
+  engine: CatalogEngine;
   engineId: number;
   initInstalled: boolean;
 }) {
@@ -203,13 +206,15 @@ function EngineCard({
 
   const [inProgress, setInProgress] = useState<boolean>(false);
   const [, setEngines] = useAtom(enginesAtom);
+  const needsNvidia = /cuda/i.test(engine.downloadLink ?? "");
   const downloadEngine = useCallback(
     async (id: number, url: string) => {
       setInProgress(true);
       const enginesDir = await getEnginesDir();
       let path = await resolve(enginesDir, `${url.slice(url.lastIndexOf("/") + 1)}`);
       if (url.endsWith(".zip") || url.endsWith(".tar")) {
-        path = enginesDir;
+        // Some archives (Lc0's official ones) have their files at the root, not in a folder.
+        path = engine.extractTo ? await resolve(enginesDir, engine.extractTo) : enginesDir;
       }
       await commands.downloadFile(`engine_${id}`, url, path, null, null, null);
       let enginesDirPath = enginesDir;
@@ -220,10 +225,11 @@ function EngineCard({
       await commands.setFileAsExecutable(enginePath);
       const args = engine.args ?? [];
       const config = unwrap(await commands.getEngineConfig(enginePath, args));
+      const { extractTo: _extractTo, ...installed } = engine;
       setEngines(async (prev) => [
         ...(await prev),
         {
-          ...engine,
+          ...installed,
           id: crypto.randomUUID(),
           type: "local",
           path: enginePath,
@@ -254,9 +260,14 @@ function EngineCard({
           <Text tt="uppercase" c="dimmed" fw={700} size="xs">
             ENGINE
           </Text>
-          <Text fw="bold" size="sm" mb="xs">
+          <Text fw="bold" size="sm" mb={needsNvidia ? 0 : "xs"}>
             {engine.name} {engine.version}
           </Text>
+          {needsNvidia && (
+            <Text size="xs" c="dimmed" mb="xs">
+              {t("Engines.Add.NvidiaOnly", "Needs an NVIDIA graphics card (CUDA)")}
+            </Text>
+          )}
           <Group wrap="nowrap" gap="xs" fz="xs">
             <IconTrophy size="1rem" />
             <Text size="xs">{`${engine.elo} ELO`}</Text>

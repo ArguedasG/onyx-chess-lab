@@ -10,6 +10,7 @@ import { type EngineOptions, events, type GoMode } from "@/bindings";
 import {
   activeTabAtom,
   currentThreatAtom,
+  engineErrorFamily,
   engineMovesFamily,
   engineProgressFamily,
   enginesAtom,
@@ -127,6 +128,7 @@ function EngineListener({
   const [, setProgress] = useAtom(engineProgressFamily({ engine: engine.id, tab: activeTab! }));
 
   const [, setEngineVariation] = useAtom(engineMovesFamily({ engine: engine.id, tab: activeTab! }));
+  const [, setEngineError] = useAtom(engineErrorFamily({ engine: engine.id, tab: activeTab! }));
   const [settings] = useAtom(
     tabEngineSettingsFamily({
       engineId: engine.id,
@@ -148,6 +150,7 @@ function EngineListener({
         !isGameOver
       ) {
         startTransition(() => {
+          setEngineError(null);
           setEngineVariation((prev) => {
             const newMap = new Map(prev);
             newMap.set(`${searchingFen}:${searchingMoves.join(",")}`, ev);
@@ -184,6 +187,21 @@ function EngineListener({
     firstEngineWithLines,
     persistScore,
   ]);
+
+  useEffect(() => {
+    if (!settings.enabled) {
+      setEngineError(null);
+      return;
+    }
+    const unlisten = events.engineErrorPayload.listen(({ payload }) => {
+      if (payload.engine === engine.id && payload.tab === activeTab) {
+        setEngineError(payload.message);
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [activeTab, engine.id, settings.enabled, setEngineError]);
 
   const getBestMoves = useMemo(
     () =>

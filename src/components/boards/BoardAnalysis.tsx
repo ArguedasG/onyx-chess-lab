@@ -22,7 +22,7 @@ import {
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
-import type { Piece } from "chessops";
+import { type Piece, parseUci } from "chessops";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,6 +31,7 @@ import { commands } from "@/bindings";
 import {
   allEnabledAtom,
   activeTabAtom,
+  bestMovesFamily,
   autoSaveAtom,
   currentAnalysisTabAtom,
   currentPracticeTabAtom,
@@ -45,7 +46,7 @@ import {
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
-import { defaultPGN, parsePGN } from "@/utils/chess";
+import { defaultPGN, getVariationLine, parsePGN } from "@/utils/chess";
 import { buildModelGameSourcePgn } from "@/utils/modelGame";
 import {
   previewOpeningTrainingSync,
@@ -57,6 +58,7 @@ import GameNotation, { NotationZoneHeader } from "../common/GameNotation";
 import MoveControls from "../common/MoveControls";
 import { TreeStateContext } from "../common/TreeStateContext";
 import AnalysisPanel from "../panels/analysis/AnalysisPanel";
+import { useRetroBoard } from "../panels/analysis/useRetro";
 import AnnotationToolbar, { annotationToolbarAtom } from "../panels/annotation/AnnotationToolbar";
 import DatabasePanel from "../panels/database/DatabasePanel";
 import InfoPanel from "../panels/info/InfoPanel";
@@ -276,7 +278,7 @@ function BoardAnalysis() {
   const allEnabled = useAtomValue(allEnabledAtom);
 
   const keyMap = useAtomValue(keyMapAtom);
-  const setThreat = useSetAtom(currentThreatAtom);
+  const [threat, setThreat] = useAtom(currentThreatAtom);
 
   const [analysisTab, setAnalysisTab] = useAtom(currentAnalysisTabAtom);
   const [currentTabSelected, setCurrentTabSelected] = useAtom(currentTabSelectedAtom);
@@ -301,6 +303,20 @@ function BoardAnalysis() {
       ),
     [showEngineStrip, currentTabSelected, editingMode, analysisTab],
   );
+
+  // The first line of the first engine that has lines, the same one drawn as the main arrow.
+  const variationLine = useMemo(() => getVariationLine(root, position), [root, position]);
+  const engineLines = useAtomValue(bestMovesFamily({ fen: root.fen, gameMoves: variationLine }));
+  const storeMakeMove = useStore(store, (s) => s.makeMove);
+  const retroBoard = useRetroBoard();
+  const playBestMove = useCallback(() => {
+    // With the threat on, the lines are the opponent's; in a retro or practice they are the answer.
+    if (practicing || editingMode || threat || retroBoard.active) return;
+    const [, lines] = Array.from(engineLines.entries()).sort((a, b) => a[0] - b[0])[0] ?? [];
+    const uci = lines?.[0]?.pv[0];
+    const move = uci ? parseUci(uci) : undefined;
+    if (move) storeMakeMove({ payload: move });
+  }, [practicing, editingMode, threat, retroBoard.active, engineLines, storeMakeMove]);
 
   const setPracticePath = useStore(store, (s) => s.setPracticePath);
   useEffect(() => {
@@ -339,6 +355,7 @@ function BoardAnalysis() {
     [keyMap.DATABASE_TAB.keys, () => setCurrentTabSelected("database")],
     [keyMap.INFO_TAB.keys, () => setCurrentTabSelected("info")],
     [keyMap.TOGGLE_THREAT.keys, () => setThreat((threat) => !threat)],
+    [keyMap.PLAY_BEST_MOVE.keys, () => playBestMove()],
     [
       keyMap.TOGGLE_ALL_ENGINES.keys,
       (e) => {

@@ -1,0 +1,144 @@
+[
+  {
+    "version": "0.22.0",
+    "notes": {
+      "en": {
+        "summary": "New training modes for tactics, endgames and openings, plus fixes from user feedback.",
+        "sections": [
+          {
+            "title": "Tactics",
+            "items": [
+              "Session modes: Free, Storm, Streak and Time trial, plus a solution length filter.",
+              "Several themes at once, excluded themes and a quality filter for Lichess puzzles.",
+              "Local tactical rating and spaced review of the puzzles you failed.",
+              "Set builder with templates (mate in 2, forks, pins and skewers…) and recent accuracy on every set.",
+              "Visualization training: a board without pieces and a blindfold mode."
+            ]
+          },
+          {
+            "title": "Endgames",
+            "items": [
+              "The goal of an endgame exercise is checked after every move (tablebase up to 7 pieces, Stockfish beyond).",
+              "New import window: one set, by theme or by chapter, into a new or an existing set, with goals computed after importing.",
+              "Theme filter and timed basic mates from random positions."
+            ]
+          },
+          {
+            "title": "Openings",
+            "items": [
+              "Continuous review of a repertoire, with hints only where your mastery is low.",
+              "Repertoire gaps: common opponent moves your repertoire does not answer yet.",
+              "Paused lines can be hidden on a section's page."
+            ]
+          },
+          {
+            "title": "Improvements and fixes",
+            "items": [
+              "Several time controls at once in the player card filter.",
+              "Space plays the engine's best move on the analysis board (change it in Settings → Keybinds).",
+              "Clicking a tab or a button no longer takes the arrow keys: they keep moving through the game (can be turned off in Settings → Keybinds).",
+              "Engine errors are shown instead of an endless \"Loading…\". The engine catalog adds the official Lc0 CPU build, which works without an NVIDIA graphics card.",
+              "This \"What's new\" window, shown after each update and in Help → What's new."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Nuevos modos de entrenamiento para táctica, finales y aperturas, y correcciones a partir de los comentarios de los usuarios.",
+        "sections": [
+          {
+            "title": "Táctica",
+            "items": [
+              "Modos de sesión: Libre, Tormenta, Racha y Contrarreloj, más un filtro por longitud de la solución.",
+              "Varios temas a la vez, temas excluidos y un filtro de calidad para los puzzles de Lichess.",
+              "Elo táctico local y repaso espaciado de los puzzles fallados.",
+              "Constructor de sets con plantillas (mate en 2, ataques dobles, clavadas y enfiladas…) y la precisión reciente de cada set.",
+              "Entrenamiento de visualización: tablero sin piezas y modo a ciegas."
+            ]
+          },
+          {
+            "title": "Finales",
+            "items": [
+              "El objetivo de cada ejercicio de finales se comprueba tras cada jugada (tablebase hasta 7 piezas y Stockfish a partir de ahí).",
+              "Nueva ventana de importación: un set, por tema o por capítulo, en un set nuevo o en uno existente, con los objetivos calculados después de importar.",
+              "Filtro por tema y mates básicos cronometrados desde posiciones al azar."
+            ]
+          },
+          {
+            "title": "Aperturas",
+            "items": [
+              "Repaso continuo de un repertorio, con pistas solo donde tu dominio es bajo.",
+              "Huecos del repertorio: jugadas habituales del rival que tu repertorio todavía no contesta.",
+              "Las líneas pausadas se pueden ocultar en la página de una sección."
+            ]
+          },
+          {
+            "title": "Mejoras y correcciones",
+            "items": [
+              "Varios ritmos a la vez en el filtro de la ficha de jugador.",
+              "La barra espaciadora juega la mejor jugada del motor en el tablero de análisis (se cambia en Configuración → Atajos de teclado).",
+              "Hacer clic en una pestaña o un botón ya no se queda con las flechas: siguen recorriendo la partida (se puede desactivar en Configuración → Atajos de teclado).",
+              "Los errores del motor se muestran en lugar de un «Cargando…» infinito. El catálogo de motores añade la versión oficial de Lc0 para CPU, que funciona sin tarjeta gráfica NVIDIA.",
+              "Esta ventana de «Novedades», que aparece tras cada actualización y en Ayuda → Novedades."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "version": "0.21.0",
+    "notes": {
+      "en": {
+        "summary": "The Players release: a full profile for any player, a repertoire generator and preparation against a specific opponent.",
+        "sections": [
+          {
+            "title": "Players",
+            "items": [
+              "A Players section with a full profile for you, your opponents and your students: games, openings, rivals, highlights and habits.",
+              "Rating par: every results table compares the score with what the rating differences predict."
+            ]
+          },
+          {
+            "title": "Repertoires and preparation",
+            "items": [
+              "Generate an editable repertoire from Lichess, Lichess Masters or a local database, and search a line for surprises.",
+              "A Preparation tab: how to play against an opponent, their likely repertoire, key positions, pawn structures and a twin bot that plays their repertoire."
+            ]
+          },
+          {
+            "title": "Training",
+            "items": [
+              "Your own mistakes become exercises with spaced review, plus priorities, conversion and defence practice, and leaks grouped by type."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "La versión de Jugadores: una ficha completa para cualquier jugador, un generador de repertorios y preparación contra un rival concreto.",
+        "sections": [
+          {
+            "title": "Jugadores",
+            "items": [
+              "Sección Jugadores con la ficha completa tuya, de tus rivales y de tus alumnos: partidas, aperturas, rivales, momentos destacados y hábitos.",
+              "Rating par: cada tabla de resultados compara la puntuación con la que predicen las diferencias de Elo."
+            ]
+          },
+          {
+            "title": "Repertorios y preparación",
+            "items": [
+              "Genera un repertorio editable desde Lichess, Lichess Masters o una base local, y busca sorpresas en una línea.",
+              "Pestaña Preparación: cómo jugarle a un rival, su repertorio probable, posiciones clave, estructuras de peones y un bot gemelo que juega su repertorio."
+            ]
+          },
+          {
+            "title": "Entrenamiento",
+            "items": [
+              "Tus propios errores se convierten en ejercicios con repaso espaciado, además de prioridades, práctica de conversión y defensa, y fugas agrupadas por tipo."
+            ]
+          }
+        ]
+      }
+    }
+  }
+]

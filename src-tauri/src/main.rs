@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use bot_league::BotLeagueManager;
-use chess::{BestMovesPayload, EngineProcess};
+use chess::{BestMovesPayload, EngineErrorPayload, EngineProcess};
 use dashmap::DashMap;
 use db::{generate_opening_report, get_position_game, get_position_games, query_position};
 use db::{ActivePositionSearches, DatabaseProgress, GameQuery, PositionSearchCache};
@@ -297,6 +297,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,
+            EngineErrorPayload,
             DatabaseProgress,
             ProgressEvent,
             GameMoveEvent,

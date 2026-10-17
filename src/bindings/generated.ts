@@ -1003,6 +1003,7 @@ bestMovesPayload: BestMovesPayload,
 botLeagueEvent: BotLeagueEvent,
 clockUpdateEvent: ClockUpdateEvent,
 databaseProgress: DatabaseProgress,
+engineErrorPayload: EngineErrorPayload,
 gameMoveEvent: GameMoveEvent,
 gameOverEvent: GameOverEvent,
 modelGameBatchEvent: ModelGameBatchEvent,
@@ -1012,6 +1013,7 @@ bestMovesPayload: "best-moves-payload",
 botLeagueEvent: "bot-league-event",
 clockUpdateEvent: "clock-update-event",
 databaseProgress: "database-progress",
+engineErrorPayload: "engine-error-payload",
 gameMoveEvent: "game-move-event",
 gameOverEvent: "game-over-event",
 modelGameBatchEvent: "model-game-batch-event",
@@ -1152,6 +1154,11 @@ threadsPerProcess: number;
  */
 hashMbPerProcess: number }
 export type EngineConfig = { name: string; options: UciOptionConfig[] }
+/**
+ * An `error ...` line from a running analysis engine. Lc0, for example, stays alive but never
+ * searches when its backend cannot start, so without this the panel would wait forever.
+ */
+export type EngineErrorPayload = { engine: string; tab: string; message: string }
 export type EngineLaunchMetadata = { path: string; resolvedArgs: string[]; randomSeed: number | null; appliedOptions: EngineOption[]; skippedUnsupportedOptions: string[] }
 export type EngineLog = { type: "gui"; value: string } | { type: "engine"; value: string }
 export type EngineOption = { name: string; value: string }

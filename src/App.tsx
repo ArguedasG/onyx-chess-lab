@@ -60,6 +60,7 @@ const colorSchemeManager = localStorageColorSchemeManager({
 });
 
 import AppUpdater from "@/components/AppUpdater";
+import WhatsNewModal from "@/components/WhatsNewModal";
 import ErrorComponent from "@/components/ErrorComponent";
 import LanguageChoiceModal from "@/components/LanguageChoiceModal";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
@@ -333,6 +334,7 @@ export default function App() {
           <Notifications />
           <LanguageChoiceModal />
           <AppUpdater />
+          <WhatsNewModal />
           <RouterProvider router={router} />
         </ContextMenuProvider>
       </MantineProvider>
