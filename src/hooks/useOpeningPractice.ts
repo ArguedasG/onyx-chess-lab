@@ -18,6 +18,11 @@ import {
     openingLearnBatchSize,
     trainableOpeningLines,
 } from "@/utils/openingLearning";
+import {
+    newContinuousSession,
+    nextContinuousLine,
+    type ContinuousColor,
+} from "@/utils/openingContinuous";
 import { getDueOpeningLines } from "@/utils/openingReview";
 import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
 
@@ -175,9 +180,40 @@ export function useOpeningPractice() {
         });
     }
 
+    /** Continuous review (I-36) over the learned lines of a repertoire or one of its sections. */
+    async function startContinuousReview(repertoire: OpeningRepertoire, variantIds: string[]) {
+        const pool = sessionLines(variantIds, "practice").map((line) => line.id);
+        if (pool.length === 0) {
+            reportEmptySession("practice");
+            return;
+        }
+        const color: ContinuousColor = repertoire.color === "both" ? null : repertoire.color;
+        const first = nextContinuousLine(areas.openings, newContinuousSession(pool), color);
+        const line = first ? areas.openings.lines[first.lineId] : undefined;
+        const variant = line ? areas.openings.variants[line.variantId] : undefined;
+        if (!first || !line || !variant) return;
+        const opened = await openVariant(repertoire, variant, "practice", [line.id]);
+        if (!opened) return;
+        setOpeningPracticeQueue({
+            mode: "continuous",
+            continuous: first.session,
+            continuousColor: color,
+            gameNumbers: [variant.trainingRecordIndex],
+            currentIndex: 0,
+            repertoireId: repertoire.id,
+            variantIds: [variant.id],
+            lineIds: [line.id],
+            returnTarget: openingReturnTarget,
+        });
+    }
+
     return {
         busy,
         error,
+        continuousRepertoire: (repertoire: OpeningRepertoire) =>
+            startContinuousReview(repertoire, repertoire.variantIds),
+        continuousVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
+            startContinuousReview(repertoire, [variant.id]),
         clearError: () => setError(null),
         practiceLine: (repertoire: OpeningRepertoire, variant: OpeningVariant, lineId: string) =>
             openVariant(repertoire, variant, "practice", [lineId]),

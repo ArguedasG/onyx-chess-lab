@@ -80,7 +80,15 @@ import {
   isOpeningLineLearned,
   nextOpeningLine,
 } from "@/utils/openingLearning";
+import {
+  afterContinuousLine,
+  aggregateMoveProgress,
+  CONTINUOUS_HINT_BELOW,
+  moveMasteryAt,
+  nextContinuousLine,
+} from "@/utils/openingContinuous";
 import { scheduleOpeningLineReview } from "@/utils/openingReview";
+import ContinuousReviewBar from "./ContinuousReviewBar";
 import OpeningLearnFeedback from "./OpeningLearnFeedback";
 import OpeningLineFeedback from "./OpeningLineFeedback";
 import { LogsModal, PositionsModal } from "./PracticeDeckModals";
@@ -174,6 +182,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     ? trainingAreas.openings.lines[selectedOpeningLineId]
     : undefined;
   const learning = practiceUnit === "line" && openingQueue?.mode === "learn";
+  const continuous = practiceUnit === "line" && openingQueue?.mode === "continuous";
   const learnMoveDelay = openingLearnMoveDelay(trainingAreas.openings);
   const learnRecallsRequired = openingLearnRecallCount(trainingAreas.openings);
   const learnRecallPending =
@@ -612,11 +621,51 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
   const finishOpeningLine = useCallback(
     (grade: 1 | 2 | 3 | 4) => {
       if (practiceState.phase !== "correct") return;
+      const mistakes = practiceState.mistakes ?? 0;
+      const timeTaken = practiceState.timeTaken ?? 0;
+      if (continuous && openingQueue?.continuous && practiceState.openingLineId) {
+        // Continuous review: no grade, no spaced repetition, the next weakest line right away.
+        const lineId = practiceState.openingLineId;
+        setTrainingAreas((previous) => ({
+          ...previous,
+          openings: recordOpeningLineSession(previous.openings, lineId, mistakes, timeTaken),
+        }));
+        setSessionStats((prev) => ({
+          ...prev,
+          correct: prev.correct + (mistakes === 0 ? 1 : 0),
+          incorrect: prev.incorrect + (mistakes > 0 ? 1 : 0),
+          streak: mistakes === 0 ? prev.streak + 1 : 0,
+          bestStreak: mistakes === 0 ? Math.max(prev.bestStreak, prev.streak + 1) : prev.bestStreak,
+        }));
+        const session = afterContinuousLine(openingQueue.continuous, lineId, mistakes);
+        const next = nextContinuousLine(
+          trainingAreas.openings,
+          session,
+          openingQueue.continuousColor ?? null,
+        );
+        const nextLine = next ? trainingAreas.openings.lines[next.lineId] : undefined;
+        const nextVariant = nextLine
+          ? trainingAreas.openings.variants[nextLine.variantId]
+          : undefined;
+        if (!next || !nextLine || !nextVariant) {
+          setOpeningQueue({ ...openingQueue, continuous: session });
+          return;
+        }
+        void openOpeningQueueEntry(
+          {
+            ...openingQueue,
+            continuous: next.session,
+            gameNumbers: [...openingQueue.gameNumbers, nextVariant.trainingRecordIndex],
+            variantIds: [...(openingQueue.variantIds ?? []), nextVariant.id],
+            lineIds: [...(openingQueue.lineIds ?? []), nextLine.id],
+          },
+          openingQueue.gameNumbers.length,
+        );
+        return;
+      }
       const indices = practiceState.linePositionIndices ?? [];
       if (indices.length === 0) return;
       updateLinePerformance(setDeck, indices, grade);
-      const mistakes = practiceState.mistakes ?? 0;
-      const timeTaken = practiceState.timeTaken ?? 0;
       if (practiceState.openingLineId) {
         const lineId = practiceState.openingLineId;
         setFinishedLineId(lineId);
@@ -652,14 +701,18 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     },
     [
       advanceOpeningChapter,
+      continuous,
       newPractice,
+      openOpeningQueueEntry,
       openingQueue,
       practiceState,
       sessionStats.mode,
       sessionStats.remainingPositions,
       setDeck,
+      setOpeningQueue,
       setSessionStats,
       setTrainingAreas,
+      trainingAreas.openings,
     ],
   );
 
@@ -668,7 +721,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
       practiceUnit !== "line" ||
       learning ||
       practiceState.phase !== "correct" ||
-      trainingAreas.openings.settings.askLineDifficulty
+      (trainingAreas.openings.settings.askLineDifficulty && !continuous)
     ) {
       return;
     }
@@ -683,6 +736,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     const timer = setTimeout(() => finishOpeningLine(grade), 550);
     return () => clearTimeout(timer);
   }, [
+    continuous,
     finishOpeningLine,
     learning,
     practiceState,
@@ -969,6 +1023,35 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
     enabled: practiceState.phase === "incorrect" && practiceUnit !== "line",
   });
 
+  // Continuous review: a hint is offered only where the expected move is still weak.
+  const continuousProgress = useMemo(
+    () =>
+      continuous && openingQueue?.continuous
+        ? aggregateMoveProgress(
+            openingQueue.continuous.pool.flatMap((lineId) =>
+              trainingAreas.openings.lines[lineId] ? [trainingAreas.openings.lines[lineId]] : [],
+            ),
+          )
+        : null,
+    [continuous, openingQueue?.continuous, trainingAreas.openings.lines],
+  );
+  const continuousHintSan = (() => {
+    if (!continuousProgress || practiceState.phase !== "waiting") return null;
+    const linePath = practiceState.linePath;
+    const line = practiceState.openingLineId
+      ? trainingAreas.openings.lines[practiceState.openingLineId]
+      : undefined;
+    if (!linePath || !line || position.length >= linePath.length) return null;
+    const orientation = headers.orientation || "white";
+    const isUserTurn =
+      orientation === "white" ? currentNode.halfMoves % 2 === 0 : currentNode.halfMoves % 2 === 1;
+    if (!isUserTurn) return null;
+    if (moveMasteryAt(line, position.length, continuousProgress) >= CONTINUOUS_HINT_BELOW) {
+      return null;
+    }
+    return currentNode.children[linePath[position.length]]?.san ?? null;
+  })();
+
   const [positionsOpen, setPositionsOpen] = useToggle();
   const [logsOpen, setLogsOpen] = useToggle();
   const [tab, setTab] = useAtom(currentPracticeTabAtom);
@@ -1024,7 +1107,15 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
               )}
               {stats.total > 0 && (
                 <>
-                  {openingQueue && (
+                  {continuous && openingQueue?.continuous && (
+                    <ContinuousReviewBar
+                      session={openingQueue.continuous}
+                      lineName={selectedOpeningLine?.name}
+                      hintSan={continuousHintSan}
+                      onFinish={returnToOpenings}
+                    />
+                  )}
+                  {openingQueue && !continuous && (
                     <Alert color={learning ? "grape" : "blue"} variant="light">
                       {learning && selectedOpeningLine
                         ? t(
@@ -1127,6 +1218,7 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     ))}
 
                   {nextLine &&
+                    !continuous &&
                     atLastQueueLine &&
                     (learning
                       ? learnFinished
@@ -1333,7 +1425,9 @@ function PracticePanel({ saveFile }: { saveFile?: () => void }) {
                     (practiceUnit === "line" || sessionStats.mode !== "full") && (
                       <Stack gap="xs">
                         {(practiceUnit !== "line" ||
-                          (!learning && trainingAreas.openings.settings.askLineDifficulty)) && (
+                          (!learning &&
+                            !continuous &&
+                            trainingAreas.openings.settings.askLineDifficulty)) && (
                           <QualityRatingPanel
                             onRate={handleQualityRating}
                             card={

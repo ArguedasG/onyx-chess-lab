@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Center,
+  Chip,
   Group,
   Loader,
   Menu,
@@ -572,20 +573,32 @@ function FilterBar({
   const { t } = useTranslation();
   return (
     <Group gap="sm" py="sm" wrap="wrap">
-      <SegmentedControl
-        size="xs"
-        value={filters.timeControl}
-        onChange={(value) =>
-          setFilters({ ...filters, timeControl: value as ProfileFilters["timeControl"] })
-        }
-        data={[
-          { value: "all", label: t("Players.Filter.AllTimeControls", "All time controls") },
-          ...timeControls.slice(0, 5).map(({ value, count }) => ({
-            value,
-            label: `${timeControlLabel(value, t)} · ${count}`,
-          })),
-        ]}
-      />
+      {/* Several time controls at once (blitz and rapid…); "all" clears the choice. */}
+      <Chip.Group
+        multiple
+        value={filters.timeControls.length === 0 ? ["all"] : filters.timeControls}
+        onChange={(values) => {
+          const added = values.find(
+            (value) =>
+              !(filters.timeControls.length === 0 ? ["all"] : filters.timeControls).includes(
+                value as never,
+              ),
+          );
+          const next = added === "all" ? [] : values.filter((value) => value !== "all");
+          setFilters({ ...filters, timeControls: next as ProfileFilters["timeControls"] });
+        }}
+      >
+        <Group gap={6}>
+          <Chip value="all" size="xs" variant="light">
+            {t("Players.Filter.AllTimeControls", "All time controls")}
+          </Chip>
+          {timeControls.slice(0, 6).map(({ value, count }) => (
+            <Chip key={value} value={value} size="xs" variant="light">
+              {`${timeControlLabel(value, t)} · ${count}`}
+            </Chip>
+          ))}
+        </Group>
+      </Chip.Group>
       <SegmentedControl
         size="xs"
         value={filters.period}

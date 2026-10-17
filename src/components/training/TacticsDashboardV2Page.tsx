@@ -36,6 +36,7 @@ import {
   IconSettings,
   IconTrash,
   IconUpload,
+  IconWand,
 } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAtom } from "jotai";
@@ -50,6 +51,17 @@ import { trainingAreasAtom } from "@/state/trainingAreas";
 import { usePendingPgnImport } from "@/hooks/usePendingPgnImport";
 import PendingPgnNotice from "../files/PendingPgnNotice";
 import { getPuzzleDatabases } from "@/utils/puzzles";
+import { useTacticsReview } from "@/state/tacticsReview";
+import { addPuzzleSet, recentSetStats } from "@/utils/puzzleSets";
+import { PROVISIONAL_DEVIATION, ratingBandFor } from "@/utils/tacticsRating";
+import {
+  dueTacticsReview,
+  recordTacticsReview,
+  type TacticsReviewItem,
+} from "@/utils/tacticsReview";
+import PuzzleSetBuilder from "./tactics/PuzzleSetBuilder";
+import TacticsProgressCards from "./tactics/TacticsProgressCards";
+import TacticsReviewSession from "./tactics/TacticsReviewSession";
 import {
   addTacticsFileSet,
   deleteTacticsSet,
@@ -148,6 +160,13 @@ export default function TacticsDashboardV2Page() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewView, setReviewView] = useState<"list" | "detail">("list");
   const reviewListViewportRef = useRef<HTMLDivElement>(null);
+  const { state: tacticsReview, update: updateTacticsReview } = useTacticsReview();
+  const [reviewSessionItems, setReviewSessionItems] = useState<TacticsReviewItem[] | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const myLevel =
+    tacticsReview && tacticsReview.rating.deviation < PROVISIONAL_DEVIATION
+      ? ratingBandFor(tacticsReview.rating)
+      : null;
 
   const sets = useMemo(
     () =>
@@ -422,6 +441,12 @@ export default function TacticsDashboardV2Page() {
           </Alert>
         )}
 
+        <TacticsProgressCards
+          state={tacticsReview}
+          onReview={() => tacticsReview && setReviewSessionItems(dueTacticsReview(tacticsReview))}
+          onAutoAddChange={(autoAdd) => updateTacticsReview((state) => ({ ...state, autoAdd }))}
+        />
+
         <div>
           <Title order={3}>
             {trainingT("Training.Copy.Availablesets.d6d3e738", "Available sets")}
@@ -461,6 +486,7 @@ export default function TacticsDashboardV2Page() {
                 Math.max(0, progress.total - 1),
               );
               const lastCycle = set.progress.cycles.at(-1);
+              const recent = recentSetStats(areas.tactics, set.id);
               return (
                 <Card key={set.id} withBorder>
                   <Stack h="100%" justify="space-between">
@@ -519,6 +545,21 @@ export default function TacticsDashboardV2Page() {
                             )
                           : ""}
                       </Text>
+                      {recent.accuracy !== null && (
+                        <Text size="xs" c="dimmed">
+                          {trainingT(
+                            "Tactics.Shelf.Recent",
+                            "Recent accuracy {{accuracy}} % · {{time}} on average",
+                            {
+                              accuracy: Math.round(recent.accuracy * 100),
+                              time:
+                                recent.averageMs !== null
+                                  ? `${Math.round(recent.averageMs / 1000)} s`
+                                  : "–",
+                            },
+                          )}
+                        </Text>
+                      )}
                     </div>
                     <Stack gap="xs" mt="md">
                       <Button
@@ -624,17 +665,23 @@ export default function TacticsDashboardV2Page() {
                 {puzzleDbs.map((db) => db.title.replace(/\.db3$/i, "")).join(" · ")}
               </Text>
             )}
-            <Button
-              variant="light"
-              leftSection={<IconPlayerPlay size={16} />}
-              onClick={openLichessTrainer}
-            >
-              {" "}
-              {trainingT(
-                "Training.Copy.Opendatabasetrainer.54b0961e",
-                "Open database trainer",
-              )}{" "}
-            </Button>
+            <Group grow>
+              <Button
+                variant="light"
+                leftSection={<IconPlayerPlay size={16} />}
+                onClick={openLichessTrainer}
+              >
+                {trainingT("Training.Copy.Opendatabasetrainer.54b0961e", "Open database trainer")}
+              </Button>
+              <Button
+                variant="default"
+                leftSection={<IconWand size={16} />}
+                disabled={puzzleDbs.length === 0}
+                onClick={() => setBuilderOpen(true)}
+              >
+                {trainingT("Tactics.Builder.Open", "Build a set")}
+              </Button>
+            </Group>
           </Stack>
         </Card>
 
@@ -751,6 +798,37 @@ export default function TacticsDashboardV2Page() {
           </Stack>
         )}
       </Modal>
+
+      {reviewSessionItems && (
+        <TacticsReviewSession
+          items={reviewSessionItems}
+          onResult={(item, result) =>
+            updateTacticsReview((state) => recordTacticsReview(state, item.id, result))
+          }
+          onClose={() => setReviewSessionItems(null)}
+        />
+      )}
+
+      <PuzzleSetBuilder
+        opened={builderOpen}
+        databases={puzzleDbs}
+        myLevel={myLevel}
+        onClose={() => setBuilderOpen(false)}
+        onCreate={(request) => {
+          setAreas((previous) => ({
+            ...previous,
+            tactics: addPuzzleSet(previous.tactics, request).state,
+          }));
+          setBuilderOpen(false);
+          setFeedback({
+            text: trainingT(
+              "Training.Copy.Setv0addedwithv1.f3488bc5",
+              "Set “{{v0}}” added with {{v1}} puzzles.",
+              { v0: request.name, v1: request.puzzles.length },
+            ),
+          });
+        }}
+      />
 
       {statisticsSet && (
         <TacticsSetStatisticsModal

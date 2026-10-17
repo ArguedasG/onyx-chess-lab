@@ -17,11 +17,13 @@ import {
   Modal,
   NumberInput,
   Progress,
+  SegmentedControl,
   Select,
   Stack,
   Switch,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconArrowLeft,
@@ -37,23 +39,16 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { makeSquare, parseUci } from "chessops";
-import { useAtom, useAtomValue } from "jotai";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "zustand";
-import type { BestMoves, ScoreValue } from "@/bindings";
-import Board from "@/components/boards/Board";
-import MoveFeedback, {
-  feedbackSquare,
-  type MoveFeedbackState,
-} from "@/components/boards/MoveFeedback";
-import { TreeStateContext, TreeStateProvider } from "@/components/common/TreeStateContext";
-import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
+import { useAtom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { commands } from "@/bindings";
+import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { useTacticsReview } from "@/state/tacticsReview";
 import { trainingAreasAtom } from "@/state/trainingAreas";
-import { useInitialOpponentMove } from "@/hooks/useInitialOpponentMove";
-import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { formatTime } from "@/utils/format";
-import { isMaiaEngine } from "@/utils/humanBots";
+import { addTacticsReviewItem } from "@/utils/tacticsReview";
+import { blindFromGame, blindFromOpponentMove, type BlindView } from "@/utils/tacticsVisualization";
 import { Stopwatch } from "@/utils/stopwatch";
 import { launchTrainingPosition } from "@/utils/trainingLaunch";
 import {
@@ -71,31 +66,20 @@ import {
   type TacticsSet,
 } from "@/utils/trainingAreas";
 import { loadTacticsExercise, type TacticsLoadedExercise } from "@/utils/tacticsTraining";
-import { defaultTree } from "@/utils/treeReducer";
+import {
+  EngineTacticsBoard,
+  GuidedTacticsBoard,
+  type TacticsVisualization,
+} from "./tactics/TacticsBoards";
 
-function scoreForSide(value: ScoreValue, side: "white" | "black"): number {
-  const sign = side === "white" ? 1 : -1;
-  if (value.type === "cp") return value.value * sign;
-  if (value.type === "mate") return value.value * sign * 100000;
-  return -value.value * sign;
-}
+type VisualizationMode = "normal" | "noPieces" | "blind";
 
-function acceptsMove(
-  best: BestMoves,
-  candidate: BestMoves,
-  side: "white" | "black",
-  thresholdCp: number,
-) {
-  const bestValue = best.score.value;
-  const candidateValue = candidate.score.value;
-  if (bestValue.type === "mate") {
-    return candidateValue.type === "mate" && candidateValue.value === bestValue.value;
-  }
-  if (candidateValue.type === "mate") {
-    return scoreForSide(candidateValue, side) > scoreForSide(bestValue, side);
-  }
-  return scoreForSide(bestValue, side) - scoreForSide(candidateValue, side) <= thresholdCp;
-}
+/** The visualization of tactics sessions (I-38) is remembered between sessions. */
+const tacticsVisualizationAtom = atomWithStorage<VisualizationMode>(
+  "tactics-visualization",
+  "normal",
+);
+const tacticsBlindDepthAtom = atomWithStorage<number>("tactics-blind-depth", 2);
 
 function fullQueue(total: number) {
   return Array.from({ length: total }, (_, index) => index);
@@ -178,6 +162,10 @@ export default function TacticsSessionV2Page() {
   const hintCounted = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, setTick] = useState(0);
+  const [visualMode, setVisualMode] = useAtom(tacticsVisualizationAtom);
+  const [blindDepth, setBlindDepth] = useAtom(tacticsBlindDepthAtom);
+  const [blindView, setBlindView] = useState<BlindView | null>(null);
+  const { update: updateReview } = useTacticsReview();
 
   const isWoodpecker = set?.config.mode === "woodpecker";
   const exerciseTimerEnabled = set?.config.exerciseTimer !== false;
@@ -285,6 +273,38 @@ export default function TacticsSessionV2Page() {
     trainingT,
   ]);
 
+  // Blind needs what led to the position: the opponent's first move or the source game.
+  const playerAnalysisSource = exercise
+    ? areas.tactics.exercises[exercise.id]?.source.playerAnalysis
+    : undefined;
+  useEffect(() => {
+    setBlindView(null);
+    if (!exercise || !set) return;
+    if (set.config.startingActor === "opponent") {
+      setBlindView(blindFromOpponentMove(exercise.fen, exercise.solutionLines[0]?.[0]));
+      return;
+    }
+    if (!playerAnalysisSource) return;
+    let cancelled = false;
+    void commands
+      .getGames(playerAnalysisSource.databasePath, {
+        game_id: playerAnalysisSource.gameId,
+        options: { page: 1, pageSize: 1, skipCount: true, sort: "id", direction: "asc" },
+      })
+      .then((response) => {
+        if (cancelled || response.status !== "ok") return;
+        const game = response.data.data[0];
+        if (!game) return;
+        setBlindView(
+          blindFromGame(game.moves, game.fen, exercise.fen, playerAnalysisSource.ply, blindDepth),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [blindDepth, exercise, playerAnalysisSource, set]);
+
   const completedIndexes = isWoodpecker
     ? currentCycleCompletedIndexes
     : getTacticsCompletedIndexes(areas.tactics, setId);
@@ -345,6 +365,7 @@ export default function TacticsSessionV2Page() {
         outcome,
         timeMs,
         cycleNumber: isWoodpecker ? cycleNumber : null,
+        variant: activeVisualization.kind === "normal" ? undefined : activeVisualization.kind,
       });
       let cycleSnapshot = cycle;
       if (outcome === "correct") {
@@ -360,6 +381,29 @@ export default function TacticsSessionV2Page() {
       if (cycleSnapshot) tactics = saveTacticsActiveCycle(tactics, setId, cycleSnapshot);
       return { ...previous, tactics };
     });
+    if (outcome === "incorrect") addToReview();
+  }
+
+  /** A missed exercise with a prepared solution joins the tactics review (I-06). */
+  function addToReview() {
+    if (!exercise || !set || exercise.solutionLines.length === 0) return;
+    const solution = exercise.solutionLines[0];
+    const setName = set.name;
+    const title = exercise.title;
+    updateReview((state) =>
+      state.autoAdd
+        ? addTacticsReviewItem(state, {
+            id: `set:${setId}:${exercise.id}`,
+            fen: exercise.fen,
+            solution,
+            opponentFirst: set.config.startingActor === "opponent",
+            label: `${setName} · ${title}`,
+            rating: null,
+            themes: areas.tactics.exercises[exercise.id]?.tags ?? [],
+            source: "set",
+          })
+        : state,
+    );
   }
 
   function finishAttempt(
@@ -651,6 +695,14 @@ export default function TacticsSessionV2Page() {
     );
   }
 
+  const blindAvailable = blindView !== null;
+  const activeVisualization: TacticsVisualization =
+    visualMode === "blind" && blindView
+      ? { kind: "blind", fen: blindView.fen, hiddenSans: blindView.hiddenSans }
+      : visualMode === "noPieces"
+        ? { kind: "noPieces" }
+        : { kind: "normal" };
+
   const cyclePercent = isWoodpecker
     ? Math.round((Math.min(cycleCompleted, total) / Math.max(1, total)) * 100)
     : Math.round(((activeIndex + 1) / total) * 100);
@@ -757,9 +809,10 @@ export default function TacticsSessionV2Page() {
             </Alert>
           ) : set.config.validationMode !== "engine" && exercise.solutionLines.length > 0 ? (
             <GuidedTacticsBoard
-              key={`${exercise.id}-${activeIndex}-${boardAttempt}`}
+              key={`${exercise.id}-${activeIndex}-${boardAttempt}-${activeVisualization.kind}`}
               exercise={exercise}
-              set={set}
+              startingActor={set.config.startingActor}
+              visualization={activeVisualization}
               disabled={result !== null || retrying}
               variationSeed={
                 areas.tactics.attempts.filter((attempt) => attempt.exerciseId === exercise.id)
@@ -826,6 +879,54 @@ export default function TacticsSessionV2Page() {
                 })}
             </Text>
           </div>
+
+          {set.config.validationMode !== "engine" && (
+            <Stack gap={6}>
+              <SegmentedControl
+                size="xs"
+                fullWidth
+                value={visualMode === "blind" && !blindAvailable ? "normal" : visualMode}
+                onChange={(value) => setVisualMode(value as VisualizationMode)}
+                data={[
+                  { value: "normal", label: trainingT("Tactics.Visual.Normal", "Normal") },
+                  { value: "noPieces", label: trainingT("Tactics.Visual.NoPieces", "No pieces") },
+                  {
+                    value: "blind",
+                    disabled: !blindAvailable,
+                    label: (
+                      <Tooltip
+                        disabled={blindAvailable}
+                        label={trainingT(
+                          "Tactics.Visual.BlindUnavailable",
+                          "Blind needs to know what led to the position: puzzles that start with the opponent's move or exercises from your games.",
+                        )}
+                        multiline
+                        w={260}
+                      >
+                        <span>{trainingT("Tactics.Visual.Blind", "Blind")}</span>
+                      </Tooltip>
+                    ),
+                  },
+                ]}
+              />
+              {visualMode === "blind" && blindAvailable && playerAnalysisSource && (
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="xs" c="dimmed">
+                    {trainingT("Tactics.Visual.Depth", "Hidden half-moves")}
+                  </Text>
+                  <Select
+                    size="xs"
+                    w={80}
+                    allowDeselect={false}
+                    value={String(blindDepth)}
+                    onChange={(value) => value && setBlindDepth(Number(value))}
+                    data={["1", "2", "3", "4", "5", "6"]}
+                    aria-label={trainingT("Tactics.Visual.Depth", "Hidden half-moves")}
+                  />
+                </Group>
+              )}
+            </Stack>
+          )}
 
           {(exerciseTimerEnabled || isWoodpecker) && (
             <TacticsTimerBar
@@ -1141,289 +1242,5 @@ function MissingSet() {
         {trainingT("Training.Copy.Backtotactics.8239d676", "Back to tactics")}{" "}
       </Button>
     </Container>
-  );
-}
-
-function GuidedTacticsBoard({
-  exercise,
-  set,
-  disabled,
-  variationSeed,
-  hintRequest,
-  onUserMove,
-  onCorrect,
-  onIncorrect,
-}: {
-  exercise: TacticsLoadedExercise;
-  set: TacticsSet;
-  disabled: boolean;
-  variationSeed: number;
-  hintRequest: number;
-  onUserMove: () => void;
-  onCorrect: (lastMove: string) => void;
-  onIncorrect: (move: string) => void;
-}) {
-  const initial = useMemo(() => {
-    const tree = defaultTree(exercise.fen);
-    const sideToMove = exercise.fen.split(" ")[1] === "b" ? "black" : "white";
-    tree.headers.orientation =
-      set.config.startingActor === "student"
-        ? sideToMove
-        : sideToMove === "white"
-          ? "black"
-          : "white";
-    return tree;
-  }, [exercise.fen, set.config.startingActor]);
-
-  return (
-    <TreeStateProvider initial={initial}>
-      <GuidedTacticsBoardInner
-        lines={exercise.solutionLines}
-        startingActor={set.config.startingActor}
-        disabled={disabled}
-        variationSeed={variationSeed}
-        hintRequest={hintRequest}
-        onUserMove={onUserMove}
-        onCorrect={onCorrect}
-        onIncorrect={onIncorrect}
-      />
-    </TreeStateProvider>
-  );
-}
-
-function GuidedTacticsBoardInner({
-  lines,
-  startingActor,
-  disabled,
-  variationSeed,
-  hintRequest,
-  onUserMove,
-  onCorrect,
-  onIncorrect,
-}: {
-  lines: string[][];
-  startingActor: TacticsSet["config"]["startingActor"];
-  disabled: boolean;
-  variationSeed: number;
-  hintRequest: number;
-  onUserMove: () => void;
-  onCorrect: (lastMove: string) => void;
-  onIncorrect: (move: string) => void;
-}) {
-  const store = useContext(TreeStateContext)!;
-  const makeMove = useStore(store, (state) => state.makeMove);
-  const setShapes = useStore(store, (state) => state.setShapes);
-  // A remounted board starts without hints even if the parent counter is already non-zero.
-  const handledHint = useRef(hintRequest);
-  const boardRef = useRef<HTMLDivElement>(null);
-  const candidates = useRef(lines);
-  const ply = useRef(0);
-  const [autoMoving, setAutoMoving] = useState(false);
-  const completed = useRef(false);
-  const opponentMoveInFlight = useRef(false);
-  const [feedback, setFeedback] = useState<MoveFeedbackState | null>(null);
-  const orientation = useStore(store, (state) => state.headers.orientation) ?? "white";
-  const showFeedback = (uci: string, correct: boolean, persistent = false) =>
-    setFeedback({ square: feedbackSquare(uci), correct, persistent, key: Date.now() });
-
-  const playOpponent = useCallback(async () => {
-    if (completed.current || disabled || opponentMoveInFlight.current) return;
-    const replies = Array.from(
-      new Set(candidates.current.map((line) => line[ply.current]).filter(Boolean)),
-    );
-    if (replies.length === 0) {
-      completed.current = true;
-      onCorrect(candidates.current[0]?.[ply.current - 1] ?? "");
-      return;
-    }
-    const reply = replies[variationSeed % replies.length];
-    const move = parseUci(reply);
-    if (!move) return;
-    opponentMoveInFlight.current = true;
-    setAutoMoving(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      candidates.current = candidates.current.filter((line) => line[ply.current] === reply);
-      makeMove({ payload: move, mainline: true, changeHeaders: false });
-      ply.current += 1;
-      if (candidates.current.some((line) => line.length === ply.current)) {
-        completed.current = true;
-        onCorrect(reply);
-      }
-    } finally {
-      opponentMoveInFlight.current = false;
-      setAutoMoving(false);
-    }
-  }, [disabled, makeMove, onCorrect, variationSeed]);
-
-  useInitialOpponentMove(startingActor, playOpponent);
-
-  // Progressive hint as in the puzzle trainer: mark the piece, then show the move, then clear.
-  useEffect(() => {
-    if (hintRequest === handledHint.current) return;
-    handledHint.current = hintRequest;
-    if (completed.current || opponentMoveInFlight.current) return;
-    const expected = parseUci(candidates.current[0]?.[ply.current] ?? "");
-    if (!expected || !("from" in expected)) return;
-    const from = makeSquare(expected.from);
-    const to = makeSquare(expected.to);
-    const shapes = store.getState().currentNode().shapes;
-    const isHint = (shape: (typeof shapes)[number]) =>
-      shape.orig === from && (!shape.dest || shape.dest === to);
-    if (shapes.some((shape) => shape.orig === from && shape.dest === to)) {
-      setShapes(shapes.filter((shape) => !isHint(shape)));
-    } else if (shapes.some((shape) => shape.orig === from && !shape.dest)) {
-      setShapes([
-        ...shapes.filter((shape) => !isHint(shape)),
-        { orig: from, dest: to, brush: "green" },
-      ]);
-    } else {
-      setShapes([...shapes, { orig: from, dest: undefined, brush: "green" }]);
-    }
-  }, [hintRequest, setShapes, store]);
-
-  function handleMove(uci: string) {
-    if (completed.current || disabled || autoMoving) return;
-    onUserMove();
-    const matching = candidates.current.filter((line) => line[ply.current] === uci);
-    if (matching.length === 0) {
-      completed.current = true;
-      showFeedback(uci, false, true);
-      onIncorrect(uci);
-      return;
-    }
-    candidates.current = matching;
-    ply.current += 1;
-    if (matching.some((line) => line.length === ply.current)) {
-      completed.current = true;
-      showFeedback(uci, true, true);
-      onCorrect(uci);
-      return;
-    }
-    showFeedback(uci, true);
-    void playOpponent();
-  }
-
-  return (
-    <>
-      <Board
-        editingMode={false}
-        movable={disabled || autoMoving ? "none" : "turn"}
-        boardRef={boardRef}
-        onMove={handleMove}
-      />
-      <MoveFeedback board={boardRef.current} feedback={feedback} orientation={orientation} />
-    </>
-  );
-}
-
-function EngineTacticsBoard({
-  exercise,
-  set,
-  disabled,
-  onUserMove,
-  onResult,
-}: {
-  exercise: TacticsLoadedExercise;
-  set: TacticsSet;
-  disabled: boolean;
-  onUserMove: () => void;
-  onResult: (
-    outcome: "correct" | "incorrect" | "unsupported",
-    playedMove: string | null,
-    feedback: string,
-  ) => void;
-}) {
-  const { t: trainingT } = useTrainingTranslation();
-
-  const storedEngines = useAtomValue(enginesAtom);
-  const engines = useMemo(() => storedEngines ?? [], [storedEngines]);
-  const [busy, setBusy] = useState(false);
-  const boardRef = useRef<HTMLDivElement>(null);
-  const [feedback, setFeedback] = useState<MoveFeedbackState | null>(null);
-
-  async function evaluateMove(playedMove: string) {
-    if (busy || disabled) return;
-    onUserMove();
-    const localEngines = engines.filter(
-      (engine): engine is LocalEngine =>
-        engine.type === "local" && Boolean(engine.path) && !isMaiaEngine(engine),
-    );
-    const localEngine =
-      localEngines.find((engine) => /stockfish/i.test(engine.name)) ?? localEngines[0];
-    if (!localEngine) {
-      onResult(
-        "unsupported",
-        playedMove,
-        trainingT(
-          "Training.Copy.SetupStockfishoranother.cb95b179",
-          "Set up Stockfish or another local engine to validate this puzzle.",
-        ),
-      );
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const bestMoves = await getBestMovesOnce(
-        localEngine,
-        { t: "Depth", c: 18 },
-        { fen: exercise.fen, moves: [], extraOptions: [{ name: "MultiPV", value: "8" }] },
-      );
-      const candidate = bestMoves.find((line) => line.uciMoves[0] === playedMove);
-      const side = exercise.fen.split(" ")[1] === "b" ? "black" : "white";
-      const correct = Boolean(
-        candidate &&
-        bestMoves[0] &&
-        acceptsMove(bestMoves[0], candidate, side, set.config.acceptanceThresholdCp),
-      );
-      setFeedback({
-        square: feedbackSquare(playedMove),
-        correct,
-        persistent: true,
-        key: Date.now(),
-      });
-      onResult(
-        correct ? "correct" : "incorrect",
-        playedMove,
-        correct
-          ? trainingT(
-              "Training.Copy.Moveacceptedbytheengine.e7c93b94",
-              "Move accepted by the engine.",
-            )
-          : "",
-      );
-    } catch (error) {
-      onResult(
-        "unsupported",
-        playedMove,
-        error instanceof Error
-          ? error.message
-          : trainingT(
-              "Training.Copy.Couldnotquerytheengine.de1b61cd",
-              "Could not query the engine.",
-            ),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const initial = useMemo(() => defaultTree(exercise.fen), [exercise.fen]);
-  return (
-    <TreeStateProvider initial={initial}>
-      <Board
-        editingMode={false}
-        movable={busy || disabled ? "none" : "turn"}
-        boardRef={boardRef}
-        onMove={(move) => void evaluateMove(move)}
-      />
-      <MoveFeedback
-        board={boardRef.current}
-        feedback={feedback}
-        // The engine-validated board keeps the tree's default (white-side) orientation.
-        orientation={initial.headers.orientation ?? "white"}
-      />
-    </TreeStateProvider>
   );
 }

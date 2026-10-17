@@ -14,7 +14,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines},
     process::{Child, ChildStdin, ChildStdout, Command},
 };
-use vampirc_uci::UciMessage;
+use vampirc_uci::{uci::ScoreValue, UciInfoAttribute, UciMessage};
 
 use crate::error::Error;
 
@@ -290,12 +290,30 @@ impl BaseEngine {
     }
 
     pub async fn wait_for_bestmove(&mut self) -> Result<String, Error> {
+        Ok(self.wait_for_bestmove_with_score().await?.0)
+    }
+
+    /// Like `wait_for_bestmove`, but also returns the last exact score of the main line, from the
+    /// point of view of the side to move. It is the score of the search that chose the move, so
+    /// reading it costs nothing extra.
+    pub async fn wait_for_bestmove_with_score(
+        &mut self,
+    ) -> Result<(String, Option<ScoreValue>), Error> {
         tokio::time::timeout(UCI_BEST_MOVE_TIMEOUT, async {
             let reader = self.reader.as_mut().ok_or(Error::EngineDisconnected)?;
+            let mut score = None;
             while let Some(line) = reader.next_line().await? {
                 self.logs.push(EngineLog::Engine(line.clone()));
-                if let UciMessage::BestMove { best_move, .. } = vampirc_uci::parse_one(&line) {
-                    return Ok(best_move.to_string());
+                match vampirc_uci::parse_one(&line) {
+                    UciMessage::BestMove { best_move, .. } => {
+                        return Ok((best_move.to_string(), score));
+                    }
+                    UciMessage::Info(attrs) => {
+                        if let Some(value) = main_line_score(&attrs) {
+                            score = Some(value);
+                        }
+                    }
+                    _ => {}
                 }
             }
             Err(Error::EngineDisconnected)
@@ -307,6 +325,23 @@ impl BaseEngine {
     pub fn kill_sync(&mut self) {
         self.kill_handle.kill_sync();
     }
+}
+
+/// Exact score of the first line of an `info` message; bounds and other lines are ignored.
+fn main_line_score(attrs: &[UciInfoAttribute]) -> Option<ScoreValue> {
+    let mut score = None;
+    for attr in attrs {
+        match attr {
+            UciInfoAttribute::MultiPv(line) if *line != 1 => return None,
+            UciInfoAttribute::Score(value)
+                if value.lower_bound != Some(true) && value.upper_bound != Some(true) =>
+            {
+                score = Some(value.value.clone());
+            }
+            _ => {}
+        }
+    }
+    score
 }
 
 impl Drop for BaseEngine {

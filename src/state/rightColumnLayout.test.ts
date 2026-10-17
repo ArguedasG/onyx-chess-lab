@@ -50,4 +50,16 @@ describe("right column layout", () => {
             DEFAULT_RIGHT_COLUMN_LAYOUTS.play,
         );
     });
+    it("keeps the puzzle notation folded until the user chooses", () => {
+        expect(resolveRightColumnLayout("puzzles", undefined).collapsed).toBe("notation");
+        // Saved before any fold was chosen (for example after resizing): still folded.
+        expect(resolveRightColumnLayout("puzzles", { collapsed: null, split: 40 }).collapsed).toBe(
+            "notation",
+        );
+        const opened = toggleZoneCollapsed(
+            resolveRightColumnLayout("puzzles", undefined),
+            "notation",
+        );
+        expect(resolveRightColumnLayout("puzzles", opened).collapsed).toBeNull();
+    });
 });

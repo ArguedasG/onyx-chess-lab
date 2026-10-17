@@ -139,6 +139,8 @@ const tacticsAttemptSchema = z.object({
     outcome: z.enum(["correct", "incorrect", "unsupported"]),
     timeMs: z.number().nonnegative(),
     cycleNumber: z.number().int().positive().nullable().optional(),
+    /** Visualization the attempt was made with (I-38); missing means the normal board. */
+    variant: z.enum(["blind", "noPieces"]).optional(),
     createdAt: z.string(),
 });
 export type TacticsAttempt = z.infer<typeof tacticsAttemptSchema>;
@@ -267,6 +269,9 @@ const endgamePositionSchema = z.object({
     studentColor: endgameStudentColorSchema,
     objectiveSource: z.enum(["pending", "tablebase", "stockfish", "manual"]),
     category: z.string().optional(),
+    /** A calculated objective that contradicts the one written in the PGN (kept until accepted). */
+    computedObjective: trainingObjectiveSchema.optional(),
+    computedSource: z.enum(["tablebase", "stockfish"]).optional(),
     theme: z.enum(["pawn", "rook", "minorPiece", "queen", "mixed", "other"]),
     sourcePgn: z.string().optional(),
     studySource: z
@@ -309,20 +314,42 @@ const endgameSetSchema = z.object({
 });
 export type EndgameSet = z.infer<typeof endgameSetSchema>;
 
+export const basicMateIdSchema = z.enum(["kq", "kr", "kbb", "kbn"]);
+export type BasicMateId = z.infer<typeof basicMateIdSchema>;
+
+const basicMateRecordSchema = z.object({
+    attempts: z.number().int().nonnegative(),
+    successes: z.number().int().nonnegative(),
+    bestTimeMs: z.number().nonnegative().nullable(),
+    lastTimeMs: z.number().nonnegative().nullable(),
+    lastPlayedAt: z.string().nullable(),
+});
+export type BasicMateRecord = z.infer<typeof basicMateRecordSchema>;
+
 const endgamesStateSchema = z.object({
     sets: z.record(endgameSetSchema),
     positions: z.record(endgamePositionSchema),
     bundledContentVersion: z.number().int().nonnegative(),
+    /** Timed basic mates (I-52); missing in data from before 8.9. */
+    basicMates: z.record(basicMateRecordSchema).optional(),
 });
 export type EndgamesState = z.infer<typeof endgamesStateSchema>;
 
+/** Material family of the included content, whose titles name their theme. */
 export function inferEndgameTheme(title: string, fen: string): EndgameTheme {
     const normalized = title.toLowerCase();
     if (/queen|dama/.test(normalized)) return "queen";
     if (/rook|torre/.test(normalized)) return "rook";
     if (/knight|bishop|minor|caballo|alfil/.test(normalized)) return "minorPiece";
     if (/pawn|pe[oó]n/.test(normalized)) return "pawn";
+    return endgameThemeFromFen(fen);
+}
 
+/**
+ * Material family read from the position alone (I-08): imported books name their chapters in
+ * their own way, so the title is not trusted.
+ */
+export function endgameThemeFromFen(fen: string): EndgameTheme {
     const board = fen.split(" ")[0]?.toLowerCase() ?? "";
     const groups = [
         board.includes("q"),
@@ -1926,7 +1953,10 @@ export function addEndgameSet(
             objective: record.endgameObjective ?? "unknown",
             studentColor: record.endgameStudentColor ?? inferEndgameStudentColor(record.fen),
             objectiveSource: record.endgameObjective ? "manual" : "pending",
-            theme: inferEndgameTheme(record.title, record.fen),
+            theme:
+                options.origin === "bundled"
+                    ? inferEndgameTheme(record.title, record.fen)
+                    : endgameThemeFromFen(record.fen),
             sourcePgn: record.sourcePgn,
             studySource: record.studySource,
             progress: {
@@ -2001,7 +2031,7 @@ export function addEndgamePositionToSet(
                 objective: record.endgameObjective ?? "unknown",
                 studentColor: record.endgameStudentColor ?? inferEndgameStudentColor(record.fen),
                 objectiveSource: record.endgameObjective ? "manual" : "pending",
-                theme: inferEndgameTheme(record.title, record.fen),
+                theme: endgameThemeFromFen(record.fen),
                 sourcePgn: record.sourcePgn,
                 studySource: record.studySource,
                 progress: {
@@ -2139,6 +2169,110 @@ export function updateEndgameStudentColor(
         positions: {
             ...state.positions,
             [positionId]: { ...position, studentColor },
+        },
+    };
+}
+
+/**
+ * Stores an objective calculated from the position. One written in the PGN is not overwritten
+ * when they disagree: the disagreement is kept so the user can accept the calculated one.
+ */
+export function applyComputedEndgameObjective(
+    state: EndgamesState,
+    positionId: string,
+    objective: TrainingObjective,
+    source: "tablebase" | "stockfish",
+    category?: string,
+): EndgamesState {
+    const position = state.positions[positionId];
+    if (!position || objective === "unknown") return state;
+    const keepsWritten =
+        position.objectiveSource === "manual" &&
+        position.objective !== "unknown" &&
+        position.objective !== objective;
+    const next: EndgamePosition = keepsWritten
+        ? { ...position, computedObjective: objective, computedSource: source }
+        : {
+              ...position,
+              objective,
+              objectiveSource: source,
+              category,
+              computedObjective: undefined,
+              computedSource: undefined,
+          };
+    return { ...state, positions: { ...state.positions, [positionId]: next } };
+}
+
+export function acceptComputedEndgameObjective(
+    state: EndgamesState,
+    positionId: string,
+): EndgamesState {
+    const position = state.positions[positionId];
+    if (!position?.computedObjective || !position.computedSource) return state;
+    return {
+        ...state,
+        positions: {
+            ...state.positions,
+            [positionId]: {
+                ...position,
+                objective: position.computedObjective,
+                objectiveSource: position.computedSource,
+                computedObjective: undefined,
+                computedSource: undefined,
+            },
+        },
+    };
+}
+
+/** Adds imported records to an existing user set. */
+export function addEndgameRecordsToSet(
+    state: EndgamesState,
+    setId: string,
+    records: ParsedTrainingRecord[],
+): EndgamesState {
+    const target = state.sets[setId];
+    if (!target || target.origin !== "user") return state;
+    const temporary = addEndgameSet(state, target.name, target.description, records);
+    const addedSet = Object.values(temporary.sets).find((set) => !state.sets[set.id]);
+    if (!addedSet) return state;
+    const sets = { ...temporary.sets };
+    delete sets[addedSet.id];
+    sets[setId] = {
+        ...target,
+        positionIds: [...target.positionIds, ...addedSet.positionIds],
+        updatedAt: timestamp(),
+    };
+    return { ...temporary, sets };
+}
+
+export function recordBasicMateAttempt(
+    state: EndgamesState,
+    mateId: BasicMateId,
+    input: { success: boolean; timeMs: number },
+): EndgamesState {
+    const previous = state.basicMates?.[mateId] ?? {
+        attempts: 0,
+        successes: 0,
+        bestTimeMs: null,
+        lastTimeMs: null,
+        lastPlayedAt: null,
+    };
+    const timeMs = Math.max(0, Math.round(input.timeMs));
+    return {
+        ...state,
+        basicMates: {
+            ...state.basicMates,
+            [mateId]: {
+                attempts: previous.attempts + 1,
+                successes: previous.successes + (input.success ? 1 : 0),
+                bestTimeMs: input.success
+                    ? previous.bestTimeMs === null
+                        ? timeMs
+                        : Math.min(previous.bestTimeMs, timeMs)
+                    : previous.bestTimeMs,
+                lastTimeMs: input.success ? timeMs : previous.lastTimeMs,
+                lastPlayedAt: timestamp(),
+            },
         },
     };
 }

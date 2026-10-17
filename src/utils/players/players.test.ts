@@ -116,15 +116,15 @@ describe("profile games", () => {
         expect(
             filterProfileGames(
                 games,
-                { timeControl: "bullet", period: "all", color: "any" },
+                { timeControls: ["bullet"], period: "all", color: "any" },
                 today,
             ),
         ).toHaveLength(1);
         expect(
-            filterProfileGames(games, { timeControl: "all", period: "all", color: "black" }, today),
+            filterProfileGames(games, { timeControls: [], period: "all", color: "black" }, today),
         ).toHaveLength(1);
         expect(
-            filterProfileGames(games, { timeControl: "all", period: "3m", color: "any" }, today),
+            filterProfileGames(games, { timeControls: [], period: "3m", color: "any" }, today),
         ).toHaveLength(1);
     });
 });

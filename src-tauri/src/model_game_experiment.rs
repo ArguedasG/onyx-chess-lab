@@ -1909,6 +1909,8 @@ mod tests {
                     color: "white".to_string(),
                     source: GameMoveSource::Engine,
                     think_time_ms: None,
+                    engine_eval: None,
+                    tablebase_category: None,
                 },
                 GameMove {
                     uci: "e7e5".to_string(),
@@ -1920,6 +1922,8 @@ mod tests {
                     color: "black".to_string(),
                     source: GameMoveSource::Engine,
                     think_time_ms: None,
+                    engine_eval: None,
+                    tablebase_category: None,
                 },
             ],
             current_fen: String::new(),
@@ -1967,6 +1971,8 @@ mod tests {
             color: "black".to_string(),
             source: GameMoveSource::Engine,
             think_time_ms: None,
+            engine_eval: None,
+            tablebase_category: None,
         });
 
         let pgn = build_pgn("experiment", 0, &manifest);

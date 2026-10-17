@@ -6,6 +6,7 @@ import {
   Card,
   Container,
   Group,
+  Menu,
   Progress,
   SimpleGrid,
   Stack,
@@ -17,18 +18,24 @@ import {
 import {
   IconArrowLeft,
   IconBook2,
+  IconChevronDown,
   IconChevronRight,
   IconDownload,
+  IconEye,
+  IconEyeOff,
   IconFileSearch,
   IconFolder,
+  IconInfinity,
   IconPlayerPlay,
   IconPlus,
+  IconRadar,
   IconRepeat,
   IconSchool,
   IconSettings,
 } from "@tabler/icons-react";
 import { Link, useLoaderData, useLocation } from "@tanstack/react-router";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOpeningPractice } from "@/hooks/useOpeningPractice";
@@ -49,6 +56,10 @@ import { formatReviewInterval } from "@/components/files/opening";
 import { isOpeningLineDue, nextOpeningReviewDate } from "@/utils/openingReview";
 import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
 import OpeningExportModal from "./OpeningExportModal";
+import RepertoireGapsModal from "./RepertoireGapsModal";
+
+/** Paused lines can be hidden in the section view to shorten long lists; remembered. */
+const hidePausedOpeningLinesAtom = atomWithStorage<boolean>("opening-hide-paused-lines", false);
 
 function getVariantLines(
   variant: OpeningVariant,
@@ -179,6 +190,67 @@ function ReviewButton({
     </Tooltip>
   ) : (
     button
+  );
+}
+
+/**
+ * Train button with a menu for the continuous review (I-36), which is another way to practice the
+ * same lines rather than a separate action.
+ */
+function TrainButton({
+  label,
+  disabled,
+  busy,
+  onTrain,
+  onContinuous,
+  variant = "filled",
+  fullWidth,
+}: {
+  label: string;
+  disabled: boolean;
+  busy: boolean;
+  onTrain: () => void;
+  onContinuous: () => void;
+  variant?: "filled" | "light";
+  fullWidth?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Button.Group style={fullWidth ? { width: "100%" } : undefined}>
+      <Button
+        variant={variant}
+        leftSection={variant === "filled" ? <IconPlayerPlay size={16} /> : undefined}
+        disabled={disabled}
+        loading={busy}
+        onClick={onTrain}
+        style={fullWidth ? { flex: 1 } : undefined}
+      >
+        {label}
+      </Button>
+      <Menu position="bottom-end" withinPortal>
+        <Menu.Target>
+          <Button
+            variant={variant}
+            px={8}
+            disabled={disabled}
+            aria-label={t("Continuous.MoreModes", "More ways to train")}
+          >
+            <IconChevronDown size={14} />
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item leftSection={<IconInfinity size={16} />} onClick={onContinuous}>
+            <Text size="sm">{t("Continuous.Title", "Continuous review")}</Text>
+            <Text size="xs" c="dimmed" maw={260}>
+              {t(
+                "Continuous.MenuDesc",
+                "No end and no grades: the opponent steers towards your weakest moves. Spaced reviews are not affected.",
+              )}
+            </Text>
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+    </Button.Group>
   );
 }
 
@@ -371,14 +443,13 @@ export function OpeningLibraryPage() {
                           busy={launcher.busy}
                           onClick={() => void launcher.reviewRepertoire(repertoire)}
                         />
-                        <Button
-                          leftSection={<IconPlayerPlay size={16} />}
+                        <TrainButton
+                          label={t("OpeningBrowser.ContinueTraining", "Continue training")}
                           disabled={learning.learned === 0}
-                          loading={launcher.busy}
-                          onClick={() => void launcher.practiceRepertoire(repertoire)}
-                        >
-                          {t("OpeningBrowser.ContinueTraining", "Continue training")}
-                        </Button>
+                          busy={launcher.busy}
+                          onTrain={() => void launcher.practiceRepertoire(repertoire)}
+                          onContinuous={() => void launcher.continuousRepertoire(repertoire)}
+                        />
                       </Group>
                     </Stack>
                   </Group>
@@ -398,6 +469,7 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
   const areas = useAtomValue(trainingAreasAtom);
   const launcher = useOpeningPractice();
   const [exportOpen, setExportOpen] = useState(false);
+  const [gapsOpen, setGapsOpen] = useState(false);
   const repertoire = areas.openings.repertoires[repertoireId];
   const locationHash = useLocation({ select: (location) => location.hash });
   const scrollRef = useOpeningScrollRestoration(
@@ -434,6 +506,13 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
             onClose={() => setExportOpen(false)}
           />
         )}
+        <RepertoireGapsModal
+          opened={gapsOpen}
+          onClose={() => setGapsOpen(false)}
+          repertoire={repertoire}
+          openings={areas.openings}
+          documentDir={documentDir}
+        />
         <BrowserError error={launcher.error} onClose={launcher.clearError} />
         <Group justify="space-between" align="flex-start">
           <Group align="flex-start">
@@ -485,26 +564,43 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
               busy={launcher.busy}
               onClick={() => void launcher.reviewRepertoire(repertoire)}
             />
-            <Button
-              leftSection={<IconPlayerPlay size={16} />}
+            <TrainButton
+              label={t("OpeningBrowser.TrainRepertoire", "Train repertoire")}
               disabled={learning.learned === 0}
-              loading={launcher.busy}
-              onClick={() => void launcher.practiceRepertoire(repertoire)}
-            >
-              {t("OpeningBrowser.TrainRepertoire", "Train repertoire")}
-            </Button>
+              busy={launcher.busy}
+              onTrain={() => void launcher.practiceRepertoire(repertoire)}
+              onContinuous={() => void launcher.continuousRepertoire(repertoire)}
+            />
           </Group>
         </Group>
 
         <Card withBorder padding="lg">
           <Group justify="space-between">
             <Text fw={600}>{t("OpeningBrowser.RepertoireProgress", "Repertoire progress")}</Text>
-            <Text size="sm" c="dimmed">
-              {t("OpeningBrowser.LinesPracticed", "{{completed}} of {{total}} lines practiced", {
-                completed: completion.completed,
-                total: completion.total,
-              })}
-            </Text>
+            <Group gap="md">
+              <Text size="sm" c="dimmed">
+                {t("OpeningBrowser.LinesPracticed", "{{completed}} of {{total}} lines practiced", {
+                  completed: completion.completed,
+                  total: completion.total,
+                })}
+              </Text>
+              <Tooltip
+                label={t(
+                  "Gaps.ButtonTip",
+                  "Opponent replies your repertoire does not answer, by how often they come up.",
+                )}
+              >
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="gray"
+                  leftSection={<IconRadar size={14} />}
+                  onClick={() => setGapsOpen(true)}
+                >
+                  {t("Gaps.Button", "Check coverage")}
+                </Button>
+              </Tooltip>
+            </Group>
           </Group>
           <Progress value={completion.percent} color="blue" size="lg" mt="sm" />
           <Box mt="md">
@@ -595,15 +691,15 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                         onClick={() => void launcher.reviewVariant(repertoire, variant)}
                         fullWidth
                       />
-                      <Button
+                      <TrainButton
                         variant="light"
                         fullWidth
+                        label={t("OpeningBrowser.Train", "Train")}
                         disabled={variantLearning.learned === 0}
-                        loading={launcher.busy}
-                        onClick={() => void launcher.practiceVariant(repertoire, variant)}
-                      >
-                        {t("OpeningBrowser.Train", "Train")}
-                      </Button>
+                        busy={launcher.busy}
+                        onTrain={() => void launcher.practiceVariant(repertoire, variant)}
+                        onContinuous={() => void launcher.continuousVariant(repertoire, variant)}
+                      />
                     </SimpleGrid>
                   </Stack>
                 </Card>
@@ -639,6 +735,8 @@ export function OpeningVariantPage({
     [areas.openings.lines, variant],
   );
   const noveltyStarts = useMemo(() => getOpeningNoveltyStarts(lines), [lines]);
+  const [hidePaused, setHidePaused] = useAtom(hidePausedOpeningLinesAtom);
+  const pausedCount = lines.filter((line) => !line.trainable).length;
 
   useEffect(() => {
     if (!requestedLineId) return;
@@ -719,23 +817,39 @@ export function OpeningVariantPage({
               busy={launcher.busy}
               onClick={() => void launcher.reviewVariant(repertoire, variant)}
             />
-            <Button
-              leftSection={<IconPlayerPlay size={16} />}
+            <TrainButton
+              label={t("OpeningBrowser.TrainSection", "Train section")}
               disabled={learning.learned === 0}
-              loading={launcher.busy}
-              onClick={() => void launcher.practiceVariant(repertoire, variant)}
-            >
-              {t("OpeningBrowser.TrainSection", "Train section")}
-            </Button>
+              busy={launcher.busy}
+              onTrain={() => void launcher.practiceVariant(repertoire, variant)}
+              onContinuous={() => void launcher.continuousVariant(repertoire, variant)}
+            />
           </Group>
         </Group>
 
-        <Alert color="blue" variant="light">
-          {t(
-            "OpeningBrowser.NovelMovesExplanation",
-            "Bold moves are the continuation that is new compared with the preceding lines in this section.",
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <Alert color="blue" variant="light" style={{ flex: 1 }}>
+            {t(
+              "OpeningBrowser.NovelMovesExplanation",
+              "Bold moves are the continuation that is new compared with the preceding lines in this section.",
+            )}
+          </Alert>
+          {pausedCount > 0 && (
+            <Button
+              variant="default"
+              leftSection={hidePaused ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+              onClick={() => setHidePaused((value) => !value)}
+            >
+              {hidePaused
+                ? t("OpeningBrowser.ShowPaused", "Show paused lines ({{count}})", {
+                    count: pausedCount,
+                  })
+                : t("OpeningBrowser.HidePaused", "Hide paused lines ({{count}})", {
+                    count: pausedCount,
+                  })}
+            </Button>
           )}
-        </Alert>
+        </Group>
 
         {lines.length === 0 ? (
           <EmptyBrowserState>
@@ -744,6 +858,8 @@ export function OpeningVariantPage({
         ) : (
           <Stack gap="md">
             {lines.map((line, index) => {
+              // Hidden lines keep their number, so the visible ones still match the section.
+              if (hidePaused && !line.trainable) return null;
               const tokens = getOpeningMoveTokens(line, noveltyStarts[index]);
               return (
                 <Card

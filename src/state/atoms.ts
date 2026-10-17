@@ -1,3 +1,12 @@
+import {
+    DEFAULT_RUSH_SETTINGS,
+    type PuzzleLength,
+    type PuzzleMode,
+    type PuzzleQuality,
+    type PuzzleThemeMode,
+    type RushSettings,
+} from "@/utils/puzzleSession";
+import type { ContinuousColor, ContinuousSession } from "@/utils/openingContinuous";
 import type { MantineColor } from "@mantine/core";
 import { resolve } from "@tauri-apps/api/path";
 import { exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -435,6 +444,20 @@ export const puzzleRatingRangeAtom = atomWithStorage<[number, number]>(
 );
 
 export const puzzleThemeAtom = atomWithStorage<string | null>("puzzle-theme", null);
+/** Several themes, combined with "any" (a mix) or "all" (every theme at once). */
+export const puzzleThemesAtom = atomWithStorage<string[]>("puzzle-themes", []);
+/** Themes left out of the trainer, whatever the included ones are. */
+export const puzzleExcludedThemesAtom = atomWithStorage<string[]>("puzzle-excluded-themes", []);
+export const puzzleThemeModeAtom = atomWithStorage<PuzzleThemeMode>("puzzle-theme-mode", "any");
+export const puzzleQualityAtom = atomWithStorage<PuzzleQuality>("puzzle-quality", "good");
+export const puzzleLengthAtom = atomWithStorage<PuzzleLength>("puzzle-length", "any");
+export const puzzleModeAtom = atomWithStorage<PuzzleMode>("puzzle-mode", "free");
+export const puzzleRushSettingsAtom = atomWithStorage<RushSettings>(
+    "puzzle-rush-settings",
+    DEFAULT_RUSH_SETTINGS,
+);
+/** Choose the first move among candidates instead of finding it on the board. */
+export const puzzleCandidatesAtom = atomWithStorage<boolean>("puzzle-candidates", false);
 
 export const coverageMinGamesAtom = atomWithStorage<number>("coverage-min-games", 50);
 
@@ -548,8 +571,14 @@ const practiceUnitFamily = atomFamily((_tab: string) => atom<"move" | "line">("m
 export const currentPracticeUnitAtom = tabValue(practiceUnitFamily);
 
 export type OpeningPracticeQueue = {
-    /** `learn` guides each line before asking to recall it; defaults to `practice`. */
-    mode?: "practice" | "learn";
+    /**
+     * `learn` guides each line before asking to recall it; `continuous` keeps drawing the weakest
+     * lines without an end and without touching spaced repetition (I-36). Defaults to `practice`.
+     */
+    mode?: "practice" | "learn" | "continuous";
+    /** State of a continuous review: the queue grows one line at a time. */
+    continuous?: ContinuousSession;
+    continuousColor?: ContinuousColor;
     gameNumbers: number[];
     currentIndex: number;
     repertoireId?: string;

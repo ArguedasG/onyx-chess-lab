@@ -93,8 +93,9 @@ prueban y comunican problemas.
   (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
   0.20.0; **8.4 Jugadores** (validada por el autor), **8.5 Generador de repertorios**, **8.6
   Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
-  implementadas; siguen **8.8–8.10**, independientes entre sí. La reestructuración de la interfaz inspirada en ChessBase
-  para Mac (0.19.0) sigue como criterio de diseño de las pantallas nuevas.
+  implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, con la validación
+  manual pendiente. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
+  sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
 actualizaciones seguras y corrección rápida de defectos. Un bug no reabre automáticamente la fase que
@@ -166,7 +167,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.7 implementadas; replanificada en 8.2–8.10 a partir del estudio de mercado. Ver sección 7.                  |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                  |
 | 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
@@ -183,6 +184,8 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
   `docs/players-phase-8-4.es.md`; generador: `docs/repertoire-generator-phase-8-5.es.md`;
   preparación contra rivales: `docs/rival-preparation-phase-8-6.es.md`; entrenamiento desde
   errores: `docs/training-from-mistakes-phase-8-7.es.md`.
+- Táctica, Finales y Aperturas tras el estudio: `docs/tactics-phase-8-8.es.md`,
+  `docs/endgames-phase-8-9.es.md` y `docs/openings-phase-8-10.es.md`.
 - Estudio de mercado (insumo de 8.2–10, identificadores `I-xx`): `docs/market-study.es.md`.
 - Release y actualizador: `docs/phase-5-brand-release-alpha-plan.es.md`,
   `docs/updater-phase-5-2.es.md` y `docs/managed-maia3.es.md`.
@@ -636,26 +639,49 @@ I-21, I-29. Contrato, reglas y umbrales:
 
 ### 8.8. Táctica: modos y sets
 
-**Estado: Pendiente; amplía la Fase 6 y puede adelantarse.** Ideas: I-05, I-06, I-20, I-38.
+**Estado: Implementada y validada automáticamente (2026-10-16); validación manual pendiente.**
+Ideas: I-05, I-06, I-20, I-38. Detalle: `docs/tactics-phase-8-8.es.md`.
 
-- modos de sesión (tormenta, racha, contrarreloj, profundidad, candidatas), FSRS y Elo táctico local,
-  constructor de sets desde los puzzles de Lichess y visualización a ciegas y sin piezas.
+- **entrenador de puzzles de Lichess:** varios temas a la vez (mezcla o todos), filtro de
+  **calidad** por popularidad e intentos (bien valorados por defecto), longitud de la solución y
+  notación contraída por defecto; muestreo en Rust por saltos aleatorios (de ~6,6 s a ~20–50 ms con
+  filtros);
+- **modos (I-05):** libre, tormenta, racha y contrarreloj, y jugadas candidatas con señuelos de Maia
+  al rating del puzzle (Stockfish si no hay Maia);
+- **Elo táctico local** (Glicko-2, primer intento, libre y contrarreloj) y **repaso FSRS** de puzzles
+  y ejercicios fallados (I-06), en `tactics-review-v1.json` cargado bajo demanda;
+- **constructor de sets** desde la base de puzzles con plantillas y estantería con precisión y
+  tiempo recientes (I-20);
+- **visualización** sin piezas y a ciegas en cualquier set, con estadísticas propias (I-38).
 
 ### 8.9. Finales: evaluación por jugada
 
-**Estado: Pendiente; amplía la Fase 6 y puede adelantarse.** Ideas: I-07, I-08, I-09; opcional:
-mates básicos cronometrados (parte de I-52).
+**Estado: Implementada y validada automáticamente (2026-10-16); validación manual pendiente.**
+Ideas: I-07, I-08, I-09 y los mates básicos cronometrados de I-52. Detalle:
+`docs/endgames-phase-8-9.es.md`.
 
 - tras cada jugada se comprueba si el objetivo sigue siendo alcanzable contra la mejor defensa, con
-  aviso, reintento y botón Veredicto; la mejor defensa es el rival predeterminado y Maia una opción;
-- al importar, familia y objetivo calculados desde la posición; filtro solo por tema.
+  aviso, **reintento desde la última posición verificada** y botón **Veredicto**; sin coste extra con
+  la mejor defensa (tablebase desde Rust con ≤ 7 piezas y la evaluación de la propia búsqueda de
+  Stockfish por encima) y con una sola búsqueda corta, siempre de la posición más nueva, con Maia;
+- **importación con vista previa** (familia desde la posición, un set, por tema o por capítulo, o
+  añadir a un set existente) y objetivos calculados que respetan los del PGN y avisan si no
+  coinciden;
+- **por tema** sobre el contenido incluido y el importado;
+- **mates básicos cronometrados** (dama, torre, dos alfiles, alfil y caballo) con posiciones al azar
+  y mejor tiempo.
 
 ### 8.10. Aperturas: repaso continuo y huecos
 
-**Estado: Pendiente; amplía 6.A y puede adelantarse.** Ideas: I-36, I-34.
+**Estado: Implementada y validada automáticamente (2026-10-16); validación manual pendiente.**
+Ideas: I-36, I-34. Detalle: `docs/openings-phase-8-10.es.md`.
 
-- modo «Repaso continuo» por dominio de cada jugada, aparte del FSRS (I-36), y huecos del repertorio
-  por frecuencia real (I-34).
+- **repaso continuo** desde la flecha del botón de entrenar: sin final ni calificación, hacia las
+  jugadas más débiles (dominio compartido entre las líneas que pasan por la misma jugada), las
+  falladas vuelven tras otras dos, pista de pieza solo con dominio bajo y sin tocar el FSRS (I-36);
+- **«Revisar cobertura»** en la página del repertorio, a demanda: respuestas del rival sin preparar
+  ordenadas por la frecuencia con que aparecerán, con **Añadir a mano** y **Generar** con el generador
+  de 8.5 (I-34).
 
 ---
 
@@ -854,6 +880,8 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - Informes y versiones de perfiles comienzan como JSON versionado en datos privados de Onyx.
 - El historial durable de perfiles se crea solo mediante **Guardar versión**.
 - SQLite se adopta únicamente si volumen, búsqueda o transacciones demuestran su necesidad.
+- Los datos que crecen fuera del arranque viven en archivos propios cargados bajo demanda:
+  `mistake-queue-v1.json` (8.7) y `tactics-review-v1.json` (repaso y Elo táctico, 8.8).
 - PGN fuente permanece inmutable; las copias editables conservan backup y procedencia.
 
 ### Entrenamiento y jugadores
@@ -863,7 +891,14 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - Las métricas de reloj declaran cobertura y no ocultan partidas sin `[%clk]`.
 - El set táctico automático es la cola **Mis errores** de 8.7, con repaso espaciado (I-17).
 - Finales: la mejor defensa es el rival predeterminado; Maia queda como opción práctica (I-07).
-- No se incluyen libros de finales en Onyx; se prioriza la importación del usuario (I-08).
+- Finales: la comprobación por jugada nunca bloquea el tablero; usa la tablebase o la evaluación de
+  la propia búsqueda del rival, y solo con Maia lanza una búsqueda corta, una a la vez y de la
+  posición más nueva.
+- No se incluyen libros de finales en Onyx; se prioriza la importación del usuario (I-08). Un
+  objetivo escrito en el PGN no se sobrescribe con el calculado.
+- Táctica: el Elo táctico solo cuenta el primer intento en los modos libre y contrarreloj; tormenta
+  y racha no puntúan.
+- El repaso continuo de Aperturas no altera las tarjetas FSRS (I-36).
 - Los torneos se diseñan con el usuario como participante (I-51).
 
 ### Distribución y licencias
@@ -902,6 +937,27 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-17 — Ajustes tras la prueba de 8.8–8.10
+
+- El autor probó 8.8–8.10. Ajustes pedidos: modales más anchos en la importación de finales y en la
+  revisión de cobertura; **excluir temas** en el entrenador de puzzles y en el constructor de sets;
+  **ocultar líneas pausadas** en la página de una sección; y **varios ritmos a la vez** en el filtro
+  de la ficha de jugador (lo usan Preparación y el resto de pestañas).
+
+### 2026-10-16 — 8.8, 8.9 y 8.10
+
+- **8.9 Finales:** objetivo comprobado tras cada jugada (aviso, reintento, veredicto), defensa con
+  tablebase y evaluación del rival reutilizada en Rust, importación con vista previa y agrupación,
+  objetivos calculados con aviso de conflicto, vista por tema sobre todo el contenido y mates básicos
+  cronometrados.
+- **8.10 Aperturas:** repaso continuo y revisión de cobertura con acciones para rellenar huecos.
+- **8.8 Táctica:** varios temas, calidad, longitud y notación contraída en el entrenador de puzzles;
+  tormenta, racha, contrarreloj y candidatas; Elo táctico y repaso FSRS; constructor de sets;
+  visualización sin piezas y a ciegas. El muestreo de puzzles pasó de ~6,6 s a ~20–50 ms.
+- Validación automática: 395 pruebas de interfaz y 144 de Rust; validación manual pendiente.
+- Detalle: `docs/tactics-phase-8-8.es.md`, `docs/endgames-phase-8-9.es.md` y
+  `docs/openings-phase-8-10.es.md`.
 
 ### 2026-10-16 — Release 0.21.0
 

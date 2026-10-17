@@ -123,9 +123,21 @@ async getEngineLogs(engine: string, tab: string) : Promise<Result<EngineLog[], s
 async memorySize() : Promise<number> {
     return await TAURI_INVOKE("memory_size");
 },
-async getPuzzle(file: string, minRating: number, maxRating: number, theme: string | null) : Promise<Result<Puzzle, string>> {
+async getPuzzle(file: string, filter: PuzzleFilter) : Promise<Result<Puzzle, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_puzzle", { file, minRating, maxRating, theme }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_puzzle", { file, filter }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Several random puzzles with their themes: sets built from the database (I-20) and sessions that
+ * need puzzles ahead (storm, streak).
+ */
+async samplePuzzles(file: string, filter: PuzzleFilter, count: number, exclude: number[]) : Promise<Result<PuzzleWithThemes[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sample_puzzles", { file, filter, count, exclude }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -572,6 +584,14 @@ async makeGameMove(gameId: string, uci: string) : Promise<Result<GameState, stri
 async takeBackGameMove(gameId: string) : Promise<Result<GameState, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("take_back_game_move", { gameId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async rewindGame(gameId: string, ply: number) : Promise<Result<GameState, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rewind_game", { gameId, ply }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1149,7 +1169,17 @@ export type GameConfig = { white: PlayerConfig; black: PlayerConfig; whiteTimeCo
 export type GameEndReason = "checkmate" | "timeout" | "resignation" | "abandonment"
 export type GameManifest = { schemaVersion: number; applicationVersion: string; gameId: string; startedAt: string; exportedAt: string; hardware: ManifestHardware; initialFen: string; initialMoves: string[]; white: PlayerConfig; black: PlayerConfig; whiteEngineLaunch: EngineLaunchMetadata | null; blackEngineLaunch: EngineLaunchMetadata | null; whiteTimeControl: TimeControl | null; blackTimeControl: TimeControl | null; openingBook: OpeningBookConfig | null; status: GameStatus; result: GameResult | null; moves: GameMove[]; currentFen: string }
 export type GameMetadata = { id: number; fen: string; event: string; event_id: number; site: string; site_id: number; date?: string | null; time?: string | null; round?: string | null; white: string; white_id: number; white_elo?: number | null; black: string; black_id: number; black_elo?: number | null; result: Outcome; time_control?: string | null; eco?: string | null; opening?: string | null; ply_count?: number | null }
-export type GameMove = { uci: string; san: string; fenAfter: string; clock: bigint | null; whiteTime: bigint | null; blackTime: bigint | null; color: string; source: GameMoveSource; thinkTimeMs: bigint | null }
+export type GameMove = { uci: string; san: string; fenAfter: string; clock: bigint | null; whiteTime: bigint | null; blackTime: bigint | null; color: string; source: GameMoveSource; thinkTimeMs: bigint | null; 
+/**
+ * Score of the engine's own search for this move, from White's point of view: the
+ * evaluation of the position the engine moved from, read at no extra cost.
+ */
+engineEval: ScoreValue | null; 
+/**
+ * Tablebase category of the position the engine moved from, for its side to move, when the
+ * move came from the tablebase.
+ */
+tablebaseCategory: string | null }
 export type GameMoveEvent = { gameId: string; moves: GameMove[]; fen: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type GameMoveSource = "human" | "engine" | "profileRepertoire" | "polyglot" | "initial"
 export type GameOverEvent = { gameId: string; result: GameResult; moves: GameMove[] }
@@ -1236,7 +1266,7 @@ ownerWhite: boolean;
  */
 ply: number }
 export type Player = { id: number; name: string | null; elo: number | null }
-export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; go: GoMode | null }
+export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; tablebaseDefense?: boolean | null; go: GoMode | null }
 export type PlayerGameRow = { id: number; 
 /**
  * Which of the requested player records played this game.
@@ -1365,6 +1395,28 @@ export type ProgressEvent = { id: string; progress: number; finished: boolean }
 export type ProgressItem = { id: string; progress: number; finished: boolean }
 export type Puzzle = { id: number; fen: string; moves: string; rating: number; rating_deviation: number; popularity: number; nb_plays: number }
 export type PuzzleDatabaseInfo = { title: string; description: string; puzzleCount: number; storageSize: bigint; path: string }
+/**
+ * What a puzzle must satisfy. Themes combine with "any" (a mix) or "all" (every theme at once);
+ * popularity and plays are the quality signals of the Lichess database (popularity goes from
+ * -100 to 100 and comes from the players' votes).
+ */
+export type PuzzleFilter = { minRating: number; maxRating: number; themes?: string[]; matchAllThemes?: boolean; 
+/**
+ * Puzzles with any of these themes are left out.
+ */
+excludeThemes?: string[]; minPopularity?: number | null; minPlays?: number | null; 
+/**
+ * Moves of the solver in the solution (the opponent's first move does not count).
+ */
+minSolutionMoves?: number | null; maxSolutionMoves?: number | null; 
+/**
+ * Pieces on the board, kings included.
+ */
+maxPieces?: number | null }
+/**
+ * A puzzle and its themes; field names match `Puzzle`.
+ */
+export type PuzzleWithThemes = { id: number; fen: string; moves: string; rating: number; rating_deviation: number; popularity: number; nb_plays: number; themes: string[] }
 export type QueryOptions<SortT> = { skipCount: boolean; page?: number | null; pageSize?: number | null; sort: SortT; direction: SortDirection }
 export type QueryResponse<T> = { data: T; count: number | null }
 export type ReportEloBand = { minElo: number; maxElo: number; results: ReportResults }

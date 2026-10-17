@@ -8,18 +8,14 @@ import {
   Group,
   Paper,
   Portal,
-  RangeSlider,
   ScrollArea,
   Select,
-  SimpleGrid,
   Stack,
-  Switch,
   Text,
   Tooltip,
 } from "@mantine/core";
 import { useSessionStorage } from "@mantine/hooks";
 import {
-  IconAlertTriangle,
   IconFlame,
   IconPlus,
   IconSettings,
@@ -29,7 +25,7 @@ import {
 } from "@tabler/icons-react";
 import { isNormal, makeSquare, makeUci, parseUci } from "chessops";
 import { parseFen } from "chessops/fen";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
@@ -41,18 +37,38 @@ import {
   hidePuzzleRatingAtom,
   jumpToNextPuzzleAtom,
   progressivePuzzlesAtom,
+  puzzleCandidatesAtom,
+  puzzleLengthAtom,
+  puzzleModeAtom,
+  puzzleQualityAtom,
   puzzleRatingRangeAtom,
-  puzzleThemeAtom,
+  puzzleRushSettingsAtom,
+  puzzleExcludedThemesAtom,
+  puzzleThemeModeAtom,
+  puzzleThemesAtom,
   selectedPuzzleDbAtom,
   tabsAtom,
   trackPuzzleTimeAtom,
 } from "@/state/atoms";
+import { useTacticsReview } from "@/state/tacticsReview";
 import { positionFromFen } from "@/utils/chessops";
 import { formatThemeLabel, formatTime } from "@/utils/format";
+import {
+  applyRushResult,
+  buildPuzzleFilter,
+  finishRushIfTimeUp,
+  rushRange,
+  rushScore,
+  rushTimeLeft,
+  startRush,
+  type PuzzleMode,
+  type RushState,
+} from "@/utils/puzzleSession";
 import { type Completion, getPuzzleDatabases, type Puzzle } from "@/utils/puzzles";
+import { PROVISIONAL_DEVIATION, ratingBandFor, updateTacticsRating } from "@/utils/tacticsRating";
+import { addTacticsReviewItem, recordBest, withRating } from "@/utils/tacticsReview";
 import { createTab } from "@/utils/tabs";
 import { defaultTree } from "@/utils/treeReducer";
-import { unwrap } from "@/utils/unwrap";
 import ChallengeHistory from "../common/ChallengeHistory";
 import ConfirmModal from "../common/ConfirmModal";
 import GameNotation from "../common/GameNotation";
@@ -61,6 +77,11 @@ import { TreeStateContext } from "../common/TreeStateContext";
 import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
 import AddPuzzle from "./AddPuzzle";
 import PuzzleBoard from "./PuzzleBoard";
+import PuzzleCandidates from "./PuzzleCandidates";
+import PuzzleFilters from "./PuzzleFilters";
+import PuzzleModePanel from "./PuzzleModePanel";
+
+const isRated = (mode: PuzzleMode) => mode === "free" || mode === "countdown";
 
 function Puzzles({ id }: { id: string }) {
   const { t } = useTranslation();
@@ -69,8 +90,10 @@ function Puzzles({ id }: { id: string }) {
   const goToStart = useStore(store, (s) => s.goToStart);
   const reset = useStore(store, (s) => s.reset);
   const makeMove = useStore(store, (s) => s.makeMove);
+  const makeMoves = useStore(store, (s) => s.makeMoves);
   const setShapes = useStore(store, (s) => s.setShapes);
   const currentMove = useStore(store, (s) => s.currentNode().move);
+  const plyOnBoard = useStore(store, (s) => s.position.length);
   const [puzzles, setPuzzles] = useSessionStorage<Puzzle[]>({
     key: `${id}-puzzles`,
     defaultValue: [],
@@ -79,7 +102,6 @@ function Puzzles({ id }: { id: string }) {
 
   const [puzzleDbs, setPuzzleDbs] = useState<PuzzleDatabaseInfo[]>([]);
   const [selectedDb, setSelectedDb] = useAtom(selectedPuzzleDbAtom);
-
   const [settingsOpened, setSettingsOpened] = useState(false);
 
   useEffect(() => {
@@ -88,42 +110,56 @@ function Puzzles({ id }: { id: string }) {
     });
   }, []);
 
-  const [ratingRange, setRatingRange] = useAtom(puzzleRatingRangeAtom);
+  const ratingRange = useAtomValue(puzzleRatingRangeAtom);
+  const setRatingRange = useSetAtom(puzzleRatingRangeAtom);
+  const themes = useAtomValue(puzzleThemesAtom);
+  const themeMode = useAtomValue(puzzleThemeModeAtom);
+  const excludedThemes = useAtomValue(puzzleExcludedThemesAtom);
+  const quality = useAtomValue(puzzleQualityAtom);
+  const length = useAtomValue(puzzleLengthAtom);
+  const [mode, setMode] = useAtom(puzzleModeAtom);
+  const [rushSettings, setRushSettings] = useAtom(puzzleRushSettingsAtom);
+  const candidatesEnabled = useAtomValue(puzzleCandidatesAtom);
+  const progressive = useAtomValue(progressivePuzzlesAtom);
+  const hideRating = useAtomValue(hidePuzzleRatingAtom);
+  const trackTime = useAtomValue(trackPuzzleTimeAtom);
+  const jumpToNextPuzzleImmediately = useAtomValue(jumpToNextPuzzleAtom);
+  const { state: review, update: updateReview } = useTacticsReview();
 
-  const [selectedTheme, setSelectedTheme] = useAtom(puzzleThemeAtom);
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [themesTableMissing, setThemesTableMissing] = useState(false);
-  const effectiveSelectedTheme =
-    selectedTheme && availableThemes.includes(selectedTheme) ? selectedTheme : null;
+  const effectiveThemes = themes.filter((theme) => availableThemes.includes(theme));
 
   useEffect(() => {
     setThemesTableMissing(false);
-
     if (!selectedDb) {
       setAvailableThemes([]);
       return;
     }
-
     commands.getPuzzleThemes(selectedDb).then((res) => {
       if (res.status === "ok") {
         setAvailableThemes(res.data);
         return;
       }
-
       setAvailableThemes([]);
-
       if (typeof res.error === "string" && res.error.includes("no such table")) {
         setThemesTableMissing(true);
       }
     });
   }, [selectedDb]);
 
-  const [jumpToNextPuzzleImmediately, setJumpToNextPuzzleImmediately] =
-    useAtom(jumpToNextPuzzleAtom);
+  // Session modes: storm and streak keep their own state; countdown times each puzzle.
+  const [rush, setRush] = useState<RushState | null>(null);
+  const rushRef = useRef<RushState | null>(null);
+  rushRef.current = rush;
+  const [newBest, setNewBest] = useState(false);
+  const [countdownStart, setCountdownStart] = useState<number | null>(null);
+  const [noPuzzles, setNoPuzzles] = useState(false);
+  const finishedRef = useRef(new Set<string>());
+  const rushActive = rush?.status === "running";
 
   const wonPuzzles = puzzles.filter((p) => p.completion === "correct");
   const lostPuzzles = puzzles.filter((p) => p.completion === "incorrect");
-
   const totalCompleted = wonPuzzles.length + lostPuzzles.length;
   const accuracy =
     totalCompleted > 0 ? Math.round((wonPuzzles.length / totalCompleted) * 100) : null;
@@ -146,17 +182,23 @@ function Puzzles({ id }: { id: string }) {
 
   const solutionAbortRef = useRef<AbortController | null>(null);
 
-  async function generatePuzzle(db: string, force: boolean = false) {
+  async function generatePuzzle(
+    db: string,
+    force: boolean = false,
+    rangeOverride?: [number, number],
+  ) {
     let nextIndex = puzzles.findIndex((p, i) => i > currentPuzzle && p.completion === "incomplete");
     if (nextIndex === -1) {
       nextIndex = puzzles.findIndex((p, i) => i < currentPuzzle && p.completion === "incomplete");
     }
 
-    if (nextIndex !== -1 && !force) {
+    const running = rushRef.current?.status === "running";
+    if (nextIndex !== -1 && !force && !running) {
       solutionAbortRef.current?.abort();
       setIsPlayingSolution(false);
       setCurrentPuzzle(nextIndex);
       setPuzzle(puzzles[nextIndex]);
+      setCountdownStart(Date.now());
       if (trackTime) {
         setTimerStart(Date.now() - (puzzles[nextIndex].timeSpent || 0));
       }
@@ -166,59 +208,147 @@ function Puzzles({ id }: { id: string }) {
     solutionAbortRef.current?.abort();
     setIsPlayingSolution(false);
 
-    let range = ratingRange;
-    if (progressive) {
+    let range =
+      rangeOverride ?? (running && rushRef.current ? rushRange(rushRef.current) : ratingRange);
+    if (progressive && !rangeOverride && !running) {
       const rating = puzzles[currentPuzzle]?.rating;
       if (rating) {
         range = [rating + 50, rating + 100];
         setRatingRange([rating + 50, rating + 100]);
       }
     }
-    const res = await commands.getPuzzle(db, range[0], range[1], effectiveSelectedTheme);
-    const puzzle = unwrap(res);
+    const res = await commands.getPuzzle(
+      db,
+      buildPuzzleFilter({
+        range,
+        themes: effectiveThemes,
+        themeMode,
+        excludeThemes: excludedThemes.filter((theme) => availableThemes.includes(theme)),
+        quality,
+        length,
+      }),
+    );
+    if (res.status === "error") {
+      setNoPuzzles(true);
+      return;
+    }
+    setNoPuzzles(false);
     const newPuzzle: Puzzle = {
-      ...puzzle,
-      moves: puzzle.moves.split(" "),
+      ...res.data,
+      moves: res.data.moves.split(" "),
       completion: "incomplete",
     };
-    setPuzzles((puzzles) => {
-      return [...puzzles, newPuzzle];
-    });
+    setPuzzles((puzzles) => [...puzzles, newPuzzle]);
     setCurrentPuzzle(puzzles.length);
     setPuzzle(newPuzzle);
+    setCountdownStart(Date.now());
     if (trackTime) {
       setTimerStart(Date.now());
     }
   }
 
+  /** Rating, review and session modes react once to the first result of each puzzle. */
+  function handleFinished(index: number, puzzle: Puzzle, completion: "correct" | "incorrect") {
+    const key = `${index}:${puzzle.id}`;
+    if (finishedRef.current.has(key)) return;
+    finishedRef.current.add(key);
+    const solved = completion === "correct";
+    const current = rushRef.current;
+    if (isRated(mode) && !current) {
+      updateReview((state) =>
+        withRating(
+          state,
+          updateTacticsRating(
+            state.rating,
+            { rating: puzzle.rating, deviation: puzzle.rating_deviation },
+            solved,
+          ),
+        ),
+      );
+    }
+    if (!solved) {
+      updateReview((state) =>
+        state.autoAdd
+          ? addTacticsReviewItem(state, {
+              id: `lichess:${puzzle.id}`,
+              fen: puzzle.fen,
+              solution: puzzle.moves,
+              opponentFirst: true,
+              label: t("Puzzle.ReviewLabel", "Lichess puzzle {{rating}}", {
+                rating: puzzle.rating,
+              }),
+              rating: puzzle.rating,
+              themes: puzzle.themes ?? [],
+              source: "puzzles",
+            })
+          : state,
+      );
+    }
+    if (current?.status === "running" && selectedDb) {
+      const next = applyRushResult(current, solved, puzzle.rating);
+      setRush(next);
+      if (next.status === "over") {
+        endRush(next);
+        return;
+      }
+      setTimeout(() => void generatePuzzle(selectedDb, true, rushRange(next)), solved ? 250 : 900);
+    }
+  }
+
+  function endRush(state: RushState) {
+    const score = rushScore(state);
+    const previous = review?.best[state.mode]?.score ?? 0;
+    setNewBest(score > previous);
+    updateReview((current) => recordBest(current, state.mode, score));
+  }
+
   async function changeCompletion(completion: Completion) {
     const timeSpent = timerStart !== null ? Date.now() - timerStart : 0;
-    const puzzle = puzzles[currentPuzzle];
+    const index = currentPuzzle;
+    const puzzle = puzzles[index];
     setPuzzles((puzzles) => {
-      puzzles[currentPuzzle].completion = completion;
-      puzzles[currentPuzzle].timeSpent = timeSpent;
+      puzzles[index].completion = completion;
+      puzzles[index].timeSpent = timeSpent;
       return [...puzzles];
     });
     setTimerStart(null);
 
+    let themesOfPuzzle = puzzle?.themes;
     if (selectedDb && puzzle?.id) {
       const res = await commands.getThemesForPuzzle(selectedDb, puzzle.id);
       if (res.status === "ok") {
+        themesOfPuzzle = res.data;
         setPuzzles((puzzles) => {
-          puzzles[currentPuzzle].themes = res.data;
+          if (puzzles[index]) puzzles[index].themes = res.data;
           return [...puzzles];
         });
       }
     }
+    if (puzzle && completion !== "incomplete") {
+      handleFinished(index, { ...puzzle, themes: themesOfPuzzle }, completion);
+    }
+  }
+
+  function startRushSession() {
+    if (!selectedDb || (mode !== "storm" && mode !== "streak")) return;
+    const settled = review && review.rating.deviation < PROVISIONAL_DEVIATION;
+    const base = settled ? review.rating.rating : (ratingRange[0] + ratingRange[1]) / 2;
+    const state = startRush(mode, rushSettings, base);
+    setNewBest(false);
+    setRush(state);
+    rushRef.current = state;
+    void generatePuzzle(selectedDb, true, rushRange(state));
+  }
+
+  function stopRush() {
+    const current = rushRef.current;
+    if (current?.status === "running") endRush({ ...current, status: "over" });
+    setRush(null);
   }
 
   const [addOpened, setAddOpened] = useState(false);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [isPlayingSolution, setIsPlayingSolution] = useState(false);
-
-  const [progressive, setProgressive] = useAtom(progressivePuzzlesAtom);
-  const [hideRating, setHideRating] = useAtom(hidePuzzleRatingAtom);
-  const [trackTime, setTrackTime] = useAtom(trackPuzzleTimeAtom);
 
   const [timerStart, setTimerStart] = useAtom(currentPuzzleTimerAtom);
   const [, setTick] = useState(0);
@@ -234,15 +364,36 @@ function Puzzles({ id }: { id: string }) {
     }
   }, [trackTime, isPuzzleIncomplete, timerStart, setTimerStart]);
 
+  const countdownActive = mode === "countdown" && isPuzzleIncomplete && countdownStart !== null;
+  const needsTick =
+    (trackTime && isPuzzleIncomplete && timerStart !== null) || countdownActive || rushActive;
   useEffect(() => {
-    if (!trackTime || !isPuzzleIncomplete || timerStart === null) return;
-
-    const displayInterval = setInterval(() => {
-      setTick((t) => t + 1);
-    }, 100);
-
+    if (!needsTick) return;
+    const displayInterval = setInterval(() => setTick((t) => t + 1), 200);
     return () => clearInterval(displayInterval);
-  }, [trackTime, isPuzzleIncomplete, timerStart]);
+  }, [needsTick]);
+
+  // Storm: the clock can run out between puzzles.
+  const changeCompletionRef = useRef(changeCompletion);
+  changeCompletionRef.current = changeCompletion;
+  const endRushRef = useRef(endRush);
+  endRushRef.current = endRush;
+  const stormLeft = rush ? rushTimeLeft(rush) : null;
+  useEffect(() => {
+    if (!rush || rush.status !== "running" || stormLeft === null || stormLeft > 0) return;
+    const finished = finishRushIfTimeUp(rush);
+    setRush(finished);
+    endRushRef.current(finished);
+  }, [rush, stormLeft]);
+
+  // Countdown: running out of time is a miss.
+  const countdownLeft =
+    countdownActive && countdownStart !== null
+      ? Math.max(0, rushSettings.countdownSeconds * 1000 - (Date.now() - countdownStart))
+      : null;
+  useEffect(() => {
+    if (countdownLeft === 0) void changeCompletionRef.current("incorrect");
+  }, [countdownLeft]);
 
   useEffect(() => {
     return () => {
@@ -269,10 +420,8 @@ function Puzzles({ id }: { id: string }) {
 
   const currentlyOnLastMoveOrNoLastMove = (): boolean => {
     if (!currentMove) return true;
-
     const moves = puzzles[currentPuzzle]?.moves;
     if (!moves) return true;
-
     const lastMoveIndex = moves.indexOf(makeUci(currentMove));
     return lastMoveIndex + 1 === moves.length;
   };
@@ -280,16 +429,37 @@ function Puzzles({ id }: { id: string }) {
   const nextMoveUci = () => {
     const curPuzzle = puzzles[currentPuzzle];
     if (!curPuzzle || !currentMove) return;
-
     const indexOfNextMoveToPlay = curPuzzle.moves.indexOf(makeUci(currentMove)) + 1;
     const nextMoveUci = curPuzzle.moves[indexOfNextMoveToPlay];
     if (!nextMoveUci) return;
-
     const nextMove = parseUci(nextMoveUci);
     if (!nextMove || !isNormal(nextMove)) return;
-
     return nextMove;
   };
+
+  const puzzle = puzzles[currentPuzzle];
+  const showCandidates =
+    candidatesEnabled &&
+    !rushActive &&
+    puzzle !== undefined &&
+    isPuzzleIncomplete &&
+    plyOnBoard === 1;
+
+  /** A correct candidate is played on the board; the rest of the puzzle continues there. */
+  function playCandidate() {
+    if (!puzzle || !selectedDb) return;
+    if (puzzle.moves.length <= 2) {
+      makeMoves({ payload: puzzle.moves.slice(1, 2), mainline: true, changeHeaders: false });
+      void changeCompletion("correct").then(() => {
+        if (jumpToNextPuzzleImmediately) void generatePuzzle(selectedDb);
+      });
+      return;
+    }
+    makeMoves({ payload: puzzle.moves.slice(1, 3), mainline: true, changeHeaders: false });
+  }
+
+  const tacticalRating = review?.rating;
+  const ratingProvisional = !tacticalRating || tacticalRating.deviation >= PROVISIONAL_DEVIATION;
 
   return (
     <>
@@ -301,374 +471,394 @@ function Puzzles({ id }: { id: string }) {
           changeCompletion={changeCompletion}
           generatePuzzle={generatePuzzle}
           db={selectedDb}
+          autoJump={jumpToNextPuzzleImmediately && !rushActive}
         />
       </Portal>
       <PanelHeader zone="tools">
         <PanelTitle>{t("Home.Card.Puzzle.Title")}</PanelTitle>
       </PanelHeader>
       <Portal target="#panel-tools">
-        <Paper
-          h="100%"
-          withBorder
-          p="md"
-          style={{
-            overflow: "hidden",
-          }}
-        >
-          <AddPuzzle
-            puzzleDbs={puzzleDbs}
-            opened={addOpened}
-            setOpened={setAddOpened}
-            setPuzzleDbs={setPuzzleDbs}
-          />
-          <ConfirmModal
-            title="Delete Puzzle Database"
-            description="Are you sure you want to delete this puzzle database?"
-            opened={deleteModalOpened}
-            onClose={() => setDeleteModalOpened(false)}
-            onConfirm={async () => {
-              if (selectedDb) {
-                await commands.deletePuzzleDatabase(selectedDb);
-                setPuzzleDbs((dbs) => dbs.filter((db) => db.path !== selectedDb));
-                setSelectedDb(null);
-                setPuzzles([]);
-                reset();
-                setTimerStart(null);
-                setIsPlayingSolution(false);
-              }
-              setDeleteModalOpened(false);
-            }}
-          />
-          <Group justify="space-between" pb="sm">
-            <Select
-              style={{ flex: 1 }}
-              data={puzzleDbs
-                .map((p) => ({
-                  label: p.title.split(".db3")[0],
-                  value: p.path,
-                }))
-                .concat({ label: `+ ${t("Common.AddNew")}`, value: "add" })}
-              value={selectedDb}
-              clearable={false}
-              placeholder={t("Puzzle.SelectDatabase")}
-              onChange={(v) => {
-                if (v === "add") {
-                  setAddOpened(true);
-                } else {
-                  setSelectedDb(v);
+        <Paper h="100%" withBorder p="md" style={{ overflow: "hidden" }}>
+          <ScrollArea h="100%" type="auto" offsetScrollbars>
+            <AddPuzzle
+              puzzleDbs={puzzleDbs}
+              opened={addOpened}
+              setOpened={setAddOpened}
+              setPuzzleDbs={setPuzzleDbs}
+            />
+            <ConfirmModal
+              title={t("Puzzle.DeleteDatabase", "Delete puzzle database")}
+              description={t(
+                "Puzzle.DeleteDatabaseDesc",
+                "Are you sure you want to delete this puzzle database?",
+              )}
+              opened={deleteModalOpened}
+              onClose={() => setDeleteModalOpened(false)}
+              onConfirm={async () => {
+                if (selectedDb) {
+                  await commands.deletePuzzleDatabase(selectedDb);
+                  setPuzzleDbs((dbs) => dbs.filter((db) => db.path !== selectedDb));
+                  setSelectedDb(null);
+                  setPuzzles([]);
+                  reset();
+                  setTimerStart(null);
+                  setIsPlayingSolution(false);
                 }
+                setDeleteModalOpened(false);
               }}
             />
-            <Group gap="xs">
-              <Tooltip label="Delete database">
-                <ActionIcon
-                  color="red"
-                  disabled={!selectedDb}
-                  onClick={() => setDeleteModalOpened(true)}
-                >
-                  <IconTrash size={20} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("SideBar.Settings")}>
-                <ActionIcon onClick={() => setSettingsOpened((o) => !o)}>
-                  <IconSettings size={20} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          </Group>
-          <Accordion
-            value={settingsOpened ? "settings" : null}
-            onChange={(v) => setSettingsOpened(v === "settings")}
-            mb="sm"
-          >
-            <Accordion.Item value="settings">
-              <Accordion.Panel>
-                <Stack gap="md">
-                  {themesTableMissing && (
-                    <Alert
-                      icon={<IconAlertTriangle />}
-                      title="Puzzle database outdated"
-                      color="yellow"
+            <Stack gap="sm">
+              <Group justify="space-between">
+                <Select
+                  style={{ flex: 1 }}
+                  data={puzzleDbs
+                    .map((p) => ({
+                      label: p.title.split(".db3")[0],
+                      value: p.path,
+                    }))
+                    .concat({ label: `+ ${t("Common.AddNew")}`, value: "add" })}
+                  value={selectedDb}
+                  clearable={false}
+                  placeholder={t("Puzzle.SelectDatabase")}
+                  onChange={(v) => {
+                    if (v === "add") {
+                      setAddOpened(true);
+                    } else {
+                      setSelectedDb(v);
+                    }
+                  }}
+                />
+                <Group gap="xs">
+                  <Tooltip label={t("Puzzle.DeleteDatabase", "Delete puzzle database")}>
+                    <ActionIcon
+                      color="red"
+                      disabled={!selectedDb}
+                      onClick={() => setDeleteModalOpened(true)}
                     >
-                      This database does not support themes. Update to the latest puzzle DB.
-                    </Alert>
-                  )}
-                  <div>
-                    <Text size="sm" fw={500} mb={4}>
-                      {t("Puzzle.RatingRange")}
-                    </Text>
-                    <RangeSlider
-                      min={600}
-                      my="md"
-                      max={2800}
-                      value={ratingRange}
-                      onChange={setRatingRange}
-                      disabled={progressive}
-                      marks={[
-                        { value: 600, label: "600" },
-                        { value: 1700, label: "1700" },
-                        { value: 2800, label: "2800" },
-                      ]}
-                    />
-                  </div>
-                  <Select
-                    label="Theme"
-                    placeholder="All themes"
-                    data={availableThemes.map((theme) => ({
-                      label: formatThemeLabel(theme),
-                      value: theme,
-                    }))}
-                    value={effectiveSelectedTheme}
-                    onChange={setSelectedTheme}
-                    clearable
-                    searchable
-                  />
-                  <SimpleGrid cols={2} spacing="sm">
-                    <Switch
-                      label={t("Puzzle.Progressive")}
-                      description={t("Puzzle.Progressive.Desc")}
-                      checked={progressive}
-                      onChange={(event) => setProgressive(event.currentTarget.checked)}
-                    />
-                    <Switch
-                      label={t("Puzzle.HideRating")}
-                      description={t("Puzzle.HideRating.Desc")}
-                      checked={hideRating}
-                      onChange={(event) => setHideRating(event.currentTarget.checked)}
-                    />
-                    <Switch
-                      label={t("Puzzle.JumpToNextPuzzleImmediately")}
-                      description={t("Puzzle.JumpToNextPuzzleImmediately.Desc")}
-                      checked={jumpToNextPuzzleImmediately}
-                      onChange={(event) =>
-                        setJumpToNextPuzzleImmediately(event.currentTarget.checked)
-                      }
-                    />
-                    <Switch
-                      label={t("Puzzle.TrackPuzzleTime")}
-                      description={t("Puzzle.TrackPuzzleTime.Desc")}
-                      checked={trackTime}
-                      onChange={(event) => {
-                        if (!event.currentTarget.checked) {
-                          setTimerStart(null);
-                          setTrackTime(false);
-                        } else {
-                          setTrackTime(true);
-                        }
-                      }}
-                    />
-                  </SimpleGrid>
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
-          <Group grow>
-            <Paper withBorder p="xs">
-              <Text size="xs" c="dimmed">
-                {t("Puzzle.Rating")}
-              </Text>
-              <Text fw={700} size="lg">
-                {isPuzzleIncomplete && hideRating && puzzles[currentPuzzle]?.rating
-                  ? "?"
-                  : puzzles[currentPuzzle]?.rating || "-"}
-              </Text>
-            </Paper>
-
-            {trackTime && (
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  {t("Puzzle.Time")}
-                </Text>
-                <Text fw={700} size="lg" ff="monospace">
-                  {formatTime(elapsedTime)}
-                </Text>
-              </Paper>
-            )}
-
-            <Paper withBorder p="xs">
-              <Text size="xs" c="dimmed">
-                {t("Puzzle.Accuracy")}
-              </Text>
-              <Text
-                fw={700}
-                size="lg"
-                c={accuracy === null ? "dimmed" : accuracy >= 50 ? "teal" : "orange"}
-              >
-                {accuracy !== null ? `${accuracy}%` : "-"}
-              </Text>
-            </Paper>
-
-            <Paper withBorder p="xs">
-              <Text size="xs" c="dimmed">
-                {t("Puzzle.Streak")}
-              </Text>
-              <Group gap={2}>
-                <Text fw={700} size="lg">
-                  {currentStreak}
-                </Text>
-                <IconFlame size={20} color="orange" />
+                      <IconTrash size={20} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t("Puzzle.Filters", "Filters and options")}>
+                    <ActionIcon
+                      variant={settingsOpened ? "filled" : "default"}
+                      onClick={() => setSettingsOpened((o) => !o)}
+                    >
+                      <IconSettings size={20} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
               </Group>
-            </Paper>
 
-            {trackTime && avgTimeSeconds > 0 && (
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  {t("Puzzle.AvgTime")}
-                </Text>
-                <Text fw={700} size="lg">
-                  {avgTimeSeconds.toFixed(1)}s
-                </Text>
-              </Paper>
-            )}
-          </Group>
-          <Divider my="sm" />
-          {!isPuzzleIncomplete && (puzzles[currentPuzzle]?.themes?.length ?? 0) > 0 && (
-            <Group gap="xs" mb="sm">
-              {puzzles[currentPuzzle]?.themes?.map((theme) => (
-                <Badge key={theme} variant="light" size="sm">
-                  {formatThemeLabel(theme)}
-                </Badge>
-              ))}
-            </Group>
-          )}
-          <Group justify="space-between">
-            <Text fz="1.75rem" fw={500}>
-              {!turnToMove
-                ? ""
-                : turnToMove === "white"
-                  ? t("Fen.BlackToMove")
-                  : t("Fen.WhiteToMove")}
-            </Text>
-            <Group gap="xs">
-              <Tooltip label={t("Puzzle.NewPuzzle")}>
-                <ActionIcon
-                  disabled={!selectedDb}
-                  onClick={() => generatePuzzle(selectedDb!, true)}
+              <Accordion
+                value={settingsOpened ? "settings" : null}
+                onChange={(v) => setSettingsOpened(v === "settings")}
+              >
+                <Accordion.Item value="settings" style={{ borderBottom: "none" }}>
+                  <Accordion.Panel>
+                    <PuzzleFilters
+                      availableThemes={availableThemes}
+                      themesTableMissing={themesTableMissing}
+                      myLevel={
+                        tacticalRating && !ratingProvisional ? ratingBandFor(tacticalRating) : null
+                      }
+                      rushActive={rushActive}
+                      onTrackTimeOff={() => setTimerStart(null)}
+                    />
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+
+              <PuzzleModePanel
+                mode={mode}
+                onModeChange={(next) => {
+                  setRush(null);
+                  setMode(next);
+                }}
+                settings={rushSettings}
+                onSettingsChange={setRushSettings}
+                rush={rush}
+                stormLeftMs={stormLeft}
+                countdownLeftMs={countdownLeft}
+                best={{ storm: review?.best.storm?.score, streak: review?.best.streak?.score }}
+                newBest={newBest}
+                disabled={!selectedDb}
+                onStart={startRushSession}
+                onStop={stopRush}
+              />
+
+              {noPuzzles && (
+                <Alert color="yellow" variant="light" p="xs">
+                  {t(
+                    "Puzzle.NoMatch",
+                    "No puzzle matches these filters. Widen the rating range, the themes or the quality.",
+                  )}
+                </Alert>
+              )}
+
+              <Group grow>
+                <Paper withBorder p="xs">
+                  <Text size="xs" c="dimmed">
+                    {t("Puzzle.Rating")}
+                  </Text>
+                  <Text fw={700} size="lg">
+                    {isPuzzleIncomplete && hideRating && puzzle?.rating
+                      ? "?"
+                      : puzzle?.rating || "-"}
+                  </Text>
+                </Paper>
+                {trackTime && (
+                  <Paper withBorder p="xs">
+                    <Text size="xs" c="dimmed">
+                      {t("Puzzle.Time")}
+                    </Text>
+                    <Text fw={700} size="lg" ff="monospace">
+                      {formatTime(elapsedTime)}
+                    </Text>
+                  </Paper>
+                )}
+                <Paper withBorder p="xs">
+                  <Text size="xs" c="dimmed">
+                    {t("Puzzle.Accuracy")}
+                  </Text>
+                  <Text
+                    fw={700}
+                    size="lg"
+                    c={accuracy === null ? "dimmed" : accuracy >= 50 ? "teal" : "orange"}
+                  >
+                    {accuracy !== null ? `${accuracy}%` : "-"}
+                  </Text>
+                </Paper>
+                <Paper withBorder p="xs">
+                  <Text size="xs" c="dimmed">
+                    {t("Puzzle.Streak")}
+                  </Text>
+                  <Group gap={2}>
+                    <Text fw={700} size="lg">
+                      {currentStreak}
+                    </Text>
+                    <IconFlame size={20} color="orange" />
+                  </Group>
+                </Paper>
+                <Tooltip
+                  label={t(
+                    "Puzzle.TacticalRatingTip",
+                    "Glicko-2 against the rating of each puzzle, first try only, in free and countdown modes.",
+                  )}
+                  multiline
+                  w={260}
                 >
-                  <IconPlus />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("Puzzle.AnalyzePosition")}>
-                <ActionIcon
-                  disabled={!selectedDb}
-                  onClick={() =>
-                    createTab({
-                      tab: {
-                        name: "Puzzle Analysis",
-                        type: "analysis",
-                      },
-                      setTabs,
-                      setActiveTab,
-                      pgn: puzzles[currentPuzzle]?.moves.join(" "),
-                      headers: {
-                        ...defaultTree().headers,
-                        fen: puzzles[currentPuzzle]?.fen,
-                        orientation:
-                          parseFen(puzzles[currentPuzzle].fen).unwrap().turn === "white"
-                            ? "black"
-                            : "white",
-                      },
-                    })
+                  <Paper withBorder p="xs">
+                    <Text size="xs" c="dimmed">
+                      {t("Puzzle.TacticalRating", "My rating")}
+                    </Text>
+                    <Text fw={700} size="lg">
+                      {tacticalRating
+                        ? `${tacticalRating.rating}${ratingProvisional ? "?" : ""}`
+                        : "-"}
+                    </Text>
+                  </Paper>
+                </Tooltip>
+                {trackTime && avgTimeSeconds > 0 && (
+                  <Paper withBorder p="xs">
+                    <Text size="xs" c="dimmed">
+                      {t("Puzzle.AvgTime")}
+                    </Text>
+                    <Text fw={700} size="lg">
+                      {avgTimeSeconds.toFixed(1)}s
+                    </Text>
+                  </Paper>
+                )}
+              </Group>
+
+              {!isPuzzleIncomplete && (puzzle?.themes?.length ?? 0) > 0 && (
+                <Group gap="xs">
+                  {puzzle?.themes?.map((theme) => (
+                    <Badge key={theme} variant="light" size="sm">
+                      {formatThemeLabel(theme)}
+                    </Badge>
+                  ))}
+                </Group>
+              )}
+
+              <Group justify="space-between">
+                <Text fz="1.5rem" fw={500}>
+                  {!turnToMove
+                    ? ""
+                    : turnToMove === "white"
+                      ? t("Fen.BlackToMove")
+                      : t("Fen.WhiteToMove")}
+                </Text>
+                <Group gap="xs">
+                  <Tooltip label={t("Puzzle.NewPuzzle")}>
+                    <ActionIcon
+                      disabled={!selectedDb || rushActive}
+                      onClick={() => generatePuzzle(selectedDb!, true)}
+                    >
+                      <IconPlus />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t("Puzzle.AnalyzePosition")}>
+                    <ActionIcon
+                      disabled={!selectedDb || !puzzle}
+                      onClick={() =>
+                        createTab({
+                          tab: {
+                            name: "Puzzle Analysis",
+                            type: "analysis",
+                          },
+                          setTabs,
+                          setActiveTab,
+                          pgn: puzzle?.moves.join(" "),
+                          headers: {
+                            ...defaultTree().headers,
+                            fen: puzzle?.fen,
+                            orientation:
+                              parseFen(puzzle.fen).unwrap().turn === "white" ? "black" : "white",
+                          },
+                        })
+                      }
+                    >
+                      <IconZoomCheck />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t("Puzzle.ClearSession")}>
+                    <ActionIcon
+                      disabled={rushActive}
+                      onClick={() => {
+                        setPuzzles([]);
+                        reset();
+                        setTimerStart(null);
+                        setIsPlayingSolution(false);
+                        finishedRef.current.clear();
+                      }}
+                    >
+                      <IconX />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              </Group>
+
+              {showCandidates && puzzle && (
+                <PuzzleCandidates
+                  key={`${currentPuzzle}-${puzzle.id}`}
+                  puzzle={puzzle}
+                  onCorrect={playCandidate}
+                  onWrong={() => void changeCompletion("incorrect")}
+                />
+              )}
+
+              <Group grow>
+                <Button
+                  variant="light"
+                  fullWidth
+                  onClick={async () => {
+                    solutionAbortRef.current?.abort();
+                    setIsPlayingSolution(false);
+                    const abortController = new AbortController();
+                    solutionAbortRef.current = abortController;
+                    const curPuzzle = puzzles[currentPuzzle];
+
+                    if (curPuzzle.completion === "incomplete") {
+                      changeCompletion("incorrect");
+                    }
+
+                    if (currentlyOnLastMoveOrNoLastMove()) return;
+
+                    const nextMove = nextMoveUci();
+                    if (!nextMove) return;
+
+                    const from = makeSquare(nextMove.from);
+                    const to = makeSquare(nextMove.to);
+                    const currentShapes = store.getState().currentNode().shapes;
+
+                    // Progressive hints: circle > arrow > clear
+                    const hasCircle = currentShapes.some((s) => s.orig === from && !s.dest);
+                    const hasArrow = currentShapes.some((s) => s.orig === from && s.dest === to);
+
+                    if (hasArrow) {
+                      setShapes(
+                        currentShapes.filter(
+                          (s) => !(s.orig === from && (!s.dest || s.dest === to)),
+                        ),
+                      );
+                    } else if (hasCircle) {
+                      setShapes([
+                        ...currentShapes.filter((s) => !(s.orig === from && !s.dest)),
+                        { orig: from, dest: to, brush: "green" },
+                      ]);
+                    } else {
+                      setShapes([
+                        ...currentShapes,
+                        { orig: from, dest: undefined, brush: "green" },
+                      ]);
+                    }
+                  }}
+                  disabled={
+                    puzzles.length === 0 ||
+                    currentlyOnLastMoveOrNoLastMove() ||
+                    isPlayingSolution ||
+                    rushActive
                   }
                 >
-                  <IconZoomCheck />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("Puzzle.ClearSession")}>
-                <ActionIcon
-                  onClick={() => {
-                    setPuzzles([]);
-                    reset();
-                    setTimerStart(null);
+                  {t("Puzzle.GetAHint")}
+                </Button>
+                <Button
+                  variant="light"
+                  fullWidth
+                  onClick={async () => {
+                    solutionAbortRef.current?.abort();
+                    const abortController = new AbortController();
+                    solutionAbortRef.current = abortController;
+
+                    const curPuzzle = puzzles[currentPuzzle];
+                    if (curPuzzle.completion === "incomplete") {
+                      changeCompletion("incorrect");
+                    }
+                    setIsPlayingSolution(true);
+                    goToStart();
+                    for (let i = 0; i < curPuzzle.moves.length; i++) {
+                      if (abortController.signal.aborted) break;
+                      makeMove({
+                        payload: parseUci(curPuzzle.moves[i])!,
+                        mainline: true,
+                      });
+                      await new Promise((r) => setTimeout(r, 500));
+                    }
                     setIsPlayingSolution(false);
                   }}
+                  disabled={puzzles.length === 0 || rushActive}
                 >
-                  <IconX />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          </Group>
-          <Group grow>
-            <Button
-              mt="sm"
-              variant="light"
-              fullWidth
-              onClick={async () => {
-                solutionAbortRef.current?.abort();
-                setIsPlayingSolution(false);
-                const abortController = new AbortController();
-                solutionAbortRef.current = abortController;
-                const curPuzzle = puzzles[currentPuzzle];
+                  {t("Puzzle.ViewSolution")}
+                </Button>
+              </Group>
 
-                if (curPuzzle.completion === "incomplete") {
-                  changeCompletion("incorrect");
-                }
-
-                if (currentlyOnLastMoveOrNoLastMove()) return;
-
-                const nextMove = nextMoveUci();
-                if (!nextMove) return;
-
-                const from = makeSquare(nextMove.from);
-                const to = makeSquare(nextMove.to);
-                const currentShapes = store.getState().currentNode().shapes;
-
-                // Progressive hints: circle > arrow > clear
-                const hasCircle = currentShapes.some((s) => s.orig === from && !s.dest);
-                const hasArrow = currentShapes.some((s) => s.orig === from && s.dest === to);
-
-                if (hasArrow) {
-                  // Third click: Remove all hint shapes for this move
-                  setShapes(
-                    currentShapes.filter((s) => !(s.orig === from && (!s.dest || s.dest === to))),
-                  );
-                } else if (hasCircle) {
-                  // Second click: Replace circle with arrow
-                  setShapes([
-                    ...currentShapes.filter((s) => !(s.orig === from && !s.dest)),
-                    { orig: from, dest: to, brush: "green" },
-                  ]);
-                } else {
-                  // First click: Add circle
-                  setShapes([...currentShapes, { orig: from, dest: undefined, brush: "green" }]);
-                }
-              }}
-              disabled={
-                puzzles.length === 0 || currentlyOnLastMoveOrNoLastMove() || isPlayingSolution
-              }
-            >
-              {t("Puzzle.GetAHint")}
-            </Button>
-            <Button
-              mt="sm"
-              variant="light"
-              fullWidth
-              onClick={async () => {
-                solutionAbortRef.current?.abort();
-                const abortController = new AbortController();
-                solutionAbortRef.current = abortController;
-
-                const curPuzzle = puzzles[currentPuzzle];
-                if (curPuzzle.completion === "incomplete") {
-                  changeCompletion("incorrect");
-                }
-                setIsPlayingSolution(true);
-                goToStart();
-                for (let i = 0; i < curPuzzle.moves.length; i++) {
-                  if (abortController.signal.aborted) break;
-                  makeMove({
-                    payload: parseUci(curPuzzle.moves[i])!,
-                    mainline: true,
-                  });
-                  await new Promise((r) => setTimeout(r, 500));
-                }
-                setIsPlayingSolution(false);
-              }}
-              disabled={puzzles.length === 0}
-            >
-              {t("Puzzle.ViewSolution")}
-            </Button>
-          </Group>
+              {puzzles.length > 0 && (
+                <>
+                  <Divider label={t("Puzzle.History", "This session")} labelPosition="left" />
+                  <ChallengeHistory
+                    challenges={puzzles.map((p) => ({
+                      ...p,
+                      label: p.rating?.toString() ?? "-",
+                    }))}
+                    current={currentPuzzle}
+                    select={(i) => {
+                      if (i === currentPuzzle || rushActive) return;
+                      solutionAbortRef.current?.abort();
+                      setIsPlayingSolution(false);
+                      setCurrentPuzzle(i);
+                      setPuzzle(puzzles[i]);
+                      if (puzzles[i].completion === "incomplete") {
+                        setTimerStart(Date.now() - (puzzles[i].timeSpent || 0));
+                        setCountdownStart(Date.now());
+                      } else {
+                        setTimerStart(null);
+                      }
+                    }}
+                  />
+                </>
+              )}
+            </Stack>
+          </ScrollArea>
         </Paper>
       </Portal>
       <PanelHeader zone="notation">
@@ -676,33 +866,8 @@ function Puzzles({ id }: { id: string }) {
       </PanelHeader>
       <Portal target="#panel-notation">
         <Stack h="100%" gap="xs">
-          <Paper withBorder p="md" mih="5rem">
-            <ScrollArea h="100%" offsetScrollbars>
-              <ChallengeHistory
-                challenges={puzzles.map((p) => ({
-                  ...p,
-                  label: p.rating?.toString() ?? "-",
-                }))}
-                current={currentPuzzle}
-                select={(i) => {
-                  if (i === currentPuzzle) return;
-                  solutionAbortRef.current?.abort();
-                  setIsPlayingSolution(false);
-                  setCurrentPuzzle(i);
-                  setPuzzle(puzzles[i]);
-                  if (puzzles[i].completion === "incomplete") {
-                    setTimerStart(Date.now() - (puzzles[i].timeSpent || 0));
-                  } else {
-                    setTimerStart(null);
-                  }
-                }}
-              />
-            </ScrollArea>
-          </Paper>
-          <Stack flex={1} gap="xs">
-            <GameNotation />
-            <MoveControls readOnly />
-          </Stack>
+          <GameNotation />
+          <MoveControls readOnly />
         </Stack>
       </Portal>
     </>

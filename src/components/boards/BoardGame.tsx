@@ -55,6 +55,7 @@ import {
 import type { ChessgroundRef } from "@/chessground/Chessground";
 import {
   activeTabAtom,
+  enginesAtom,
   flipBoardAfterMoveAtom,
   currentGameIdAtom,
   currentGameStateAtom,
@@ -102,9 +103,12 @@ import { getModelGameArtifactPaths, serializeModelGameArtifacts } from "@/utils/
 import { normalizeEngineGoMode } from "@/utils/enginePresets";
 import { lowTimeThresholdSeconds, playGameEndSound, playLowTimeSound } from "@/utils/sound";
 import { createTab } from "@/utils/tabs";
+import { generateBasicMate } from "@/utils/basicMates";
 import {
   isEndgameObjectiveMet,
+  recordBasicMateAttempt,
   recordEndgameAttempt,
+  type BasicMateId,
   type EndgamePosition,
   type TrainingObjective,
 } from "@/utils/trainingAreas";
@@ -118,7 +122,14 @@ import MoveControls from "../common/MoveControls";
 import { TreeStateContext } from "../common/TreeStateContext";
 import Board from "./Board";
 import BoardControls from "./BoardControls";
+import { BasicMateResult } from "./BasicMateResult";
 import EditingCard from "./EditingCard";
+import {
+  EndgameObjectivePanel,
+  findObjectiveEngine,
+  moveNumberAfter,
+  useEndgameObjectiveWatch,
+} from "./EndgameObjectiveWatch";
 import HumanBotHistoryPanel from "./HumanBotHistoryPanel";
 import HumanBotMeasurementsPanel from "./HumanBotMeasurementsPanel";
 import BotLeaguePanel from "./BotLeaguePanel";
@@ -301,6 +312,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const endgameSuccess = endgameStudentColor
     ? isEndgameObjectiveMet(endgameObjective, headers.result, endgameStudentColor)
     : null;
+  const basicMateId = headers.other?.ChessLabEndgameBasicMate as BasicMateId | undefined;
+  const [basicMateTimeMs, setBasicMateTimeMs] = useState<number | null>(null);
   const setFen = useStore(store, (s) => s.setFen);
   const setHeaders = useStore(store, (s) => s.setHeaders);
   const setResult = useStore(store, (s) => s.setResult);
@@ -331,6 +344,24 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const endgameStartedAtRef = useRef(Date.now());
   const endgameAttemptRecordedRef = useRef(false);
   const endgameAutoStartAttemptedRef = useRef(false);
+  const storedEngines = useAtomValue(enginesAtom);
+  const objectiveEngine = useMemo(() => findObjectiveEngine(storedEngines), [storedEngines]);
+  const endgameOpponent = players.white.type === "human" ? players.black : players.white;
+  const endgameWatch = useEndgameObjectiveWatch({
+    gameId,
+    active:
+      !generatorMode &&
+      headers.other?.ChessLabTrainingArea === "endgames" &&
+      gameState !== "settingUp",
+    startFen: root.fen,
+    studentColor: endgameStudentColor,
+    objective: endgameObjective,
+    trustOpponentEval:
+      endgameOpponent.type === "engine" &&
+      Boolean(endgameOpponent.engine) &&
+      !isMaiaEngine(endgameOpponent.engine!),
+    engine: objectiveEngine,
+  });
 
   const [logsOpened, toggleLogsOpened] = useToggle();
   const [botLeagueOpened, toggleBotLeagueOpened] = useToggle();
@@ -666,6 +697,11 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         name: s.name,
         value: s.name === "MultiPV" ? "1" : (s.value?.toString() ?? ""),
       })),
+      // Only endgame training uses the tablebase defense, even if the setting stays stored.
+      tablebaseDefense:
+        !maia && settings.tablebaseDefense && headers.other?.ChessLabTrainingArea === "endgames"
+          ? true
+          : null,
       go: settings.timeControl
         ? null
         : maia
@@ -782,7 +818,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     historySavedRef.current = false;
     discardGameResultRef.current = false;
     setHumanHasMoved(false);
-    if (endgamePositionId) {
+    if (endgamePositionId || basicMateId) {
       endgameStartedAtRef.current = Date.now();
       endgameAttemptRecordedRef.current = false;
     }
@@ -1080,6 +1116,24 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         | "white"
         | "black"
         | undefined;
+      const completedBasicMate = store.getState().headers.other?.ChessLabEndgameBasicMate as
+        | BasicMateId
+        | undefined;
+      if (completedBasicMate && completedStudentColor && !endgameAttemptRecordedRef.current) {
+        endgameAttemptRecordedRef.current = true;
+        const mated =
+          (completedStudentColor === "white" && outcome === "1-0") ||
+          (completedStudentColor === "black" && outcome === "0-1");
+        const timeMs = Date.now() - endgameStartedAtRef.current;
+        setBasicMateTimeMs(timeMs);
+        setTrainingAreas((previous) => ({
+          ...previous,
+          endgames: recordBasicMateAttempt(previous.endgames, completedBasicMate, {
+            success: mated,
+            timeMs,
+          }),
+        }));
+      }
       if (completedEndgameId && completedStudentColor && !endgameAttemptRecordedRef.current) {
         endgameAttemptRecordedRef.current = true;
         setTrainingAreas((previous) => {
@@ -1440,6 +1494,35 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         tab.value === activeTab ? { ...tab, name: position.title, type: "play" } : tab,
       ),
     );
+    setGameId(null);
+    setGameState("settingUp");
+    setWhiteTime(null);
+    setBlackTime(null);
+    setResult("*");
+    endgameAutoStartAttemptedRef.current = false;
+    endgameAttemptRecordedRef.current = false;
+  }
+
+  function handleNextBasicMate() {
+    if (!basicMateId) return;
+    const fen = generateBasicMate(basicMateId);
+    const nextTree = defaultTree(fen);
+    nextTree.headers = { ...headers, fen, result: "*" };
+    setTreeState(nextTree);
+    setGameId(null);
+    setGameState("settingUp");
+    setWhiteTime(null);
+    setBlackTime(null);
+    setResult("*");
+    setBasicMateTimeMs(null);
+    endgameAutoStartAttemptedRef.current = false;
+    endgameAttemptRecordedRef.current = false;
+  }
+
+  /** Starts again from an earlier position of the finished game, keeping the moves before it. */
+  function handleRetryEndgameFrom(ply: number) {
+    const moves = getTreeMoves().slice(0, ply);
+    syncTreeWithMoves(moves.map((uci) => ({ uci, clock: null })));
     setGameId(null);
     setGameState("settingUp");
     setWhiteTime(null);
@@ -1880,7 +1963,19 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                 </Stack>
               )}
               {(gameState === "playing" || gameState === "gameOver") &&
-                (gameState === "gameOver" && endgamePosition ? (
+                (gameState === "gameOver" && basicMateId ? (
+                  <BasicMateResult
+                    success={
+                      (endgameStudentColor === "white" && headers.result === "1-0") ||
+                      (endgameStudentColor === "black" && headers.result === "0-1")
+                    }
+                    timeMs={basicMateTimeMs}
+                    record={trainingAreas.endgames.basicMates?.[basicMateId]}
+                    onNext={handleNextBasicMate}
+                    onAnalyze={changeToAnalysisMode}
+                    onBack={() => void handleReturnToEndgames()}
+                  />
+                ) : gameState === "gameOver" && endgamePosition ? (
                   <Stack h="100%" justify="space-between">
                     <Stack align="center" justify="center" style={{ flex: 1 }} ta="center">
                       {endgameSuccess ? (
@@ -1938,6 +2033,18 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                           {t("Endgame.PlayNext", "Play the next endgame")}
                         </Button>
                       )}
+                      {endgameSuccess !== true && endgameWatch.state.lostAtPly !== null && (
+                        <Button
+                          color="orange"
+                          variant="light"
+                          leftSection={<IconRefresh />}
+                          onClick={() => handleRetryEndgameFrom(endgameWatch.state.retryPly)}
+                        >
+                          {t("Endgame.Watch.RetryFrom", "Retry from move {{move}}", {
+                            move: moveNumberAfter(root.fen, endgameWatch.state.retryPly),
+                          })}
+                        </Button>
+                      )}
                       <Button
                         variant={endgameSuccess === true ? "default" : "light"}
                         leftSection={<IconRefresh />}
@@ -1964,6 +2071,18 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                 ) : (
                   <Stack h="100%">
                     <Box flex={1}>
+                      {endgameWatch.enabled && endgameStudentColor && (
+                        <Box mb="sm">
+                          <EndgameObjectivePanel
+                            watch={endgameWatch}
+                            startFen={root.fen}
+                            studentColor={endgameStudentColor}
+                            objective={endgameObjective}
+                            engine={objectiveEngine}
+                            playing={gameState === "playing"}
+                          />
+                        </Box>
+                      )}
                       <GameInfo headers={headers} />
                       {generatorMode && gameState === "playing" && (
                         <Group justify="center" mt="sm" gap="xs">
@@ -1978,16 +2097,18 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                       )}
                     </Box>
                     <Group grow>
-                      {gameState === "playing" && endgamePosition && trainingReturn && (
-                        <Button
-                          variant="subtle"
-                          onClick={() => void handleReturnToEndgames()}
-                          leftSection={<IconArrowLeft />}
-                          loading={isAborting}
-                        >
-                          Volver a la lista de finales
-                        </Button>
-                      )}
+                      {gameState === "playing" &&
+                        (endgamePosition || basicMateId) &&
+                        trainingReturn && (
+                          <Button
+                            variant="subtle"
+                            onClick={() => void handleReturnToEndgames()}
+                            leftSection={<IconArrowLeft />}
+                            loading={isAborting}
+                          >
+                            Volver a la lista de finales
+                          </Button>
+                        )}
                       {gameState === "playing" && (
                         <Button
                           variant="default"

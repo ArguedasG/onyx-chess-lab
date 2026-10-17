@@ -23,6 +23,8 @@ function gameMove(
         color,
         source,
         thinkTimeMs: thinkTimeMs === null ? null : BigInt(thinkTimeMs),
+        engineEval: null,
+        tablebaseCategory: null,
     };
 }
 

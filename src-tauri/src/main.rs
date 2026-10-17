@@ -86,7 +86,8 @@ use crate::db::{
 use crate::fs::set_file_as_executable;
 use crate::game::{
     abort_game, get_game_engine_logs, get_game_manifest, get_game_state, make_game_move,
-    resign_game, start_game, take_back_game_move, ClockUpdateEvent, GameMoveEvent, GameOverEvent,
+    resign_game, rewind_game, start_game, take_back_game_move, ClockUpdateEvent, GameMoveEvent,
+    GameOverEvent,
 };
 use crate::lexer::lex_pgn;
 use crate::model_game_batch::{
@@ -98,7 +99,7 @@ use crate::oauth::authenticate;
 use crate::pgn::{count_pgn_games, delete_game, read_games, write_game};
 use crate::puzzle::{
     delete_puzzle_database, get_puzzle, get_puzzle_db_info, get_puzzle_themes,
-    get_themes_for_puzzle,
+    get_themes_for_puzzle, sample_puzzles,
 };
 use crate::secure_tokens::{
     delete_lichess_token, get_lichess_token, secure_token_storage_available, store_lichess_token,
@@ -181,6 +182,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_engine_logs,
             memory_size,
             get_puzzle,
+            sample_puzzles,
             search_opening_name,
             get_opening_from_fen,
             get_opening_from_fens,
@@ -239,6 +241,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_game_state,
             make_game_move,
             take_back_game_move,
+            rewind_game,
             resign_game,
             abort_game,
             get_game_engine_logs,

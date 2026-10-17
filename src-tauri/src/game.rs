@@ -25,6 +25,8 @@ use tokio::{
     time::{interval, Duration},
 };
 
+use vampirc_uci::uci::ScoreValue;
+
 use crate::{
     engine::{
         parse_fen_to_position, BaseEngine, EngineKillHandle, EngineLaunchMetadata, EngineLog,
@@ -68,6 +70,10 @@ pub enum PlayerConfig {
         #[serde(default, rename = "humanTiming")]
         #[specta(rename = "humanTiming")]
         human_timing: Option<HumanTimingConfig>,
+        /// With 7 pieces or fewer, play the best tablebase defense instead of searching.
+        #[serde(default, rename = "tablebaseDefense")]
+        #[specta(rename = "tablebaseDefense")]
+        tablebase_defense: Option<bool>,
         go: Option<GoMode>,
     },
 }
@@ -224,6 +230,12 @@ pub struct GameMove {
     pub color: String,
     pub source: GameMoveSource,
     pub think_time_ms: Option<u64>,
+    /// Score of the engine's own search for this move, from White's point of view: the
+    /// evaluation of the position the engine moved from, read at no extra cost.
+    pub engine_eval: Option<ScoreValue>,
+    /// Tablebase category of the position the engine moved from, for its side to move, when the
+    /// move came from the tablebase.
+    pub tablebase_category: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Type, PartialEq, Eq)]
@@ -560,6 +572,8 @@ impl GameController {
             color: color.to_string(),
             source,
             think_time_ms,
+            engine_eval: None,
+            tablebase_category: None,
         };
 
         self.moves.push(game_move.clone());
@@ -602,6 +616,8 @@ impl GameController {
             color: color.to_string(),
             source: GameMoveSource::Initial,
             think_time_ms: None,
+            engine_eval: None,
+            tablebase_category: None,
         };
 
         self.moves.push(game_move.clone());
@@ -1020,6 +1036,57 @@ impl GameManager {
             }
             .emit(app)?;
         } else if controller.is_engine_turn() {
+            if let Some(tx) = &controller.move_notify_tx {
+                let _ = tx.try_send(());
+            }
+        }
+
+        Ok(controller.get_state())
+    }
+
+    /// Takes the game back to the position after its first `ply` moves, never before the moves it
+    /// started with, so a student can retry from an earlier position without a new game.
+    pub async fn rewind_to(
+        &self,
+        game_id: &str,
+        ply: usize,
+        app: &AppHandle,
+    ) -> Result<GameState, Error> {
+        let game = self
+            .games
+            .get(game_id)
+            .ok_or_else(|| Error::GameNotFound(game_id.to_string()))?;
+
+        let mut controller = game.write().await;
+        if controller.status != GameStatus::Playing {
+            return Err(Error::GameNotInProgress);
+        }
+
+        let initial = controller
+            .moves
+            .iter()
+            .take_while(|m| m.source == GameMoveSource::Initial)
+            .count();
+        let target = ply.clamp(initial, controller.moves.len());
+        controller.moves.truncate(target);
+        controller.engine_thinking = false;
+
+        controller.rebuild_position_from_moves()?;
+        controller.check_game_end();
+
+        let (white_time, black_time) = controller.get_current_times();
+        let fen = Fen::from_position(controller.position.clone(), EnPassantMode::Legal).to_string();
+
+        GameMoveEvent {
+            game_id: game_id.to_string(),
+            moves: controller.moves.clone(),
+            fen,
+            white_time,
+            black_time,
+        }
+        .emit(app)?;
+
+        if controller.status == GameStatus::Playing && controller.is_engine_turn() {
             if let Some(tx) = &controller.move_notify_tx {
                 let _ = tx.try_send(());
             }
@@ -2000,7 +2067,7 @@ async fn request_engine_move(
         }
     }
 
-    let (engine_arc, go_mode, initial_fen, moves, turn, human_think_time_ms) = {
+    let (engine_arc, go_mode, initial_fen, moves, turn, human_think_time_ms, tablebase_fen) = {
         let ctrl = controller.read().await;
 
         if ctrl.status != GameStatus::Playing {
@@ -2019,8 +2086,12 @@ async fn request_engine_move(
             None => return Err(Error::EngineNotInitialized),
         };
 
-        let go = match player_config {
-            PlayerConfig::Engine { go, .. } => go,
+        let (go, tablebase_defense) = match player_config {
+            PlayerConfig::Engine {
+                go,
+                tablebase_defense,
+                ..
+            } => (go, tablebase_defense.unwrap_or(false)),
             _ => return Err(Error::NotEngineTurn),
         };
 
@@ -2054,6 +2125,10 @@ async fn request_engine_move(
         };
 
         let human_think_time_ms = sample_human_think_time(&ctrl, GameMoveSource::Engine);
+        let tablebase_fen = (tablebase_defense
+            && ctrl.position.board().occupied().count() <= TABLEBASE_MAX_PIECES
+            && ctrl.position.castles().is_empty())
+        .then(|| Fen::from_position(ctrl.position.clone(), EnPassantMode::Legal).to_string());
 
         (
             engine,
@@ -2062,34 +2137,124 @@ async fn request_engine_move(
             moves,
             turn,
             human_think_time_ms,
+            tablebase_fen,
         )
     };
 
-    let best_move = {
+    // Best defense: the tablebase answers exactly; without connection the engine plays instead.
+    if let Some(fen) = tablebase_fen {
+        if let Some((uci, category)) = tablebase_best_move(&fen).await {
+            let committed = commit_engine_move(
+                game_id,
+                controller,
+                app,
+                turn,
+                &uci,
+                decision_started_at,
+                None,
+                Some(category),
+            )
+            .await?;
+            if committed {
+                engine_arc
+                    .lock()
+                    .await
+                    .log_gui_message(&format!("Tablebase move: {uci}"));
+            }
+            return Ok(());
+        }
+    }
+
+    let (best_move, score) = {
         let mut engine = engine_arc.lock().await;
         engine.set_position(&initial_fen, &moves).await?;
         engine.go(&go_mode).await?;
-        engine.wait_for_bestmove().await?
+        engine.wait_for_bestmove_with_score().await?
     };
 
     wait_for_human_think_time(decision_started_at, human_think_time_ms).await;
 
+    // The engine reports from its own side; moves store White's point of view.
+    let engine_eval = score.map(|value| match (turn, value) {
+        (Color::White, value) => value,
+        (Color::Black, ScoreValue::Cp(cp)) => ScoreValue::Cp(-cp),
+        (Color::Black, ScoreValue::Mate(moves)) => ScoreValue::Mate(-moves),
+    });
+    commit_engine_move(
+        game_id,
+        controller,
+        app,
+        turn,
+        &best_move,
+        decision_started_at,
+        engine_eval,
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+const TABLEBASE_MAX_PIECES: usize = 7;
+const TABLEBASE_URL: &str = "https://tablebase.lichess.org/standard";
+
+#[derive(Deserialize)]
+struct TablebaseResponse {
+    category: String,
+    moves: Vec<TablebaseResponseMove>,
+}
+
+#[derive(Deserialize)]
+struct TablebaseResponseMove {
+    uci: String,
+}
+
+/// Best move of the Lichess tablebase (its moves come best first) and the category of the
+/// position for the side to move. `None` when it cannot answer in time.
+async fn tablebase_best_move(fen: &str) -> Option<(String, String)> {
+    let url = reqwest::Url::parse_with_params(TABLEBASE_URL, &[("fen", fen)]).ok()?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(4))
+        .user_agent(concat!("OnyxChessLab/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .ok()?;
+    let response = client.get(url).send().await.ok()?.error_for_status().ok()?;
+    let data: TablebaseResponse = response.json().await.ok()?;
+    if data.category == "unknown" {
+        return None;
+    }
+    let best = data.moves.into_iter().next()?;
+    Some((best.uci, data.category))
+}
+
+/// Plays the engine's move if the game is still waiting for it and tells the interface.
+/// Returns whether the move was played.
+#[allow(clippy::too_many_arguments)]
+async fn commit_engine_move(
+    game_id: &str,
+    controller: &Arc<RwLock<GameController>>,
+    app: &AppHandle,
+    turn: Color,
+    uci: &str,
+    decision_started_at: Instant,
+    engine_eval: Option<ScoreValue>,
+    tablebase_category: Option<String>,
+) -> Result<bool, Error> {
     let mut ctrl = controller.write().await;
     ctrl.engine_thinking = false;
 
-    if ctrl.status != GameStatus::Playing {
-        return Ok(());
-    }
-
-    if ctrl.position.turn() != turn {
-        return Ok(());
+    if ctrl.status != GameStatus::Playing || ctrl.position.turn() != turn {
+        return Ok(false);
     }
 
     let game_move = ctrl.apply_move(
-        &best_move,
+        uci,
         GameMoveSource::Engine,
         Some(decision_started_at.elapsed().as_millis() as u64),
     )?;
+    if let Some(last) = ctrl.moves.last_mut() {
+        last.engine_eval = engine_eval;
+        last.tablebase_category = tablebase_category;
+    }
     let (white_time, black_time) = ctrl.get_current_times();
 
     GameMoveEvent {
@@ -2110,7 +2275,7 @@ async fn request_engine_move(
         .emit(app)?;
     }
 
-    Ok(())
+    Ok(true)
 }
 
 fn clock_millis_to_uci(value: u64) -> u32 {
@@ -2157,6 +2322,20 @@ pub async fn take_back_game_move(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<GameState, Error> {
     state.game_manager.take_back_move(&game_id, &app).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn rewind_game(
+    game_id: String,
+    ply: u32,
+    state: tauri::State<'_, crate::AppState>,
+    app: AppHandle,
+) -> Result<GameState, Error> {
+    state
+        .game_manager
+        .rewind_to(&game_id, ply as usize, &app)
+        .await
 }
 
 #[tauri::command]
@@ -2304,6 +2483,7 @@ mod tests {
                 opening_repertoire: None,
                 human_timing: None,
                 go: Some(GoMode::Depth(24)),
+                tablebase_defense: None,
             },
             white_time_control: None,
             black_time_control: None,
@@ -2362,6 +2542,7 @@ mod tests {
             opening_repertoire: None,
             human_timing: None,
             go: Some(GoMode::Depth(12)),
+            tablebase_defense: None,
         };
 
         normalize_game_engine_options(&mut player, true);
@@ -2394,6 +2575,7 @@ mod tests {
             opening_repertoire: None,
             human_timing: None,
             go: Some(GoMode::Depth(18)),
+            tablebase_defense: None,
         };
 
         normalize_lc0_go_mode(&mut player);

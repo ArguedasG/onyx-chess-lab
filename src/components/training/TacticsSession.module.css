@@ -51,6 +51,11 @@
   flex-shrink: 0;
 }
 
+/* Visualization without pieces: the board keeps working, only the pieces are not drawn. */
+.noPieces :global(cg-board piece) {
+  visibility: hidden;
+}
+
 .more {
   border-top: 1px solid var(--mantine-color-default-border);
 }

@@ -1500,6 +1500,7 @@ mod tests {
                 opening_repertoire: None,
                 human_timing: None,
                 go: None,
+                tablebase_defense: None,
             },
         }
     }

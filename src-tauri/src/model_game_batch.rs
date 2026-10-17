@@ -731,6 +731,7 @@ mod tests {
             opening_repertoire: None,
             human_timing: None,
             go: Some(GoMode::Depth(1)),
+            tablebase_defense: None,
         }
     }
 

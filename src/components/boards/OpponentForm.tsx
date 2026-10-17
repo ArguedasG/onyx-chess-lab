@@ -69,6 +69,8 @@ export type OpponentSettings =
       seed?: number;
       timeUnit?: TimeType;
       incrementUnit?: TimeType;
+      /** Endgame training: best tablebase defense with 7 pieces or fewer. */
+      tablebaseDefense?: boolean;
     }
   | {
       type: "humanBot";

@@ -78,6 +78,18 @@ export default function TacticsSetStatisticsModal({ opened, onClose, set, state 
   const statistics = useMemo(() => getTacticsSetStatistics(state, set.id), [set.id, state]);
 
   if (!statistics) return null;
+  // Visualization attempts (I-38) are also counted on their own.
+  const visualStats = (["blind", "noPieces"] as const).flatMap((kind) => {
+    const attempts = state.attempts.filter(
+      (attempt) =>
+        attempt.setId === set.id && attempt.variant === kind && attempt.outcome !== "unsupported",
+    );
+    if (attempts.length === 0) return [];
+    const correct = attempts.filter((attempt) => attempt.outcome === "correct").length;
+    return [
+      { kind, attempts: attempts.length, accuracy: Math.round((correct / attempts.length) * 100) },
+    ];
+  });
   const recentEvolution = statistics.evolution.slice(-8);
   const completedCycles = [...statistics.completedCycles].reverse();
 
@@ -138,6 +150,27 @@ export default function TacticsSetStatisticsModal({ opened, onClose, set, state 
               detail={t("Training.Tactics.Stats.Excluded", "Excluded from accuracy")}
             />
           </SimpleGrid>
+          {visualStats.length > 0 && (
+            <Card withBorder mt="sm" padding="sm">
+              <Text size="sm" fw={600} mb={4}>
+                {t("Tactics.Visual.Stats", "Visualization")}
+              </Text>
+              <Group gap="lg">
+                {visualStats.map((item) => (
+                  <Text key={item.kind} size="sm">
+                    {item.kind === "blind"
+                      ? t("Tactics.Visual.Blind", "Blind")
+                      : t("Tactics.Visual.NoPieces", "No pieces")}
+                    {": "}
+                    {t("Tactics.Visual.StatsLine", "{{accuracy}} % · {{count}} attempts", {
+                      accuracy: item.accuracy,
+                      count: item.attempts,
+                    })}
+                  </Text>
+                ))}
+              </Group>
+            </Card>
+          )}
           <Card withBorder mt="sm" padding="sm">
             <Group justify="space-between">
               <Text size="sm" fw={600}>

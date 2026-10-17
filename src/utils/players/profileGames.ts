@@ -80,7 +80,8 @@ export function mergeProfileGames(groups: ReadonlyArray<readonly ProfileGame[]>)
 export type ProfilePeriod = "all" | "12m" | "3m";
 
 export type ProfileFilters = {
-    timeControl: "all" | PlayerAnalysisTimeControl;
+    /** Time controls to keep, several at once (blitz and rapid…); empty keeps them all. */
+    timeControls: PlayerAnalysisTimeControl[];
     period: ProfilePeriod;
     color: "any" | "white" | "black";
     /** Only the most recent N games that pass the other filters (8.6); `null` for all. */
@@ -88,7 +89,7 @@ export type ProfileFilters = {
 };
 
 export const DEFAULT_PROFILE_FILTERS: ProfileFilters = {
-    timeControl: "all",
+    timeControls: [],
     period: "all",
     color: "any",
     last: null,
@@ -109,7 +110,8 @@ export function filterProfileGames(
     const start = periodStart(filters.period, today);
     const filtered = games.filter(
         (game) =>
-            (filters.timeControl === "all" || game.timeControlCategory === filters.timeControl) &&
+            (filters.timeControls.length === 0 ||
+                filters.timeControls.includes(game.timeControlCategory)) &&
             (filters.color === "any" || game.isWhite === (filters.color === "white")) &&
             (start === null || (game.day !== null && game.day >= start)),
     );
