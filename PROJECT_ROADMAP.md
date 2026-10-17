@@ -78,9 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.21.0** (8.4 Jugadores, 8.5 Generador de repertorios, 8.6
-  Preparación contra rivales y 8.7 Entrenamiento desde errores). Detalle:
-  `docs/release-notes-0.21.0.es.md`.
+- Última versión publicada: **0.22.0** (8.8 Táctica, 8.9 Finales, 8.10 Aperturas y correcciones a
+  partir de comentarios de usuarios). Detalle: `docs/release-notes-0.22.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -93,8 +92,8 @@ prueban y comunican problemas.
   (`docs/market-study.es.md`, 2026-10-14). El mantenimiento del estudio, 8.2 y 8.3 se publicaron en
   0.20.0; **8.4 Jugadores** (validada por el autor), **8.5 Generador de repertorios**, **8.6
   Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
-  implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, con la validación
-  manual pendiente. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
+  implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, y se publicaron en
+  0.22.0. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
   sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -937,6 +936,19 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-17 — Release 0.22.0
+
+- Publica 8.8 (modos y sets de táctica), 8.9 (finales comprobados jugada a jugada e importación) y
+  8.10 (repaso continuo y huecos del repertorio), con los ajustes tras la prueba del autor.
+- Comentarios de un usuario: la barra espaciadora juega la mejor jugada del motor (atajo
+  configurable); las pestañas y botones clicados devuelven el teclado para que las flechas sigan
+  recorriendo la partida (ajuste desactivable); los errores del motor se muestran en lugar de
+  «Cargando…» (el Lc0 CUDA del catálogo no arranca sin NVIDIA) y el catálogo añade el Lc0 oficial
+  para CPU; ventana de Novedades tras actualizar y en Ayuda, con las notas en
+  `src/data/changelog.json`, que el workflow de release usa como descripción.
+- Validación automática: 400 pruebas de interfaz y 145 de Rust.
+- Detalle: `docs/release-notes-0.22.0.es.md`.
 
 ### 2026-10-17 — Ajustes tras la prueba de 8.8–8.10
 
