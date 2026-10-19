@@ -28,6 +28,7 @@ import { DEFAULT_TIME_CONTROL, type OpponentSettings } from "@/components/boards
 import { type Position, positionSchema } from "@/components/files/opening";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
 import { positionFromFen, swapMove } from "@/utils/chessops";
+import { type BotRatingsState, botRatingsStateSchema, EMPTY_BOT_RATINGS } from "@/utils/botRating";
 import type { SuccessDatabaseInfo } from "@/utils/db";
 import { type Engine, type EngineSettings, engineSchema } from "@/utils/engines";
 import type { HumanBotGameMeasurement } from "@/utils/humanBotMeasurements";
@@ -416,6 +417,23 @@ export const humanBotHistoryAtom = unwrap(
     ),
     () => EMPTY_HUMAN_BOT_HISTORY,
 );
+
+/** The user's ratings against the bots, one per rhythm (Phase 9.1, I-50). */
+export const botRatingsAtom = unwrap(
+    atomWithStorage<BotRatingsState>(
+        "bot-ratings.json",
+        EMPTY_BOT_RATINGS,
+        createAsyncZodStorage(botRatingsStateSchema, fileStorage),
+    ),
+    () => EMPTY_BOT_RATINGS,
+);
+
+/** Whether the next game against a bot is rated; friendly by default. */
+export const ratedBotGameAtom = atomWithStorage<boolean>("rated-bot-game", false);
+
+/** Which games against the bots the user's own player card includes. */
+export type BotGamesInCard = "rated" | "all" | "none";
+export const botGamesInCardAtom = atomWithStorage<BotGamesInCard>("bot-games-in-card", "rated");
 
 function tabValue<T extends object | string | boolean | number | null | undefined>(
     family: AtomFamily<string, PrimitiveAtom<T>>,

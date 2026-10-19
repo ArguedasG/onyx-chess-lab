@@ -77,6 +77,13 @@ export type PlayerCardTab =
 /** Session-only: the tab of each card, so coming back from a game keeps the view. */
 export const playerCardTabAtom = atom<Record<string, PlayerCardTab>>({});
 
+/** Which games a card with games against the bots shows: its accounts, the bots or both. */
+export type PlayerCardScope = "accounts" | "bots" | "all";
+export const playerCardScopeAtom = atomWithStorage<Record<string, PlayerCardScope>>(
+    "player-card-scope",
+    {},
+);
+
 export function sourceKey(source: Pick<PlayerAnalysisSource, "databasePath" | "playerId">): string {
     return `${source.databasePath}:${source.playerId}`;
 }

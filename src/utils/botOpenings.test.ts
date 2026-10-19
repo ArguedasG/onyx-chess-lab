@@ -1,0 +1,47 @@
+import { Chess, parseUci } from "chessops";
+import { describe, expect, it } from "vitest";
+import {
+    BOT_OPENING_FAMILIES,
+    BOT_OPENING_LINES,
+    type BotOpeningLineId,
+    botFamilyLines,
+    botOpeningLineUci,
+} from "./botOpenings";
+
+describe("bot opening lines", () => {
+    it("are legal from the initial position", () => {
+        for (const id of Object.keys(BOT_OPENING_LINES) as BotOpeningLineId[]) {
+            const position = Chess.default();
+            for (const uci of botOpeningLineUci(id)) {
+                const move = parseUci(uci);
+                expect(move, `${id}: ${uci}`).toBeDefined();
+                expect(position.isLegal(move!), `${id}: ${uci}`).toBe(true);
+                position.play(move!);
+            }
+        }
+    });
+
+    it("write castling as the king's two-square move", () => {
+        expect(botOpeningLineUci("ruy-closed")).toContain("e1g1");
+        expect(botOpeningLineUci("najdorf-bg5")).toContain("e1c1");
+        expect(botOpeningLineUci("kid-black")).toContain("e8g8");
+    });
+
+    it("start with the family's own side", () => {
+        const firstWhiteMoves = new Set(["e4", "d4", "c4", "Nf3"]);
+        for (const [id, family] of Object.entries(BOT_OPENING_FAMILIES)) {
+            for (const [line] of family.lines) {
+                const first = BOT_OPENING_LINES[line].split(" ")[0];
+                expect(firstWhiteMoves.has(first), `${id}/${line}`).toBe(true);
+                if (family.kind === "vsE4") expect(first, `${id}/${line}`).toBe("e4");
+                if (family.kind === "vsD4") expect(first, `${id}/${line}`).toBe("d4");
+                if (family.kind === "vsFlank")
+                    expect(["c4", "Nf3"], `${id}/${line}`).toContain(first);
+            }
+            const lines = botFamilyLines(id as keyof typeof BOT_OPENING_FAMILIES);
+            expect(
+                lines.every((line) => line.side === (family.kind === "white" ? "white" : "black")),
+            ).toBe(true);
+        }
+    });
+});

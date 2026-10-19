@@ -69,7 +69,10 @@ import {
   gamePlayer1SettingsAtom,
   gamePlayer2SettingsAtom,
   gameSameTimeControlAtom,
+  botRatingsAtom,
   humanBotHistoryAtom,
+  ratedBotGameAtom,
+  sessionsAtom,
   humanBotMeasurementsAtom,
   modelGameBlackSettingsAtom,
   modelGameBatchSettingsAtom,
@@ -81,11 +84,22 @@ import { twinBooksAtom } from "@/state/twinBots";
 import { positionFromFen } from "@/utils/chessops";
 import { getPGN } from "@/utils/chess";
 import { serializeGameManifest } from "@/utils/gameManifest";
+import {
+  applyRatedGame,
+  botRatingAt,
+  EMPTY_BOT_RATINGS,
+  type RatedRhythm,
+  ratedGameBlocker,
+  rhythmOfClock,
+} from "@/utils/botRating";
+import { saveBotGame } from "@/utils/botGamesDatabase";
+import { accountPlayerNames } from "@/utils/players/accountSources";
 import { buildHumanBotHistoryGame, EMPTY_HUMAN_BOT_HISTORY } from "@/utils/humanBotHistory";
 import {
   buildMaiaEngineSettings,
   buildHumanBotEngineArgs,
   buildHumanBotEngineSettings,
+  buildHumanBotPlay,
   buildHumanBotOpeningRepertoire,
   buildHumanBotTiming,
   buildHumanBotTraceHeaders,
@@ -131,6 +145,8 @@ import {
   useEndgameObjectiveWatch,
 } from "./EndgameObjectiveWatch";
 import HumanBotHistoryPanel from "./HumanBotHistoryPanel";
+import BotGameSetup, { type UserColor } from "./BotGameSetup";
+import RatedGameSelector, { formatPlayerRating } from "./RatedGameSelector";
 import HumanBotMeasurementsPanel from "./HumanBotMeasurementsPanel";
 import BotLeaguePanel from "./BotLeaguePanel";
 import { ModelGameBatchProgress, ModelGameBatchSetup } from "./ModelGameBatchPanel";
@@ -188,6 +204,19 @@ function toMeasurementPlayer(
   };
 }
 
+/** The human and the catalog bot of the setup, whatever their colors; `null` otherwise. */
+function getSetupBotMatch(first: OpponentSettings, second: OpponentSettings) {
+  const pair =
+    first.type === "human" && second.type === "humanBot"
+      ? { player: first, bot: second }
+      : second.type === "human" && first.type === "humanBot"
+        ? { player: second, bot: first }
+        : null;
+  return pair && pair.bot.type === "humanBot" && !pair.bot.twin
+    ? { player: pair.player, bot: pair.bot }
+    : null;
+}
+
 function getHumanBotHistoryMatch(players: { white: OpponentSettings; black: OpponentSettings }) {
   // A twin is not a catalogue profile: its games stay out of the bot history.
   if (
@@ -230,6 +259,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const [editingMode, toggleEditingMode] = useToggle();
   const [selectedPiece, setSelectedPiece] = useState<Piece | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [manualSetup, setManualSetup] = useState(false);
   const [isAborting, setIsAborting] = useState(false);
   const [humanHasMoved, setHumanHasMoved] = useState(false);
   const [batchActionBusy, setBatchActionBusy] = useState(false);
@@ -337,6 +367,14 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const twinBooks = useAtomValue(twinBooksAtom);
   const setMeasurements = useSetAtom(humanBotMeasurementsAtom);
   const historySavedRef = useRef(false);
+  const [ratedPreference, setRatedPreference] = useAtom(ratedBotGameAtom);
+  const [botRatings, setBotRatings] = useAtom(botRatingsAtom);
+  const sessions = useAtomValue(sessionsAtom);
+  /** The rating at stake in the current game: its rhythm and the bot's rating there. */
+  const gameRatingRef = useRef<{ rhythm: RatedRhythm; botRating: number } | null>(null);
+  // Read when a game ends, without subscribing the game listeners to them again.
+  const ratingContextRef = useRef({ botRatings, sessions, t });
+  ratingContextRef.current = { botRatings, sessions, t };
   const discardGameResultRef = useRef(false);
   const modelGameRunRef = useRef<ModelGameRun | null>(null);
   const singleExperimentIdRef = useRef<string | null>(null);
@@ -416,6 +454,24 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     (players.white.type === "human" && blackIsEngineControlled) ||
     (players.black.type === "human" && whiteIsEngineControlled);
   const isPlayerVsHumanBot = getHumanBotHistoryMatch(players) !== null;
+
+  const setupBotMatch = getSetupBotMatch(player1Settings, player2Settings);
+  const setupBotProfile = setupBotMatch ? getHumanBotProfile(setupBotMatch.bot.profileId) : null;
+  const ratedBlocker = ratedGameBlocker({
+    againstCatalogBot: setupBotMatch !== null,
+    fromStartPosition: root.fen === INITIAL_FEN && root.children.length === 0,
+    playerClock: setupBotMatch?.player.timeControl,
+    botClock: setupBotMatch?.bot.timeControl,
+    openingBook: openingBookEnabled && Boolean(openingBookPath),
+    verifier: objectiveEngine !== null,
+  });
+  const setupClockRhythm = setupBotMatch?.player.timeControl
+    ? rhythmOfClock(setupBotMatch.player.timeControl)
+    : null;
+  const setupRhythm: RatedRhythm | null =
+    ratedBlocker === null && setupClockRhythm && setupClockRhythm !== "bullet"
+      ? setupClockRhythm
+      : null;
 
   // Warn the human once per game when their clock enters the low-time zone.
   const lowTimeWarnedRef = useRef({ white: false, black: false });
@@ -660,6 +716,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           value: setting.value?.toString() ?? "",
         })),
         openingRepertoire: buildHumanBotOpeningRepertoire(profile),
+        // The generator keeps plain Maia sampling, so its experiments stay comparable.
+        botPlay: generatorMode ? null : buildHumanBotPlay(profile, objectiveEngine),
         humanTiming: generatorMode
           ? null
           : settings.humanTiming === false
@@ -817,6 +875,19 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     }
     historySavedRef.current = false;
     discardGameResultRef.current = false;
+    gameRatingRef.current = null;
+    const ratedMatch = generatorMode
+      ? null
+      : getSetupBotMatch(playerSettings.white, playerSettings.black);
+    if (ratedMatch && ratedPreference && ratedBlocker === null && ratedMatch.player.timeControl) {
+      const rhythm = rhythmOfClock(ratedMatch.player.timeControl);
+      if (rhythm !== "bullet") {
+        gameRatingRef.current = {
+          rhythm,
+          botRating: botRatingAt(getHumanBotProfile(ratedMatch.bot.profileId).elo, rhythm),
+        };
+      }
+    }
     setHumanHasMoved(false);
     if (endgamePositionId || basicMateId) {
       endgameStartedAtRef.current = Date.now();
@@ -1066,8 +1137,18 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
 
   const onTakeBack = useCallback(async () => {
     if (!gameId || gameState !== "playing") return;
+    if (gameRatingRef.current) {
+      gameRatingRef.current = null;
+      notifications.show({
+        title: t("HumanBots.Rated.NowFriendly", "The game is now friendly"),
+        message: t(
+          "HumanBots.Rated.NowFriendly.Desc",
+          "Taking back a move makes a rated game friendly: it will not change your rating.",
+        ),
+      });
+    }
     await commands.takeBackGameMove(gameId);
-  }, [gameId, gameState]);
+  }, [gameId, gameState, t]);
 
   useEffect(() => {
     if (gameState !== "playing" || !gameId) return;
@@ -1193,6 +1274,74 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
             : finalHeaders.black_time_control) ??
           finalHeaders.time_control ??
           null;
+        const rating = gameRatingRef.current;
+        gameRatingRef.current = null;
+        // As on Lichess, a game left before both sides made two moves does not count.
+        const ratedOutcome = rating && outcome !== "*" && payload.moves.length >= 4 ? rating : null;
+        const score =
+          outcome === "1/2-1/2"
+            ? 0.5
+            : (outcome === "1-0") === (historyMatch.playerColor === "white")
+              ? 1
+              : 0;
+        const {
+          botRatings: currentRatings,
+          sessions: currentSessions,
+          t,
+        } = ratingContextRef.current;
+        const ratingResult = ratedOutcome
+          ? applyRatedGame(currentRatings ?? EMPTY_BOT_RATINGS, {
+              gameId: `${payload.gameId}-${recordedAt}`,
+              recordedAt,
+              rhythm: ratedOutcome.rhythm,
+              profileId: profile.id,
+              botRating: ratedOutcome.botRating,
+              score,
+            })
+          : null;
+        if (ratingResult?.event) {
+          const event = ratingResult.event;
+          setBotRatings(ratingResult.state);
+          const change = event.after - event.before;
+          notifications.show({
+            title: t("HumanBots.Rated.Changed", "Rating {{rating}} ({{change}})", {
+              rating: formatPlayerRating(ratingResult.state.ratings[event.rhythm]),
+              change: change >= 0 ? `+${change}` : `${change}`,
+            }),
+            message: t(
+              "HumanBots.Rated.Changed.Desc",
+              "Your rating against the bots at this rhythm.",
+            ),
+            color: change >= 0 ? "teal" : "orange",
+          });
+        }
+        // In the bot game databases the player has the name of their card, so the games join it.
+        const cardName =
+          accountPlayerNames(currentSessions)[0] ?? historyMatch.player.name ?? "Player";
+        const playerElo = ratingResult?.event?.before ?? null;
+        const botElo = ratedOutcome?.botRating ?? profile.elo;
+        const databaseHeaders: GameHeaders = {
+          ...finalHeaders,
+          event: ratingResult?.event ? "Onyx rated game" : "Onyx friendly game",
+          white: historyMatch.playerColor === "white" ? cardName : profile.name,
+          black: historyMatch.playerColor === "black" ? cardName : profile.name,
+          white_elo: historyMatch.playerColor === "white" ? playerElo : botElo,
+          black_elo: historyMatch.playerColor === "black" ? playerElo : botElo,
+        };
+        const databasePgn = getPGN(store.getState().root, {
+          headers: databaseHeaders,
+          comments: false,
+          extraMarkups: false,
+          glyphs: false,
+          variations: false,
+        });
+        saveBotGame(databasePgn, Boolean(ratingResult?.event), payload.gameId).catch((error) =>
+          notifications.show({
+            title: t("HumanBots.Database.SaveError", "Could not save the game in its database"),
+            message: error instanceof Error ? error.message : String(error),
+            color: "red",
+          }),
+        );
         const historyGame = buildHumanBotHistoryGame({
           id: `${payload.gameId}-${recordedAt}`,
           backendGameId: payload.gameId,
@@ -1207,6 +1356,19 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           plies: payload.moves.length,
           pgn,
         });
+        if (ratingResult?.event) {
+          historyGame.rated = true;
+          historyGame.rhythm = ratingResult.event.rhythm;
+          historyGame.ratingBefore = ratingResult.event.before;
+          historyGame.ratingAfter = ratingResult.event.after;
+        } else {
+          historyGame.rated = false;
+          const clock =
+            historyMatch.playerColor === "white"
+              ? players.white.timeControl
+              : players.black.timeControl;
+          historyGame.rhythm = clock ? rhythmOfClock(clock) : null;
+        }
         setHistory(async (previous) => {
           const current = (await previous) ?? EMPTY_HUMAN_BOT_HISTORY;
           return {
@@ -1238,6 +1400,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     players,
     setGameState,
     setHeaders,
+    setBotRatings,
     setHistory,
     setMeasurements,
     setResult,
@@ -1683,6 +1846,64 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     });
   }
 
+  // A human against a catalog bot gets its own setup panel; the manual one stays one click away.
+  const botSetupActive = !generatorMode && setupBotMatch !== null && !manualSetup;
+  const botIsPlayer1 = setupBotMatch?.bot === player1Settings;
+  const invertColor = (color: UserColor): UserColor =>
+    color === "white" ? "black" : color === "black" ? "white" : "random";
+  const setBotClock = (clock: OpponentSettings["timeControl"]) => {
+    setPlayer1Settings((previous) => ({ ...previous, timeControl: clock }));
+    setPlayer2Settings((previous) => ({ ...previous, timeControl: clock }));
+    setSameTimeControl(true);
+  };
+  const ratedSelector = (
+    <RatedGameSelector
+      rated={ratedPreference}
+      onChange={setRatedPreference}
+      blocker={ratedBlocker}
+      rhythm={setupRhythm}
+      playerRating={setupRhythm ? (botRatings ?? EMPTY_BOT_RATINGS).ratings[setupRhythm] : null}
+      botName={setupBotProfile?.name ?? ""}
+      botRating={
+        setupBotProfile && setupRhythm ? botRatingAt(setupBotProfile.elo, setupRhythm) : null
+      }
+      showTitle={!botSetupActive}
+    />
+  );
+  const openingBookControls = (
+    <>
+      <Checkbox
+        label={t("Board.Opponent.EnableOpeningBook")}
+        checked={openingBookEnabled}
+        onChange={(e) => setOpeningBookEnabled(e.currentTarget.checked)}
+      />
+
+      {openingBookEnabled && (
+        <>
+          <FileInput
+            label="Opening book (.pgn/.epd/.bin/.zip)"
+            description={t("Import.PGN.ClickToSelect")}
+            filename={openingBookPath}
+            onClick={handleSelectOpeningBook}
+          />
+          {openingBookPath?.includes(".bin") && (
+            <NumberInput
+              label="Polyglot max plies"
+              description="Maximum number of plies from the starting position that the opening book will be used for."
+              min={1}
+              value={openingBookMaxPly}
+              onChange={(value) => {
+                if (typeof value === "number" && Number.isFinite(value)) {
+                  setOpeningBookMaxPly(Math.max(1, Math.trunc(value)));
+                }
+              }}
+            />
+          )}
+        </>
+      )}
+    </>
+  );
+
   return (
     <>
       <Portal target="#left" style={{ height: "100%" }}>
@@ -1808,123 +2029,131 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                         </Button>
                       )}
                       {generatorMode && <ModelGameExperimentHistory />}
-                      <Group>
-                        <Text flex={1} ta="center" fz="lg" fw="bold">
-                          {generatorMode
-                            ? t("Fen.White", "White")
-                            : match(inputColor)
-                                .with("white", () => "White")
-                                .with("random", () => "Random")
-                                .with("black", () => "Black")
-                                .exhaustive()}
-                        </Text>
-                        {generatorMode ? (
-                          <Tooltip label={t("ModelGame.SwapColors", "Cambiar colores")}>
-                            <ActionIcon
-                              aria-label={t("ModelGame.SwapColors", "Cambiar colores")}
-                              onClick={swapModelGameColors}
-                            >
-                              <IconArrowsExchange />
-                            </ActionIcon>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip label={t("Board.Game.CycleColor", "Cambiar color")}>
-                            <ActionIcon
-                              aria-label={t("Board.Game.CycleColor", "Cambiar color")}
-                              onClick={cycleColor}
-                            >
-                              <IconArrowsExchange />
-                            </ActionIcon>
-                          </Tooltip>
-                        )}
-                        <Text flex={1} ta="center" fz="lg" fw="bold">
-                          {generatorMode
-                            ? t("Fen.Black", "Black")
-                            : match(inputColor)
-                                .with("white", () => "Black")
-                                .with("random", () => "Random")
-                                .with("black", () => "White")
-                                .exhaustive()}
-                        </Text>
-                      </Group>
-                      <Box flex={1}>
-                        <Group style={{ alignItems: "start" }}>
-                          <OpponentForm
-                            sameTimeControl={sameTimeControl}
-                            opponent={player1Settings}
-                            setOpponent={setPlayer1Settings}
-                            setOtherOpponent={setPlayer2Settings}
-                            allowedTypes={generatorMode ? ["engine", "humanBot"] : undefined}
-                            showSeed={generatorMode}
-                            humanTimingEnabled={!generatorMode}
-                          />
-                          <Divider orientation="vertical" />
-                          <OpponentForm
-                            sameTimeControl={sameTimeControl}
-                            opponent={player2Settings}
-                            setOpponent={setPlayer2Settings}
-                            setOtherOpponent={setPlayer1Settings}
-                            allowedTypes={generatorMode ? ["engine", "humanBot"] : undefined}
-                            showSeed={generatorMode}
-                            humanTimingEnabled={!generatorMode}
-                          />
-                        </Group>
-                      </Box>
+                      {botSetupActive && setupBotMatch && (
+                        <BotGameSetup
+                          bot={setupBotMatch.bot}
+                          setBot={botIsPlayer1 ? setPlayer1Settings : setPlayer2Settings}
+                          player={setupBotMatch.player}
+                          setPlayer={botIsPlayer1 ? setPlayer2Settings : setPlayer1Settings}
+                          userColor={botIsPlayer1 ? invertColor(inputColor) : inputColor}
+                          setUserColor={(color) =>
+                            setInputColor(botIsPlayer1 ? invertColor(color) : color)
+                          }
+                          setClock={setBotClock}
+                          ratedSelector={ratedSelector}
+                          advanced={openingBookControls}
+                          humanTimingEnabled={!generatorMode}
+                          onManualSetup={() => setManualSetup(true)}
+                        />
+                      )}
+                      {!generatorMode && setupBotMatch && manualSetup && (
+                        <Button size="xs" variant="subtle" onClick={() => setManualSetup(false)}>
+                          {t("HumanBots.Setup.BackToBot", "Back to the bot setup")}
+                        </Button>
+                      )}
+                      {!botSetupActive && (
+                        <>
+                          <Group>
+                            <Text flex={1} ta="center" fz="lg" fw="bold">
+                              {generatorMode
+                                ? t("Fen.White", "White")
+                                : match(inputColor)
+                                    .with("white", () => "White")
+                                    .with("random", () => "Random")
+                                    .with("black", () => "Black")
+                                    .exhaustive()}
+                            </Text>
+                            {generatorMode ? (
+                              <Tooltip label={t("ModelGame.SwapColors", "Cambiar colores")}>
+                                <ActionIcon
+                                  aria-label={t("ModelGame.SwapColors", "Cambiar colores")}
+                                  onClick={swapModelGameColors}
+                                >
+                                  <IconArrowsExchange />
+                                </ActionIcon>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip label={t("Board.Game.CycleColor", "Cambiar color")}>
+                                <ActionIcon
+                                  aria-label={t("Board.Game.CycleColor", "Cambiar color")}
+                                  onClick={cycleColor}
+                                >
+                                  <IconArrowsExchange />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            <Text flex={1} ta="center" fz="lg" fw="bold">
+                              {generatorMode
+                                ? t("Fen.Black", "Black")
+                                : match(inputColor)
+                                    .with("white", () => "Black")
+                                    .with("random", () => "Random")
+                                    .with("black", () => "White")
+                                    .exhaustive()}
+                            </Text>
+                          </Group>
+                          <Box flex={1}>
+                            <Group style={{ alignItems: "start" }}>
+                              <OpponentForm
+                                sameTimeControl={sameTimeControl}
+                                opponent={player1Settings}
+                                setOpponent={setPlayer1Settings}
+                                setOtherOpponent={setPlayer2Settings}
+                                allowedTypes={generatorMode ? ["engine", "humanBot"] : undefined}
+                                showSeed={generatorMode}
+                                humanTimingEnabled={!generatorMode}
+                              />
+                              <Divider orientation="vertical" />
+                              <OpponentForm
+                                sameTimeControl={sameTimeControl}
+                                opponent={player2Settings}
+                                setOpponent={setPlayer2Settings}
+                                setOtherOpponent={setPlayer1Settings}
+                                allowedTypes={generatorMode ? ["engine", "humanBot"] : undefined}
+                                showSeed={generatorMode}
+                                humanTimingEnabled={!generatorMode}
+                              />
+                            </Group>
+                          </Box>
+                        </>
+                      )}
 
                       <Paper withBorder p="sm">
                         <Stack>
-                          <Checkbox
-                            label={t("Board.Opponent.SameTimeControl")}
-                            checked={sameTimeControl}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              setSameTimeControl(checked);
-                              if (checked) {
-                                setPlayer2Settings((prev) => ({
-                                  ...prev,
-                                  timeControl: player1Settings.timeControl,
-                                  timeUnit: player1Settings.timeUnit,
-                                  incrementUnit: player1Settings.incrementUnit,
-                                }));
-                              }
-                            }}
-                          />
-
-                          <Divider variant="dashed" />
-
-                          <Checkbox
-                            label={t("Board.Opponent.EnableOpeningBook")}
-                            checked={openingBookEnabled}
-                            onChange={(e) => setOpeningBookEnabled(e.currentTarget.checked)}
-                          />
-
-                          {openingBookEnabled && (
+                          {!botSetupActive && (
                             <>
-                              <FileInput
-                                label="Opening book (.pgn/.epd/.bin/.zip)"
-                                description={t("Import.PGN.ClickToSelect")}
-                                filename={openingBookPath}
-                                onClick={handleSelectOpeningBook}
+                              <Checkbox
+                                label={t("Board.Opponent.SameTimeControl")}
+                                checked={sameTimeControl}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSameTimeControl(checked);
+                                  if (checked) {
+                                    setPlayer2Settings((prev) => ({
+                                      ...prev,
+                                      timeControl: player1Settings.timeControl,
+                                      timeUnit: player1Settings.timeUnit,
+                                      incrementUnit: player1Settings.incrementUnit,
+                                    }));
+                                  }
+                                }}
                               />
-                              {openingBookPath?.includes(".bin") && (
-                                <NumberInput
-                                  label="Polyglot max plies"
-                                  description="Maximum number of plies from the starting position that the opening book will be used for."
-                                  min={1}
-                                  value={openingBookMaxPly}
-                                  onChange={(value) => {
-                                    if (typeof value === "number" && Number.isFinite(value)) {
-                                      setOpeningBookMaxPly(Math.max(1, Math.trunc(value)));
-                                    }
-                                  }}
-                                />
-                              )}
+
+                              <Divider variant="dashed" />
                             </>
                           )}
 
-                          {!generatorMode && (
+                          {!botSetupActive && openingBookControls}
+
+                          {!generatorMode && setupBotMatch && !botSetupActive && (
                             <>
                               <Divider variant="dashed" />
+                              {ratedSelector}
+                            </>
+                          )}
+                          {!generatorMode && (
+                            <>
+                              {!botSetupActive && <Divider variant="dashed" />}
                               <HumanBotHistoryPanel />
 
                               <Divider variant="dashed" />

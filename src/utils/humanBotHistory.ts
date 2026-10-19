@@ -19,6 +19,12 @@ export const humanBotHistoryGameSchema = z.object({
     timeControl: z.string().nullable(),
     plies: z.number().int().nonnegative(),
     pgn: z.string(),
+    /** Rated game (Phase 9.1); older games are friendly. */
+    rated: z.boolean().optional(),
+    rhythm: z.enum(["bullet", "blitz", "rapid", "classical"]).nullable().optional(),
+    /** The player's rating at that rhythm before and after a rated game. */
+    ratingBefore: z.number().optional(),
+    ratingAfter: z.number().optional(),
 });
 
 export type HumanBotHistoryGame = z.infer<typeof humanBotHistoryGameSchema>;

@@ -7,13 +7,18 @@
 mod analysis_benchmark;
 mod analysis_cache;
 mod analysis_library;
+mod bot_candidates;
 mod bot_league;
+mod bot_strength;
+mod bot_style;
 mod chess;
 mod db;
 mod engine;
 mod engine_budget;
 mod error;
 mod game;
+#[cfg(test)]
+mod style_lab;
 
 mod fs;
 mod lexer;

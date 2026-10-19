@@ -1501,6 +1501,7 @@ mod tests {
                 human_timing: None,
                 go: None,
                 tablebase_defense: None,
+                bot_play: None,
             },
         }
     }

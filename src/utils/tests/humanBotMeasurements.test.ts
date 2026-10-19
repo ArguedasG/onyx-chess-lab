@@ -83,7 +83,7 @@ describe("human bot measurements", () => {
 
         expect(buildHumanBotMeasurementHeaders(measurement)).toMatchObject({
             BlackBotProfileVersion: "3",
-            BlackBotCatalogVersion: "4.5.0",
+            BlackBotCatalogVersion: "9.1.0",
             BlackBotRepertoireMode: "weighted",
             BlackBotAggression: "high",
             BlackBotComplexity: "high",
@@ -99,7 +99,7 @@ describe("human bot measurements", () => {
 
         const csv = humanBotMeasurementsToCsv([measurement]);
         expect(csv).toContain("repertoireLastBotMove");
-        expect(csv).toContain(",black,luna,3,4.5.0,900,novice-900,");
+        expect(csv).toContain(",black,luna,3,9.1.0,900,novice-900,");
         expect(csv).toContain("repertoireMode");
     });
 

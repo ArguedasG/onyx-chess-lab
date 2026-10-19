@@ -1,4 +1,6 @@
 import type { DatabaseInfo } from "@/bindings";
+import type { BotGamesInCard } from "@/state/atoms";
+import { botGameSources } from "@/utils/botGamesDatabase";
 import { getDatabases, query_players } from "@/utils/db";
 import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
 import type { Session } from "@/utils/session";
@@ -9,6 +11,9 @@ export type AccountPlayer = {
     sessions: Session[];
     /** The account records found in the downloaded account databases. */
     sources: PlayerAnalysisSource[];
+    /** The player's records in the databases of games against the bots, kept apart: the card
+     *  shows them on request, and they never change its analysis profile. */
+    botSources: PlayerAnalysisSource[];
 };
 
 export function sessionUsername(session: Session): string | undefined {
@@ -101,8 +106,12 @@ async function findAccountRecord(
     };
 }
 
-/** The connected accounts grouped by player name, with their records in the account databases. */
-export async function loadAccountPlayers(sessions: readonly Session[]): Promise<AccountPlayer[]> {
+/** The connected accounts grouped by player name, with their records in the account databases
+ *  and, as `botGames` asks, in the databases of games against the bots. */
+export async function loadAccountPlayers(
+    sessions: readonly Session[],
+    botGames: BotGamesInCard = "rated",
+): Promise<AccountPlayer[]> {
     if (sessions.length === 0) return [];
     const databases = (await getDatabases()).filter(
         (database): database is DatabaseInfo & { type: "success" } => database.type === "success",
@@ -120,7 +129,8 @@ export async function loadAccountPlayers(sessions: readonly Session[]): Promise<
                     }),
                 )
             ).filter((source): source is PlayerAnalysisSource => source !== null);
-            return { name, sessions: own, sources };
+            const botSources = await botGameSources(name, botGames).catch(() => []);
+            return { name, sessions: own, sources, botSources };
         }),
     );
 }

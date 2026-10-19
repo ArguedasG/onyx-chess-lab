@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
-import { sessionsAtom } from "@/state/atoms";
+import { botGamesInCardAtom, sessionsAtom } from "@/state/atoms";
 import { playerAnalysisProfileId } from "@/state/playerAnalysis";
 import {
     type PlayerCardKind,
@@ -26,6 +26,8 @@ export type ResolvedPlayerCard = {
     sources: PlayerAnalysisSource[];
     /** Records the card cannot lose (the connected accounts). */
     fixedSources: PlayerAnalysisSource[];
+    /** Games against the bots (account cards), shown apart from `sources` on request. */
+    botSources?: PlayerAnalysisSource[];
     analysisProfileId: string;
     fide?: PlayerFideLink;
     notes?: string;
@@ -45,15 +47,17 @@ export type PlayerCardChange = Partial<{
 
 export function useAccountPlayers() {
     const sessions = useAtomValue(sessionsAtom);
+    const botGames = useAtomValue(botGamesInCardAtom);
     return useSWR(
         [
             "account-players",
+            botGames,
             sessions.map(
                 (session) =>
                     `${session.lichess?.username ?? ""}|${session.chessCom?.username ?? ""}|${session.player ?? ""}|${session.updatedAt}`,
             ),
         ],
-        () => loadAccountPlayers(sessions),
+        () => loadAccountPlayers(sessions, botGames),
         { revalidateOnFocus: false },
     );
 }
@@ -83,6 +87,7 @@ export function usePlayerCards() {
                     kind: "self",
                     sources: uniqueSources([...player.sources, ...(extras?.aliases ?? [])]),
                     fixedSources: player.sources,
+                    botSources: player.botSources,
                     // The same id the Accounts page used, so existing profiles stay attached.
                     analysisProfileId: playerAnalysisProfileId(player.name, player.sources),
                     fide: extras?.fide,
@@ -250,7 +255,7 @@ export function usePlayerCards() {
     const selfSources = useMemo(
         () =>
             uniqueSources([
-                ...accountCards.flatMap((card) => card.sources),
+                ...accountCards.flatMap((card) => [...card.sources, ...(card.botSources ?? [])]),
                 ...savedCards
                     .filter((card) => card.kind === "self")
                     .flatMap((card) => card.sources),

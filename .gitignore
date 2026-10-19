@@ -30,3 +30,6 @@ src-tauri/gen/
 
 # Local experiment exports
 tests/
+
+# Bot laboratory results (Phase 9.1)
+lab-results/

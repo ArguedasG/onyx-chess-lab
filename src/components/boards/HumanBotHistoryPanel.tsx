@@ -5,6 +5,9 @@ import {
   Group,
   Modal,
   Pagination,
+  Paper,
+  Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -13,11 +16,19 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { IconHistory, IconRefresh, IconTrash, IconZoomCheck } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "@/components/common/ConfirmModal";
-import { activeTabAtom, humanBotHistoryAtom, tabsAtom } from "@/state/atoms";
+import {
+  activeTabAtom,
+  type BotGamesInCard,
+  botGamesInCardAtom,
+  botRatingsAtom,
+  humanBotHistoryAtom,
+  tabsAtom,
+} from "@/state/atoms";
+import { EMPTY_BOT_RATINGS, RATED_RHYTHMS } from "@/utils/botRating";
 import {
   clearHumanBotHistory,
   EMPTY_HUMAN_BOT_HISTORY,
@@ -29,6 +40,7 @@ import {
 } from "@/utils/humanBotHistory";
 import { HUMAN_BOT_PROFILES } from "@/utils/humanBots";
 import { createTab } from "@/utils/tabs";
+import { formatPlayerRating, useRhythmLabel } from "./RatedGameSelector";
 
 type PendingAction =
   | { type: "deleteAll" }
@@ -46,6 +58,9 @@ export default function HumanBotHistoryPanel() {
   const [opened, { open, close }] = useDisclosure(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [page, setPage] = useState(1);
+  const botRatings = useAtomValue(botRatingsAtom) ?? EMPTY_BOT_RATINGS;
+  const [botGamesInCard, setBotGamesInCard] = useAtom(botGamesInCardAtom);
+  const rhythmLabel = useRhythmLabel();
 
   function updateHistory(updater: (current: HumanBotHistoryState) => HumanBotHistoryState) {
     setHistory(async (previous) => updater((await previous) ?? EMPTY_HUMAN_BOT_HISTORY));
@@ -161,6 +176,7 @@ export default function HumanBotHistoryPanel() {
                   <Table.Th>{t("Common.Date", "Date")}</Table.Th>
                   <Table.Th>{t("HumanBots.History.Bot", "Bot")}</Table.Th>
                   <Table.Th>{t("HumanBots.History.Color", "Your color")}</Table.Th>
+                  <Table.Th>{t("HumanBots.History.Type", "Type")}</Table.Th>
                   <Table.Th>{t("HumanBots.History.Result", "Result")}</Table.Th>
                   <Table.Th>{t("HumanBots.History.Actions", "Actions")}</Table.Th>
                 </Table.Tr>
@@ -176,6 +192,25 @@ export default function HumanBotHistoryPanel() {
                       {game.playerColor === "white"
                         ? t("Common.WHITE", "White")
                         : t("Common.BLACK", "Black")}
+                    </Table.Td>
+                    <Table.Td>
+                      {game.rated &&
+                      game.ratingBefore !== undefined &&
+                      game.ratingAfter !== undefined ? (
+                        <Tooltip label={`${game.ratingBefore} → ${game.ratingAfter}`}>
+                          <Badge variant="outline" color="blue">
+                            {game.rhythm && game.rhythm !== "bullet"
+                              ? rhythmLabel(game.rhythm)
+                              : ""}{" "}
+                            {game.ratingAfter - game.ratingBefore >= 0 ? "+" : ""}
+                            {game.ratingAfter - game.ratingBefore}
+                          </Badge>
+                        </Tooltip>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          {t("HumanBots.Rated.Friendly", "Friendly")}
+                        </Text>
+                      )}
                     </Table.Td>
                     <Table.Td>
                       <Badge
@@ -239,6 +274,38 @@ export default function HumanBotHistoryPanel() {
             "Finished player-versus-bot games are saved locally and can be reopened for analysis.",
           )}
         </Text>
+
+        <SimpleGrid cols={3} spacing="xs">
+          {RATED_RHYTHMS.map((rhythm) => {
+            const rating = botRatings.ratings[rhythm];
+            return (
+              <Paper key={rhythm} withBorder radius="md" p="xs" ta="center">
+                <Text size="xs" c="dimmed">
+                  {rhythmLabel(rhythm)}
+                </Text>
+                <Text fw={700} size="lg">
+                  {rating.games > 0 ? formatPlayerRating(rating) : "—"}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("HumanBots.Rated.Games", "{{n}} rated", { n: rating.games })}
+                </Text>
+              </Paper>
+            );
+          })}
+        </SimpleGrid>
+
+        <Select
+          size="xs"
+          label={t("HumanBots.InCard", "Bot games available in your player card")}
+          value={botGamesInCard}
+          onChange={(value) => value && setBotGamesInCard(value as BotGamesInCard)}
+          allowDeselect={false}
+          data={[
+            { value: "rated", label: t("HumanBots.InCard.Rated", "Rated games") },
+            { value: "all", label: t("HumanBots.InCard.All", "Rated and friendly games") },
+            { value: "none", label: t("HumanBots.InCard.None", "None") },
+          ]}
+        />
 
         <Table.ScrollContainer minWidth={430}>
           <Table striped withRowBorders={false} fz="xs">

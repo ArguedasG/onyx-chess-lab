@@ -39,16 +39,15 @@ import {
   DEFAULT_HUMAN_BOT_PROFILE_ID,
   DEFAULT_MAIA_ELO,
   getHumanBotProfile,
-  HUMAN_BOT_PROFILES,
   MAIA_ELO_MAX,
   MAIA_ELO_MIN,
   type HumanBotProfileId,
   type HumanBotRepertoireId,
-  type HumanBotStyleAxisLevel,
   isMaiaEngine,
 } from "@/utils/humanBots";
 import { twinBooksAtom } from "@/state/twinBots";
 import { EnginesSelect } from "./EnginesSelect";
+import { BotSummaryCard, useCatalogRepertoireLabel } from "./BotPicker";
 
 export type OpponentSettings =
   | {
@@ -120,6 +119,7 @@ export function OpponentForm({
 }) {
   const { t } = useTranslation();
   const [eloDraft, setEloDraft] = useState<string | null>(null);
+  const catalogRepertoireLabel = useCatalogRepertoireLabel();
   const humanBotProfile = getHumanBotProfile(
     opponent.type === "humanBot" ? opponent.profileId : DEFAULT_HUMAN_BOT_PROFILE_ID,
   );
@@ -228,61 +228,6 @@ export function OpponentForm({
     }
   }
 
-  function getAxisLabel(
-    axis: "aggression" | "complexity" | "sharpness" | "theory",
-    level: HumanBotStyleAxisLevel,
-  ): string {
-    const labels = {
-      aggression: {
-        low: t("HumanBots.Style.Aggression.Low", "Defensive"),
-        medium: t("HumanBots.Style.Aggression.Medium", "Balanced"),
-        high: t("HumanBots.Style.Aggression.High", "Aggressive"),
-      },
-      complexity: {
-        low: t("HumanBots.Style.Complexity.Low", "Simplifying"),
-        medium: t("HumanBots.Style.Complexity.Medium", "Balanced"),
-        high: t("HumanBots.Style.Complexity.High", "Complicating"),
-      },
-      sharpness: {
-        low: t("HumanBots.Style.Sharpness.Low", "Solid"),
-        medium: t("HumanBots.Style.Sharpness.Medium", "Balanced"),
-        high: t("HumanBots.Style.Sharpness.High", "Sharp"),
-      },
-      theory: {
-        low: t("HumanBots.Style.Theory.Low", "Less theoretical"),
-        medium: t("HumanBots.Style.Theory.Medium", "Balanced theory"),
-        high: t("HumanBots.Style.Theory.High", "Theoretical"),
-      },
-    };
-    return labels[axis][level];
-  }
-
-  function getEditorialStyleLabel(): string {
-    const { decisionStyle, openingStyle } = humanBotProfile;
-    if (!decisionStyle || !openingStyle) {
-      return t("HumanBots.Style.Unclassified", "Unclassified style");
-    }
-    return `${getAxisLabel("aggression", decisionStyle.aggression)} · ${getAxisLabel("complexity", decisionStyle.complexity)}`;
-  }
-
-  function getEditorialStyleDescription(): string {
-    const { decisionStyle, openingStyle } = humanBotProfile;
-    if (!decisionStyle || !openingStyle) {
-      return t(
-        "HumanBots.Style.Unclassified.Desc",
-        "This profile does not have an editorial style classification yet.",
-      );
-    }
-    return t("HumanBots.Style.Editorial.Desc", {
-      defaultValue:
-        "Editorial hypothesis: {{aggression}} decisions, {{complexity}} positions, {{sharpness}} openings and {{theory}} theory.",
-      aggression: getAxisLabel("aggression", decisionStyle.aggression),
-      complexity: getAxisLabel("complexity", decisionStyle.complexity),
-      sharpness: getAxisLabel("sharpness", openingStyle.sharpness),
-      theory: getAxisLabel("theory", openingStyle.theory),
-    });
-  }
-
   function getRepertoireLabel(repertoireId: HumanBotRepertoireId): string {
     const labels: Record<HumanBotRepertoireId, string> = {
       "luna-e4-explorer": t("HumanBots.Repertoire.Luna", "E4 explorer"),
@@ -301,26 +246,7 @@ export function OpponentForm({
       "tomas-kings-indian": t("HumanBots.Repertoire.Tomas", "King's Indian systems"),
       "atlas-mainline": t("HumanBots.Repertoire.Atlas", "Grandmaster main lines"),
     };
-    return labels[repertoireId];
-  }
-
-  function getRepertoireDescription(): string {
-    if (humanBotProfile.repertoire.mode === "none") {
-      return t(
-        "HumanBots.Repertoire.None.Desc",
-        "This bot has no profile opening repertoire; Maia's normal selection drives its openings.",
-      );
-    }
-    if (humanBotProfile.repertoire.mode === "forcedLine") {
-      return t(
-        "HumanBots.Repertoire.ForcedLine.Desc",
-        "Follows one initial opening line for three full moves, then Maia improvises normally.",
-      );
-    }
-    return t(
-      "HumanBots.Repertoire.Desc",
-      "The bot follows weighted preferences while the game remains in its repertoire, then Maia chooses normally.",
-    );
+    return labels[repertoireId] ?? catalogRepertoireLabel(humanBotProfile);
   }
 
   return (
@@ -504,19 +430,6 @@ export function OpponentForm({
 
       {opponent.type === "humanBot" && (
         <Stack gap="sm">
-          <EnginesSelect
-            engine={opponent.engine && isMaiaEngine(opponent.engine) ? opponent.engine : null}
-            filter={isMaiaEngine}
-            label={t("HumanBots.MaiaEngine", "Maia 3 engine")}
-            description={t(
-              "HumanBots.MaiaEngine.Desc",
-              "Local Maia 3 installation used by this profile.",
-            )}
-            setEngine={(engine) =>
-              setOpponent((prev) => (prev.type === "humanBot" ? { ...prev, engine } : prev))
-            }
-          />
-
           {(!opponent.engine || !isMaiaEngine(opponent.engine)) && (
             <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
               {t(
@@ -537,53 +450,18 @@ export function OpponentForm({
             />
           ) : (
             <>
-              <Select
-                allowDeselect={false}
-                label={t("HumanBots.Profile", "Bot profile")}
-                data={HUMAN_BOT_PROFILES.map((profile) => ({
-                  value: profile.id,
-                  label: `${profile.name} · ${profile.elo} ELO`,
-                }))}
-                value={humanBotProfile.id}
+              <BotSummaryCard
+                profile={humanBotProfile}
+                clock={opponent.timeControl}
+                repertoireLabel={getRepertoireLabel(humanBotProfile.repertoireId)}
                 onChange={(profileId) =>
                   setOpponent((prev) =>
-                    prev.type === "humanBot" && profileId
+                    prev.type === "humanBot"
                       ? { ...prev, profileId: profileId as HumanBotProfileId, twin: undefined }
                       : prev,
                   )
                 }
               />
-
-              <Paper withBorder p="sm">
-                <Stack gap={6}>
-                  <Group justify="space-between">
-                    <Text fw={600}>{humanBotProfile.name}</Text>
-                    <Badge variant="light">{humanBotProfile.elo} ELO</Badge>
-                  </Group>
-                  <Badge variant="outline" w="fit-content">
-                    {getEditorialStyleLabel()}
-                  </Badge>
-                  <Text size="sm">{getEditorialStyleDescription()}</Text>
-                  <Divider />
-                  <Group justify="space-between" align="flex-start" wrap="nowrap">
-                    <Text size="xs" c="dimmed">
-                      {t("HumanBots.Repertoire", "Opening repertoire")}
-                    </Text>
-                    <Text size="sm" fw={500} ta="right">
-                      {getRepertoireLabel(humanBotProfile.repertoireId)}
-                    </Text>
-                  </Group>
-                  <Text size="xs" c="dimmed">
-                    {getRepertoireDescription()}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {t(
-                      "HumanBots.EloDisclaimer",
-                      "Profile ELO controls Maia's behavior and is also used as the human opponent ELO. It is not yet a calibrated playing-strength rating.",
-                    )}
-                  </Text>
-                </Stack>
-              </Paper>
             </>
           )}
 
@@ -604,6 +482,19 @@ export function OpponentForm({
               }
             />
           )}
+
+          <EnginesSelect
+            engine={opponent.engine && isMaiaEngine(opponent.engine) ? opponent.engine : null}
+            filter={isMaiaEngine}
+            label={t("HumanBots.MaiaEngine", "Maia 3 engine")}
+            description={t(
+              "HumanBots.MaiaEngine.Desc",
+              "Local Maia 3 installation used by this profile.",
+            )}
+            setEngine={(engine) =>
+              setOpponent((prev) => (prev.type === "humanBot" ? { ...prev, engine } : prev))
+            }
+          />
         </Stack>
       )}
 

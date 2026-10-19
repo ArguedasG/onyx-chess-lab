@@ -732,6 +732,7 @@ mod tests {
             human_timing: None,
             go: Some(GoMode::Depth(1)),
             tablebase_defense: None,
+            bot_play: None,
         }
     }
 

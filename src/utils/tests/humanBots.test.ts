@@ -19,7 +19,7 @@ import {
 
 describe("human bot profiles", () => {
     it("has unique identifiers and valid sampling values", () => {
-        expect(HUMAN_BOT_PROFILES).toHaveLength(15);
+        expect(HUMAN_BOT_PROFILES).toHaveLength(74);
         expect(new Set(HUMAN_BOT_PROFILES.map((profile) => profile.id)).size).toBe(
             HUMAN_BOT_PROFILES.length,
         );
@@ -49,7 +49,7 @@ describe("human bot profiles", () => {
     it("keeps the approved editorial style classification explicit", () => {
         expect(
             Object.fromEntries(
-                HUMAN_BOT_PROFILES.map((profile) => [
+                HUMAN_BOT_PROFILES.filter((profile) => !profile.catalog).map((profile) => [
                     profile.id,
                     {
                         decision: profile.decisionStyle,
@@ -232,7 +232,7 @@ describe("human bot profiles", () => {
         expect(buildHumanBotTraceHeaders(luna, "Black", true)).toEqual({
             BlackBotProfile: "luna",
             BlackBotProfileVersion: "3",
-            BlackBotCatalogVersion: "4.5.0",
+            BlackBotCatalogVersion: "9.1.0",
             BlackBotLevel: "novice-900",
             BlackBotStyle: "adventurous",
             BlackBotStyleEvidence: "editorial",
@@ -340,5 +340,39 @@ describe("human bot profiles", () => {
                 args: [],
             }),
         ).toBe(false);
+    });
+
+    it("fills the Phase 9.1 ladder up to 2800", () => {
+        const elos = new Set(HUMAN_BOT_PROFILES.map((profile) => profile.elo));
+        for (const elo of [800, 900, 1000]) expect(elos.has(elo)).toBe(true);
+        for (let elo = 1050; elo <= 2800; elo += 50) expect(elos.has(elo), `${elo}`).toBe(true);
+        expect(Math.max(...elos)).toBe(2800);
+        for (let elo = 1300; elo <= 2400; elo += 50) {
+            const count = HUMAN_BOT_PROFILES.filter((profile) => profile.elo === elo).length;
+            expect(count, `${elo}`).toBeGreaterThanOrEqual(2);
+        }
+        for (const name of [
+            "Lucy",
+            "Tiffany",
+            "Herson",
+            "Josymar",
+            "Jose",
+            "David",
+            "Brandon",
+            "Billy",
+        ])
+            expect(
+                HUMAN_BOT_PROFILES.some((profile) => profile.name === name),
+                name,
+            ).toBe(true);
+    });
+
+    it("gives Billy the King's Indian against 1.d4", () => {
+        const billy = getHumanBotProfile("billy");
+        const againstD4 = billy.repertoire.lines.filter(
+            (line) => line.side === "black" && line.moves[0] === "d2d4",
+        );
+        expect(againstD4.length).toBeGreaterThan(0);
+        expect(againstD4.every((line) => line.moves.includes("g7g6"))).toBe(true);
     });
 });

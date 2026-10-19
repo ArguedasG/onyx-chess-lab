@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Cursor, Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Instant,
 };
@@ -12,13 +12,13 @@ use dashmap::DashMap;
 use log::{error, info};
 use pgn_reader::{BufferedReader, RawHeader, Skip, Visitor};
 use polyglot_book_rs::PolyglotBook;
-use rand::{seq::IteratorRandom, Rng};
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use shakmaty::{
     fen::Fen, san::SanPlus, uci::UciMove, CastlingMode, Chess, Color, EnPassantMode, Position,
 };
 use specta::Type;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tokio::{
     sync::{watch, Mutex, RwLock},
@@ -28,6 +28,9 @@ use tokio::{
 use vampirc_uci::uci::ScoreValue;
 
 use crate::{
+    bot_candidates::policy_launch,
+    bot_strength::strength_plan,
+    bot_style::{choose_bot_move, BotPlayConfig},
     engine::{
         parse_fen_to_position, BaseEngine, EngineKillHandle, EngineLaunchMetadata, EngineLog,
         EngineOption, GoMode, PlayersTime,
@@ -74,6 +77,10 @@ pub enum PlayerConfig {
         #[serde(default, rename = "tablebaseDefense")]
         #[specta(rename = "tablebaseDefense")]
         tablebase_defense: Option<bool>,
+        /// Styled human bot (Phase 9.1): Maia's candidates re-weighted by its play style.
+        #[serde(default, rename = "botPlay")]
+        #[specta(rename = "botPlay")]
+        bot_play: Option<BotPlayConfig>,
         go: Option<GoMode>,
     },
 }
@@ -330,6 +337,35 @@ struct ClockState {
     last_tick: Instant,
 }
 
+/// What a styled bot adds to its engine: Maia launched through the policy wrapper and, when it has
+/// a style, a verifier.
+struct BotEngine {
+    config: BotPlayConfig,
+    verifier: Option<Arc<Mutex<BaseEngine>>>,
+    verifier_kill: Option<EngineKillHandle>,
+}
+
+impl GameController {
+    /// Kills every engine process of the game, the verifiers of styled bots included.
+    fn kill_engines(&self) {
+        for handle in [&self.white_engine_kill, &self.black_engine_kill]
+            .into_iter()
+            .flatten()
+        {
+            handle.kill_sync();
+        }
+        self.kill_verifiers();
+    }
+
+    fn kill_verifiers(&self) {
+        for bot in [&self.white_bot, &self.black_bot].into_iter().flatten() {
+            if let Some(handle) = &bot.verifier_kill {
+                handle.kill_sync();
+            }
+        }
+    }
+}
+
 struct GameController {
     game_id: GameId,
     config: GameConfig,
@@ -345,6 +381,9 @@ struct GameController {
     black_engine_kill: Option<EngineKillHandle>,
     white_engine_launch: Option<EngineLaunchMetadata>,
     black_engine_launch: Option<EngineLaunchMetadata>,
+    /// Styled bots: whether Maia prints its policy, and the Stockfish that checks the candidates.
+    white_bot: Option<BotEngine>,
+    black_bot: Option<BotEngine>,
     started_at: String,
     shutdown_tx: Option<watch::Sender<bool>>,
     move_notify_tx: Option<tokio::sync::mpsc::Sender<()>>,
@@ -402,6 +441,8 @@ impl GameController {
             black_engine_kill: None,
             white_engine_launch: None,
             black_engine_launch: None,
+            white_bot: None,
+            black_bot: None,
             started_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             shutdown_tx: None,
             move_notify_tx: None,
@@ -801,12 +842,7 @@ impl GameManager {
             if let Some(tx) = game.shutdown_tx.take() {
                 let _ = tx.send(true);
             }
-            if let Some(handle) = &game.white_engine_kill {
-                handle.kill_sync();
-            }
-            if let Some(handle) = &game.black_engine_kill {
-                handle.kill_sync();
-            }
+            game.kill_engines();
         }
 
         let OpeningBookResult {
@@ -832,72 +868,22 @@ impl GameManager {
         controller.polyglot_book = polyglot_book;
         controller.polyglot_max_ply = polyglot_max_ply;
 
-        if let PlayerConfig::Engine {
-            path,
-            args,
-            options,
-            seed,
-            ..
-        } = &config.white
+        let scripts_dir = app.path().app_data_dir()?.join("scripts");
+        if let Some(spawned) =
+            spawn_player_engine(&config.white, castling_mode, &scripts_dir).await?
         {
-            let mut engine = BaseEngine::spawn_with_seed(PathBuf::from(path), args, *seed).await?;
-            engine.init_uci().await?;
-            for opt in options {
-                if opt.name == "UCI_Chess960" || opt.name == "MultiPV" {
-                    continue;
-                }
-                engine
-                    .set_option_if_supported(&opt.name, &opt.value)
-                    .await?;
-            }
-            if castling_mode.is_chess960() {
-                engine
-                    .set_option_if_supported("UCI_Chess960", "true")
-                    .await?;
-            } else {
-                engine
-                    .set_option_if_supported("UCI_Chess960", "false")
-                    .await?;
-            }
-            engine.set_option_if_supported("MultiPV", "1").await?;
-            engine.new_game().await?;
-            controller.white_engine_launch = Some(engine.launch_metadata());
-            controller.white_engine_kill = Some(engine.kill_handle());
-            controller.white_engine = Some(Arc::new(Mutex::new(engine)));
+            controller.white_engine_launch = Some(spawned.engine.launch_metadata());
+            controller.white_engine_kill = Some(spawned.engine.kill_handle());
+            controller.white_engine = Some(Arc::new(Mutex::new(spawned.engine)));
+            controller.white_bot = spawned.bot;
         }
-
-        if let PlayerConfig::Engine {
-            path,
-            args,
-            options,
-            seed,
-            ..
-        } = &config.black
+        if let Some(spawned) =
+            spawn_player_engine(&config.black, castling_mode, &scripts_dir).await?
         {
-            let mut engine = BaseEngine::spawn_with_seed(PathBuf::from(path), args, *seed).await?;
-            engine.init_uci().await?;
-            for opt in options {
-                if opt.name == "UCI_Chess960" || opt.name == "MultiPV" {
-                    continue;
-                }
-                engine
-                    .set_option_if_supported(&opt.name, &opt.value)
-                    .await?;
-            }
-            if castling_mode.is_chess960() {
-                engine
-                    .set_option_if_supported("UCI_Chess960", "true")
-                    .await?;
-            } else {
-                engine
-                    .set_option_if_supported("UCI_Chess960", "false")
-                    .await?;
-            }
-            engine.set_option_if_supported("MultiPV", "1").await?;
-            engine.new_game().await?;
-            controller.black_engine_launch = Some(engine.launch_metadata());
-            controller.black_engine_kill = Some(engine.kill_handle());
-            controller.black_engine = Some(Arc::new(Mutex::new(engine)));
+            controller.black_engine_launch = Some(spawned.engine.launch_metadata());
+            controller.black_engine_kill = Some(spawned.engine.kill_handle());
+            controller.black_engine = Some(Arc::new(Mutex::new(spawned.engine)));
+            controller.black_bot = spawned.bot;
         }
 
         controller.reset_clock();
@@ -1136,12 +1122,7 @@ impl GameManager {
             if let Some(tx) = controller.shutdown_tx.take() {
                 let _ = tx.send(true);
             }
-            if let Some(handle) = &controller.white_engine_kill {
-                handle.kill_sync();
-            }
-            if let Some(handle) = &controller.black_engine_kill {
-                handle.kill_sync();
-            }
+            controller.kill_engines();
         }
         Ok(())
     }
@@ -1164,12 +1145,7 @@ impl GameManager {
                 if let Some(tx) = &controller.shutdown_tx {
                     let _ = tx.send(true);
                 }
-                if let Some(handle) = &controller.white_engine_kill {
-                    handle.kill_sync();
-                }
-                if let Some(handle) = &controller.black_engine_kill {
-                    handle.kill_sync();
-                }
+                controller.kill_engines();
             }
         }
     }
@@ -1223,6 +1199,101 @@ impl GameManager {
         };
         Ok(engine.get_logs())
     }
+}
+
+struct SpawnedEngine {
+    engine: BaseEngine,
+    bot: Option<BotEngine>,
+}
+
+/// Starts the engine of a player. A styled bot runs Maia through the policy wrapper and gets a
+/// verifier; if Maia cannot be wrapped or the verifier fails to start, the bot
+/// plays as a plain Maia.
+async fn spawn_player_engine(
+    player: &PlayerConfig,
+    castling_mode: CastlingMode,
+    scripts_dir: &Path,
+) -> Result<Option<SpawnedEngine>, Error> {
+    let PlayerConfig::Engine {
+        path,
+        args,
+        options,
+        seed,
+        bot_play,
+        ..
+    } = player
+    else {
+        return Ok(None);
+    };
+    let wrapped = match bot_play {
+        Some(_) => policy_launch(Path::new(path), args, scripts_dir)?,
+        None => None,
+    };
+    let styled = wrapped.is_some();
+    let (program, launch_args) = wrapped.unwrap_or_else(|| (PathBuf::from(path), args.clone()));
+    let mut engine = BaseEngine::spawn_with_seed(program, &launch_args, *seed).await?;
+    engine.init_uci().await?;
+    for opt in options {
+        if opt.name == "UCI_Chess960" || opt.name == "MultiPV" {
+            continue;
+        }
+        engine
+            .set_option_if_supported(&opt.name, &opt.value)
+            .await?;
+    }
+    engine
+        .set_option_if_supported(
+            "UCI_Chess960",
+            if castling_mode.is_chess960() {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .await?;
+    engine.set_option_if_supported("MultiPV", "1").await?;
+    if let (Some(config), true) = (bot_play, styled) {
+        // Above Maia's range, or with the strength filter, Maia is asked for less (I-48).
+        engine
+            .set_option_if_supported("SelfElo", strength_plan(config.elo).maia_elo)
+            .await?;
+    }
+    engine.new_game().await?;
+
+    let bot = match bot_play {
+        Some(config) if styled => {
+            let verifier = match &config.verifier_path {
+                // Also without style: the verification marks the critical moves.
+                Some(verifier_path) => {
+                    match spawn_verifier(verifier_path, &config.verifier_args).await {
+                        Ok(verifier) => Some(verifier),
+                        Err(err) => {
+                            error!("Bot verifier did not start, playing without style: {err}");
+                            None
+                        }
+                    }
+                }
+                _ => None,
+            };
+            Some(BotEngine {
+                config: config.clone(),
+                verifier_kill: verifier.as_ref().map(BaseEngine::kill_handle),
+                verifier: verifier.map(|verifier| Arc::new(Mutex::new(verifier))),
+            })
+        }
+        _ => None,
+    };
+    Ok(Some(SpawnedEngine { engine, bot }))
+}
+
+/// A small Stockfish: one thread and little hash are enough for 150 ms on a few candidates.
+async fn spawn_verifier(path: &str, args: &[String]) -> Result<BaseEngine, Error> {
+    let mut verifier = BaseEngine::spawn(PathBuf::from(path), args).await?;
+    verifier.init_uci().await?;
+    verifier.set_option_if_supported("Threads", 1).await?;
+    verifier.set_option_if_supported("Hash", 32).await?;
+    verifier.new_game().await?;
+    Ok(verifier)
 }
 
 fn normalize_game_engine_options(player: &mut PlayerConfig, chess960: bool) {
@@ -1746,12 +1817,7 @@ async fn game_loop(
     {
         let ctrl = controller.read().await;
         if force_kill_engines {
-            if let Some(handle) = &ctrl.white_engine_kill {
-                handle.kill_sync();
-            }
-            if let Some(handle) = &ctrl.black_engine_kill {
-                handle.kill_sync();
-            }
+            ctrl.kill_engines();
         } else {
             if let Some(engine) = &ctrl.white_engine {
                 let mut proc = engine.lock().await;
@@ -1761,6 +1827,8 @@ async fn game_loop(
                 let mut proc = engine.lock().await;
                 let _ = proc.quit().await;
             }
+            // A verifier never holds anything worth a clean exit.
+            ctrl.kill_verifiers();
         }
     }
 
@@ -1910,48 +1978,88 @@ impl EngineBookMove {
     }
 }
 
-fn calculate_human_think_time(
-    config: &HumanTimingConfig,
+/// What changes how long a human bot thinks about one move.
+#[derive(Clone, Copy, Debug)]
+struct ThinkContext {
     source: GameMoveSource,
     legal_move_count: usize,
     in_check: bool,
     ply: usize,
     remaining_time_ms: Option<u64>,
     increment_ms: u64,
+    /// The bot's initial clock: with the increment it sets the rhythm.
+    initial_time_ms: Option<u64>,
+    /// First move of its own after leaving its repertoire or the book.
+    out_of_book: bool,
+    /// Only one candidate keeps the evaluation, according to the verification.
+    critical: bool,
+    /// Takes back on the square where the opponent just captured.
+    recapture: bool,
+}
+
+/// How much longer than in blitz a bot thinks at this rhythm, with the Lichess estimate of a
+/// game's duration (base + 40 × increment): bullet 0.6, blitz 1, rapid 1.6, classical 2.5.
+/// Without a clock it thinks as in blitz.
+fn rhythm_factor(initial_time_ms: Option<u64>, increment_ms: u64) -> f64 {
+    let Some(initial) = initial_time_ms else {
+        return 1.0;
+    };
+    let estimated_seconds = (initial + 40 * increment_ms) / 1000;
+    match estimated_seconds {
+        0..180 => 0.6,
+        180..480 => 1.0,
+        480..1500 => 1.6,
+        _ => 2.5,
+    }
+}
+
+fn calculate_human_think_time(
+    config: &HumanTimingConfig,
+    context: ThinkContext,
     rng: &mut impl Rng,
 ) -> u64 {
-    let min_time = u64::from(config.min_think_time_ms.min(config.max_think_time_ms));
-    let max_time = u64::from(config.max_think_time_ms.max(config.min_think_time_ms));
-    let average_time = u64::from(config.average_think_time_ms).clamp(min_time, max_time);
+    let rhythm = rhythm_factor(context.initial_time_ms, context.increment_ms);
+    let scale = |ms: u32| (f64::from(ms) * rhythm) as u64;
+    let min_time = scale(config.min_think_time_ms.min(config.max_think_time_ms));
+    let max_time = scale(config.max_think_time_ms.max(config.min_think_time_ms));
+    let average_time = scale(config.average_think_time_ms).clamp(min_time, max_time);
     let jitter_percent = rng.gen_range(70_u64..=130);
     let mut target = average_time.saturating_mul(jitter_percent) / 100;
 
-    if ply < 10 {
+    if context.ply < 10 {
         target = target.saturating_mul(80) / 100;
     }
-    if in_check || legal_move_count <= 8 {
+    if context.in_check || context.legal_move_count <= 8 {
         target = target.saturating_mul(70) / 100;
-    } else if legal_move_count >= 30 {
+    } else if context.legal_move_count >= 30 {
         target = target.saturating_mul(120) / 100;
     }
 
     if matches!(
-        source,
+        context.source,
         GameMoveSource::ProfileRepertoire | GameMoveSource::Polyglot
     ) {
         target = target.saturating_mul(u64::from(config.repertoire_time_percent)) / 100;
+    } else if context.recapture {
+        target /= 2;
+    } else if context.out_of_book {
+        // Leaving known ground is where a human stops to think the longest.
+        target = target.saturating_mul(2);
+    } else if context.critical {
+        target = target.saturating_mul(150) / 100;
     } else if rng.gen_ratio(1, 10) {
         target = target.saturating_mul(160) / 100;
     }
 
     target = target.clamp(min_time, max_time);
 
-    if let Some(remaining) = remaining_time_ms {
+    if let Some(remaining) = context.remaining_time_ms {
         if remaining <= 150 {
             return 0;
         }
-        let expected_moves_left = ((80_usize.saturating_sub(ply)) / 2).clamp(10, 35) as u64;
-        let sustainable_time = remaining / expected_moves_left + increment_ms.saturating_mul(3) / 4;
+        let expected_moves_left = ((80_usize.saturating_sub(context.ply)) / 2).clamp(10, 35) as u64;
+        let sustainable_time =
+            remaining / expected_moves_left + context.increment_ms.saturating_mul(3) / 4;
         let clock_cap = sustainable_time.saturating_mul(2).max(100);
         target = target.min(clock_cap).min(remaining.saturating_sub(150));
     }
@@ -1959,7 +2067,14 @@ fn calculate_human_think_time(
     target
 }
 
-fn sample_human_think_time(controller: &GameController, source: GameMoveSource) -> Option<u64> {
+/// Think time of the bot to move. `chosen` is the move it decided on, when known, and
+/// `critical` whether the verification found a single good move.
+fn sample_human_think_time(
+    controller: &GameController,
+    source: GameMoveSource,
+    chosen: Option<&str>,
+    critical: bool,
+) -> Option<u64> {
     let config = match controller.current_turn_player() {
         PlayerConfig::Engine {
             human_timing: Some(config),
@@ -1968,21 +2083,48 @@ fn sample_human_think_time(controller: &GameController, source: GameMoveSource) 
         _ => return None,
     };
     let (white_time, black_time) = controller.get_current_times();
-    let (remaining_time, increment) = match (&controller.clock, controller.position.turn()) {
+    let turn = controller.position.turn();
+    let (remaining_time, increment) = match (&controller.clock, turn) {
         (Some(clock), Color::White) => (white_time, clock.white_increment),
         (Some(clock), Color::Black) => (black_time, clock.black_increment),
         (None, _) => (None, 0),
+    };
+    let initial_time = match turn {
+        Color::White => controller.config.white_time_control.as_ref(),
+        Color::Black => controller.config.black_time_control.as_ref(),
+    }
+    .map(|control| control.initial_time);
+    let moves = &controller.moves;
+    let out_of_book = source == GameMoveSource::Engine
+        && moves.len() >= 2
+        && matches!(
+            moves[moves.len() - 2].source,
+            GameMoveSource::ProfileRepertoire | GameMoveSource::Polyglot
+        );
+    let recapture = match (moves.last(), chosen) {
+        (Some(last), Some(chosen)) => {
+            last.san.contains('x')
+                && chosen.get(2..4).is_some()
+                && chosen.get(2..4) == last.uci.get(2..4)
+        }
+        _ => false,
     };
     let mut rng = rand::thread_rng();
 
     Some(calculate_human_think_time(
         config,
-        source,
-        controller.position.legal_moves().len(),
-        controller.position.is_check(),
-        controller.moves.len(),
-        remaining_time,
-        increment,
+        ThinkContext {
+            source,
+            legal_move_count: controller.position.legal_moves().len(),
+            in_check: controller.position.is_check(),
+            ply: moves.len(),
+            remaining_time_ms: remaining_time,
+            increment_ms: increment,
+            initial_time_ms: initial_time,
+            out_of_book,
+            critical,
+            recapture,
+        },
         &mut rng,
     ))
 }
@@ -2012,7 +2154,7 @@ async fn request_engine_move(
             .or_else(|| try_polyglot_book_move(&ctrl).map(|uci| EngineBookMove::Polyglot { uci }));
         let human_think_time_ms = book_move
             .as_ref()
-            .and_then(|book_move| sample_human_think_time(&ctrl, book_move.source()));
+            .and_then(|book_move| sample_human_think_time(&ctrl, book_move.source(), None, false));
         let turn = ctrl.position.turn();
         let engine_arc = if turn == Color::White {
             ctrl.white_engine.clone()
@@ -2067,7 +2209,7 @@ async fn request_engine_move(
         }
     }
 
-    let (engine_arc, go_mode, initial_fen, moves, turn, human_think_time_ms, tablebase_fen) = {
+    let (engine_arc, go_mode, initial_fen, moves, turn, tablebase_fen, bot) = {
         let ctrl = controller.read().await;
 
         if ctrl.status != GameStatus::Playing {
@@ -2124,11 +2266,24 @@ async fn request_engine_move(
             go.unwrap_or(GoMode::Depth(20))
         };
 
-        let human_think_time_ms = sample_human_think_time(&ctrl, GameMoveSource::Engine);
         let tablebase_fen = (tablebase_defense
             && ctrl.position.board().occupied().count() <= TABLEBASE_MAX_PIECES
             && ctrl.position.castles().is_empty())
         .then(|| Fen::from_position(ctrl.position.clone(), EnPassantMode::Legal).to_string());
+
+        let bot = if turn == Color::White {
+            &ctrl.white_bot
+        } else {
+            &ctrl.black_bot
+        }
+        .as_ref()
+        .map(|bot| {
+            (
+                bot.config.clone(),
+                bot.verifier.clone(),
+                ctrl.position.clone(),
+            )
+        });
 
         (
             engine,
@@ -2136,8 +2291,8 @@ async fn request_engine_move(
             initial_fen,
             moves,
             turn,
-            human_think_time_ms,
             tablebase_fen,
+            bot,
         )
     };
 
@@ -2165,13 +2320,48 @@ async fn request_engine_move(
         }
     }
 
-    let (best_move, score) = {
+    let (best_move, score, critical) = {
         let mut engine = engine_arc.lock().await;
         engine.set_position(&initial_fen, &moves).await?;
-        engine.go(&go_mode).await?;
-        engine.wait_for_bestmove_with_score().await?
+        match bot {
+            Some((config, verifier, position)) => {
+                let mut verifier = match &verifier {
+                    Some(verifier) => Some(verifier.lock().await),
+                    None => None,
+                };
+                let choice = choose_bot_move(
+                    &mut engine,
+                    verifier.as_deref_mut(),
+                    &config,
+                    &position,
+                    &initial_fen,
+                    &moves,
+                    &go_mode,
+                    &mut StdRng::from_entropy(),
+                )
+                .await?;
+                let score = choice.score();
+                let critical = choice.is_critical();
+                (choice.uci, score, critical)
+            }
+            None => {
+                engine.go(&go_mode).await?;
+                let (best_move, score) = engine.wait_for_bestmove_with_score().await?;
+                (best_move, score, false)
+            }
+        }
     };
 
+    // Sampled once the move is known: recaptures are quick, critical moves take longer. The time
+    // spent computing counts as thinking.
+    let human_think_time_ms = {
+        let ctrl = controller.read().await;
+        (ctrl.status == GameStatus::Playing && ctrl.position.turn() == turn)
+            .then(|| {
+                sample_human_think_time(&ctrl, GameMoveSource::Engine, Some(&best_move), critical)
+            })
+            .flatten()
+    };
     wait_for_human_think_time(decision_started_at, human_think_time_ms).await;
 
     // The engine reports from its own side; moves store White's point of view.
@@ -2484,6 +2674,7 @@ mod tests {
                 human_timing: None,
                 go: Some(GoMode::Depth(24)),
                 tablebase_defense: None,
+                bot_play: None,
             },
             white_time_control: None,
             black_time_control: None,
@@ -2543,6 +2734,7 @@ mod tests {
             human_timing: None,
             go: Some(GoMode::Depth(12)),
             tablebase_defense: None,
+            bot_play: None,
         };
 
         normalize_game_engine_options(&mut player, true);
@@ -2576,6 +2768,7 @@ mod tests {
             human_timing: None,
             go: Some(GoMode::Depth(18)),
             tablebase_defense: None,
+            bot_play: None,
         };
 
         normalize_lc0_go_mode(&mut player);
@@ -2584,6 +2777,39 @@ mod tests {
             panic!("player must remain an engine");
         };
         assert_eq!(go, Some(GoMode::Nodes(2_000)));
+    }
+
+    fn think_context(source: GameMoveSource) -> ThinkContext {
+        ThinkContext {
+            source,
+            legal_move_count: 20,
+            in_check: false,
+            ply: 20,
+            remaining_time_ms: None,
+            increment_ms: 0,
+            initial_time_ms: None,
+            out_of_book: false,
+            critical: false,
+            recapture: false,
+        }
+    }
+
+    /// Average think time over many samples, to compare situations without the jitter.
+    fn average_think_time(timing: &HumanTimingConfig, context: ThinkContext) -> u64 {
+        let mut rng = StdRng::seed_from_u64(9);
+        (0..400)
+            .map(|_| calculate_human_think_time(timing, context, &mut rng))
+            .sum::<u64>()
+            / 400
+    }
+
+    fn deliberate_timing() -> HumanTimingConfig {
+        HumanTimingConfig {
+            min_think_time_ms: 1400,
+            average_think_time_ms: 4500,
+            max_think_time_ms: 13_500,
+            repertoire_time_percent: 34,
+        }
     }
 
     #[test]
@@ -2599,22 +2825,12 @@ mod tests {
 
         let repertoire_time = calculate_human_think_time(
             &timing,
-            GameMoveSource::ProfileRepertoire,
-            20,
-            false,
-            20,
-            None,
-            0,
+            think_context(GameMoveSource::ProfileRepertoire),
             &mut repertoire_rng,
         );
         let engine_time = calculate_human_think_time(
             &timing,
-            GameMoveSource::Engine,
-            20,
-            false,
-            20,
-            None,
-            0,
+            think_context(GameMoveSource::Engine),
             &mut engine_rng,
         );
 
@@ -2633,17 +2849,63 @@ mod tests {
 
         let target = calculate_human_think_time(
             &timing,
-            GameMoveSource::Engine,
-            30,
-            false,
-            0,
-            Some(1000),
-            0,
+            ThinkContext {
+                legal_move_count: 30,
+                ply: 0,
+                remaining_time_ms: Some(1000),
+                ..think_context(GameMoveSource::Engine)
+            },
             &mut rng,
         );
 
         assert!(target < 500);
         assert!(target <= 850);
+    }
+
+    #[test]
+    fn slower_rhythms_think_longer() {
+        assert_eq!(rhythm_factor(None, 0), 1.0);
+        assert_eq!(rhythm_factor(Some(60_000), 0), 0.6);
+        assert_eq!(rhythm_factor(Some(180_000), 2_000), 1.0);
+        assert_eq!(rhythm_factor(Some(600_000), 5_000), 1.6);
+        assert_eq!(rhythm_factor(Some(1_800_000), 30_000), 2.5);
+
+        let timing = deliberate_timing();
+        let at = |initial: u64, increment: u64| {
+            average_think_time(
+                &timing,
+                ThinkContext {
+                    initial_time_ms: Some(initial),
+                    increment_ms: increment,
+                    remaining_time_ms: Some(initial),
+                    ..think_context(GameMoveSource::Engine)
+                },
+            )
+        };
+        let blitz = at(180_000, 2_000);
+        let rapid = at(600_000, 5_000);
+        let classical = at(1_800_000, 30_000);
+        assert!(blitz < rapid && rapid < classical);
+        // A slight increase, not a full use of the clock: about 2.5 times blitz.
+        assert!(
+            classical < blitz * 3,
+            "{blitz} ms in blitz, {classical} ms in classical"
+        );
+    }
+
+    #[test]
+    fn leaving_the_book_and_critical_moves_take_longer_and_recaptures_less() {
+        let timing = deliberate_timing();
+        let normal = average_think_time(&timing, think_context(GameMoveSource::Engine));
+        let with = |change: fn(&mut ThinkContext)| {
+            let mut context = think_context(GameMoveSource::Engine);
+            change(&mut context);
+            average_think_time(&timing, context)
+        };
+        let out_of_book = with(|context| context.out_of_book = true);
+        let critical = with(|context| context.critical = true);
+        let recapture = with(|context| context.recapture = true);
+        assert!(out_of_book > critical && critical > normal && normal > recapture);
     }
 
     #[test]

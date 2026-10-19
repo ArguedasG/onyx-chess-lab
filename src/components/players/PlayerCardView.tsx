@@ -39,8 +39,18 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
-import { playerAnalysisAtom, playerAnalysisViewFamily } from "@/state/playerAnalysis";
-import { type PlayerCardTab, playerCardTabAtom, sourceKey } from "@/state/playerCards";
+import {
+  playerAnalysisAtom,
+  playerAnalysisProfileId,
+  playerAnalysisViewFamily,
+} from "@/state/playerAnalysis";
+import {
+  type PlayerCardScope,
+  playerCardScopeAtom,
+  type PlayerCardTab,
+  playerCardTabAtom,
+  sourceKey,
+} from "@/state/playerCards";
 import { getDatabases } from "@/utils/db";
 import {
   PLAYER_ANALYSIS_SCHEMA_VERSION,
@@ -103,7 +113,26 @@ export default function PlayerCardView({
 }) {
   const { t } = useTranslation();
   const kinds = useKindLabels();
-  const { data: allGames, error, isLoading, mutate } = usePlayerGames(card.sources);
+  // Accounts, games against the bots or both, each with its own analysis profile; the accounts
+  // keep the card's profile.
+  const [scopes, setScopes] = useAtom(playerCardScopeAtom);
+  const botSources = useMemo(() => card.botSources ?? [], [card.botSources]);
+  const scope: PlayerCardScope =
+    botSources.length > 0 ? (scopes[card.id] ?? "accounts") : "accounts";
+  const scopedSources = useMemo(
+    () =>
+      scope === "bots"
+        ? botSources
+        : scope === "all"
+          ? [...card.sources, ...botSources]
+          : card.sources,
+    [scope, botSources, card.sources],
+  );
+  const profileId =
+    scope === "accounts"
+      ? card.analysisProfileId
+      : playerAnalysisProfileId(card.name, scopedSources);
+  const { data: allGames, error, isLoading, mutate } = usePlayerGames(scopedSources);
   const [filters, setFilters] = useState<ProfileFilters>(DEFAULT_PROFILE_FILTERS);
   const [tabs, setTabs] = useAtom(playerCardTabAtom);
   const tab = tabs[card.id] ?? "summary";
@@ -111,7 +140,7 @@ export default function PlayerCardView({
     (value: PlayerCardTab) => setTabs((previous) => ({ ...previous, [card.id]: value })),
     [card.id, setTabs],
   );
-  const setAnalysisView = useSetAtom(playerAnalysisViewFamily(card.analysisProfileId));
+  const setAnalysisView = useSetAtom(playerAnalysisViewFamily(profileId));
   // Every engine mark of the card leads to the engine view of the Analysis tab.
   const openEngineAnalysis = useCallback(() => {
     setAnalysisView((previous) => ({ ...previous, section: "engine" }));
@@ -131,9 +160,10 @@ export default function PlayerCardView({
   const [databaseDir] = useAtom(storedDatabasesDirAtom);
   const [, setConversionState] = useAtom(databaseConversionStateAtom);
   const analysis = useAtomValue(playerAnalysisAtom);
-  const stored = analysis.profiles[card.analysisProfileId];
+  const cardProfile = analysis.profiles[card.analysisProfileId];
+  const stored = analysis.profiles[profileId];
   const engine = stored?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION ? stored.engine : null;
-  useAutoMistakes(trainingOwner, card.analysisProfileId, engine);
+  useAutoMistakes(trainingOwner, profileId, engine);
   const { update: updateQueues } = useMistakeQueues();
   const analyzedKeys = useMemo(
     () => new Set(engine?.games.map((game) => game.key) ?? []),
@@ -146,20 +176,22 @@ export default function PlayerCardView({
   const markMigrated = actions.markAliasesMigrated;
   useEffect(() => {
     if (card.aliasesMigrated || !update || !markMigrated) return;
-    if (stored?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION) {
+    if (cardProfile?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION) {
       const known = new Set(card.sources.map(sourceKey));
-      const missing = stored.metadata.sources.filter((source) => !known.has(sourceKey(source)));
+      const missing = cardProfile.metadata.sources.filter(
+        (source) => !known.has(sourceKey(source)),
+      );
       if (missing.length > 0) update({ sources: [...card.sources, ...missing] });
     }
     markMigrated();
-  }, [card.aliasesMigrated, card.sources, markMigrated, stored, update]);
+  }, [card.aliasesMigrated, card.sources, cardProfile, markMigrated, update]);
 
   const games = useMemo(() => filterProfileGames(allGames ?? [], filters), [allGames, filters]);
   const timeControls = useMemo(() => timeControlsOf(allGames ?? []), [allGames]);
 
   const openGame = useOpenPlayerGame({
     path: returnPath,
-    profileId: card.analysisProfileId,
+    profileId,
     playerName: card.name,
   });
   const openProfileGame = useCallback(
@@ -197,7 +229,7 @@ export default function PlayerCardView({
     }
   }, [card.sessions, databaseDir, mutate, setConversionState, t]);
 
-  const databaseTitles = [...new Set(card.sources.map((source) => source.databaseTitle))];
+  const databaseTitles = [...new Set(scopedSources.map((source) => source.databaseTitle))];
   const mainFide = card.fide;
 
   return (
@@ -414,6 +446,32 @@ export default function PlayerCardView({
                 </Tabs.Tab>
               )}
             </Tabs.List>
+            {botSources.length > 0 && (
+              <Tooltip
+                label={t(
+                  "Players.Scope.Help",
+                  "Your accounts, your games against the Onyx bots, or both. Each choice has its own analysis.",
+                )}
+                multiline
+                w={260}
+              >
+                <SegmentedControl
+                  size="xs"
+                  value={scope}
+                  onChange={(value) =>
+                    setScopes((previous) => ({
+                      ...previous,
+                      [card.id]: value as PlayerCardScope,
+                    }))
+                  }
+                  data={[
+                    { value: "accounts", label: t("Players.Scope.Accounts", "Accounts") },
+                    { value: "bots", label: t("Players.Scope.Bots", "Bots") },
+                    { value: "all", label: t("Players.Scope.All", "All") },
+                  ]}
+                />
+              </Tooltip>
+            )}
           </Group>
 
           {tab !== "analysis" && (
@@ -484,7 +542,7 @@ export default function PlayerCardView({
                   games={games}
                   name={card.name}
                   cardId={card.id}
-                  profileId={card.analysisProfileId}
+                  profileId={profileId}
                   isSelf={card.kind === "self"}
                   engine={engine}
                   onOpenGame={(game, ply) => openProfileGame(game, ply)}
@@ -523,8 +581,8 @@ export default function PlayerCardView({
           <Tabs.Panel value="analysis" pt="xs" style={{ flex: 1, minHeight: 0 }}>
             <PlayerAnalysisPanel
               playerName={card.name}
-              profileId={card.analysisProfileId}
-              sources={card.sources}
+              profileId={profileId}
+              sources={scopedSources}
               onOpenReference={openReference}
               explicitGameKeys={explicitGameKeys}
               onClearExplicitGames={() => setExplicitGameKeys(null)}

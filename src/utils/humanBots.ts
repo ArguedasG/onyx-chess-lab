@@ -1,8 +1,16 @@
+import type { BotPlayConfig } from "@/bindings";
+import {
+    BOT_CATALOG_SPECS,
+    type BotCatalogSpec,
+    type BotOpeningStyleId,
+    type BotPlayStyleId,
+} from "./botCatalogSpecs";
+import { type BotOpeningFamilyId, botFamilyLines } from "./botOpenings";
 import type { EngineSettings, LocalEngine } from "./engines";
 import { RANDOM_SEED_PLACEHOLDER } from "./engines";
 
 export const HUMAN_BOT_CONFIG_VERSION = 6;
-export const HUMAN_BOT_CATALOG_VERSION = "4.5.0";
+export const HUMAN_BOT_CATALOG_VERSION = "9.1.0";
 export const HUMAN_BOT_PROFILE_VERSION = 3;
 export const HUMAN_BOT_REPERTOIRE_SCHEMA_VERSION = 2;
 export const HUMAN_BOT_MODEL_ID = "maia3";
@@ -76,6 +84,12 @@ export type HumanBotProfile = {
     decisionStyle: HumanBotDecisionStyle | null;
     openingStyle: HumanBotOpeningStyle | null;
     styleEvidence: HumanBotStyleEvidence;
+    /** Catalog bots of Phase 9.1: their personalities and opening families. */
+    catalog?: {
+        play: BotPlayStyleId;
+        opening: BotOpeningStyleId;
+        families: Pick<BotCatalogSpec, "white" | "vsE4" | "vsD4" | "vsFlank">;
+    };
 };
 
 export type HumanBotOpeningRepertoireConfig = {
@@ -88,7 +102,7 @@ export type HumanBotOpeningRepertoireConfig = {
 
 export type HumanBotTimingConfig = Omit<HumanBotTiming, "id">;
 
-export const HUMAN_BOT_LEVELS = [
+const ORIGINAL_HUMAN_BOT_LEVELS = [
     { id: "novice-900", elo: 900 },
     { id: "novice-1050", elo: 1050 },
     { id: "developing-1200", elo: 1200 },
@@ -427,7 +441,7 @@ function openingLine(
     return { id, moves: OPENING_LINES[id], weight, side };
 }
 
-export const HUMAN_BOT_REPERTOIRES = [
+const ORIGINAL_HUMAN_BOT_REPERTOIRES = [
     {
         id: "luna-e4-explorer",
         version: HUMAN_BOT_REPERTOIRE_SCHEMA_VERSION,
@@ -592,10 +606,10 @@ export const HUMAN_BOT_REPERTOIRES = [
     },
 ] as const satisfies readonly HumanBotRepertoire[];
 
-type HumanBotLevelId = (typeof HUMAN_BOT_LEVELS)[number]["id"];
+type HumanBotLevelId = (typeof ORIGINAL_HUMAN_BOT_LEVELS)[number]["id"];
 type HumanBotSamplingStyleId = (typeof HUMAN_BOT_SAMPLING_STYLES)[number]["id"];
 type HumanBotTimingId = (typeof HUMAN_BOT_TIMINGS)[number]["id"];
-export type HumanBotRepertoireId = (typeof HUMAN_BOT_REPERTOIRES)[number]["id"];
+export type HumanBotRepertoireId = string;
 
 const HUMAN_BOT_PROFILE_DEFINITIONS = [
     {
@@ -791,16 +805,18 @@ const HUMAN_BOT_PROFILE_DEFINITIONS = [
     styleEvidence: HumanBotStyleEvidence;
 }[];
 
-export type HumanBotProfileId = (typeof HUMAN_BOT_PROFILE_DEFINITIONS)[number]["id"];
+export type HumanBotProfileId = string;
 
 function resolveHumanBotProfile(
     definition: (typeof HUMAN_BOT_PROFILE_DEFINITIONS)[number],
 ): HumanBotProfile {
-    const level = HUMAN_BOT_LEVELS.find((candidate) => candidate.id === definition.levelId)!;
+    const level = ORIGINAL_HUMAN_BOT_LEVELS.find(
+        (candidate) => candidate.id === definition.levelId,
+    )!;
     const style = HUMAN_BOT_SAMPLING_STYLES.find(
         (candidate) => candidate.id === definition.samplingStyleId,
     )!;
-    const repertoire = HUMAN_BOT_REPERTOIRES.find(
+    const repertoire = ORIGINAL_HUMAN_BOT_REPERTOIRES.find(
         (candidate) => candidate.id === definition.repertoireId,
     )!;
     const timing = HUMAN_BOT_TIMINGS.find((candidate) => candidate.id === definition.timingId)!;
@@ -816,9 +832,137 @@ function resolveHumanBotProfile(
     };
 }
 
-export const HUMAN_BOT_PROFILES: readonly HumanBotProfile[] = HUMAN_BOT_PROFILE_DEFINITIONS.map(
-    resolveHumanBotProfile,
-).sort((left, right) => left.elo - right.elo);
+const PLAY_STYLE_AXES: Record<BotPlayStyleId, HumanBotDecisionStyle> = {
+    rematador: { aggression: "high", complexity: "low" },
+    salvaje: { aggression: "high", complexity: "high" },
+    guardian: { aggression: "low", complexity: "low" },
+    acechador: { aggression: "low", complexity: "high" },
+    equilibrista: { aggression: "medium", complexity: "medium" },
+};
+
+const OPENING_STYLE_AXES: Record<BotOpeningStyleId, HumanBotOpeningStyle> = {
+    aventurero: { sharpness: "high", theory: "low" },
+    esgrimista: { sharpness: "high", theory: "high" },
+    practico: { sharpness: "low", theory: "low" },
+    clasico: { sharpness: "low", theory: "high" },
+};
+
+/** The play personality of any profile: its own for catalog bots, from its axes otherwise. */
+export function humanBotPlayStyle(profile: HumanBotProfile): BotPlayStyleId {
+    if (profile.catalog) return profile.catalog.play;
+    const style = profile.decisionStyle;
+    if (!style || style.aggression === "medium") return "equilibrista";
+    const complicates = style.complexity === "high";
+    if (style.aggression === "high") return complicates ? "salvaje" : "rematador";
+    return complicates ? "acechador" : "guardian";
+}
+
+/** The opening personality of any profile. */
+export function humanBotOpeningStyle(profile: HumanBotProfile): BotOpeningStyleId {
+    if (profile.catalog) return profile.catalog.opening;
+    const style = profile.openingStyle;
+    const sharp = style?.sharpness === "high";
+    const theoretical = style?.theory === "high";
+    if (sharp) return theoretical ? "esgrimista" : "aventurero";
+    return theoretical ? "clasico" : "practico";
+}
+
+function catalogSampling(elo: number) {
+    const id =
+        elo <= 1200
+            ? "adventurous"
+            : elo <= 1800
+              ? "balanced"
+              : elo <= 2100
+                ? "balanced-selective"
+                : elo <= 2300
+                  ? "focused"
+                  : "focused-narrow";
+    return HUMAN_BOT_SAMPLING_STYLES.find((style) => style.id === id)!;
+}
+
+function catalogTiming(elo: number) {
+    const id =
+        elo <= 1000
+            ? "casual-fast"
+            : elo <= 1400
+              ? "casual"
+              : elo <= 1700
+                ? "steady"
+                : elo <= 2000
+                  ? "deliberate"
+                  : elo <= 2300
+                    ? "patient"
+                    : "deep";
+    return HUMAN_BOT_TIMINGS.find((timing) => timing.id === id)!;
+}
+
+/** How deep a bot follows its repertoire: weaker and less theoretical bots leave it sooner. */
+function catalogMaxPly(spec: BotCatalogSpec): number {
+    const theory = OPENING_STYLE_AXES[spec.opening].theory === "high";
+    if (spec.elo < 1200) return 8;
+    if (spec.elo < 1600) return theory ? 12 : 10;
+    return theory ? 18 : 12;
+}
+
+function resolveCatalogProfile(spec: BotCatalogSpec): HumanBotProfile {
+    const sampling = catalogSampling(spec.elo);
+    const timing = catalogTiming(spec.elo);
+    const families: BotOpeningFamilyId[] = [spec.white, spec.vsE4, spec.vsD4, spec.vsFlank];
+    const repertoire: HumanBotRepertoire = {
+        id: `${spec.id}-repertoire`,
+        version: HUMAN_BOT_REPERTOIRE_SCHEMA_VERSION,
+        mode: "weighted",
+        maxPly: catalogMaxPly(spec),
+        lines: families.flatMap(botFamilyLines),
+    };
+    return {
+        id: spec.id,
+        name: spec.name,
+        profileVersion: HUMAN_BOT_PROFILE_VERSION,
+        levelId: `elo-${spec.elo}`,
+        samplingStyleId: sampling.id,
+        timingId: timing.id,
+        repertoireId: repertoire.id,
+        elo: spec.elo,
+        style: sampling.style,
+        temperature: sampling.temperature,
+        topP: sampling.topP,
+        repertoire,
+        timing,
+        decisionStyle: PLAY_STYLE_AXES[spec.play],
+        openingStyle: OPENING_STYLE_AXES[spec.opening],
+        styleEvidence: "editorial",
+        catalog: {
+            play: spec.play,
+            opening: spec.opening,
+            families: {
+                white: spec.white,
+                vsE4: spec.vsE4,
+                vsD4: spec.vsD4,
+                vsFlank: spec.vsFlank,
+            },
+        },
+    };
+}
+
+export const HUMAN_BOT_PROFILES: readonly HumanBotProfile[] = [
+    ...HUMAN_BOT_PROFILE_DEFINITIONS.map(resolveHumanBotProfile),
+    ...BOT_CATALOG_SPECS.map(resolveCatalogProfile),
+].sort((left, right) => left.elo - right.elo || left.name.localeCompare(right.name));
+
+export const HUMAN_BOT_LEVELS: readonly HumanBotLevel[] = [
+    ...ORIGINAL_HUMAN_BOT_LEVELS,
+    ...BOT_CATALOG_SPECS.map((spec) => ({ id: `elo-${spec.elo}`, elo: spec.elo })).filter(
+        (level, index, all) => all.findIndex((other) => other.id === level.id) === index,
+    ),
+];
+
+export const HUMAN_BOT_REPERTOIRES: readonly HumanBotRepertoire[] = HUMAN_BOT_PROFILES.map(
+    (profile) => profile.repertoire,
+).filter(
+    (repertoire, index, all) => all.findIndex((other) => other.id === repertoire.id) === index,
+);
 
 export const DEFAULT_HUMAN_BOT_PROFILE_ID: HumanBotProfileId = "vera";
 
@@ -882,6 +1026,37 @@ export function buildHumanBotTiming(profile: HumanBotProfile): HumanBotTimingCon
         averageThinkTimeMs: profile.timing.averageThinkTimeMs,
         maxThinkTimeMs: profile.timing.maxThinkTimeMs,
         repertoireTimePercent: profile.timing.repertoireTimePercent,
+    };
+}
+
+const STYLE_AXIS_WEIGHT: Record<HumanBotStyleAxisLevel, number> = { low: -1, medium: 0, high: 1 };
+
+/** Weights of the play style (Phase 9.1): aggression, and simplification as the inverse of
+ *  complexity. A profile without a decision style plays as Maia. */
+export function humanBotStyleWeights(profile: HumanBotProfile): {
+    aggression: number;
+    simplification: number;
+} {
+    const style = profile.decisionStyle;
+    return {
+        aggression: style ? STYLE_AXIS_WEIGHT[style.aggression] : 0,
+        simplification: style ? -STYLE_AXIS_WEIGHT[style.complexity] : 0,
+    };
+}
+
+/** How the bot picks among Maia's candidates. Without a verifier (no Stockfish installed) the
+ *  style is not applied and the bot samples Maia's own policy. */
+export function buildHumanBotPlay(
+    profile: HumanBotProfile,
+    verifier: LocalEngine | null,
+): BotPlayConfig {
+    return {
+        ...humanBotStyleWeights(profile),
+        elo: profile.elo,
+        temperature: profile.temperature,
+        topP: profile.topP,
+        verifierPath: verifier?.path ?? null,
+        verifierArgs: verifier?.args ?? [],
     };
 }
 

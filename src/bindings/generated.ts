@@ -1078,6 +1078,23 @@ export type BotLeagueStanding = { profileId: string; name: string; targetElo: nu
 export type BotLeagueState = { leagueId: string; ownerId: string; status: BotLeagueStatus; totalGames: number; completedGames: number; failedGames: number; activeGames: string[]; queuedGames: number; effectiveConcurrency: number; estimatedThreadsPerGame: number; estimatedHashMbPerGame: number; results: BotLeagueGameResult[]; standings: BotLeagueStanding[] }
 export type BotLeagueStatus = "running" | "paused" | "cancelling" | "completed" | "cancelled"
 export type BotLeagueSummary = { leagueId: string; ownerId: string; status: BotLeagueStatus; createdAt: string; updatedAt: string; players: BotLeaguePlayerSummary[]; gamesPerPair: number; totalGames: number; completedGames: number; failedGames: number; recordedGames: number }
+/**
+ * How a styled human bot plays: its style and the sampling it applies to Maia's candidates. Maia
+ * must run through the policy wrapper; the verifier is a Stockfish process.
+ */
+export type BotPlayConfig = { 
+/**
+ * From -1 (defensive) to 1 (aggressive).
+ */
+aggression: number; 
+/**
+ * From -1 (complicates) to 1 (simplifies).
+ */
+simplification: number; elo: number; temperature: number; topP: number; 
+/**
+ * Engine that checks the candidates; without it the style is not applied.
+ */
+verifierPath: string | null; verifierArgs?: string[] }
 export type ClockUpdateEvent = { gameId: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type DatabaseInfo = { title: string; description: string; player_count: number; event_count: number; game_count: number; storage_size: bigint; filename: string; indexed: boolean }
 export type DatabaseProgress = { id: string; progress: number }
@@ -1273,7 +1290,7 @@ ownerWhite: boolean;
  */
 ply: number }
 export type Player = { id: number; name: string | null; elo: number | null }
-export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; tablebaseDefense?: boolean | null; go: GoMode | null }
+export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; tablebaseDefense?: boolean | null; botPlay?: BotPlayConfig | null; go: GoMode | null }
 export type PlayerGameRow = { id: number; 
 /**
  * Which of the requested player records played this game.
