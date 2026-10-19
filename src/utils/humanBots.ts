@@ -5,6 +5,7 @@ import {
     type BotOpeningStyleId,
     type BotPlayStyleId,
 } from "./botCatalogSpecs";
+import { generatedPlayerSpec, parseGeneratedPlayerId } from "./botGeneratedPlayers";
 import { type BotOpeningFamilyId, botFamilyLines } from "./botOpenings";
 import type { EngineSettings, LocalEngine } from "./engines";
 import { RANDOM_SEED_PLACEHOLDER } from "./engines";
@@ -997,7 +998,14 @@ export function buildMaiaEngineSettings(
     ];
 }
 
+/** A generated player (I-49), rebuilt from the seed and rating in its id. */
+export function generatedHumanBotProfile(seed: number, elo: number): HumanBotProfile {
+    return resolveCatalogProfile(generatedPlayerSpec(seed, elo));
+}
+
 export function getHumanBotProfile(profileId: string | null | undefined): HumanBotProfile {
+    const generated = profileId ? parseGeneratedPlayerId(profileId) : null;
+    if (generated) return generatedHumanBotProfile(generated.seed, generated.elo);
     return (
         HUMAN_BOT_PROFILES.find((profile) => profile.id === profileId) ??
         HUMAN_BOT_PROFILES.find((profile) => profile.id === DEFAULT_HUMAN_BOT_PROFILE_ID)!

@@ -55,6 +55,7 @@ export default function RatedGameSelector({
       "HumanBots.Rated.Blocked.NotAgainstBot",
       "Only games against a catalog bot can be rated.",
     ),
+    guided: t("HumanBots.Rated.Blocked.Guided", "Guided games are always friendly."),
     customPosition: t(
       "HumanBots.Rated.Blocked.CustomPosition",
       "Rated games start from the initial position.",

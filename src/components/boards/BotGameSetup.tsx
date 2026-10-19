@@ -17,6 +17,7 @@ import { IconAlertTriangle, IconChevronDown, IconChevronRight } from "@tabler/ic
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TimeControlField } from "@/utils/clock";
+import type { GuidedLevel } from "@/utils/guidedPlay";
 import { getHumanBotProfile, isMaiaEngine } from "@/utils/humanBots";
 import { BotSummaryCard, useCatalogRepertoireLabel } from "./BotPicker";
 import { EnginesSelect } from "./EnginesSelect";
@@ -181,6 +182,8 @@ export default function BotGameSetup({
   userColor,
   setUserColor,
   setClock,
+  guidedLevel,
+  setGuidedLevel,
   ratedSelector,
   advanced,
   humanTimingEnabled,
@@ -193,6 +196,8 @@ export default function BotGameSetup({
   userColor: UserColor;
   setUserColor: (color: UserColor) => void;
   setClock: (clock: TimeControlField | undefined) => void;
+  guidedLevel: GuidedLevel;
+  setGuidedLevel: (level: GuidedLevel) => void;
   ratedSelector: ReactNode;
   advanced?: ReactNode;
   humanTimingEnabled: boolean;
@@ -244,6 +249,32 @@ export default function BotGameSetup({
 
         <Section label={t("HumanBots.Setup.Clock", "Time control")}>
           <ClockPresets clock={bot.timeControl} onChange={setClock} />
+        </Section>
+
+        <Section label={t("HumanBots.Guided.Section", "Help")}>
+          <SegmentedControl
+            fullWidth
+            value={guidedLevel}
+            onChange={(value) => setGuidedLevel(value as GuidedLevel)}
+            data={[
+              { value: "off", label: t("HumanBots.Guided.Off", "No help") },
+              { value: "warnings", label: t("HumanBots.Guided.Warnings", "Warnings") },
+              { value: "hints", label: t("HumanBots.Guided.Hints", "Warnings and hints") },
+            ]}
+          />
+          {guidedLevel !== "off" && (
+            <Text size="xs" c="dimmed">
+              {guidedLevel === "warnings"
+                ? t(
+                    "HumanBots.Guided.Warnings.Desc",
+                    "You are warned when one move is clearly better than the others.",
+                  )
+                : t(
+                    "HumanBots.Guided.Hints.Desc",
+                    "You are warned at critical moments and can ask for the piece to move, then the move.",
+                  )}
+            </Text>
+          )}
         </Section>
 
         <Section label={t("HumanBots.Rated.Title", "Game type")}>{ratedSelector}</Section>

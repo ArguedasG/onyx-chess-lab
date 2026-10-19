@@ -167,7 +167,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
 | 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                  |
-| 9 — Expansión avanzada                      | Pendiente                                | Bots con personalidad medida, torneos con el usuario e interpretación estratégica.                                |
+| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots) implementada, pendiente de validación manual; 9.2 y 9.3 pendientes. Ver `docs/bots-phase-9-1.es.md`.   |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
 
 ### Documentación de fases cerradas
@@ -768,13 +768,21 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ### 9.1. Bots humanos y calibración
 
+**Estado: implementada (2026-10-18), pendiente de validación manual.** Detalle, decisiones y
+mediciones en `docs/bots-phase-9-1.es.md`: estilos medidos en el laboratorio (5 personalidades de
+juego y 4 de apertura), Maia puro hasta 2400 y Maia 2400 con filtro de Stockfish calibrado hasta
+2800, catálogo de 74 bots con ~120 líneas de apertura y explorador, panel único de partida contra un
+bot, rating Glicko-2 por ritmo con partidas puntuables y amistosas, bases de partidas y fuente en la
+ficha, tiempos de reflexión por ritmo, partida guiada y jugadores generados con semilla fija.
+
 Ideas: I-47, I-48 (puede adelantarse), I-49, I-50, I-52 (partida guiada).
 
 - retomar la expansión de la Fase 4;
 - personalidades de juego reales y medidas: reordenar las candidatas de Maia según el estilo dentro
   de un margen de Stockfish y medir el resultado antes de anunciarlo (I-47);
 - bots fuertes con candidatas de Maia verificadas con Stockfish (I-48);
-- catálogo de 80–100 bots curados, jugadores generados con semilla fija y explorador de bots (I-49);
+- catálogo de 80–100 bots curados (74 en la primera entrega, con margen), jugadores generados con
+  semilla fija y explorador de bots (I-49);
 - rating local del usuario contra bots y escala calibrada con la liga (I-50);
 - partida guiada que avisa en los momentos críticos (I-52);
 - ampliar el catálogo solo cuando los perfiles sean distinguibles.

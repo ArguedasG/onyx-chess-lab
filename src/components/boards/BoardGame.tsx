@@ -71,6 +71,7 @@ import {
   gameSameTimeControlAtom,
   botRatingsAtom,
   humanBotHistoryAtom,
+  guidedLevelAtom,
   ratedBotGameAtom,
   sessionsAtom,
   humanBotMeasurementsAtom,
@@ -93,6 +94,7 @@ import {
   rhythmOfClock,
 } from "@/utils/botRating";
 import { saveBotGame } from "@/utils/botGamesDatabase";
+import type { GuidedLevel } from "@/utils/guidedPlay";
 import { accountPlayerNames } from "@/utils/players/accountSources";
 import { buildHumanBotHistoryGame, EMPTY_HUMAN_BOT_HISTORY } from "@/utils/humanBotHistory";
 import {
@@ -146,6 +148,7 @@ import {
 } from "./EndgameObjectiveWatch";
 import HumanBotHistoryPanel from "./HumanBotHistoryPanel";
 import BotGameSetup, { type UserColor } from "./BotGameSetup";
+import { GuidedPlayPanel, useGuidedPlay } from "./GuidedPlay";
 import RatedGameSelector, { formatPlayerRating } from "./RatedGameSelector";
 import HumanBotMeasurementsPanel from "./HumanBotMeasurementsPanel";
 import BotLeaguePanel from "./BotLeaguePanel";
@@ -368,6 +371,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const setMeasurements = useSetAtom(humanBotMeasurementsAtom);
   const historySavedRef = useRef(false);
   const [ratedPreference, setRatedPreference] = useAtom(ratedBotGameAtom);
+  const [guidedLevel, setGuidedLevel] = useAtom(guidedLevelAtom);
+  /** The help of the game in progress, fixed when it starts. */
+  const [gameGuidedLevel, setGameGuidedLevel] = useState<GuidedLevel>("off");
   const [botRatings, setBotRatings] = useAtom(botRatingsAtom);
   const sessions = useAtomValue(sessionsAtom);
   /** The rating at stake in the current game: its rhythm and the bot's rating there. */
@@ -459,6 +465,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const setupBotProfile = setupBotMatch ? getHumanBotProfile(setupBotMatch.bot.profileId) : null;
   const ratedBlocker = ratedGameBlocker({
     againstCatalogBot: setupBotMatch !== null,
+    guided: guidedLevel !== "off",
     fromStartPosition: root.fen === INITIAL_FEN && root.children.length === 0,
     playerClock: setupBotMatch?.player.timeControl,
     botClock: setupBotMatch?.bot.timeControl,
@@ -530,6 +537,23 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     const king = pos.board.kingOf(pos.turn);
     return king === undefined ? [] : [{ orig: makeSquare(king), brush: "red" }];
   }, [currentFen, gameState]);
+
+  // Guided play (I-52): a short search on the player's turn, with the hint they ask for.
+  const guidedActive = gameState === "playing" && gameGuidedLevel !== "off";
+  const guidedPlayerColor = getHumanBotHistoryMatch(players)?.playerColor ?? null;
+  const guidedPlayerToMove =
+    guidedPlayerColor !== null &&
+    (currentFen.split(" ")[1] === "b" ? "black" : "white") === guidedPlayerColor;
+  const guided = useGuidedPlay({
+    active: guidedActive,
+    fen: currentFen,
+    playerToMove: guidedPlayerToMove,
+    engine: objectiveEngine,
+  });
+  const boardShapes = useMemo(
+    () => [...matedKingShapes, ...guided.shapes],
+    [guided.shapes, matedKingShapes],
+  );
   const canAbortBeforeFirstMove =
     !generatorMode && isPlayerVsHumanBot && gameState === "playing" && !humanHasMoved;
 
@@ -876,6 +900,11 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     historySavedRef.current = false;
     discardGameResultRef.current = false;
     gameRatingRef.current = null;
+    setGameGuidedLevel(
+      !generatorMode && getSetupBotMatch(playerSettings.white, playerSettings.black)
+        ? guidedLevel
+        : "off",
+    );
     const ratedMatch = generatorMode
       ? null
       : getSetupBotMatch(playerSettings.white, playerSettings.black);
@@ -1919,7 +1948,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           selectedPiece={selectedPiece}
           cgRef={cgRef}
           enablePremoves={isPlayerVsEngine && gameState === "playing"}
-          overlayShapes={matedKingShapes}
+          overlayShapes={boardShapes}
         />
       </Portal>
       <PanelHeader zone="tools">
@@ -2040,6 +2069,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                             setInputColor(botIsPlayer1 ? invertColor(color) : color)
                           }
                           setClock={setBotClock}
+                          guidedLevel={guidedLevel}
+                          setGuidedLevel={setGuidedLevel}
                           ratedSelector={ratedSelector}
                           advanced={openingBookControls}
                           humanTimingEnabled={!generatorMode}
@@ -2309,6 +2340,15 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                             objective={endgameObjective}
                             engine={objectiveEngine}
                             playing={gameState === "playing"}
+                          />
+                        </Box>
+                      )}
+                      {guidedActive && (
+                        <Box mb="sm">
+                          <GuidedPlayPanel
+                            level={gameGuidedLevel}
+                            guided={guided}
+                            playerToMove={guidedPlayerToMove}
                           />
                         </Box>
                       )}

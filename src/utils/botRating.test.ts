@@ -92,6 +92,7 @@ describe("rated games", () => {
 
     it("explains why a game cannot be rated", () => {
         expect(ratedGameBlocker({ ...ok, againstCatalogBot: false })).toBe("notAgainstBot");
+        expect(ratedGameBlocker({ ...ok, guided: true })).toBe("guided");
         expect(ratedGameBlocker({ ...ok, fromStartPosition: false })).toBe("customPosition");
         expect(ratedGameBlocker({ ...ok, botClock: undefined })).toBe("noClock");
         expect(ratedGameBlocker({ ...ok, botClock: { seconds: 300_000 } })).toBe("differentClocks");

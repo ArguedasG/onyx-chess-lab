@@ -30,6 +30,7 @@ import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
 import { positionFromFen, swapMove } from "@/utils/chessops";
 import { type BotRatingsState, botRatingsStateSchema, EMPTY_BOT_RATINGS } from "@/utils/botRating";
 import type { SuccessDatabaseInfo } from "@/utils/db";
+import type { GuidedLevel } from "@/utils/guidedPlay";
 import { type Engine, type EngineSettings, engineSchema } from "@/utils/engines";
 import type { HumanBotGameMeasurement } from "@/utils/humanBotMeasurements";
 import { isMaiaEngine } from "@/utils/humanBots";
@@ -427,6 +428,9 @@ export const botRatingsAtom = unwrap(
     ),
     () => EMPTY_BOT_RATINGS,
 );
+
+/** Help in games against a bot (I-52); guided games are always friendly. */
+export const guidedLevelAtom = atomWithStorage<GuidedLevel>("bot-guided-level", "off");
 
 /** Whether the next game against a bot is rated; friendly by default. */
 export const ratedBotGameAtom = atomWithStorage<boolean>("rated-bot-game", false);

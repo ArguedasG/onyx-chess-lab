@@ -10,8 +10,7 @@ Inicio: 2026-10-17. Ideas: I-47, I-48, I-49, I-50 e I-52 (partida guiada) del es
   etiqueta de Elo (I-50), nunca en la fuerza (I-48), para no contarlo dos veces.
 - **I-48: probabilidad de verificar p(Elo).** 0 en niveles bajos (Maia pura), creciente en una zona
   de transición (~1900–2300, a medir) y 1 arriba, con un margen cada vez más estrecho.
-- **I-49: escalera** 800, 900, 1000 y de 50 en 50 hasta 2800 (39 puestos); repeticiones de 1300 a
-  2400. El techo bajó a 2600 con el primer método y volvió a 2800 con el de Maia puro hasta 2400.
+- **I-49: escalera** 800, 900, 1000 y de 50 en 50 hasta 2800 (39 puestos); repeticiones de 1300 a 2400. El techo bajó a 2600 con el primer método y volvió a 2800 con el de Maia puro hasta 2400.
 - **I-50: etiquetas por ritmo**, con parámetros en una tabla versionada:
   - Blitz: el Elo del bot (escala de Lichess blitz, la nativa de Maia).
   - Rápida: `E − (100 + 0,07·(E − 1000))` (2000 → 1830, 2800 → 2574).
@@ -33,20 +32,20 @@ Inicio: 2026-10-17. Ideas: I-47, I-48, I-49, I-50 e I-52 (partida guiada) del es
   partidas del autor y la opinión de los usuarios.
 - Los nombres de las personalidades no copian los de Chessiverse:
 
-  | Personalidad de juego | Ejes                    | Id interno     |
-  | --------------------- | ----------------------- | -------------- |
-  | Rematador (Striker)   | agresivo, simplifica    | `rematador`    |
-  | Salvaje               | agresivo, complica      | `salvaje`      |
-  | Guardián              | defensivo, simplifica   | `guardian`     |
-  | Acechador (Lurker)    | defensivo, complica     | `acechador`    |
-  | Equilibrista          | centro                  | `equilibrista` |
+  | Personalidad de juego | Ejes                  | Id interno     |
+  | --------------------- | --------------------- | -------------- |
+  | Rematador (Striker)   | agresivo, simplifica  | `rematador`    |
+  | Salvaje               | agresivo, complica    | `salvaje`      |
+  | Guardián              | defensivo, simplifica | `guardian`     |
+  | Acechador (Lurker)    | defensivo, complica   | `acechador`    |
+  | Equilibrista          | centro                | `equilibrista` |
 
-  | Estilo de apertura           | Ejes                  |
-  | ---------------------------- | --------------------- |
-  | Aventurero                   | aguda, poca teoría    |
-  | Esgrimista                   | aguda, teórica        |
-  | Práctico                     | sólida, poca teoría   |
-  | Clásico                      | sólida, teórica       |
+  | Estilo de apertura | Ejes                |
+  | ------------------ | ------------------- |
+  | Aventurero         | aguda, poca teoría  |
+  | Esgrimista         | aguda, teórica      |
+  | Práctico           | sólida, poca teoría |
+  | Clásico            | sólida, teórica     |
 
 - Laboratorio de estilos: propuesta B (2 Elos × 5 estilos × 20 partidas, en 4 lotes).
 
@@ -58,8 +57,9 @@ Inicio: 2026-10-17. Ideas: I-47, I-48, I-49, I-50 e I-52 (partida guiada) del es
 4. Filtro de I-48 con p(Elo). **Hecho y calibrado hasta 2400–2600.**
 5. Tiempos de reflexión por ritmo. **Hecho.**
 6. Rating por ritmo, partidas puntuables y amistosas, base de partidas y fuente en la ficha. **Hecho.**
-7. Catálogo completo y explorador de bots.
-8. Partida guiada (I-52).
+7. Catálogo completo y explorador de bots. **Hecho.**
+8. Partida guiada (I-52). **Hecho.**
+9. Jugadores generados con semilla fija (I-49), para los torneos de 9.2. **Hecho.**
 
 ## Paso 1 — Candidatas de Maia y verificación con Stockfish
 
@@ -133,10 +133,10 @@ Cinco personalidades contra un bot neutro del mismo Elo. Estimación por partida
 máquina: ~11 s de cálculo con procesos reutilizados (la liga actual arranca Maia en cada partida,
 ~10 s más) y ~6–8 s efectivos con 2 partidas a la vez. Se confirmará con el primer lote.
 
-| Propuesta  | Partidas                     | Duración total | Lotes         | Qué permite ver                                                    |
-| ---------- | ---------------------------- | -------------- | ------------- | ------------------------------------------------------------------ |
-| A          | 1 Elo × 5 estilos × 10 = 50  | ~5–10 min      | 1             | Diferencias groseras y PGN para revisar; Elo ±170.                 |
-| **B** (\*) | 2 Elos × 5 estilos × 20 = 200 | ~20–40 min     | 4 de ~7–10 min | Rasgos por jugada (jaques, capturas, cambios, material); Elo ±120. |
+| Propuesta  | Partidas                      | Duración total | Lotes           | Qué permite ver                                                    |
+| ---------- | ----------------------------- | -------------- | --------------- | ------------------------------------------------------------------ |
+| A          | 1 Elo × 5 estilos × 10 = 50   | ~5–10 min      | 1               | Diferencias groseras y PGN para revisar; Elo ±170.                 |
+| **B** (\*) | 2 Elos × 5 estilos × 20 = 200 | ~20–40 min     | 4 de ~7–10 min  | Rasgos por jugada (jaques, capturas, cambios, material); Elo ±120. |
 | C          | 2 Elos × 5 estilos × 50 = 500 | ~50–100 min    | 10 de ~7–10 min | Rasgos con buena precisión; Elo ±80.                               |
 
 (\*) Elegida por el autor. Duración real de la primera ronda: 4 lotes de 7–8 min, **31 min en
@@ -155,16 +155,16 @@ del mismo Elo, colores alternados, un solo Maia y un Stockfish por proceso de tr
 
 Medias del bot con estilo (intervalo del 95 % entre paréntesis cuando importa):
 
-| Métrica                     | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
-| --------------------------- | --------- | ------- | -------- | --------- | ------------ |
-| Jaques/jugada, 1500 (%)     | 12,9      | 11,7    | 4,1      | 3,5       | 5,4          |
-| Jaques/jugada, 2000 (%)     | 13,6      | 14,1    | 4,8      | 4,9       | 8,0          |
-| Cambios/jugada, 1500 (%)    | 9,6       | 8,5     | 12,2     | 7,2       | 10,4         |
-| Material medio, 2000        | 47,8      | 55,3    | 44,4     | 51,6      | 47,8         |
-| Medias jugadas, 2000        | 96        | 82      | 114      | 96        | 98           |
-| Prob. Maia de su jugada, 2000 (%) | 58  | 55      | 55       | 53        | 56           |
-| Elo frente al neutro, 1500  | −17       | 0       | −191     | −512      | −147         |
-| Elo frente al neutro, 2000  | +89       | +70     | −147     | −127      | −35          |
+| Métrica                           | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
+| --------------------------------- | --------- | ------- | -------- | --------- | ------------ |
+| Jaques/jugada, 1500 (%)           | 12,9      | 11,7    | 4,1      | 3,5       | 5,4          |
+| Jaques/jugada, 2000 (%)           | 13,6      | 14,1    | 4,8      | 4,9       | 8,0          |
+| Cambios/jugada, 1500 (%)          | 9,6       | 8,5     | 12,2     | 7,2       | 10,4         |
+| Material medio, 2000              | 47,8      | 55,3    | 44,4     | 51,6      | 47,8         |
+| Medias jugadas, 2000              | 96        | 82      | 114      | 96        | 98           |
+| Prob. Maia de su jugada, 2000 (%) | 58        | 55      | 55       | 53        | 56           |
+| Elo frente al neutro, 1500        | −17       | 0       | −191     | −512      | −147         |
+| Elo frente al neutro, 2000        | +89       | +70     | −147     | −127      | −35          |
 
 Conclusiones:
 
@@ -191,16 +191,16 @@ grupo de jugadas aceptables) y la simplificación reforzada (cambio +1,5; tensi�
 4 lotes de 6–7 min, **26 min en total**. Resultados en `lab-results/style-lab-v2/`. El Equilibrista
 coincide con la primera ronda partida por partida, como debe (mismas semillas y sin estilo).
 
-| Métrica                        | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
-| ------------------------------ | --------- | ------- | -------- | --------- | ------------ |
-| Jaques/jugada, 1500 (%)        | 10,8      | 8,6     | 5,7      | 11,1      | 5,4          |
-| Jaques/jugada, 2000 (%)        | 12,9      | 15,5    | 7,4      | 7,0       | 8,0          |
-| Cambios/jugada, 1500 (%)       | 11,8      | 8,6     | 11,8     | 8,1       | 10,4         |
-| Cambios/jugada, 2000 (%)       | 11,2      | 9,0     | 11,3     | 10,8      | 11,0         |
-| Piezas atacadas, 1500          | 2,81      | 3,80    | 2,97     | 3,47      | 3,05         |
-| Material medio, 1500           | 48,3      | 55,7    | 48,3     | 49,6      | 49,6         |
-| Elo frente al neutro, 1500     | +89       | −17     | −127     | +89       | −147         |
-| Elo frente al neutro, 2000     | −70       | +70     | −35      | +17       | −35          |
+| Métrica                    | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
+| -------------------------- | --------- | ------- | -------- | --------- | ------------ |
+| Jaques/jugada, 1500 (%)    | 10,8      | 8,6     | 5,7      | 11,1      | 5,4          |
+| Jaques/jugada, 2000 (%)    | 12,9      | 15,5    | 7,4      | 7,0       | 8,0          |
+| Cambios/jugada, 1500 (%)   | 11,8      | 8,6     | 11,8     | 8,1       | 10,4         |
+| Cambios/jugada, 2000 (%)   | 11,2      | 9,0     | 11,3     | 10,8      | 11,0         |
+| Piezas atacadas, 1500      | 2,81      | 3,80    | 2,97     | 3,47      | 3,05         |
+| Material medio, 1500       | 48,3      | 55,7    | 48,3     | 49,6      | 49,6         |
+| Elo frente al neutro, 1500 | +89       | −17     | −127     | +89       | −147         |
+| Elo frente al neutro, 2000 | −70       | +70     | −35      | +17       | −35          |
 
 Conclusiones:
 
@@ -219,17 +219,17 @@ Conclusiones:
 Igual que la segunda con `STYLE_STRENGTH` = 2,0. 4 lotes de 7–8 min, ~30 min. Resultados en
 `lab-results/style-lab-v3/`.
 
-| Métrica                    | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
-| -------------------------- | --------- | ------- | -------- | --------- | ------------ |
-| Jaques/jugada, 1500 (%)    | 9,8       | 11,6    | 5,1      | 8,1       | 5,4          |
-| Jaques/jugada, 2000 (%)    | 14,0      | 14,0    | 5,4      | 8,2       | 8,0          |
-| Cambios/jugada, 1500 (%)   | 10,6      | 7,2     | 12,4     | 7,6       | 10,4         |
-| Cambios/jugada, 2000 (%)   | 12,1      | 9,2     | 10,2     | 7,2       | 11,0         |
-| Piezas atacadas, 2000      | 3,30      | 3,55    | 2,95     | 3,60      | 3,32         |
-| Medias jugadas, 2000       | 98        | 95      | 112      | 94        | 98           |
-| Prob. Maia de su jugada, 2000 (%) | 55 | 54     | 53       | 54        | 56           |
-| Elo frente al neutro, 1500 | −53       | −89     | +17      | +53       | −147         |
-| Elo frente al neutro, 2000 | +17       | +53     | −127     | +17       | −35          |
+| Métrica                           | Rematador | Salvaje | Guardián | Acechador | Equilibrista |
+| --------------------------------- | --------- | ------- | -------- | --------- | ------------ |
+| Jaques/jugada, 1500 (%)           | 9,8       | 11,6    | 5,1      | 8,1       | 5,4          |
+| Jaques/jugada, 2000 (%)           | 14,0      | 14,0    | 5,4      | 8,2       | 8,0          |
+| Cambios/jugada, 1500 (%)          | 10,6      | 7,2     | 12,4     | 7,6       | 10,4         |
+| Cambios/jugada, 2000 (%)          | 12,1      | 9,2     | 10,2     | 7,2       | 11,0         |
+| Piezas atacadas, 2000             | 3,30      | 3,55    | 2,95     | 3,60      | 3,32         |
+| Medias jugadas, 2000              | 98        | 95      | 112      | 94        | 98           |
+| Prob. Maia de su jugada, 2000 (%) | 55        | 54      | 53       | 54        | 56           |
+| Elo frente al neutro, 1500        | −53       | −89     | +17      | +53       | −147         |
+| Elo frente al neutro, 2000        | +17       | +53     | −127     | +17       | −35          |
 
 Conclusiones:
 
@@ -308,13 +308,13 @@ pedido a Maia.
 Filtro desde 2000 (completo en 2400), margen de 150 a 40 cp, hasta 150 puntos menos a Maia. 50
 partidas, ~17,5 min (el segundo lote se canceló para no pasar del tiempo previsto).
 
-| Enfrentamiento         | Filtradas | Puntuación | Elo medido | Esperado |
-| ---------------------- | --------- | ---------- | ---------- | -------- |
-| 2100 vs Maia 2100      | 29 %      | 90 %       | +382       | 0        |
-| 2300 vs Maia 2300      | 72 %      | 80 %       | +241       | 0        |
-| 2500 vs Maia 2300      | 100 %     | 100 %      | > +400     | +200     |
-| 2700 vs bot 2500       | 100 %     | 75 %       | +191       | +200     |
-| 2800 vs bot 2600       | 100 %     | 50 %       | 0          | +200     |
+| Enfrentamiento    | Filtradas | Puntuación | Elo medido | Esperado |
+| ----------------- | --------- | ---------- | ---------- | -------- |
+| 2100 vs Maia 2100 | 29 %      | 90 %       | +382       | 0        |
+| 2300 vs Maia 2300 | 72 %      | 80 %       | +241       | 0        |
+| 2500 vs Maia 2300 | 100 %     | 100 %      | > +400     | +200     |
+| 2700 vs bot 2500  | 100 %     | 75 %       | +191       | +200     |
+| 2800 vs bot 2600  | 100 %     | 50 %       | 0          | +200     |
 
 Conclusiones: el filtro vale muchísimo más de lo supuesto (filtrar una de cada cuatro jugadas ya
 suma ~400 puntos frente a Maia); y estrechar el margen por debajo de ~70 cp ya no suma fuerza.
@@ -419,12 +419,12 @@ los errores catastróficos) suma ~250 puntos, así que el 2500 solo filtra la mi
 
 60 partidas, ~13 min. Las dos rondas (v4 y v5) suman ~24 min.
 
-| Bot  | Margen | Puntuación | Elo medido (95 %)  | Esperado |
-| ---- | ------ | ---------- | ------------------ | -------- |
-| 2500 | 400 (mitad de las jugadas) | 57 % | +47 (−119 a +239) | +100 |
-| 2600 | 400    | 53 %       | +23 (−139 a +197)  | +200     |
-| 2700 | 200    | 80 %       | +241 (+100 a +552) | +300     |
-| 2800 | 130    | 93 %       | +458 (+244 a +798) | +400     |
+| Bot  | Margen                     | Puntuación | Elo medido (95 %)  | Esperado |
+| ---- | -------------------------- | ---------- | ------------------ | -------- |
+| 2500 | 400 (mitad de las jugadas) | 57 %       | +47 (−119 a +239)  | +100     |
+| 2600 | 400                        | 53 %       | +23 (−139 a +197)  | +200     |
+| 2700 | 200                        | 80 %       | +241 (+100 a +552) | +300     |
+| 2800 | 130                        | 93 %       | +458 (+244 a +798) | +400     |
 
 Juntando v4 y v5 (30 partidas por margen) la curva es coherente: 400 cp ~+150, 250 cp ~+120,
 200 cp ~+240, 150 cp ~+380, 130 cp ~+460, 80 cp ~+585 frente a Maia 2400. **Márgenes vigentes**: 2500
@@ -499,3 +499,32 @@ ocupaba el primer lugar):
 - «Configurar jugadores a mano» vuelve a las dos columnas de siempre, y desde ahí un botón regresa
   al panel.
 - En la vista manual, el selector del motor Maia pasa al final del bot.
+
+## Partida guiada (I-52, 2026-10-18)
+
+- En el panel de partida contra un bot, sección **Ayuda**: Sin ayuda (por defecto), Avisos, o Avisos
+  y pistas. Con ayuda, la partida siempre es amistosa.
+- En tu turno, una búsqueda corta de Stockfish (700 ms, MultiPV 2, 1 hilo) decide si el momento es
+  **crítico**: la mejor jugada supera a la segunda en 1,5 peones o más con la partida sin decidir
+  (`src/utils/guidedPlay.ts`). No avisa en partidas ya ganadas o perdidas, sí cuando una sola jugada
+  salva una posición difícil.
+- El panel «Partida guiada» de la partida muestra «Posición tranquila» o «Momento crítico». Con
+  pistas, primero se puede pedir **la pieza** (círculo en el tablero) y después **la jugada**
+  (flecha).
+
+## Jugadores generados (I-49, 2026-10-18)
+
+`src/utils/botGeneratedPlayers.ts`: con una semilla y un Elo se sortean nombre, personalidades y
+familias de apertura acordes al estilo. El identificador `gen-<semilla>-<elo>` basta para
+reconstruirlo idéntico (`getHumanBotProfile` lo entiende), así que un torneo solo guarda ids. Se usan
+en 9.2; todavía no aparecen en el explorador.
+
+## Validación manual pendiente
+
+1. Panel de partida contra un bot: ritmo, tipo, color, ayuda y opciones avanzadas.
+2. Explorador: filtros, búsqueda y selector de ritmo.
+3. Partida puntuable completa en cada ritmo, cambio de rating y paso a amistosa al deshacer.
+4. Partida guiada con avisos y con pistas.
+5. Ficha: Cuentas / Bots / Todas.
+6. Instalación limpia en otro PC: Maia desde Motores, Stockfish, partida puntuable con un bot de
+   estilo y líneas `onyx-policy` en los registros del motor.

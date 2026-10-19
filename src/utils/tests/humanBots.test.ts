@@ -344,27 +344,20 @@ describe("human bot profiles", () => {
 
     it("fills the Phase 9.1 ladder up to 2800", () => {
         const elos = new Set(HUMAN_BOT_PROFILES.map((profile) => profile.elo));
-        for (const elo of [800, 900, 1000]) expect(elos.has(elo)).toBe(true);
-        for (let elo = 1050; elo <= 2800; elo += 50) expect(elos.has(elo), `${elo}`).toBe(true);
+        const ladder = [800, 900, 1000];
+        for (let elo = 1050; elo <= 2800; elo += 50) ladder.push(elo);
+        expect(ladder.filter((elo) => !elos.has(elo))).toEqual([]);
         expect(Math.max(...elos)).toBe(2800);
+        const thin: number[] = [];
         for (let elo = 1300; elo <= 2400; elo += 50) {
-            const count = HUMAN_BOT_PROFILES.filter((profile) => profile.elo === elo).length;
-            expect(count, `${elo}`).toBeGreaterThanOrEqual(2);
+            if (HUMAN_BOT_PROFILES.filter((profile) => profile.elo === elo).length < 2)
+                thin.push(elo);
         }
-        for (const name of [
-            "Lucy",
-            "Tiffany",
-            "Herson",
-            "Josymar",
-            "Jose",
-            "David",
-            "Brandon",
-            "Billy",
-        ])
-            expect(
-                HUMAN_BOT_PROFILES.some((profile) => profile.name === name),
-                name,
-            ).toBe(true);
+        expect(thin).toEqual([]);
+        const names = ["Lucy", "Tiffany", "Herson", "Josymar", "Jose", "David", "Brandon", "Billy"];
+        expect(
+            names.filter((name) => !HUMAN_BOT_PROFILES.some((profile) => profile.name === name)),
+        ).toEqual([]);
     });
 
     it("gives Billy the King's Indian against 1.d4", () => {

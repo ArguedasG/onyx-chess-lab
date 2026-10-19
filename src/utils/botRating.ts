@@ -207,6 +207,7 @@ export function applyRatedGame(
 /** Why a game against a bot cannot be rated, or `null` when it can. */
 export type RatedGameBlocker =
     | "notAgainstBot"
+    | "guided"
     | "customPosition"
     | "noClock"
     | "differentClocks"
@@ -223,6 +224,8 @@ export function rhythmOfClock(clock: NonNullable<ClockSetting>): Rhythm {
 
 export function ratedGameBlocker(setup: {
     againstCatalogBot: boolean;
+    /** Guided play (I-52) is a help, so the game cannot be rated. */
+    guided?: boolean;
     fromStartPosition: boolean;
     playerClock: ClockSetting;
     botClock: ClockSetting;
@@ -230,6 +233,7 @@ export function ratedGameBlocker(setup: {
     verifier: boolean;
 }): RatedGameBlocker | null {
     if (!setup.againstCatalogBot) return "notAgainstBot";
+    if (setup.guided) return "guided";
     if (!setup.fromStartPosition) return "customPosition";
     if (!setup.playerClock || !setup.botClock) return "noClock";
     if (

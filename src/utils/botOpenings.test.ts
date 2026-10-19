@@ -10,15 +10,19 @@ import {
 
 describe("bot opening lines", () => {
     it("are legal from the initial position", () => {
+        const illegal: string[] = [];
         for (const id of Object.keys(BOT_OPENING_LINES) as BotOpeningLineId[]) {
             const position = Chess.default();
             for (const uci of botOpeningLineUci(id)) {
                 const move = parseUci(uci);
-                expect(move, `${id}: ${uci}`).toBeDefined();
-                expect(position.isLegal(move!), `${id}: ${uci}`).toBe(true);
-                position.play(move!);
+                if (!move || !position.isLegal(move)) {
+                    illegal.push(`${id}: ${uci}`);
+                    break;
+                }
+                position.play(move);
             }
         }
+        expect(illegal).toEqual([]);
     });
 
     it("write castling as the king's two-square move", () => {
@@ -28,20 +32,21 @@ describe("bot opening lines", () => {
     });
 
     it("start with the family's own side", () => {
-        const firstWhiteMoves = new Set(["e4", "d4", "c4", "Nf3"]);
+        const firstMoves = {
+            white: ["e4", "d4", "c4", "Nf3"],
+            vsE4: ["e4"],
+            vsD4: ["d4"],
+            vsFlank: ["c4", "Nf3"],
+        } as const;
         for (const [id, family] of Object.entries(BOT_OPENING_FAMILIES)) {
-            for (const [line] of family.lines) {
-                const first = BOT_OPENING_LINES[line].split(" ")[0];
-                expect(firstWhiteMoves.has(first), `${id}/${line}`).toBe(true);
-                if (family.kind === "vsE4") expect(first, `${id}/${line}`).toBe("e4");
-                if (family.kind === "vsD4") expect(first, `${id}/${line}`).toBe("d4");
-                if (family.kind === "vsFlank")
-                    expect(["c4", "Nf3"], `${id}/${line}`).toContain(first);
-            }
+            const allowed: readonly string[] = firstMoves[family.kind];
+            const wrongStart = family.lines
+                .map(([line]) => line)
+                .filter((line) => !allowed.includes(BOT_OPENING_LINES[line].split(" ")[0]));
+            expect(wrongStart).toEqual([]);
+            const side = family.kind === "white" ? "white" : "black";
             const lines = botFamilyLines(id as keyof typeof BOT_OPENING_FAMILIES);
-            expect(
-                lines.every((line) => line.side === (family.kind === "white" ? "white" : "black")),
-            ).toBe(true);
+            expect(lines.every((candidate) => candidate.side === side)).toBe(true);
         }
     });
 });
