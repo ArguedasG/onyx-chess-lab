@@ -14,7 +14,6 @@ import {
   Group,
   Loader,
   Menu,
-  Modal,
   NumberInput,
   Progress,
   SegmentedControl,
@@ -25,6 +24,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import {
   IconArrowLeft,
   IconAlertTriangle,

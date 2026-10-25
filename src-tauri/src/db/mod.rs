@@ -1025,8 +1025,23 @@ pub struct QueryOptions<SortT> {
     pub direction: SortDirection,
 }
 
+/// Leaves out the games where both players are weak, judging each player by the best rating they
+/// have in any game of the database (a player rated 100 in one game and 2300 in another counts as
+/// 2300). Games between a strong and a weak player stay: they show how mistakes are punished.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq, Hash, Type)]
+pub struct WeakGamesFilter {
+    /// A player whose best known rating is below this is weak.
+    #[specta(optional)]
+    pub below: Option<i32>,
+    /// Players with no rating in any game also count as weak.
+    #[serde(default)]
+    pub unrated: bool,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq, Hash, Type)]
 pub struct GameQuery {
+    #[specta(optional)]
+    pub weak_games: Option<WeakGamesFilter>,
     #[specta(optional)]
     pub options: Option<QueryOptions<GameSort>>,
     #[specta(optional)]

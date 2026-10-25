@@ -1,15 +1,5 @@
-import {
-  Alert,
-  Badge,
-  Box,
-  Button,
-  Group,
-  Modal,
-  Progress,
-  Stack,
-  Text,
-  ThemeIcon,
-} from "@mantine/core";
+import { Alert, Badge, Box, Button, Group, Progress, Stack, Text, ThemeIcon } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import {
   IconArrowRight,
   IconBulb,

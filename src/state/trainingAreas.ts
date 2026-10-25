@@ -1,9 +1,9 @@
 import { notifications } from "@mantine/notifications";
-import { BaseDirectory, exists, readTextFile, rename, writeTextFile } from "@tauri-apps/plugin-fs";
 import { warn } from "@tauri-apps/plugin-log";
 import i18n from "i18next";
 import { atomWithStorage } from "jotai/utils";
-import { createFileBackedStorage, type TextFileSystem } from "./fileBackedStorage";
+import { appDataFiles } from "./appDataFiles";
+import { createFileBackedStorage } from "./fileBackedStorage";
 import { createZodStorage } from "./utils";
 import {
     createEmptyTrainingAreas,
@@ -12,26 +12,6 @@ import {
 } from "@/utils/trainingAreas";
 
 export const TRAINING_AREAS_KEY = "training-areas-v1";
-
-const appData = { baseDir: BaseDirectory.AppData };
-
-const appDataFiles: TextFileSystem = {
-    exists: (name) => exists(name, appData),
-    read: (name) => readTextFile(name, appData),
-    async write(name, contents) {
-        const temporary = `${name}.tmp`;
-        await writeTextFile(temporary, contents, appData);
-        await rename(temporary, name, {
-            oldPathBaseDir: BaseDirectory.AppData,
-            newPathBaseDir: BaseDirectory.AppData,
-        });
-    },
-    rename: (from, to) =>
-        rename(from, to, {
-            oldPathBaseDir: BaseDirectory.AppData,
-            newPathBaseDir: BaseDirectory.AppData,
-        }),
-};
 
 let lastErrorNotice = 0;
 

@@ -23,7 +23,7 @@ import type {
 } from "jotai/vanilla/utils/atomWithStorage";
 import type { ReviewLog } from "ts-fsrs";
 import { z } from "zod";
-import type { BestMoves, GameConfig, GoMode, OpeningReport } from "@/bindings";
+import type { BestMoves, GameConfig, GoMode, OpeningReport, WeakGamesFilter } from "@/bindings";
 import { DEFAULT_TIME_CONTROL, type OpponentSettings } from "@/components/boards/OpponentForm";
 import { type Position, positionSchema } from "@/components/files/opening";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
@@ -357,6 +357,8 @@ export type ModelGameBatchSettings = {
     enabled: boolean;
     gameCount: number;
     alternateColors: boolean;
+    /** Varied openings, each played with both colors, instead of the repertoires. */
+    openingSuite?: boolean;
     seedStep: number;
     concurrency: number;
     maxCpuThreads: number;
@@ -538,6 +540,20 @@ export const localOptionsFamily = atomFamily((_tab: string) =>
 );
 export const currentLocalOptionsAtom = tabValue(localOptionsFamily);
 
+/**
+ * Leaves out of position queries the games where both players are weak, by each player's best
+ * known rating. A preference for the reference database, shared by every tab; off by default.
+ */
+export const weakGamesFilterAtom = atomWithStorage<WeakGamesFilter>("weak-games-filter", {
+    below: null,
+    unrated: false,
+});
+
+/** The filter as the query expects it, or `null` when it leaves nothing out. */
+export function activeWeakFilter(filter: WeakGamesFilter): WeakGamesFilter | null {
+    return filter.below != null || filter.unrated ? filter : null;
+}
+
 export const lichessOptionsAtom = atomWithStorage<LichessGamesOptions>(
     "lichess-all-options",
     {
@@ -653,6 +669,10 @@ export type PlayRun = {
     config: GameConfig;
     players: { white: OpponentSettings; black: OpponentSettings };
     source: TreeState;
+    /** The colors were drawn at random, so a rematch swaps them. */
+    randomColors?: boolean;
+    /** Whether the game was rated when it started; its rematch keeps it. */
+    rated?: boolean;
 };
 export const playRunFamily = atomFamily((_tab: string) => atom<PlayRun | null>(null));
 export const currentPlayRunAtom = tabValue(playRunFamily);

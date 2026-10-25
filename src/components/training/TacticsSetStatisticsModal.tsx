@@ -4,7 +4,6 @@ import {
   Card,
   Divider,
   Group,
-  Modal,
   Progress,
   ScrollArea,
   SimpleGrid,
@@ -13,6 +12,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconChartBar, IconClock, IconTargetArrow } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation as useTrainingTranslation } from "react-i18next";

@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Group,
-  Modal,
   NumberInput,
   Progress,
   ScrollArea,
@@ -14,6 +13,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconChessKnight, IconPlayerStop, IconRadar, IconSparkles } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";

@@ -1,4 +1,5 @@
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useLoaderData } from "@tanstack/react-router";
 import { useAtom, useSetAtom } from "jotai";
 import { useContext, useState } from "react";

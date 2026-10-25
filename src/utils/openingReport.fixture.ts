@@ -54,6 +54,7 @@ export function openingReportFixture(): OpeningReport {
             fen,
             total: 4,
             skippedGames: 0,
+            unlistedGames: 0,
             scanMs: 1,
             cacheHit: false,
             openings: [

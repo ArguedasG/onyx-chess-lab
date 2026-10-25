@@ -3,7 +3,6 @@ import {
   Button,
   Group,
   Menu,
-  Modal,
   NumberInput,
   Paper,
   Progress,
@@ -17,6 +16,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconChartDots, IconDownload, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useAtom } from "jotai";

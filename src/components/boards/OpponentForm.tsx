@@ -15,6 +15,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import MaiaRequiredAlert, { useInstalledMaia } from "@/components/common/MaiaRequiredAlert";
 import { IconAlertTriangle, IconCpu, IconRobot, IconUser } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
@@ -118,6 +119,7 @@ export function OpponentForm({
   humanTimingEnabled?: boolean;
 }) {
   const { t } = useTranslation();
+  const installedMaia = useInstalledMaia();
   const [eloDraft, setEloDraft] = useState<string | null>(null);
   const catalogRepertoireLabel = useCatalogRepertoireLabel();
   const humanBotProfile = getHumanBotProfile(
@@ -430,14 +432,19 @@ export function OpponentForm({
 
       {opponent.type === "humanBot" && (
         <Stack gap="sm">
-          {(!opponent.engine || !isMaiaEngine(opponent.engine)) && (
-            <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
-              {t(
-                "HumanBots.NoMaiaEngine",
-                "No Maia 3 engine was found. Add it from the Engines section first.",
-              )}
-            </Alert>
-          )}
+          {(!opponent.engine || !isMaiaEngine(opponent.engine)) &&
+            (installedMaia ? (
+              <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
+                {t("HumanBots.PickMaiaEngine", "Choose the Maia 3 engine below for this bot.")}
+              </Alert>
+            ) : (
+              <MaiaRequiredAlert>
+                {t(
+                  "HumanBots.NoMaiaEngine",
+                  "No Maia 3 engine was found. Add it from the Engines section first.",
+                )}
+              </MaiaRequiredAlert>
+            ))}
 
           {opponent.twin ? (
             <TwinCard

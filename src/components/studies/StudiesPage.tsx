@@ -8,7 +8,6 @@ import {
   Container,
   Group,
   Menu,
-  Modal,
   Paper,
   ScrollArea,
   SimpleGrid,
@@ -18,6 +17,7 @@ import {
   Textarea,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import {
   IconArrowDown,

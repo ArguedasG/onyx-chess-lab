@@ -1,4 +1,5 @@
-import { Button, Modal, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import { Button, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useLoaderData, useNavigate } from "@tanstack/react-router";
 import { INITIAL_FEN } from "chessops/fen";
 import { useAtom, useSetAtom, useStore } from "jotai";
@@ -55,6 +56,7 @@ export default function CreateRepertoireModal({
     const result = await createFile({
       filename: trimmedName,
       filetype: "repertoire",
+      uniqueName: true,
       pgn,
       dir: documentDir,
     });

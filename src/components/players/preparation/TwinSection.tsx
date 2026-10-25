@@ -12,6 +12,7 @@ import {
   Table,
   Text,
 } from "@mantine/core";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import { IconChartDots, IconPlayerPlay, IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
@@ -179,12 +180,12 @@ export default function TwinSection({
       />
 
       {!maia && (
-        <Alert color="yellow">
+        <MaiaRequiredAlert>
           {t(
             "Preparation.Twin.NoMaia",
             "The twin needs Maia 3. Install it from Engines (managed installation).",
           )}
-        </Alert>
+        </MaiaRequiredAlert>
       )}
 
       <Paper withBorder radius="md" p="md">

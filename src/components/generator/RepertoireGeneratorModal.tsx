@@ -4,7 +4,6 @@ import {
   Button,
   Grid,
   Group,
-  Modal,
   Paper,
   Progress,
   ScrollArea,
@@ -15,6 +14,8 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import {
   IconBook2,
@@ -512,12 +513,12 @@ export default function RepertoireGeneratorModal({
                   </Alert>
                 )}
                 {!maia && (
-                  <Alert color="gray" py={6}>
+                  <MaiaRequiredAlert color="gray">
                     {t(
                       "Generator.NoMaia",
                       "Maia 3 is not installed: replies and difficulty come only from the games of the source.",
                     )}
-                  </Alert>
+                  </MaiaRequiredAlert>
                 )}
                 <Group>
                   <Button

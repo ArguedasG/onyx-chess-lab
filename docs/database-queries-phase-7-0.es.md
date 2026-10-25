@@ -191,3 +191,24 @@ e indexación, prioridad frente a cobertura, actualización de una base consulta
 recuperación de errores, primera apertura de v4, regeneración de v5, apertura en nodo correcto,
 tablas en ventana estrecha y limpieza de temporales. La Fase 7.0 fue cerrada posteriormente mediante
 validación manual del producto; los pendientes nuevos se gestionan como mantenimiento.
+
+## Mantenimiento (2026-10-20)
+
+- **Posiciones muy amplias.** La lista de coincidencias de una consulta tiene un tope de 256 MiB
+  (24 bytes por partida, unos 11,2 M). Antes, superarlo hacía fallar la consulta; ocurría en la
+  posición inicial de bases de más de ~11 M partidas. Ahora la lista deja de crecer (sin más disco
+  temporal), las estadísticas de jugadas siguen contando todas las partidas y el panel indica
+  cuántas quedaron fuera de la lista y del informe (`unlistedGames` en `PositionSummary`).
+- **Excluir partidas entre jugadores débiles** (Filtros del panel, preferencia común a todas las
+  pestañas; desactivado por defecto). Una partida queda fuera solo si **los dos** jugadores son
+  débiles: sin rating, o con su **mejor rating conocido en toda la base** por debajo de 1000–1800.
+  Así, un jugador fuerte que aparece con un rating erróneo bajo no se pierde, y las partidas de un
+  fuerte contra un débil se conservan. El mejor rating por jugador se calcula una vez desde el
+  índice de búsqueda y se reutiliza mientras la base no cambie. El jugador compartido «Unknown» usa
+  el rating de esa partida. Contar como débiles a los jugadores sin rating es opcional, con aviso:
+  deja fuera las partidas históricas anteriores al rating. No borra nada de la base.
+- **Recuento en la revisión completa de calidad.** La revisión completa cuenta cuántas partidas
+  dejaría fuera ese filtro en cada ajuste (ambos sin rating y ambos por debajo de 1000–1800), con la
+  misma regla (`record_best_elo` e `is_weak_player`, compartidas con la consulta) y en una segunda
+  lectura sin jugadas. Sirve para decidir con datos si una copia recortada de la base sería
+  notablemente más rápida: una consulta tarda aproximadamente en proporción al número de partidas.

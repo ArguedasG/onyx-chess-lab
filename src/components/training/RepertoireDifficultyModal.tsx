@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   Group,
-  Modal,
   NumberInput,
   Progress,
   ScrollArea,
@@ -14,6 +13,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconBrain, IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";

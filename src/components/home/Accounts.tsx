@@ -4,10 +4,10 @@ import {
   Checkbox,
   Group,
   InputWrapper,
-  Modal,
   Stack,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconPlus } from "@tabler/icons-react";
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useState } from "react";

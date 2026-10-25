@@ -1777,6 +1777,27 @@ export function deleteOpeningVariant(state: OpeningsState, variantId: string): O
     return normalizeOpeningVariantOrder(next, repertoire.id);
 }
 
+/**
+ * Removes a section. Its lines are deleted with it, or first moved to the end of another section
+ * of the same repertoire, keeping their training progress.
+ */
+export function removeOpeningSection(
+    state: OpeningsState,
+    variantId: string,
+    moveLinesTo: string | null,
+): OpeningsState {
+    const variant = state.variants[variantId];
+    if (!variant) return state;
+    let next = state;
+    const target = moveLinesTo ? state.variants[moveLinesTo] : undefined;
+    if (target && target.id !== variantId && target.repertoireId === variant.repertoireId) {
+        for (const lineId of variant.lineIds) {
+            next = moveOpeningLine(next, lineId, target.id, Number.MAX_SAFE_INTEGER);
+        }
+    }
+    return deleteOpeningVariant(next, variantId);
+}
+
 export function deleteOpeningRepertoire(state: OpeningsState, repertoireId: string): OpeningsState {
     if (!state.repertoires[repertoireId]) return state;
     const repertoires = { ...state.repertoires };

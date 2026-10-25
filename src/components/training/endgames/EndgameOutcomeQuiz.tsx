@@ -1,5 +1,6 @@
 import { useTranslation as useTrainingTranslation } from "react-i18next";
-import { Alert, Badge, Box, Button, Modal, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconHelpCircle, IconPlayerPlay, IconSearch } from "@tabler/icons-react";
 import { Chessground } from "@/chessground/Chessground";
 import type { EndgameOutcomeGuess, EndgamePosition } from "@/utils/trainingAreas";

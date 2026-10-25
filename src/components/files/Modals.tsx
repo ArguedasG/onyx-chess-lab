@@ -1,4 +1,5 @@
-import { Button, Modal, SimpleGrid, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Button, SimpleGrid, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useLoaderData } from "@tanstack/react-router";
 import { resolve, dirname } from "@tauri-apps/api/path";
 import { exists, mkdir, rename, writeTextFile } from "@tauri-apps/plugin-fs";

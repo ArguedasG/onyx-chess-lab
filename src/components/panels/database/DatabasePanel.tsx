@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Badge,
   Button,
   Collapse,
   Group,
@@ -22,9 +23,15 @@ import { useTranslation } from "react-i18next";
 import useSWR from "swr/immutable";
 import { match } from "ts-pattern";
 import { useStore } from "zustand";
-import { commands, type NormalizedGame, type PositionSummary } from "@/bindings";
+import {
+  commands,
+  type NormalizedGame,
+  type PositionSummary,
+  type WeakGamesFilter,
+} from "@/bindings";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import {
+  activeWeakFilter,
   currentDbTabAtom,
   currentDbTypeAtom,
   currentLocalOptionsAtom,
@@ -33,6 +40,7 @@ import {
   masterOptionsAtom,
   referenceDbAtom,
   sessionsAtom,
+  weakGamesFilterAtom,
 } from "@/state/atoms";
 import { getDatabases, isTransientPositionError, type Opening, queryPosition } from "@/utils/db";
 import PositionGamesTable from "./PositionGamesTable";
@@ -83,6 +91,8 @@ export type LocalOptions = {
   start_date?: string;
   end_date?: string;
   result: "any" | "whitewon" | "draw" | "blackwon";
+  /** Leaves out games between two weak players (a preference shared by every tab). */
+  weak?: WeakGamesFilter | null;
 };
 
 /** Which explorer sections are folded (true = folded), and which one goes on top. */
@@ -168,6 +178,7 @@ function DatabasePanel() {
   const [masterOptions, setMasterOptions] = useAtom(masterOptionsAtom);
   const [localOptions, setLocalOptions] = useAtom(currentLocalOptionsAtom);
   const [db, setDb] = useAtom(currentDbTypeAtom);
+  const weakFilter = useAtomValue(weakGamesFilterAtom);
   const explorerToken = sessions.find((session) => session.lichess?.accessToken)?.lichess
     ?.accessToken;
   const missingExplorerToken = db !== "local" && !explorerToken;
@@ -193,7 +204,7 @@ function DatabasePanel() {
   const dbType: DBType = match(db)
     .with("local", (v) => ({
       type: v,
-      options: localOptions,
+      options: { ...localOptions, weak: activeWeakFilter(weakFilter) },
     }))
     .with("lch_all", (v) => ({
       type: v,
@@ -339,6 +350,30 @@ function DatabasePanel() {
         >
           {t("Board.Database.Filters", "Filters")}
         </Button>
+        {db === "local" && activeWeakFilter(weakFilter) && (
+          <Tooltip
+            multiline
+            w={260}
+            label={t(
+              "Board.Database.Weak.Active.Desc",
+              "Games between two weak players are left out of this query. Change it in Filters.",
+            )}
+          >
+            <Badge
+              size="sm"
+              variant="light"
+              color="orange"
+              style={{ cursor: "pointer" }}
+              onClick={() => setFiltersOpen(true)}
+            >
+              {weakFilter.below != null
+                ? t("Board.Database.Weak.Active", "Without weak games (< {{elo}})", {
+                    elo: weakFilter.below,
+                  })
+                : t("Board.Database.Weak.ActiveUnrated", "Without unrated games")}
+            </Badge>
+          </Tooltip>
+        )}
         {db === "local" && (
           <Tooltip label={t("Board.Database.Refresh")}>
             <ActionIcon
@@ -375,6 +410,18 @@ function DatabasePanel() {
         <Alert color="yellow">
           {t("Board.Database.SkippedGames", { count: openingData.snapshot.skippedGames })}
         </Alert>
+      )}
+      {!!openingData?.snapshot?.unlistedGames && (
+        <Text size="xs" c="dimmed">
+          {t(
+            "Board.Database.UnlistedGames",
+            "Very broad position: the move statistics include every game, but the game list and the report use the first {{listed}} ({{unlisted}} left out). Make a move or add a filter to see them all.",
+            {
+              listed: formatNumber(openingData.snapshot.total),
+              unlisted: formatNumber(openingData.snapshot.unlistedGames),
+            },
+          )}
+        </Text>
       )}
       <Collapse in={filtersOpen}>
         <ScrollArea.Autosize mah="40vh" offsetScrollbars className={classes.filters}>

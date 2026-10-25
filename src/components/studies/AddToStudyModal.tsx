@@ -1,4 +1,5 @@
-import { Alert, Button, Group, Modal, Select, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";

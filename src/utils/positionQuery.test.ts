@@ -23,6 +23,7 @@ const summary = {
     total: 10,
     openings: [{ move: "e4", white: 3, draw: 2, black: 1, unknown: 4 }],
     skippedGames: 0,
+    unlistedGames: 0,
     scanMs: 1,
     cacheHit: false,
 };

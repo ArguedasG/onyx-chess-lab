@@ -5,12 +5,12 @@ import {
   Card,
   Code,
   Group,
-  Modal,
   ScrollArea,
   SegmentedControl,
   Stack,
   Text,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconExternalLink } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";

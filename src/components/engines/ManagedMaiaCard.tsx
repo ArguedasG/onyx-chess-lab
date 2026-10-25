@@ -1,15 +1,5 @@
-import {
-  Anchor,
-  Badge,
-  Box,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  Skeleton,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { Anchor, Badge, Box, Button, Group, Paper, Skeleton, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconBrain, IconDatabase, IconShieldCheck, IconTrophy } from "@tabler/icons-react";
 import { useAtom } from "jotai";

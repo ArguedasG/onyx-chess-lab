@@ -4,7 +4,6 @@ import {
   Button,
   Chip,
   Group,
-  Modal,
   Paper,
   RangeSlider,
   ScrollArea,
@@ -16,6 +15,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconSearch, IconUsers } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
 import { type ReactNode, useMemo, useState } from "react";
@@ -34,20 +34,20 @@ import {
 import { initials } from "@/components/players/common";
 import { useRhythmLabel } from "./RatedGameSelector";
 
-const PLAY_STYLES: readonly BotPlayStyleId[] = [
+export const PLAY_STYLES: readonly BotPlayStyleId[] = [
   "rematador",
   "salvaje",
   "guardian",
   "acechador",
   "equilibrista",
 ];
-const OPENING_STYLES: readonly BotOpeningStyleId[] = [
+export const OPENING_STYLES: readonly BotOpeningStyleId[] = [
   "aventurero",
   "esgrimista",
   "practico",
   "clasico",
 ];
-const PLAY_COLORS: Record<BotPlayStyleId, string> = {
+export const PLAY_COLORS: Record<BotPlayStyleId, string> = {
   rematador: "red",
   salvaje: "orange",
   guardian: "blue",
@@ -134,7 +134,7 @@ function familiesOf(profile: HumanBotProfile): BotOpeningFamilyId[] {
   return families ? [families.white, families.vsE4, families.vsD4] : [];
 }
 
-function BotBadges({ profile }: { profile: HumanBotProfile }) {
+export function BotBadges({ profile }: { profile: HumanBotProfile }) {
   const labels = usePersonalityLabels();
   const play = humanBotPlayStyle(profile);
   const opening = humanBotOpeningStyle(profile);
@@ -247,7 +247,7 @@ export function BotSummaryCard({
 }
 
 /** The bot explorer (I-49): search and filters over the whole catalog. */
-function BotExplorerModal({
+export function BotExplorerModal({
   opened,
   onClose,
   selectedId,

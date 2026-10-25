@@ -6,7 +6,7 @@ use super::{
         PositionStats,
     },
     search_index::{GameResult, SearchGameEntryRef},
-    GameQuery, MmapSearchIndex, NormalizedGame, SortDirection,
+    GameQuery, MmapSearchIndex, NormalizedGame, SortDirection, WeakGamesFilter,
 };
 use crate::{error::Error, AppState};
 use diesel::prelude::*;
@@ -69,6 +69,13 @@ pub(super) fn canonical_query(mut query: GameQuery) -> Result<GameQuery, Error> 
         return Err(invalid("Unsupported position filter"));
     }
     query.options = None;
+    if query
+        .weak_games
+        .as_ref()
+        .is_some_and(|filter| filter.below.is_none() && !filter.unrated)
+    {
+        query.weak_games = None;
+    }
     let position = query
         .position
         .as_mut()
@@ -112,9 +119,15 @@ pub struct PositionSummary {
     pub token: String,
     pub fingerprint: String,
     pub fen: String,
+    /** Matches kept in the list of games (and used by paging, sorting and the report). */
     pub total: u32,
     pub openings: Vec<PositionStats>,
     pub skipped_games: u32,
+    /**
+     * Matches counted in `openings` but left out of the list because it reached its size limit:
+     * very broad positions, such as the initial one in a database of more than ~11 M games.
+     */
+    pub unlisted_games: u32,
     pub scan_ms: f64,
     pub cache_hit: bool,
 }
@@ -231,6 +244,67 @@ impl MatchRecord {
     }
 }
 
+/// Best rating of each player id in a database, kept while the database does not change.
+static BEST_ELOS: Mutex<Option<(PathBuf, String, Arc<Vec<i16>>)>> = Mutex::new(None);
+
+fn best_elos(database: &Path, revision: &str, index: &MmapSearchIndex) -> Arc<Vec<i16>> {
+    if let Some((path, cached_revision, best)) = BEST_ELOS.lock().unwrap().as_ref() {
+        if path == database && cached_revision == revision {
+            return best.clone();
+        }
+    }
+    let mut best: Vec<i16> = Vec::new();
+    for i in 0..index.len() {
+        let Some(entry) = index.get_entry_ref(i) else {
+            continue;
+        };
+        record_best_elo(&mut best, entry.white_id, entry.white_elo);
+        record_best_elo(&mut best, entry.black_id, entry.black_elo);
+    }
+    let best = Arc::new(best);
+    *BEST_ELOS.lock().unwrap() = Some((database.into(), revision.into(), best.clone()));
+    best
+}
+
+/// Keeps the best rating of a player; the same rule for the query and the quality report.
+pub(super) fn record_best_elo(best: &mut Vec<i16>, id: i32, elo: i16) {
+    // Player 0 is the shared "Unknown" player: it never has a rating of its own.
+    if id <= 0 || elo <= 0 {
+        return;
+    }
+    let id = id as usize;
+    if best.len() <= id {
+        best.resize(id + 1, 0);
+    }
+    best[id] = best[id].max(elo);
+}
+
+pub(super) fn is_weak_player(
+    best: &[i16],
+    id: i32,
+    game_elo: i16,
+    filter: &WeakGamesFilter,
+) -> bool {
+    // The game's own rating counts too: it is all there is for the shared "Unknown" player.
+    let known = if id > 0 {
+        best.get(id as usize).copied().unwrap_or(0)
+    } else {
+        0
+    };
+    let elo = known.max(game_elo);
+    if elo <= 0 {
+        filter.unrated
+    } else {
+        filter.below.is_some_and(|below| i32::from(elo) < below)
+    }
+}
+
+/// Both players weak: the game is left out of the query.
+fn is_weak_game(entry: &SearchGameEntryRef<'_>, best: &[i16], filter: &WeakGamesFilter) -> bool {
+    is_weak_player(best, entry.white_id, entry.white_elo, filter)
+        && is_weak_player(best, entry.black_id, entry.black_elo, filter)
+}
+
 fn matches_filters(entry: &SearchGameEntryRef<'_>, query: &GameQuery) -> bool {
     if query.player1.is_some_and(|id| id != entry.white_id)
         || query.player2.is_some_and(|id| id != entry.black_id)
@@ -285,10 +359,15 @@ fn scan(
         return Err(invalid("Position index exceeds supported game count"));
     }
     let position = convert_position_query(query.position.clone().unwrap())?;
+    let weak = query
+        .weak_games
+        .as_ref()
+        .map(|filter| (filter, best_elos(&database, &revision, index)));
     let mut output = BufWriter::new(tempfile::tempfile()?);
     let mut openings: BTreeMap<String, PositionStats> = BTreeMap::new();
     let mut total = 0u32;
     let mut skipped = 0u32;
+    let mut unlisted = 0u32;
     for offset in (0..index.len()).step_by(SCAN_BATCH) {
         if cancelled() {
             return Err(Error::SearchCancelled);
@@ -301,6 +380,12 @@ fn scan(
                     return Ok(None);
                 }
                 let entry = index.get_entry_ref(i).unwrap();
+                if weak
+                    .as_ref()
+                    .is_some_and(|(filter, best)| is_weak_game(&entry, best, filter))
+                {
+                    return Ok(None);
+                }
                 if !matches_filters(&entry, &query)
                     || !position.can_reach(
                         &ByColor {
@@ -341,13 +426,14 @@ fn scan(
                     continue;
                 }
             };
+            // Past the limit the list stops growing (no more temporary disk), but the move
+            // statistics still count every match.
             if (total as u64 + 1) * RECORD_BYTES as u64 > MAX_SNAPSHOT_BYTES {
-                return Err(invalid(
-                    "Position query exceeds 256 MiB; narrow the filters",
-                ));
+                unlisted += 1;
+            } else {
+                output.write_all(&record.encode())?;
+                total += 1;
             }
-            output.write_all(&record.encode())?;
-            total += 1;
             let counts = openings
                 .entry(record.next_move.clone())
                 .or_insert(PositionStats {
@@ -377,6 +463,7 @@ fn scan(
             total,
             openings: openings.into_values().collect(),
             skipped_games: skipped,
+            unlisted_games: unlisted,
             scan_ms: started.elapsed().as_secs_f64() * 1000.0,
             cache_hit: false,
         },
@@ -909,6 +996,67 @@ pub(super) mod tests {
         let json = serde_json::to_value(&page).unwrap();
         assert!(json[0].get("moves").is_none());
         assert_eq!(result.bytes(), 650 * 24);
+    }
+
+    #[test]
+    fn weak_games_filter_judges_players_by_their_best_known_rating() {
+        let (_dir, path, state) = fixture(6);
+        let db = rusqlite::Connection::open(&path).unwrap();
+        for id in 1..=4 {
+            db.execute(
+                "INSERT INTO Players (ID, Name) VALUES (?1, ?2)",
+                rusqlite::params![id, format!("P{id}")],
+            )
+            .unwrap();
+        }
+        // (game, white, black, white elo, black elo)
+        for (id, white, black, white_elo, black_elo) in [
+            (1, 1, 2, 900, 950),   // two weak players: left out
+            (2, 3, 2, 100, 950),   // P3 says 100 here but is 2300 in game 3: kept
+            (3, 3, 1, 2300, 900),  // strong against weak: kept
+            (4, 4, 1, 0, 900),     // P4 never has a rating
+            (5, 4, 0, 0, 0),       // nobody rated
+            (6, 0, 0, 1000, 1050), // the "Unknown" player uses the game's rating
+        ] {
+            db.execute(
+                "UPDATE Games SET WhiteID=?2, BlackID=?3, WhiteElo=?4, BlackElo=?5 WHERE ID=?1",
+                rusqlite::params![id, white, black, white_elo, black_elo],
+            )
+            .unwrap();
+        }
+        drop(db);
+        let ids = |filter: WeakGamesFilter| {
+            let mut weak = query();
+            weak.weak_games = Some(filter);
+            let result = snapshot(&path, &state, weak);
+            read_page(&result, 0, 20)
+                .unwrap()
+                .into_iter()
+                .map(|game| game.id)
+                .collect::<Vec<_>>()
+        };
+        let below = |elo| WeakGamesFilter {
+            below: Some(elo),
+            unrated: false,
+        };
+        assert_eq!(ids(below(1200)), vec![2, 3, 4, 5]);
+        assert_eq!(ids(below(1000)), vec![2, 3, 4, 5, 6]);
+        assert_eq!(
+            ids(WeakGamesFilter {
+                below: Some(1200),
+                unrated: true
+            }),
+            vec![2, 3]
+        );
+        assert_eq!(
+            ids(WeakGamesFilter {
+                below: None,
+                unrated: true
+            }),
+            vec![1, 2, 3, 4, 6]
+        );
+        // An empty filter is the same query as no filter.
+        assert_eq!(ids(WeakGamesFilter::default()).len(), 6);
     }
 
     #[test]

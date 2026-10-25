@@ -1115,7 +1115,12 @@ suspiciousNames: number; suspiciousNameExamples: string[];
 /**
  * Players whose ratings differ by more than `ELO_SPREAD_LIMIT`.
  */
-inconsistentEloPlayers: number; inconsistentEloExamples: string[] }
+inconsistentEloPlayers: number; inconsistentEloExamples: string[]; 
+/**
+ * Games the "leave out games between weak players" filter of the position queries would
+ * leave out, for each of its settings, with exactly the same rule.
+ */
+weakGames: WeakGamesCount[] }
 export type DatabaseQualityReport = { games: bigint; 
 /**
  * No moves at all.
@@ -1207,7 +1212,26 @@ tablebaseCategory: string | null }
 export type GameMoveEvent = { gameId: string; moves: GameMove[]; fen: string; whiteTime: bigint | null; blackTime: bigint | null }
 export type GameMoveSource = "human" | "engine" | "profileRepertoire" | "polyglot" | "initial"
 export type GameOverEvent = { gameId: string; result: GameResult; moves: GameMove[] }
-export type GameQuery = { options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; after_game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
+export type GameQuery = { weak_games?: WeakGamesFilter | null; options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; after_game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
+/**
+ * Leaves out the games where both players are weak, judging each player by the best rating they
+ * have in any game of the database (a player rated 100 in one game and 2300 in another counts as
+ * 2300). Games between a strong and a weak player stay: they show how mistakes are punished.
+ */
+export type WeakGamesCount = { 
+/**
+ * `None`: both players without any rating.
+ */
+below: number | null; games: number }
+export type WeakGamesFilter = { 
+/**
+ * A player whose best known rating is below this is weak.
+ */
+below?: number | null; 
+/**
+ * Players with no rating in any game also count as weak.
+ */
+unrated?: boolean }
 export type GameResult = { type: "whiteWins"; reason: GameEndReason } | { type: "blackWins"; reason: GameEndReason } | { type: "draw"; reason: DrawReason }
 export type GameSort = "id" | "date" | "whiteElo" | "blackElo" | "ply_count"
 export type GameState = { gameId: string; status: GameStatus; initialFen: string; moves: GameMove[]; currentFen: string; ply: number; turn: string; whiteTime: bigint | null; blackTime: bigint | null; whitePlayer: string; blackPlayer: string }
@@ -1221,7 +1245,12 @@ export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: nu
 export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
 export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
 export type ManifestHardware = { operatingSystem: string; architecture: string; logicalCpus: bigint }
-export type ModelGameBatchConfig = { ownerId: string; gameConfig: GameConfig; gameCount: number; alternateColors: boolean; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number }
+export type ModelGameBatchConfig = { ownerId: string; gameConfig: GameConfig; gameCount: number; alternateColors: boolean; 
+/**
+ * Plays the games from `OPENING_SUITE` instead of the players' repertoires and books: each
+ * opening twice when the colors alternate, so its advantage cancels out.
+ */
+openingSuite?: boolean; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number }
 export type ModelGameBatchEvent = { state: ModelGameBatchState }
 export type ModelGameBatchGameResult = { index: number; gameId: string; whitePlayer: string; blackPlayer: string; whiteSeed: number | null; blackSeed: number | null; attempts: number; status: ModelGameBatchGameStatus; result: GameResult | null; plies: number; error: string | null }
 export type ModelGameBatchGameStatus = "completed" | "failed"
@@ -1350,7 +1379,16 @@ export type PositionGameMetadata = { snapshotOffset: number; id: number; white: 
 export type PositionGameSort = "index" | "date" | "averageElo" | "whiteElo" | "blackElo"
 export type PositionQueryJs = { fen: string; type_: string }
 export type PositionStats = { move: string; white: number; draw: number; black: number; unknown: number }
-export type PositionSummary = { token: string; fingerprint: string; fen: string; total: number; openings: PositionStats[]; skippedGames: number; scanMs: number; cacheHit: boolean }
+export type PositionSummary = { token: string; fingerprint: string; fen: string; 
+/**
+ * Matches kept in the list of games (and used by paging, sorting and the report).
+ */
+total: number; openings: PositionStats[]; skippedGames: number; 
+/**
+ * Matches counted in `openings` but left out of the list because it reached its size limit:
+ * very broad positions, such as the initial one in a database of more than ~11 M games.
+ */
+unlistedGames: number; scanMs: number; cacheHit: boolean }
 export type PositionTree = { 
 /**
  * Node 0 is the root.

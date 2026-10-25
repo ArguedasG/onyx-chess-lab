@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
     addOpeningRepertoire,
     createEmptyTrainingAreas,
+    addBlankOpeningVariant,
     deleteOpeningRepertoire,
+    removeOpeningSection,
 } from "./trainingAreas";
 
 function addRepertoire(
@@ -55,5 +57,35 @@ describe("opening repertoire deletion", () => {
             true,
         );
         expect(Object.values(next.lines)).toHaveLength(1);
+    });
+});
+
+describe("opening section deletion", () => {
+    function twoSections() {
+        let state = addRepertoire(createEmptyTrainingAreas().openings, "White");
+        const repertoire = Object.values(state.repertoires)[0];
+        state = addBlankOpeningVariant(state, repertoire.id, "Second");
+        const [first, second] = state.repertoires[repertoire.id].variantIds.map(
+            (id) => state.variants[id],
+        );
+        return { state, repertoire, first, second };
+    }
+
+    it("moves the lines to another section, keeping them", () => {
+        const { state, repertoire, first, second } = twoSections();
+        const lineId = first.lineIds[0];
+        const next = removeOpeningSection(state, first.id, second.id);
+        expect(next.variants[first.id]).toBeUndefined();
+        expect(next.repertoires[repertoire.id].variantIds).toEqual([second.id]);
+        expect(next.variants[second.id].lineIds).toEqual([lineId]);
+        expect(next.lines[lineId].variantId).toBe(second.id);
+    });
+
+    it("deletes the lines with the section when no target is given", () => {
+        const { state, first } = twoSections();
+        const lineId = first.lineIds[0];
+        const next = removeOpeningSection(state, first.id, null);
+        expect(next.variants[first.id]).toBeUndefined();
+        expect(next.lines[lineId]).toBeUndefined();
     });
 });

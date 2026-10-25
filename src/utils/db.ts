@@ -215,6 +215,7 @@ export async function queryPosition(
                     start_date: options.start_date,
                     end_date: options.end_date,
                     wanted_result: options.result,
+                    weak_games: options.weak ?? undefined,
                 },
                 tab,
                 background,

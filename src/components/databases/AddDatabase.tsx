@@ -5,7 +5,6 @@ import {
   Divider,
   Group,
   Loader,
-  Modal,
   Paper,
   ScrollArea,
   SimpleGrid,
@@ -14,7 +13,9 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
 import { basename, resolve } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom, useSetAtom } from "jotai";
@@ -71,9 +72,41 @@ function AddDatabase({
       targetDatabaseTitle: title,
       sourceFileName,
     }));
+    // The conversion keeps running in the background; the user is told when it starts and ends.
+    const notificationId = `convert-${dbPath}`;
+    notifications.show({
+      id: notificationId,
+      loading: true,
+      autoClose: false,
+      withCloseButton: false,
+      title: t("Databases.Add.Converting", "Converting {{title}}", { title }),
+      message: t(
+        "Databases.Add.Converting.Desc",
+        "You can keep using Onyx; the database appears in the list when it is ready.",
+      ),
+    });
     try {
       unwrap(await commands.convertPgn(paths, dbPath, null, title, description ?? null));
       await setDatabases(await getDatabases());
+      notifications.update({
+        id: notificationId,
+        loading: false,
+        autoClose: 5000,
+        withCloseButton: true,
+        color: "teal",
+        title: t("Databases.Add.Converted", "{{title}} is ready", { title }),
+        message: t("Databases.Add.Converted.Desc", "The database was converted and added."),
+      });
+    } catch (error) {
+      notifications.update({
+        id: notificationId,
+        loading: false,
+        autoClose: false,
+        withCloseButton: true,
+        color: "red",
+        title: t("Databases.Add.ConvertError", "Could not convert {{title}}", { title }),
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setLoading(false);
       setConversionState((prev) => ({
@@ -150,8 +183,9 @@ function AddDatabase({
           <form
             onSubmit={form.onSubmit(async (values) => {
               if (disableLocalConversion) return;
-              await convertDB(values.files, values.title, values.description);
               setOpened(false);
+              form.reset();
+              await convertDB(values.files, values.title, values.description);
             })}
           >
             <TextInput label={t("Common.Name")} withAsterisk {...form.getInputProps("title")} />

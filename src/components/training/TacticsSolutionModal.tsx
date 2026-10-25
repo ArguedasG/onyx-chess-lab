@@ -1,4 +1,5 @@
-import { Alert, Button, Group, Loader, Modal, Paper, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Loader, Paper, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconAlertTriangle, IconEye } from "@tabler/icons-react";
 import { parseUci } from "chessops";
 import { useAtomValue } from "jotai";

@@ -1,4 +1,5 @@
-import { ActionIcon, Alert, Button, Group, Loader, Modal, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Alert, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconArrowsDiff, IconDownload, IconRestore, IconTrash } from "@tabler/icons-react";
 import { ask, save } from "@tauri-apps/plugin-dialog";

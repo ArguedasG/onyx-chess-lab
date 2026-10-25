@@ -1,4 +1,5 @@
-import { Button, Modal, SegmentedControl, Stack, Text } from "@mantine/core";
+import { Button, SegmentedControl, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

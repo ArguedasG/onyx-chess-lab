@@ -26,6 +26,7 @@ export async function createGeneratedRepertoire(input: {
     const created = await createFile({
         filename: `${input.name} - Editable`,
         filetype: "repertoire",
+        uniqueName: true,
         pgn: prepared.trainingPgn,
         dir: input.documentDir,
     });

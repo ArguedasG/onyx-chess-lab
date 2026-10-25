@@ -6,11 +6,11 @@ import {
   Divider,
   Group,
   Menu,
-  Modal,
   Stack,
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import {
   IconBook2,

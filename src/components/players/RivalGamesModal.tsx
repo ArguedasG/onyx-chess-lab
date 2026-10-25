@@ -4,7 +4,6 @@ import {
   Button,
   Checkbox,
   Group,
-  Modal,
   Paper,
   Progress,
   ScrollArea,
@@ -13,6 +12,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useDebouncedValue } from "@mantine/hooks";
 import {
   IconBroadcast,

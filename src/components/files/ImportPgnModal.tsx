@@ -1,13 +1,5 @@
-import {
-  ActionIcon,
-  Alert,
-  Button,
-  Group,
-  Modal,
-  SegmentedControl,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { ActionIcon, Alert, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconFileImport, IconX } from "@tabler/icons-react";
 import { join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";

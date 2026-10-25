@@ -2,13 +2,13 @@ import {
   Alert,
   Button,
   Group,
-  Modal,
   SegmentedControl,
   Select,
   Stack,
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";

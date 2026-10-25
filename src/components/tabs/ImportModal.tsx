@@ -4,13 +4,13 @@ import {
   Divider,
   FileInput,
   Group,
-  Modal,
   SimpleGrid,
   Stack,
   Text,
   Textarea,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useLoaderData } from "@tanstack/react-router";
 import { resolve, tempDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";

@@ -1,14 +1,5 @@
-import {
-  ActionIcon,
-  Badge,
-  Card,
-  Divider,
-  Group,
-  Modal,
-  SimpleGrid,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { ActionIcon, Badge, Card, Divider, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconArrowRight } from "@tabler/icons-react";
 import { useContext } from "react";
 import { useTranslation } from "react-i18next";

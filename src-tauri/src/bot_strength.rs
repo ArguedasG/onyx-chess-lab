@@ -15,10 +15,9 @@ use crate::bot_candidates::{score_to_cp, MaiaCandidate, VerifiedCandidate};
 pub const PURE_MAIA_MAX_ELO: u32 = 2400;
 /// Filter margin (cp) at each level above Maia's range; linear in between. From the calibrations
 /// of 2026-10-18 against Maia 2400 (30 games per margin): 400 cp ~+150, 200 cp ~+240, 150 cp
-/// ~+380, 130 cp ~+460, 80 cp ~+585.
-const MARGINS: [(u32, f32); 4] = [(2500, 400.0), (2600, 220.0), (2700, 175.0), (2800, 140.0)];
-/// From this rating every move is filtered; between 2400 and here, only part of them.
-const FULL_FILTER_ELO: u32 = 2600;
+/// ~+380, 130 cp ~+460, 80 cp ~+585. Every move is filtered above 2400: filtering only part of
+/// them (up to 2600 until 2026-10-23) left 2450-2550 no stronger than Maia 2400 (40 games each).
+const MARGINS: [(u32, f32); 4] = [(2450, 400.0), (2600, 220.0), (2700, 175.0), (2800, 140.0)];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StrengthPlan {
@@ -65,7 +64,7 @@ pub fn strength_plan(elo: u32) -> StrengthPlan {
     let top = fraction(elo, PURE_MAIA_MAX_ELO, 2800);
     StrengthPlan {
         maia_elo: PURE_MAIA_MAX_ELO,
-        filter_probability: fraction(elo, PURE_MAIA_MAX_ELO, FULL_FILTER_ELO),
+        filter_probability: 1.0,
         margin_cp: margin_at(elo).round() as i32,
         verify_ms: (150.0 + 200.0 * top).round() as u32,
         temperature_scale: 1.0 - 0.15 * top,
@@ -143,9 +142,8 @@ mod tests {
                 plan.margin_cp
             })
             .collect();
-        assert_eq!(margins, [400, 400, 310, 220, 175, 158, 140, 140]);
-        assert!((strength_plan(2500).filter_probability - 0.5).abs() < 1e-6);
-        assert_eq!(strength_plan(2600).filter_probability, 1.0);
+        assert_eq!(margins, [400, 340, 280, 220, 175, 158, 140, 140]);
+        assert_eq!(strength_plan(2450).filter_probability, 1.0);
         assert_eq!(strength_plan(2800).verify_ms, 350);
     }
 

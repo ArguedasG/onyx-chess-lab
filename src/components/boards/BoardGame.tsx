@@ -6,7 +6,6 @@ import {
   Divider,
   Group,
   Loader,
-  Modal,
   NumberInput,
   Paper,
   Portal,
@@ -16,6 +15,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
@@ -82,6 +82,8 @@ import {
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { twinBooksAtom } from "@/state/twinBots";
+import { findTournamentGame, updateTournaments } from "@/state/tournaments";
+import { recordUserGame } from "@/utils/tournaments/engine";
 import { positionFromFen } from "@/utils/chessops";
 import { getPGN } from "@/utils/chess";
 import { serializeGameManifest } from "@/utils/gameManifest";
@@ -156,6 +158,8 @@ import { ModelGameBatchProgress, ModelGameBatchSetup } from "./ModelGameBatchPan
 import ModelGameExperimentHistory from "./ModelGameExperimentHistory";
 import { OpponentForm, type OpponentSettings } from "./OpponentForm";
 import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
+import TournamentGamePanel from "../tournaments/TournamentGamePanel";
+import { TOURNAMENT_HEADERS } from "../tournaments/useTournamentGameLauncher";
 
 function gameResultToOutcome(result: GameResult): Outcome {
   if (result.type === "whiteWins") return "1-0";
@@ -330,6 +334,10 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
               label: t("Training.BackToEndgames", "Back to endgames"),
             }
           : null;
+  // A tournament game (9.2): its pairing fixes the opponent, the clock and the colors.
+  const tournamentId = generatorMode ? undefined : headers.other?.[TOURNAMENT_HEADERS.id];
+  const tournamentGameId = generatorMode ? undefined : headers.other?.[TOURNAMENT_HEADERS.game];
+  const inTournament = Boolean(tournamentId && tournamentGameId);
   const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
   const endgamePositionId = headers.other?.ChessLabEndgamePositionId;
   const endgamePosition = endgamePositionId
@@ -465,11 +473,12 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const setupBotProfile = setupBotMatch ? getHumanBotProfile(setupBotMatch.bot.profileId) : null;
   const ratedBlocker = ratedGameBlocker({
     againstCatalogBot: setupBotMatch !== null,
-    guided: guidedLevel !== "off",
+    // Tournament games are played without help and with the bot's own repertoire.
+    guided: !inTournament && guidedLevel !== "off",
     fromStartPosition: root.fen === INITIAL_FEN && root.children.length === 0,
     playerClock: setupBotMatch?.player.timeControl,
     botClock: setupBotMatch?.bot.timeControl,
-    openingBook: openingBookEnabled && Boolean(openingBookPath),
+    openingBook: !inTournament && openingBookEnabled && Boolean(openingBookPath),
     verifier: objectiveEngine !== null,
   });
   const setupClockRhythm = setupBotMatch?.player.timeControl
@@ -718,7 +727,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         opponentSettings.type === "humanBot"
           ? getHumanBotProfile(opponentSettings.profileId).elo
           : opponentSettings.type === "engine"
-            ? (opponentSettings.engine?.elo ?? profile.elo)
+            ? (opponentSettings.targetElo ?? opponentSettings.engine?.elo ?? profile.elo)
             : profile.elo;
       const engineSettings = buildHumanBotEngineSettings(
         profile,
@@ -740,8 +749,10 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           value: setting.value?.toString() ?? "",
         })),
         openingRepertoire: buildHumanBotOpeningRepertoire(profile),
-        // The generator keeps plain Maia sampling, so its experiments stay comparable.
-        botPlay: generatorMode ? null : buildHumanBotPlay(profile, objectiveEngine),
+        // The generator plays the bot as in a real game (style and Stockfish filter), so what it
+        // measures is the bot a user faces; without a verifier it falls back to plain Maia.
+        botPlay:
+          generatorMode && !objectiveEngine ? null : buildHumanBotPlay(profile, objectiveEngine),
         humanTiming: generatorMode
           ? null
           : settings.humanTiming === false
@@ -835,7 +846,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       initialFen: root.fen === INITIAL_FEN ? null : root.fen,
       initialMoves,
       openingBook:
-        openingBookEnabled && openingBookPath
+        !inTournament && openingBookEnabled && openingBookPath
           ? { path: openingBookPath, maxPly: Math.max(1, openingBookMaxPly) }
           : null,
     } as GameConfig;
@@ -851,7 +862,10 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     if (generatorMode && batchSettings.enabled) {
       await launchModelGameBatch(config);
     } else {
-      await launchConfiguredGame(config, playerSettings);
+      // A game with random colors gets its rematch with the colors swapped.
+      await launchConfiguredGame(config, playerSettings, {
+        randomColors: inputColor === "random",
+      });
     }
   }
 
@@ -866,6 +880,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           gameConfig: config,
           gameCount: batchSettings.gameCount,
           alternateColors: batchSettings.alternateColors,
+          openingSuite: batchSettings.openingSuite ?? false,
           seedStep: batchSettings.seedStep,
           requestedConcurrency: batchSettings.concurrency,
           maxCpuThreads: batchSettings.maxCpuThreads,
@@ -887,28 +902,42 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     }
   }
 
-  async function launchConfiguredGame(config: GameConfig, playerSettings: GamePlayers) {
+  async function launchConfiguredGame(
+    config: GameConfig,
+    playerSettings: GamePlayers,
+    {
+      randomColors = false,
+      rated,
+    }: {
+      randomColors?: boolean;
+      /**
+       * A rematch keeps the type of the game it repeats. It cannot ask the setup again: until the
+       * next render the board still shows the previous game, which would look like a custom position.
+       */
+      rated?: boolean;
+    } = {},
+  ) {
     setIsStarting(true);
     setPlayers(playerSettings);
-    if (!generatorMode) {
-      setPlayRun({
-        config: structuredClone(config),
-        players: structuredClone(playerSettings),
-        source: snapshotTreeState(store.getState()),
-      });
-    }
     historySavedRef.current = false;
     discardGameResultRef.current = false;
     gameRatingRef.current = null;
     setGameGuidedLevel(
-      !generatorMode && getSetupBotMatch(playerSettings.white, playerSettings.black)
+      !generatorMode &&
+        !inTournament &&
+        getSetupBotMatch(playerSettings.white, playerSettings.black)
         ? guidedLevel
         : "off",
     );
     const ratedMatch = generatorMode
       ? null
       : getSetupBotMatch(playerSettings.white, playerSettings.black);
-    if (ratedMatch && ratedPreference && ratedBlocker === null && ratedMatch.player.timeControl) {
+    // A tournament decides once, when it is created, whether its games count for the rating.
+    const wantsRated = inTournament
+      ? headers.other?.[TOURNAMENT_HEADERS.rated] === "1"
+      : ratedPreference;
+    const canRate = rated ?? (wantsRated && ratedBlocker === null);
+    if (ratedMatch && canRate && ratedMatch.player.timeControl) {
       const rhythm = rhythmOfClock(ratedMatch.player.timeControl);
       if (rhythm !== "bullet") {
         gameRatingRef.current = {
@@ -916,6 +945,16 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           botRating: botRatingAt(getHumanBotProfile(ratedMatch.bot.profileId).elo, rhythm),
         };
       }
+    }
+    if (!generatorMode) {
+      setPlayRun({
+        config: structuredClone(config),
+        players: structuredClone(playerSettings),
+        source: snapshotTreeState(store.getState()),
+        randomColors,
+        // As decided when the game started: taking back a move later does not change the rematch.
+        rated: gameRatingRef.current !== null,
+      });
     }
     setHumanHasMoved(false);
     if (endgamePositionId || basicMateId) {
@@ -1051,7 +1090,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
             ? (playerSettings.black.twin?.elo ??
               getHumanBotProfile(playerSettings.black.profileId).elo)
             : undefined,
-        event: eventStr,
+        event: inTournament ? headers.event : eventStr,
         site: "Onyx Chess Lab",
         date: dateStr,
         time: timeStr,
@@ -1349,9 +1388,15 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           accountPlayerNames(currentSessions)[0] ?? historyMatch.player.name ?? "Player";
         const playerElo = ratingResult?.event?.before ?? null;
         const botElo = ratedOutcome?.botRating ?? profile.elo;
+        const finishedTournamentId = finalHeaders.other?.[TOURNAMENT_HEADERS.id];
+        const finishedTournamentGameId = finalHeaders.other?.[TOURNAMENT_HEADERS.game];
         const databaseHeaders: GameHeaders = {
           ...finalHeaders,
-          event: ratingResult?.event ? "Onyx rated game" : "Onyx friendly game",
+          event: finishedTournamentId
+            ? finalHeaders.event
+            : ratingResult?.event
+              ? "Onyx rated game"
+              : "Onyx friendly game",
           white: historyMatch.playerColor === "white" ? cardName : profile.name,
           black: historyMatch.playerColor === "black" ? cardName : profile.name,
           white_elo: historyMatch.playerColor === "white" ? playerElo : botElo,
@@ -1364,6 +1409,28 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           glyphs: false,
           variations: false,
         });
+        if (finishedTournamentId && finishedTournamentGameId && outcome !== "*") {
+          void updateTournaments((state) => ({
+            ...state,
+            tournaments: state.tournaments.map((tournament) =>
+              tournament.id === finishedTournamentId
+                ? recordUserGame(
+                    tournament,
+                    finishedTournamentGameId,
+                    outcome,
+                    databasePgn,
+                    recordedAt,
+                  )
+                : tournament,
+            ),
+          })).catch((error) =>
+            notifications.show({
+              title: t("Tournaments.SaveError", "Could not save the result in the tournament"),
+              message: error instanceof Error ? error.message : String(error),
+              color: "red",
+            }),
+          );
+        }
         saveBotGame(databasePgn, Boolean(ratingResult?.event), payload.gameId).catch((error) =>
           notifications.show({
             title: t("HumanBots.Database.SaveError", "Could not save the game in its database"),
@@ -1506,8 +1573,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   useEffect(() => {
     const shouldStartEndgame =
       !generatorMode &&
-      headers.other?.ChessLabTrainingArea === "endgames" &&
-      headers.other?.ChessLabEndgameAutoStart === "1";
+      ((headers.other?.ChessLabTrainingArea === "endgames" &&
+        headers.other?.ChessLabEndgameAutoStart === "1") ||
+        (inTournament && headers.other?.[TOURNAMENT_HEADERS.autoStart] === "1"));
     if (
       !shouldStartEndgame ||
       gameState !== "settingUp" ||
@@ -1518,8 +1586,24 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       return;
     }
     endgameAutoStartAttemptedRef.current = true;
+    if (inTournament && tournamentId && tournamentGameId) {
+      // A game already decided (for example, a tab restored after a restart) is not replayed.
+      void findTournamentGame(tournamentId, tournamentGameId).then((game) => {
+        if (game?.mode === "pending") void startGameRef.current();
+      });
+      return;
+    }
     void startGameRef.current();
-  }, [gameState, generatorMode, headers.other, isStarting, setupIsValid]);
+  }, [
+    gameState,
+    generatorMode,
+    headers.other,
+    inTournament,
+    isStarting,
+    setupIsValid,
+    tournamentGameId,
+    tournamentId,
+  ]);
 
   function getResignationLosingColor(): "white" | "black" {
     if (isPlayerVsEngine) {
@@ -1656,7 +1740,24 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     setBlackTime(null);
     setHumanHasMoved(false);
     setGameId(null);
-    await launchConfiguredGame(structuredClone(run.config), structuredClone(run.players));
+    const config = structuredClone(run.config);
+    const players = structuredClone(run.players);
+    if (!run.randomColors) {
+      await launchConfiguredGame(config, players, { rated: run.rated ?? false });
+      return;
+    }
+    // Colors were drawn at random: the rematch swaps them, as over the board.
+    await launchConfiguredGame(
+      {
+        ...config,
+        white: config.black,
+        black: config.white,
+        whiteTimeControl: config.blackTimeControl,
+        blackTimeControl: config.whiteTimeControl,
+      },
+      { white: players.black, black: players.white },
+      { randomColors: true, rated: run.rated ?? false },
+    );
   }
 
   function prepareEndgamePosition(position: EndgamePosition) {
@@ -2002,7 +2103,17 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
             />
           ) : (
             <>
-              {gameState === "settingUp" && (
+              {gameState === "settingUp" && inTournament && tournamentId && tournamentGameId && (
+                <TournamentGamePanel
+                  tournamentId={tournamentId}
+                  gameId={tournamentGameId}
+                  phase="setup"
+                  starting={isStarting}
+                  canStart={setupIsValid && error === null}
+                  onStart={() => void startGame()}
+                />
+              )}
+              {gameState === "settingUp" && !inTournament && (
                 <Stack h="100%" gap={0}>
                   <ScrollArea style={{ flex: 1 }} offsetScrollbars>
                     <Stack>
@@ -2352,6 +2463,19 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                           />
                         </Box>
                       )}
+                      {inTournament && tournamentId && tournamentGameId && (
+                        <Box mb="sm">
+                          <TournamentGamePanel
+                            tournamentId={tournamentId}
+                            gameId={tournamentGameId}
+                            phase={gameState === "playing" ? "playing" : "gameOver"}
+                            starting={isStarting}
+                            canStart={setupIsValid}
+                            // A game aborted before the first move did not count and is played again.
+                            onStart={() => void handleRematch()}
+                          />
+                        </Box>
+                      )}
                       <GameInfo headers={headers} />
                       {generatorMode && gameState === "playing" && (
                         <Group justify="center" mt="sm" gap="xs">
@@ -2405,6 +2529,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                       {gameState === "gameOver" &&
                         !generatorMode &&
                         !trainingReturn &&
+                        !inTournament &&
                         playRun &&
                         ((players.white.type === "human" && isEngineControlled(players.black)) ||
                           (players.black.type === "human" &&
@@ -2418,7 +2543,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                             {t("Game.Rematch", "Rematch")}
                           </Button>
                         )}
-                      {gameState === "gameOver" && !generatorMode && (
+                      {gameState === "gameOver" && !generatorMode && !inTournament && (
                         <Button
                           variant="default"
                           onClick={handleNewGame}
@@ -2529,7 +2654,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                   editingMode={gameState === "settingUp" && editingMode}
                   toggleEditingMode={toggleEditingMode}
                   dirty={false}
-                  canTakeBack={onePlayerIsEngine}
+                  canTakeBack={onePlayerIsEngine && !inTournament}
                   onTakeBack={onTakeBack}
                   disableVariations
                   allowEditing={gameState === "settingUp"}

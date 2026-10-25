@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
+import { Route as TournamentsRouteImport } from './routes/tournaments'
 import { Route as StudiesRouteImport } from './routes/studies'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PlayersRouteImport } from './routes/players'
@@ -35,6 +36,11 @@ import { Route as TrainingOpeningsRepertoireIdVariantIdRouteImport } from './rou
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
   path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TournamentsRoute = TournamentsRouteImport.update({
+  id: '/tournaments',
+  path: '/tournaments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudiesRoute = StudiesRouteImport.update({
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
+  '/tournaments': typeof TournamentsRoute
   '/training': typeof TrainingRouteWithChildren
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
@@ -179,6 +186,7 @@ export interface FileRoutesByTo {
   '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
+  '/tournaments': typeof TournamentsRoute
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
   '/training/library': typeof TrainingLibraryRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
   '/studies': typeof StudiesRoute
+  '/tournaments': typeof TournamentsRoute
   '/training': typeof TrainingRouteWithChildren
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
   '/training/endgames': typeof TrainingEndgamesRoute
@@ -226,6 +235,7 @@ export interface FileRouteTypes {
     | '/players'
     | '/settings'
     | '/studies'
+    | '/tournaments'
     | '/training'
     | '/databases/$databaseId'
     | '/training/endgames'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/players'
     | '/settings'
     | '/studies'
+    | '/tournaments'
     | '/databases/$databaseId'
     | '/training/endgames'
     | '/training/library'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/players'
     | '/settings'
     | '/studies'
+    | '/tournaments'
     | '/training'
     | '/databases/$databaseId'
     | '/training/endgames'
@@ -295,6 +307,7 @@ export interface RootRouteChildren {
   PlayersRoute: typeof PlayersRoute
   SettingsRoute: typeof SettingsRoute
   StudiesRoute: typeof StudiesRoute
+  TournamentsRoute: typeof TournamentsRoute
   TrainingRoute: typeof TrainingRouteWithChildren
   DatabasesDatabaseIdRoute: typeof DatabasesDatabaseIdRoute
   DatabasesIndexRoute: typeof DatabasesIndexRoute
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/training'
       fullPath: '/training'
       preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tournaments': {
+      id: '/tournaments'
+      path: '/tournaments'
+      fullPath: '/tournaments'
+      preLoaderRoute: typeof TournamentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studies': {
@@ -535,6 +555,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlayersRoute: PlayersRoute,
   SettingsRoute: SettingsRoute,
   StudiesRoute: StudiesRoute,
+  TournamentsRoute: TournamentsRoute,
   TrainingRoute: TrainingRouteWithChildren,
   DatabasesDatabaseIdRoute: DatabasesDatabaseIdRoute,
   DatabasesIndexRoute: DatabasesIndexRoute,

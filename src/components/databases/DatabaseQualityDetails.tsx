@@ -2,7 +2,12 @@ import { Alert, Button, Group, Progress, Stack, Table, Text } from "@mantine/cor
 import { IconPlayerStop, IconSearch } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands, type DatabaseQualityDetails as Details, events } from "@/bindings";
+import {
+  commands,
+  type DatabaseQualityDetails as Details,
+  events,
+  type WeakGamesCount,
+} from "@/bindings";
 
 /**
  * Complete quality check: duplicates, suspicious names and inconsistent ratings. It reads every
@@ -84,7 +89,7 @@ export default function DatabaseQualityDetails({ file }: { file: string }) {
       <Text fz="sm">
         {t(
           "Databases.Quality.DetailsDesc",
-          "The complete check also looks for duplicates, suspicious names and inconsistent ratings. It reads every game's moves: several minutes on a base of millions.",
+          "The complete check also looks for duplicates, suspicious names, inconsistent ratings and games between weak players. It reads every game's moves: several minutes on a base of millions.",
         )}
       </Text>
       <Group>
@@ -135,6 +140,56 @@ export default function DatabaseQualityDetails({ file }: { file: string }) {
           </Table.Tbody>
         </Table>
       )}
+      {details && details.weakGames.length > 0 && (
+        <WeakGamesTable counts={details.weakGames} total={details.games} />
+      )}
+    </Stack>
+  );
+}
+
+/**
+ * How many games the "leave out games between weak players" filter would drop at each setting,
+ * to decide whether a trimmed copy of the base would be worth it.
+ */
+function WeakGamesTable({ counts, total }: { counts: WeakGamesCount[]; total: number }) {
+  const { t } = useTranslation();
+  const percent = (games: number) =>
+    total === 0
+      ? "0"
+      : ((games / total) * 100).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return (
+    <Stack gap={4} mt="xs">
+      <Text size="sm" fw={600}>
+        {t("Databases.Quality.Weak.Title", "Games between weak players")}
+      </Text>
+      <Text size="xs" c="dimmed">
+        {t(
+          "Databases.Quality.Weak.Desc",
+          "Games the filter of the Database panel would leave out: both players weak, each judged by their best rating in the whole base. A position query takes roughly in proportion to the number of games, so only a large share would make a trimmed copy noticeably faster.",
+        )}
+      </Text>
+      <Table withTableBorder striped>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>{t("Databases.Quality.Weak.Setting", "Both players")}</Table.Th>
+            <Table.Th ta="right">{t("Databases.Quality.Weak.Games", "Games")}</Table.Th>
+            <Table.Th ta="right">{t("Databases.Quality.Weak.Share", "% of the base")}</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {counts.map((item) => (
+            <Table.Tr key={item.below ?? "unrated"}>
+              <Table.Td>
+                {item.below === null
+                  ? t("Board.Database.Weak.Unrated", "Both without a rating")
+                  : t("Board.Database.Weak.Below", "Both below {{elo}}", { elo: item.below })}
+              </Table.Td>
+              <Table.Td ta="right">{item.games.toLocaleString()}</Table.Td>
+              <Table.Td ta="right">{percent(item.games)} %</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
     </Stack>
   );
 }

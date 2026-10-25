@@ -8,7 +8,6 @@ import {
   Group,
   Input,
   JsonInput,
-  Modal,
   NumberInput,
   Paper,
   ScrollArea,
@@ -22,6 +21,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useToggle } from "@mantine/hooks";
 import {
   IconCloud,

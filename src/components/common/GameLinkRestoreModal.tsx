@@ -1,15 +1,5 @@
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  ScrollArea,
-  Select,
-  Stack,
-  Table,
-  Text,
-} from "@mantine/core";
+import { Alert, Badge, Button, Group, ScrollArea, Select, Stack, Table, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconSearch } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";

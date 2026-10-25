@@ -9,7 +9,6 @@ import {
   Code,
   Container,
   Group,
-  Modal,
   NumberInput,
   Progress,
   ScrollArea,
@@ -23,6 +22,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import {
   IconArrowLeft,
   IconChartBar,

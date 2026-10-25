@@ -5,7 +5,6 @@ import {
   Button,
   Checkbox,
   Group,
-  Modal,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -14,6 +13,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useEffect, useMemo, useState } from "react";
 import {
   ENDGAME_THEME_ORDER,

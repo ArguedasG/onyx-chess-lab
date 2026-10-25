@@ -5,13 +5,14 @@ import {
   Button,
   Container,
   Group,
-  Modal,
   SegmentedControl,
   Select,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
+import { Modal } from "@/components/common/Modal";
 import { resolveResource } from "@tauri-apps/api/path";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { IconArrowLeft } from "@tabler/icons-react";
@@ -523,6 +524,15 @@ export default function EndgameTrainingV2Page() {
             onChange={(value) => value && setOpponentMode(value as OpponentMode)}
           />
         </Group>
+
+        {opponentMode === "maia" && !maiaEngine && (
+          <MaiaRequiredAlert>
+            {trainingT(
+              "Endgames.Opponent.NoMaia",
+              "The practical opponent plays with Maia 3, which is not installed. Install it or choose the best defense.",
+            )}
+          </MaiaRequiredAlert>
+        )}
 
         {feedback && (
           <Alert color={feedback.color} withCloseButton onClose={() => setFeedback(null)}>

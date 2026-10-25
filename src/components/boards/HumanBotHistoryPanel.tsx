@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Group,
-  Modal,
   Pagination,
   Paper,
   Select,
@@ -13,6 +12,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useDisclosure } from "@mantine/hooks";
 import { IconHistory, IconRefresh, IconTrash, IconZoomCheck } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -307,6 +307,37 @@ export default function HumanBotHistoryPanel() {
           ]}
         />
 
+        <Group gap="xs">
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={<IconHistory size={14} />}
+            onClick={open}
+          >
+            {t("HumanBots.History.Open", "View games")}
+          </Button>
+          <Tooltip label={t("HumanBots.History.ResetAllScores", "Reset all bot scores")}>
+            <ActionIcon
+              ml="auto"
+              variant="subtle"
+              disabled={history.games.length === 0}
+              onClick={() => setPendingAction({ type: "resetAllScores" })}
+            >
+              <IconRefresh size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={t("HumanBots.History.DeleteAll", "Delete bot game history")}>
+            <ActionIcon
+              color="red"
+              variant="subtle"
+              disabled={history.games.length === 0}
+              onClick={() => setPendingAction({ type: "deleteAll" })}
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+
         <Table.ScrollContainer minWidth={430}>
           <Table striped withRowBorders={false} fz="xs">
             <Table.Thead>
@@ -349,37 +380,6 @@ export default function HumanBotHistoryPanel() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-
-        <Group gap="xs">
-          <Button
-            size="xs"
-            variant="default"
-            leftSection={<IconHistory size={14} />}
-            onClick={open}
-          >
-            {t("HumanBots.History.Open", "View games")}
-          </Button>
-          <Tooltip label={t("HumanBots.History.ResetAllScores", "Reset all bot scores")}>
-            <ActionIcon
-              ml="auto"
-              variant="subtle"
-              disabled={history.games.length === 0}
-              onClick={() => setPendingAction({ type: "resetAllScores" })}
-            >
-              <IconRefresh size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label={t("HumanBots.History.DeleteAll", "Delete bot game history")}>
-            <ActionIcon
-              color="red"
-              variant="subtle"
-              disabled={history.games.length === 0}
-              onClick={() => setPendingAction({ type: "deleteAll" })}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
       </Stack>
     </>
   );

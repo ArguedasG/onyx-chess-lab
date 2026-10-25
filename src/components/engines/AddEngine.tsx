@@ -5,13 +5,13 @@ import {
   Group,
   Image,
   Loader,
-  Modal,
   Paper,
   ScrollArea,
   SimpleGrid,
   Tabs,
   Text,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useForm } from "@mantine/form";
 import { IconDatabase, IconTrophy } from "@tabler/icons-react";
 import { join, resolve } from "@tauri-apps/api/path";

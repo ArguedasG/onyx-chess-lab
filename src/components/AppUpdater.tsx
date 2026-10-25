@@ -1,4 +1,5 @@
-import { Button, Group, Modal, Progress, ScrollArea, Stack, Text } from "@mantine/core";
+import { Button, Group, Progress, ScrollArea, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { platform } from "@tauri-apps/plugin-os";
@@ -12,6 +13,7 @@ import {
   type AppUpdateProgress,
 } from "@/utils/appUpdater";
 import { ReleaseNotesView } from "@/components/WhatsNewModal";
+import { playerAnalysisStorage } from "@/state/playerAnalysis";
 import { trainingAreasStorage } from "@/state/trainingAreas";
 import { parseReleaseNotesMarkdown } from "@/utils/changelog";
 import { formatBytes } from "@/utils/format";
@@ -118,7 +120,7 @@ export default function AppUpdater() {
     setProgress(EMPTY_UPDATE_PROGRESS);
     try {
       // The Windows installer closes Onyx without a close request.
-      await trainingAreasStorage.flush();
+      await Promise.all([trainingAreasStorage.flush(), playerAnalysisStorage.flush()]);
       await update.downloadAndInstall((event) => {
         setProgress((current) => reduceUpdateProgress(current, event));
       });

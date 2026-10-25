@@ -1,4 +1,5 @@
-import { Alert, Button, Group, Modal, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { resolve } from "@tauri-apps/api/path";
 import { ask, save } from "@tauri-apps/plugin-dialog";

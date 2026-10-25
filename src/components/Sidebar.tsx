@@ -13,6 +13,7 @@ import {
   IconPlayerPlay,
   IconSettings,
   IconTarget,
+  IconTrophy,
   IconNotebook,
   IconUser,
   IconUsersGroup,
@@ -108,6 +109,12 @@ export function SideBar() {
             label={t("SideBar.Play", "Play")}
             expanded={expanded}
             onClick={() => void startGame()}
+          />
+          <NavbarLink
+            icon={IconTrophy}
+            label={t("SideBar.Tournaments", "Tournaments")}
+            url="/tournaments"
+            expanded={expanded}
           />
           <NavbarAction
             icon={IconFileImport}

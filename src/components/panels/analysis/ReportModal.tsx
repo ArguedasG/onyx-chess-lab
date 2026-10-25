@@ -1,4 +1,5 @@
-import { Button, Checkbox, Group, Modal, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Button, Checkbox, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useAtom, useAtomValue } from "jotai";

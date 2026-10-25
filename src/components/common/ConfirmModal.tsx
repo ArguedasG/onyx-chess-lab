@@ -1,4 +1,5 @@
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useTranslation } from "react-i18next";
 
 function ConfirmModal({

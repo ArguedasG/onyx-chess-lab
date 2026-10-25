@@ -1,4 +1,5 @@
-import { Button, Group, List, Modal, ScrollArea, Stack, Text, Title } from "@mantine/core";
+import { Button, Group, List, ScrollArea, Stack, Text, Title } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { getVersion } from "@tauri-apps/api/app";
 import { warn } from "@tauri-apps/plugin-log";
 import { useCallback, useEffect, useState } from "react";

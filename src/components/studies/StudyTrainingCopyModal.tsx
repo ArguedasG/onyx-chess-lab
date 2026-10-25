@@ -4,7 +4,6 @@ import {
   Card,
   Checkbox,
   Group,
-  Modal,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -12,6 +11,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
@@ -261,6 +261,7 @@ export default function StudyTrainingCopyModal({
       const created = await createFile({
         filename: `${repertoireName} - Editable`,
         filetype: "repertoire",
+        uniqueName: true,
         pgn: prepared.trainingPgn,
         dir: documentDir,
       });

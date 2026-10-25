@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   Progress,
   SimpleGrid,
   Stack,
@@ -13,6 +12,7 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import {
   IconArrowRight,
   IconBulb,

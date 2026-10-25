@@ -1,4 +1,5 @@
-import { Alert, Modal } from "@mantine/core";
+import { Alert } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

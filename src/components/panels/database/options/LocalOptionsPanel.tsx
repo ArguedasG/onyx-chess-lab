@@ -20,6 +20,7 @@ import { Chessground } from "@/chessground/Chessground";
 import PiecesGrid from "@/components/boards/PiecesGrid";
 import { PlayerSearchInput } from "@/components/databases/PlayerSearchInput";
 import { currentLocalOptionsAtom } from "@/state/atoms";
+import WeakGamesFilterInput from "./WeakGamesFilterInput";
 
 function LocalOptionsPanel({ boardFen }: { boardFen: string }) {
   const { t } = useTranslation();
@@ -156,6 +157,8 @@ function LocalOptionsPanel({ boardFen }: { boardFen: string }) {
           />
         </Stack>
       </SimpleGrid>
+
+      <WeakGamesFilterInput />
 
       <Stack gap={4}>
         <Text fw="bold" fz="sm">

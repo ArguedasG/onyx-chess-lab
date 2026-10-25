@@ -106,17 +106,28 @@ export async function openFile(
 }
 
 export async function createFile({
-    filename,
+    filename: requestedName,
     filetype,
     pgn,
     dir,
+    uniqueName = false,
 }: {
     filename: string;
     filetype: "game" | "repertoire" | "tournament" | "puzzle" | "other";
     pgn?: string;
     dir: string;
+    /**
+     * When the name is taken, use "name (1)", "name (2)"… instead of failing. For files the app
+     * names on its own, such as the PGN of a new repertoire (a deleted repertoire keeps its PGN).
+     */
+    uniqueName?: boolean;
 }): Promise<Result<FileMetadata>> {
-    const file = await resolve(dir, `${filename}.pgn`);
+    let filename = requestedName;
+    let file = await resolve(dir, `${filename}.pgn`);
+    for (let copy = 1; uniqueName && (await exists(file)) && copy < 1000; copy++) {
+        filename = `${requestedName} (${copy})`;
+        file = await resolve(dir, `${filename}.pgn`);
+    }
     if (await exists(file)) {
         return Result.err(Error("File already exists"));
     }

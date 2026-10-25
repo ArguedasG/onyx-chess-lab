@@ -1,4 +1,5 @@
-import { Button, Modal, Stack, Text } from "@mantine/core";
+import { Button, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useTranslation } from "react-i18next";
 import type {
   PlayerAnalysisCriticalPosition,

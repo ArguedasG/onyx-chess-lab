@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   Chip,
   Collapse,
@@ -13,8 +12,9 @@ import {
   TextInput,
   UnstyledButton,
 } from "@mantine/core";
-import { IconAlertTriangle, IconChevronDown, IconChevronRight } from "@tabler/icons-react";
-import { type ReactNode, useState } from "react";
+import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
+import { type ReactNode, useEffect, useState } from "react";
+import MaiaRequiredAlert, { useInstalledMaia } from "@/components/common/MaiaRequiredAlert";
 import { useTranslation } from "react-i18next";
 import type { TimeControlField } from "@/utils/clock";
 import type { GuidedLevel } from "@/utils/guidedPlay";
@@ -71,10 +71,13 @@ export function ClockPresets({
   clock,
   onChange,
   compact = false,
+  allowNone = true,
 }: {
   clock: TimeControlField | undefined;
   onChange: (clock: TimeControlField | undefined) => void;
   compact?: boolean;
+  /** Tournaments always have a clock. */
+  allowNone?: boolean;
 }) {
   const { t } = useTranslation();
   const rhythmLabel = useRhythmLabel();
@@ -115,9 +118,11 @@ export function ClockPresets({
             {t("HumanBots.Clock.Other", "Other")}
           </Text>
           <Group gap={4}>
-            <Chip value="none" size="xs">
-              {t("HumanBots.Clock.None", "No clock")}
-            </Chip>
+            {allowNone && (
+              <Chip value="none" size="xs">
+                {t("HumanBots.Clock.None", "No clock")}
+              </Chip>
+            )}
             <Chip value="custom" size="xs">
               {t("HumanBots.Clock.Custom", "Custom")}
             </Chip>
@@ -208,6 +213,14 @@ export default function BotGameSetup({
   const [advancedOpened, setAdvancedOpened] = useState(false);
   const profile = getHumanBotProfile(bot.profileId);
   const maia = bot.engine && isMaiaEngine(bot.engine) ? bot.engine : null;
+  const installedMaia = useInstalledMaia();
+  // An installed Maia is chosen on its own: the bot cannot play without it.
+  useEffect(() => {
+    if (maia || !installedMaia) return;
+    setBot((previous) =>
+      previous.type === "humanBot" ? { ...previous, engine: installedMaia } : previous,
+    );
+  }, [installedMaia, maia, setBot]);
   const clockSelector = <ClockPresets clock={bot.timeControl} onChange={setClock} compact />;
 
   return (
@@ -222,13 +235,13 @@ export default function BotGameSetup({
           </Button>
         </Group>
 
-        {!maia && (
-          <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
+        {!maia && !installedMaia && (
+          <MaiaRequiredAlert>
             {t(
               "HumanBots.NoMaiaEngine",
               "No Maia 3 engine was found. Add it from the Engines section first.",
             )}
-          </Alert>
+          </MaiaRequiredAlert>
         )}
 
         <Section label={t("HumanBots.Setup.Opponent", "Opponent")}>

@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
+import { playerAnalysisStorage, preloadPlayerAnalysis } from "./state/playerAnalysis";
 import { preloadTrainingAreas, trainingAreasStorage } from "./state/trainingAreas";
 
 import be_BY from "./translation/be-BY.json";
@@ -77,7 +78,10 @@ const root = createRoot(container!);
 
 // Training data is read from disk before rendering so no component can start from empty defaults
 // and overwrite it. Pending writes are flushed before the window closes.
-void preloadTrainingAreas().finally(() => {
-  void getCurrentWindow().onCloseRequested(() => trainingAreasStorage.flush());
+// Both files are read before the first render: their stores serve values synchronously.
+void Promise.allSettled([preloadTrainingAreas(), preloadPlayerAnalysis()]).finally(() => {
+  void getCurrentWindow().onCloseRequested(() =>
+    Promise.all([trainingAreasStorage.flush(), playerAnalysisStorage.flush()]).then(() => {}),
+  );
   root.render(<App />);
 });

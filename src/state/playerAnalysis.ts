@@ -1,5 +1,10 @@
+import { notifications } from "@mantine/notifications";
+import { warn } from "@tauri-apps/plugin-log";
+import i18n from "i18next";
 import { atom } from "jotai";
-import { atomFamily, atomWithStorage } from "jotai/utils";
+import { atomFamily, atomWithStorage, createJSONStorage } from "jotai/utils";
+import { createFileBackedStorage } from "./fileBackedStorage";
+import { appDataFiles } from "./appDataFiles";
 import {
     PLAYER_ANALYSIS_SCHEMA_VERSION,
     type PlayerEngineAnalysis,
@@ -22,11 +27,43 @@ export type PlayerAnalysisState = {
     profiles: Record<string, StoredPlayerAnalysis>;
 };
 
-export const playerAnalysisAtom = atomWithStorage<PlayerAnalysisState>("player-analysis-v1", {
-    schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
-    enabled: true,
-    profiles: {},
+export const PLAYER_ANALYSIS_KEY = "player-analysis-v1";
+
+let lastErrorNotice = 0;
+
+/**
+ * Player analyses used to live in localStorage, whose ~5 MB quota a few engine analyses could
+ * fill ("exceeded the quota"). They now live in `player-analysis-v1.json` in the app data folder;
+ * the first start migrates the old value and keeps a backup copy.
+ */
+export const playerAnalysisStorage = createFileBackedStorage({
+    fs: appDataFiles,
+    legacy: typeof localStorage === "undefined" ? undefined : localStorage,
+    onError(key, error) {
+        warn(`Player analysis storage error for ${key}: ${String(error)}`);
+        if (Date.now() - lastErrorNotice < 30_000) return;
+        lastErrorNotice = Date.now();
+        notifications.show({
+            color: "red",
+            title: i18n.t("PlayerAnalysis.StorageError", "The player analysis could not be saved"),
+            message: String(error),
+        });
+    },
 });
+
+export function preloadPlayerAnalysis(): Promise<void> {
+    return playerAnalysisStorage.preload(PLAYER_ANALYSIS_KEY);
+}
+
+export const playerAnalysisAtom = atomWithStorage<PlayerAnalysisState>(
+    PLAYER_ANALYSIS_KEY,
+    {
+        schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
+        enabled: true,
+        profiles: {},
+    },
+    createJSONStorage(() => playerAnalysisStorage),
+);
 
 export type PlayerAnalysisReturnTarget = {
     profileId: string;

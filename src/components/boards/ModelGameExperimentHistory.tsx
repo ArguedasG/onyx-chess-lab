@@ -5,7 +5,6 @@ import {
   Checkbox,
   Group,
   Menu,
-  Modal,
   Pagination,
   Paper,
   ScrollArea,
@@ -15,6 +14,7 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {

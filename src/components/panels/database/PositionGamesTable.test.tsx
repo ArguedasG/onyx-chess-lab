@@ -144,6 +144,7 @@ const summary = (token = "one"): PositionSummary => ({
   fen: "fen",
   openings: [],
   skippedGames: 0,
+  unlistedGames: 0,
   scanMs: 10,
   cacheHit: false,
 });

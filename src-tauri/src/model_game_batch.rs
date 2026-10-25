@@ -33,6 +33,10 @@ pub struct ModelGameBatchConfig {
     pub game_config: GameConfig,
     pub game_count: u32,
     pub alternate_colors: bool,
+    /// Plays the games from `OPENING_SUITE` instead of the players' repertoires and books: each
+    /// opening twice when the colors alternate, so its advantage cancels out.
+    #[serde(default)]
+    pub opening_suite: bool,
     pub seed_step: u32,
     pub requested_concurrency: u32,
     pub max_cpu_threads: u32,
@@ -368,6 +372,80 @@ fn player_seed(player: &PlayerConfig) -> Option<u32> {
     }
 }
 
+/// Balanced, varied openings for strength tests (8 plies each), from the main families of 1.e4,
+/// 1.d4 and the flank openings.
+const OPENING_SUITE: [[&str; 8]; 20] = [
+    [
+        "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6",
+    ],
+    [
+        "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3", "g8f6",
+    ],
+    [
+        "e2e4", "e7e5", "g1f3", "b8c6", "d2d4", "e5d4", "f3d4", "g8f6",
+    ],
+    [
+        "e2e4", "e7e5", "g1f3", "g8f6", "f3e5", "d7d6", "e5f3", "f6e4",
+    ],
+    [
+        "e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6",
+    ],
+    [
+        "e2e4", "c7c5", "g1f3", "e7e6", "d2d4", "c5d4", "f3d4", "b8c6",
+    ],
+    [
+        "e2e4", "e7e6", "d2d4", "d7d5", "b1c3", "g8f6", "c1g5", "f8e7",
+    ],
+    [
+        "e2e4", "c7c6", "d2d4", "d7d5", "b1c3", "d5e4", "c3e4", "c8f5",
+    ],
+    [
+        "e2e4", "d7d6", "d2d4", "g8f6", "b1c3", "g7g6", "g1f3", "f8g7",
+    ],
+    [
+        "d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7",
+    ],
+    [
+        "d2d4", "d7d5", "c2c4", "c7c6", "g1f3", "g8f6", "b1c3", "d5c4",
+    ],
+    [
+        "d2d4", "g8f6", "c2c4", "e7e6", "b1c3", "f8b4", "e2e3", "e8g8",
+    ],
+    [
+        "d2d4", "g8f6", "c2c4", "g7g6", "b1c3", "f8g7", "e2e4", "d7d6",
+    ],
+    [
+        "d2d4", "g8f6", "c2c4", "g7g6", "b1c3", "d7d5", "c4d5", "f6d5",
+    ],
+    [
+        "d2d4", "g8f6", "c2c4", "e7e6", "g1f3", "b7b6", "g2g3", "c8b7",
+    ],
+    [
+        "d2d4", "g8f6", "c2c4", "e7e6", "g2g3", "d7d5", "f1g2", "f8e7",
+    ],
+    [
+        "d2d4", "d7d5", "c1f4", "g8f6", "e2e3", "e7e6", "g1f3", "c7c5",
+    ],
+    [
+        "c2c4", "c7c5", "g1f3", "g8f6", "b1c3", "b8c6", "g2g3", "g7g6",
+    ],
+    [
+        "c2c4", "e7e5", "b1c3", "g8f6", "g1f3", "b8c6", "g2g3", "d7d5",
+    ],
+    [
+        "g1f3", "d7d5", "g2g3", "g8f6", "f1g2", "e7e6", "e1g1", "f8e7",
+    ],
+];
+
+fn clear_player_repertoire(player: &mut PlayerConfig) {
+    if let PlayerConfig::Engine {
+        opening_repertoire, ..
+    } = player
+    {
+        *opening_repertoire = None;
+    }
+}
+
 fn increment_player_seed(player: &mut PlayerConfig, increment: u32) {
     if let PlayerConfig::Engine {
         seed: Some(value), ..
@@ -400,6 +478,20 @@ fn game_config_for_index(config: &ModelGameBatchConfig, index: u32) -> GameConfi
             &mut game_config.white_time_control,
             &mut game_config.black_time_control,
         );
+    }
+    if config.opening_suite {
+        // With alternating colors, games 2n and 2n + 1 share an opening.
+        let pair = if config.alternate_colors {
+            index / 2
+        } else {
+            index
+        };
+        let opening = OPENING_SUITE[pair as usize % OPENING_SUITE.len()];
+        game_config.initial_fen = None;
+        game_config.initial_moves = opening.iter().map(|uci| uci.to_string()).collect();
+        game_config.opening_book = None;
+        clear_player_repertoire(&mut game_config.white);
+        clear_player_repertoire(&mut game_config.black);
     }
     game_config
 }
@@ -750,6 +842,7 @@ mod tests {
             },
             game_count: 8,
             alternate_colors: true,
+            opening_suite: false,
             seed_step: 3,
             requested_concurrency: 4,
             max_cpu_threads: 8,
@@ -770,6 +863,31 @@ mod tests {
         assert_eq!(player_seed(&second.white), Some(23));
         assert_eq!(player_name(&second.black), "A");
         assert_eq!(player_seed(&second.black), Some(13));
+    }
+
+    #[test]
+    fn the_opening_suite_is_legal_and_each_opening_is_played_with_both_colors() {
+        use shakmaty::{uci::UciMove, Chess, Position};
+
+        for opening in OPENING_SUITE {
+            let mut position = Chess::default();
+            for uci in opening {
+                let m = uci.parse::<UciMove>().unwrap().to_move(&position).unwrap();
+                position.play_unchecked(&m);
+            }
+        }
+
+        let mut config = batch_config();
+        config.opening_suite = true;
+        let games: Vec<GameConfig> = (0..4).map(|i| game_config_for_index(&config, i)).collect();
+        assert_eq!(games[0].initial_moves, OPENING_SUITE[0]);
+        assert_eq!(games[1].initial_moves, OPENING_SUITE[0]);
+        assert_eq!(games[2].initial_moves, OPENING_SUITE[1]);
+        assert_eq!(player_name(&games[1].white), "B");
+        assert!(games.iter().all(|game| game.opening_book.is_none()));
+        assert!(game_config_for_index(&batch_config(), 0)
+            .initial_moves
+            .is_empty());
     }
 
     #[test]

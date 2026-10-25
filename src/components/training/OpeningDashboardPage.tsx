@@ -9,7 +9,6 @@ import {
   Checkbox,
   Container,
   Group,
-  Modal,
   NumberInput,
   ScrollArea,
   Select,
@@ -21,6 +20,8 @@ import {
   Tooltip,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
+import OpeningSectionDeleteModal from "./OpeningSectionDeleteModal";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
@@ -69,6 +70,7 @@ import {
   addOpeningVariantFolder,
   deleteOpeningLine,
   deleteOpeningRepertoire,
+  removeOpeningSection,
   getOpeningLineMetrics,
   getOpeningRepertoireMetrics,
   getOpeningVariantMetrics,
@@ -182,6 +184,7 @@ export default function OpeningDashboardPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineDraftName, setLineDraftName] = useState("");
   const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
+  const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
   const [deletingRepertoireId, setDeletingRepertoireId] = useState<string | null>(null);
   const pendingImport = usePendingPgnImport("openings");
   const repertoires = useMemo(
@@ -224,6 +227,7 @@ export default function OpeningDashboardPage() {
       const created = await createFile({
         filename: repertoireName,
         filetype: "repertoire",
+        uniqueName: true,
         pgn,
         dir: documentDir,
       });
@@ -440,6 +444,39 @@ export default function OpeningDashboardPage() {
     }
   }
 
+  async function confirmDeleteSection(moveLinesTo: string | null) {
+    const variant = deletingVariantId ? areas.openings.variants[deletingVariantId] : undefined;
+    if (!variant) return;
+    const target = moveLinesTo ? areas.openings.variants[moveLinesTo] : undefined;
+    setBusy(true);
+    try {
+      const openings = removeOpeningSection(areas.openings, variant.id, moveLinesTo);
+      await persistOpeningOrganization(openings, variant.repertoireId);
+      setDeletingVariantId(null);
+      setFeedback({
+        text: target
+          ? t(
+              "OpeningManage.DeleteSection.DoneMoved",
+              "Section “{{name}}” deleted; its lines moved to “{{target}}”.",
+              { name: variant.name, target: target.name },
+            )
+          : t("OpeningManage.DeleteSection.Done", "Section “{{name}}” deleted.", {
+              name: variant.name,
+            }),
+      });
+    } catch (error) {
+      setFeedback({
+        text:
+          error instanceof Error
+            ? error.message
+            : t("OpeningManage.DeleteSection.Failed", "Could not delete the section."),
+        color: "red",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function confirmDeleteRepertoire() {
     if (!deletingRepertoireId) return;
     const repertoire = areas.openings.repertoires[deletingRepertoireId];
@@ -478,6 +515,7 @@ export default function OpeningDashboardPage() {
       const created = await createFile({
         filename: `${repertoireName} - Editable`,
         filetype: "repertoire",
+        uniqueName: true,
         pgn: prepared.trainingPgn,
         dir: documentDir,
       });
@@ -1265,6 +1303,26 @@ export default function OpeningDashboardPage() {
                                                   >
                                                     <IconUpload size={16} />
                                                   </ActionIcon>
+                                                  <Tooltip
+                                                    label={t(
+                                                      "OpeningManage.DeleteSection",
+                                                      "Delete section",
+                                                    )}
+                                                  >
+                                                    <ActionIcon
+                                                      variant="subtle"
+                                                      color="red"
+                                                      aria-label={t(
+                                                        "OpeningManage.DeleteSection",
+                                                        "Delete section",
+                                                      )}
+                                                      onClick={() =>
+                                                        setDeletingVariantId(variant.id)
+                                                      }
+                                                    >
+                                                      <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                  </Tooltip>
                                                   <ActionIcon
                                                     size="lg"
                                                     variant="subtle"
@@ -1797,6 +1855,15 @@ export default function OpeningDashboardPage() {
           </Group>
         </Stack>
       </Modal>
+
+      <OpeningSectionDeleteModal
+        key={deletingVariantId ?? "none"}
+        openings={areas.openings}
+        variantId={deletingVariantId}
+        busy={busy}
+        onClose={() => setDeletingVariantId(null)}
+        onConfirm={(moveLinesTo) => void confirmDeleteSection(moveLinesTo)}
+      />
 
       <Modal
         opened={deletingLineId !== null}

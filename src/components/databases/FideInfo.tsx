@@ -6,10 +6,10 @@ import {
   Center,
   Divider,
   Group,
-  Modal,
   Stack,
   Text,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconCloud } from "@tabler/icons-react";
 import * as Flags from "mantine-flagpack";
 import { useTranslation } from "react-i18next";

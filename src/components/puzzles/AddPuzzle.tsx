@@ -1,4 +1,5 @@
-import { Box, Divider, Group, Modal, Paper, ScrollArea, Stack, Text } from "@mantine/core";
+import { Box, Divider, Group, Paper, ScrollArea, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { resolve } from "@tauri-apps/api/path";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { useTranslation } from "react-i18next";

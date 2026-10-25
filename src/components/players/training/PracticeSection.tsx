@@ -11,6 +11,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import { IconChessKnight, IconPlayerPlay, IconShieldHalf } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
@@ -119,9 +120,9 @@ export default function PracticeSection({
         right={summary ? <EngineBadge games={summary.analyzedGames} /> : undefined}
       />
       {!maia && (
-        <Alert color="yellow" py={8}>
+        <MaiaRequiredAlert>
           {t("Practice.NoMaia", "Practice needs Maia 3, from Engines.")}
-        </Alert>
+        </MaiaRequiredAlert>
       )}
       {!summary || summary.analyzedGames === 0 ? (
         <EmptyState>

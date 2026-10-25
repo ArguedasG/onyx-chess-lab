@@ -13,6 +13,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import { IconChessKnight, IconFocus2, IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -200,13 +201,13 @@ export default function KeyPositionsSection({
         </Alert>
       )}
       {needsMaia && !maia && (
-        <Alert color="gray" py={6}>
+        <MaiaRequiredAlert color="gray">
           {t(
             "Preparation.Key.NoMaia",
             "Maia 3 is not installed: positions with fewer than {{count}} games of this player are left without a difficulty.",
             { count: MIN_OWN_GAMES },
           )}
-        </Alert>
+        </MaiaRequiredAlert>
       )}
       {run.status === "error" && <Alert color="red">{run.message}</Alert>}
 

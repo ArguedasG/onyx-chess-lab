@@ -8,7 +8,6 @@ import {
   Card,
   Container,
   Group,
-  Modal,
   NumberInput,
   ScrollArea,
   Select,
@@ -18,6 +17,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   IconArrowLeft,

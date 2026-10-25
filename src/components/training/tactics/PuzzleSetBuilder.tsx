@@ -4,7 +4,6 @@ import {
   Button,
   Chip,
   Group,
-  Modal,
   MultiSelect,
   NumberInput,
   RangeSlider,
@@ -15,6 +14,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconTarget, IconWand } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { commands, type PuzzleDatabaseInfo } from "@/bindings";

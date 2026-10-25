@@ -5,7 +5,6 @@ import {
   Button,
   Group,
   Loader,
-  Modal,
   Paper,
   SegmentedControl,
   Select,
@@ -15,6 +14,7 @@ import {
   TextInput,
   UnstyledButton,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { IconExternalLink, IconSearch, IconTrash } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

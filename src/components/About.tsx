@@ -1,4 +1,5 @@
-import { Anchor, Modal, Text } from "@mantine/core";
+import { Anchor, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
 import { arch, version as OSVersion, type } from "@tauri-apps/plugin-os";
 import { useEffect, useState } from "react";

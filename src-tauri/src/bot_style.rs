@@ -10,7 +10,10 @@
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use shakmaty::{attacks, uci::UciMove, Bitboard, Chess, Color, Move, Position, Rank, Role, Square};
+use shakmaty::{
+    attacks, fen::Fen, uci::UciMove, Bitboard, CastlingMode, Chess, Color, Move, Position, Rank,
+    Role, Square,
+};
 use specta::Type;
 use vampirc_uci::uci::ScoreValue;
 
@@ -113,6 +116,7 @@ pub async fn choose_bot_move(
 ) -> Result<BotChoice, Error> {
     maia.go(go).await?;
     let (best_move, policy) = wait_for_maia_move(maia).await?;
+    let recapture_on = last_capture_square(fen, moves);
     let entries: Vec<(MaiaCandidate, MoveTraits, Move)> = policy
         .unwrap_or_default()
         .into_iter()
@@ -123,7 +127,7 @@ pub async fn choose_bot_move(
                 .ok()?
                 .to_move(position)
                 .ok()?;
-            let traits = move_traits(position, &m);
+            let traits = move_traits(position, &m, recapture_on);
             Some((candidate, traits, m))
         })
         .collect();
@@ -228,11 +232,20 @@ pub struct MoveTraits {
     pub capture: bool,
     /// A capture of a piece of about the same value (pawn for pawn, minor for minor...).
     pub trade: bool,
+    /// A capture on the square where the opponent has just captured.
+    pub recapture: bool,
 }
 
 impl MoveTraits {
     pub fn style_score(&self, weights: StyleWeights) -> f32 {
-        weights.aggression * self.aggression + weights.simplification * self.simplification
+        // A complicating style keeps exchanges from starting, but does not decline a recapture:
+        // that loses material, not tension.
+        let simplification = if self.recapture && weights.simplification < 0.0 {
+            0.0
+        } else {
+            self.simplification
+        };
+        weights.aggression * self.aggression + weights.simplification * simplification
     }
 }
 
@@ -296,19 +309,52 @@ fn king_zone_attacks(position: &Chess, king_color: Color, attacker: Color) -> i3
         .sum()
 }
 
-/// Pieces of both colors attacked by the other color: how many exchanges are pending.
-fn tension(position: &Chess) -> i32 {
+/// Pieces of both colors attacked by the other color: how many exchanges are pending. A piece of
+/// `us` that is simply lost (undefended, or attacked by a cheaper piece) is not tension: a
+/// complicating style must not prefer leaving its own pieces hanging.
+fn tension(position: &Chess, us: Color) -> i32 {
     let board = position.board();
     let occupied = board.occupied();
     occupied
         .into_iter()
         .filter(|&square| {
-            board.color_at(square).is_some_and(|color| {
-                board.role_at(square) != Some(Role::King)
-                    && board.attacks_to(square, !color, occupied).any()
-            })
+            let (Some(color), Some(role)) = (board.color_at(square), board.role_at(square)) else {
+                return false;
+            };
+            if role == Role::King {
+                return false;
+            }
+            let attackers = board.attacks_to(square, !color, occupied);
+            if attackers.is_empty() {
+                return false;
+            }
+            if color != us {
+                return true;
+            }
+            let defended = board.attacks_to(square, color, occupied).any();
+            let cheaper_attacker = attackers
+                .into_iter()
+                .filter_map(|attacker| board.role_at(attacker))
+                .any(|attacker| value(attacker) < value(role));
+            defended && !cheaper_attacker
         })
         .count() as i32
+}
+
+/// Where the opponent's last move captured, if it did.
+fn last_capture_square(fen: &str, moves: &[String]) -> Option<Square> {
+    let (last, earlier) = moves.split_last()?;
+    let mut position: Chess = fen
+        .parse::<Fen>()
+        .ok()?
+        .into_position(CastlingMode::Standard)
+        .ok()?;
+    for uci in earlier {
+        let m = uci.parse::<UciMove>().ok()?.to_move(&position).ok()?;
+        position.play_unchecked(&m);
+    }
+    let m = last.parse::<UciMove>().ok()?.to_move(&position).ok()?;
+    m.is_capture().then(|| m.to())
 }
 
 fn back_rank_distance(square: Square, color: Color) -> u32 {
@@ -319,7 +365,7 @@ fn back_rank_distance(square: Square, color: Color) -> u32 {
 }
 
 /// Traits of `m` (legal) in `position`.
-pub fn move_traits(position: &Chess, m: &Move) -> MoveTraits {
+pub fn move_traits(position: &Chess, m: &Move, recapture_on: Option<Square>) -> MoveTraits {
     let us = position.turn();
     let them = !us;
     let mut after = position.clone();
@@ -380,7 +426,7 @@ pub fn move_traits(position: &Chess, m: &Move) -> MoveTraits {
             simplification += 0.6;
         }
     }
-    let tension_change = tension(&after) - tension(position);
+    let tension_change = tension(&after, us) - tension(position, us);
     simplification -= 0.25 * tension_change.clamp(-6, 6) as f32;
 
     MoveTraits {
@@ -389,6 +435,7 @@ pub fn move_traits(position: &Chess, m: &Move) -> MoveTraits {
         check,
         capture,
         trade,
+        recapture: capture && recapture_on == Some(m.to()),
     }
 }
 
@@ -546,7 +593,6 @@ fn argmax(values: &[f32]) -> usize {
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
-    use shakmaty::{fen::Fen, uci::UciMove, CastlingMode};
     use vampirc_uci::uci::ScoreValue;
 
     use super::*;
@@ -561,7 +607,7 @@ mod tests {
     fn traits(fen: &str, uci: &str) -> MoveTraits {
         let position = position(fen);
         let m = uci.parse::<UciMove>().unwrap().to_move(&position).unwrap();
-        move_traits(&position, &m)
+        move_traits(&position, &m, None)
     }
 
     #[test]
@@ -585,6 +631,44 @@ mod tests {
         assert!(exchange.simplification > 0.5);
         let develop = traits(fen, "b1c3");
         assert!(develop.simplification < exchange.simplification);
+    }
+
+    #[test]
+    fn a_complicating_style_does_not_decline_a_recapture() {
+        // White has just taken a knight on d5; Nf6xd5 trades back.
+        let fen = "4k3/8/5n2/3N4/8/8/8/4K3 b - - 0 1";
+        let position = position(fen);
+        let m = "f6d5"
+            .parse::<UciMove>()
+            .unwrap()
+            .to_move(&position)
+            .unwrap();
+        let complicating = StyleWeights {
+            aggression: 0.0,
+            simplification: -1.0,
+        };
+        let recapture = move_traits(&position, &m, Some(Square::D5));
+        assert!(recapture.recapture && recapture.trade);
+        assert_eq!(recapture.style_score(complicating), 0.0);
+        let trade = move_traits(&position, &m, None);
+        assert!(trade.style_score(complicating) < 0.0);
+        let start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        let moves = |list: &[&str]| list.iter().map(|m| m.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            last_capture_square(start, &moves(&["e2e4", "d7d5", "e4d5"])),
+            Some(Square::D5)
+        );
+        assert_eq!(last_capture_square(start, &moves(&["e2e4", "d7d5"])), None);
+    }
+
+    #[test]
+    fn a_hanging_piece_of_our_own_is_not_tension() {
+        // Ne2-d4 just puts the knight where the e5 pawn takes it; Nc3 is a quiet move.
+        let fen = "4k3/8/8/4p3/8/8/4N3/4K3 w - - 0 1";
+        assert_eq!(
+            traits(fen, "e2d4").simplification,
+            traits(fen, "e2c3").simplification
+        );
     }
 
     #[test]

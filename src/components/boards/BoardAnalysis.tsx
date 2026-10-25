@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Group,
-  Modal,
   Paper,
   Portal,
   Stack,
@@ -11,6 +10,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useHotkeys, useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {

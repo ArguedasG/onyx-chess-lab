@@ -9,7 +9,6 @@ import {
   Container,
   Divider,
   Group,
-  Modal,
   Paper,
   Select,
   SimpleGrid,
@@ -20,6 +19,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";

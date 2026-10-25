@@ -21,6 +21,10 @@ use once_cell::sync::Lazy;
 use serde::Serialize;
 use specta::Type;
 
+use super::{
+    position_query::{is_weak_player, record_best_elo},
+    WeakGamesFilter,
+};
 use crate::{error::Error, progress::update_progress, AppState};
 
 /// A player whose ratings in the base differ by more than this probably mixes several people or
@@ -47,6 +51,32 @@ pub struct DatabaseQualityDetails {
     /// Players whose ratings differ by more than `ELO_SPREAD_LIMIT`.
     pub inconsistent_elo_players: u32,
     pub inconsistent_elo_examples: Vec<String>,
+    /// Games the "leave out games between weak players" filter of the position queries would
+    /// leave out, for each of its settings, with exactly the same rule.
+    pub weak_games: Vec<WeakGamesCount>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeakGamesCount {
+    /// `None`: both players without any rating.
+    pub below: Option<i32>,
+    pub games: u32,
+}
+
+/// The filter settings the report counts: both unrated, then both below each threshold.
+pub const WEAK_THRESHOLDS: [i32; 9] = [1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800];
+
+fn weak_filters() -> Vec<WeakGamesFilter> {
+    std::iter::once(WeakGamesFilter {
+        below: None,
+        unrated: true,
+    })
+    .chain(WEAK_THRESHOLDS.iter().map(|&below| WeakGamesFilter {
+        below: Some(below),
+        unrated: false,
+    }))
+    .collect()
 }
 
 /// Hashes a column whatever type SQLite stored in it (old bases mix text and integers).
@@ -114,6 +144,8 @@ fn scan(
 
     let mut keys: Vec<(u64, u64)> = Vec::with_capacity(total as usize);
     let mut ratings: HashMap<i64, (u32, u32)> = HashMap::new();
+    // Best rating per player, read as the search index stores ratings.
+    let mut best: Vec<i16> = Vec::new();
     let mut rate = |player: i64, elo: Option<i64>| {
         // Implausible ratings are counted by the minimal report; here they would hide real spreads.
         let (min, max) = super::quality::PLAUSIBLE_ELO;
@@ -141,20 +173,63 @@ fn scan(
             hash_column(&mut metadata, row.get_ref(column)?);
         }
         keys.push((game.finish(), metadata.finish()));
-        rate(white, integer_column(row.get_ref(2)?));
-        rate(black, integer_column(row.get_ref(3)?));
+        let white_elo = integer_column(row.get_ref(2)?);
+        let black_elo = integer_column(row.get_ref(3)?);
+        rate(white, white_elo);
+        rate(black, black_elo);
+        record_best_elo(&mut best, white as i32, white_elo.unwrap_or(0) as i16);
+        record_best_elo(&mut best, black as i32, black_elo.unwrap_or(0) as i16);
         seen += 1;
         if seen.is_multiple_of(PROGRESS_EVERY) {
             if cancelled.load(Ordering::Acquire) {
                 return Err(Error::SearchCancelled);
             }
-            progress(seen as f32 / total.max(1) as f32 * 90.0);
+            progress(seen as f32 / total.max(1) as f32 * 80.0);
         }
     }
     drop(rows);
     drop(statement);
 
     let (exact_duplicates, probable_duplicates) = count_duplicates(keys);
+    progress(85.0);
+
+    // Second, light read (no moves): every game once the best ratings are known.
+    let filters = weak_filters();
+    let mut weak_counts = vec![0u32; filters.len()];
+    let mut statement =
+        connection.prepare("SELECT WhiteID, WhiteElo, BlackID, BlackElo FROM Games")?;
+    let mut rows = statement.query([])?;
+    let mut seen = 0u64;
+    while let Some(row) = rows.next()? {
+        let white = integer_column(row.get_ref(0)?).unwrap_or_default() as i32;
+        let white_elo = integer_column(row.get_ref(1)?).unwrap_or(0) as i16;
+        let black = integer_column(row.get_ref(2)?).unwrap_or_default() as i32;
+        let black_elo = integer_column(row.get_ref(3)?).unwrap_or(0) as i16;
+        for (count, filter) in weak_counts.iter_mut().zip(&filters) {
+            if is_weak_player(&best, white, white_elo, filter)
+                && is_weak_player(&best, black, black_elo, filter)
+            {
+                *count += 1;
+            }
+        }
+        seen += 1;
+        if seen.is_multiple_of(PROGRESS_EVERY) {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(Error::SearchCancelled);
+            }
+            progress(85.0 + seen as f32 / total.max(1) as f32 * 10.0);
+        }
+    }
+    drop(rows);
+    drop(statement);
+    let weak_games = filters
+        .iter()
+        .zip(weak_counts)
+        .map(|(filter, games)| WeakGamesCount {
+            below: filter.below,
+            games,
+        })
+        .collect();
     progress(95.0);
 
     let mut names: HashMap<i64, String> = HashMap::new();
@@ -203,6 +278,7 @@ fn scan(
         suspicious_name_examples,
         inconsistent_elo_players: spread.len() as u32,
         inconsistent_elo_examples,
+        weak_games,
     })
 }
 
@@ -318,9 +394,59 @@ mod tests {
                 suspicious_name_examples: vec!["NN".to_string()],
                 inconsistent_elo_players: 1,
                 inconsistent_elo_examples: vec!["So, Wesley (1500–2700)".to_string()],
+                weak_games: weak_filters()
+                    .iter()
+                    .map(|filter| WeakGamesCount {
+                        below: filter.below,
+                        games: 0,
+                    })
+                    .collect(),
             }
         );
         // Fewer games than the cancellation check interval: it finishes first.
         assert!(scan(&path, &AtomicBool::new(true), &|_| {}).is_ok());
+    }
+
+    #[test]
+    fn counts_weak_games_as_the_position_filter_leaves_them_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("weak.db3");
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        // The same games as `weak_games_filter_judges_players_by_their_best_known_rating`.
+        connection
+            .execute_batch(
+                "CREATE TABLE Players (ID INTEGER PRIMARY KEY, Name TEXT, Elo INTEGER);
+                 CREATE TABLE Games (ID INTEGER PRIMARY KEY, EventID INTEGER, SiteID INTEGER,
+                    Round TEXT, Date TEXT, UTCTime TEXT, WhiteID INTEGER, WhiteElo INTEGER,
+                    BlackID INTEGER, BlackElo INTEGER, Moves BLOB);
+                 INSERT INTO Players VALUES (0, 'Unknown', NULL), (1, 'Pérez, Ana', NULL),
+                    (2, 'Rojas, Luis', NULL), (3, 'Mora, Iván', NULL), (4, 'Vega, Sara', NULL);
+                 INSERT INTO Games (EventID, SiteID, Round, WhiteID, WhiteElo, BlackID, BlackElo,
+                    Moves) VALUES
+                    (0, 0, '1', 1, 900, 2, 950, X'01'),
+                    (0, 0, '2', 3, 100, 2, 950, X'02'),
+                    (0, 0, '3', 3, 2300, 1, 900, X'03'),
+                    (0, 0, '4', 4, 0, 1, 900, X'04'),
+                    (0, 0, '5', 4, 0, 0, 0, X'05'),
+                    (0, 0, '6', 0, 1000, 0, 1050, X'06');",
+            )
+            .unwrap();
+        drop(connection);
+        let report = scan(&path, &AtomicBool::new(false), &|_| {}).unwrap();
+        let count = |below: Option<i32>| {
+            report
+                .weak_games
+                .iter()
+                .find(|item| item.below == below)
+                .unwrap()
+                .games
+        };
+        // The query keeps 2, 3, 4 and 5 below 1200, and leaves out 1 and 6.
+        assert_eq!(count(Some(1200)), 2);
+        assert_eq!(count(Some(1000)), 1);
+        assert_eq!(count(Some(1800)), 2);
+        // Only game 5 has no rating on either side.
+        assert_eq!(count(None), 1);
+        assert_eq!(report.weak_games.len(), 1 + WEAK_THRESHOLDS.len());
     }
 }

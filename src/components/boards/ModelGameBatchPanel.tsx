@@ -98,6 +98,15 @@ export function ModelGameBatchSetup({
                 "Swap the complete player configurations in every second game.",
               )}
             />
+            <Switch
+              checked={settings.openingSuite ?? false}
+              onChange={(event) => update({ openingSuite: event.currentTarget.checked })}
+              label={t("ModelGame.Batch.OpeningSuite", "Varied openings")}
+              description={t(
+                "ModelGame.Batch.OpeningSuite.Desc",
+                "Start the games from 20 balanced openings, without repertoires or opening books; with alternating colors each opening is played once with each color.",
+              )}
+            />
 
             <Divider label={t("ModelGame.Batch.Resources", "Scheduling and resource budgets")} />
             <SimpleGrid cols={{ base: 1, sm: 2 }}>

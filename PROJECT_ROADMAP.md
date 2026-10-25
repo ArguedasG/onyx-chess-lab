@@ -152,23 +152,23 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 
 ## 4. Estado de las fases
 
-| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                          |
-| ------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                   |
-| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                               |
-| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                         |
-| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                               |
-| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                               |
-| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10. |
-| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                       |
-| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                |
-| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                     |
-| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                     |
-| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                          |
-| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.        |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                  |
-| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots) implementada, pendiente de validación manual; 9.2 y 9.3 pendientes. Ver `docs/bots-phase-9-1.es.md`.   |
-| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                        |
+| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                                                                 |
+| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                                                                             |
+| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                                                                       |
+| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                                                                             |
+| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                                                                             |
+| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10.                                               |
+| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                                                                     |
+| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                                                              |
+| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                                                                   |
+| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                                                                   |
+| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                        |
+| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                      |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                |
+| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots) y 9.2 (torneos) implementadas, pendientes de validación manual; 9.3 pendiente. Ver `docs/bots-phase-9-1.es.md` y `docs/tournaments-phase-9-2.es.md`. |
+| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                      |
 
 ### Documentación de fases cerradas
 
@@ -789,6 +789,13 @@ Ideas: I-47, I-48 (puede adelantarse), I-49, I-50, I-52 (partida guiada).
 
 ### 9.2. Torneos interactivos
 
+**Estado: implementada (2026-10-18), pendiente de validación manual.** Detalle en
+`docs/tournaments-phase-9-2.es.md`: sección Torneos propia, cuatro formatos, plantillas desde el
+punto de vista del usuario («todos de mi nivel» = ±100 por defecto, ajustable), autorrelleno con
+bots del catálogo y jugadores generados, calendario local diario, semanal y mensual, tableros sin el
+usuario resueltos por un modelo de Elo y estilo, partidas puntuables por torneo, armagedón en las
+eliminatorias, retirada, rendimiento frente a lo esperado y exportación PGN.
+
 Ideas: I-51. **El usuario es el protagonista**; los torneos solo de bots son experimentos del
 Generador.
 
@@ -930,7 +937,6 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - ¿Qué estrategia de migración conservará los datos existentes al sustituir el bundle identifier
   heredado y los metadatos de publisher?
 - ¿Qué pregunta medible se convertirá en el caso de estudio reproducible de MLOps?
-- ¿Qué plantillas y formatos de torneo aportan más valor en 9.2 antes de investigar funciones online?
 - En Fase 10: ¿se alojan las bases convertidas (Hugging Face Datasets recomendado) o el catálogo
   propio solo enlaza la página oficial de LumbrasGigaBase? Antes, escribir al autor de Lumbras.
 - ¿Se adopta SQLite para la caché de evaluaciones y la cola de errores, con archivos y conexiones

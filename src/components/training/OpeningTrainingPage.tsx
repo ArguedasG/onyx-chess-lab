@@ -73,6 +73,7 @@ export default function OpeningTrainingPage() {
       const created = await createFile({
         filename: repertoireName,
         filetype: "repertoire",
+        uniqueName: true,
         pgn: raw,
         dir: documentDir,
       });

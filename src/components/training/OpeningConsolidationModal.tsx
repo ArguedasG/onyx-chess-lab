@@ -1,4 +1,5 @@
-import { Alert, Button, Card, Checkbox, Group, Modal, Stack, Text } from "@mantine/core";
+import { Alert, Button, Card, Checkbox, Group, Stack, Text } from "@mantine/core";
+import { Modal } from "@/components/common/Modal";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
