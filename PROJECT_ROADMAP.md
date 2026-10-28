@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.22.0** (8.8 Táctica, 8.9 Finales, 8.10 Aperturas y correcciones a
-  partir de comentarios de usuarios). Detalle: `docs/release-notes-0.22.0.es.md`.
+- Última versión publicada: **0.23.0** (9.1 Bots, 9.2 Torneos, 9.3 Estructuras de peones y gemelo,
+  y mejoras de repertorios y motores). Detalle: `docs/release-notes-0.23.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -93,7 +93,8 @@ prueban y comunican problemas.
   0.20.0; **8.4 Jugadores** (validada por el autor), **8.5 Generador de repertorios**, **8.6
   Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
   implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, y se publicaron en
-  0.22.0. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
+  0.22.0. La **Fase 9** completa (9.1 Bots, 9.2 Torneos y 9.3 Interpretación estratégica) se
+  publicó en 0.23.0; queda la **Fase 10**, la última. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
   sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -167,7 +168,7 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 | 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                        |
 | 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                      |
 | 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                |
-| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots) y 9.2 (torneos) implementadas, pendientes de validación manual; 9.3 pendiente. Ver `docs/bots-phase-9-1.es.md` y `docs/tournaments-phase-9-2.es.md`. |
+| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots), 9.2 (torneos) y 9.3 (estructuras y el gemelo) implementadas, pendientes de validación manual. Ver: `docs/strategic-interpretation-phase-9-3.es.md`. |
 | 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                      |
 
 ### Documentación de fases cerradas
@@ -775,6 +776,13 @@ juego y 4 de apertura), Maia puro hasta 2400 y Maia 2400 con filtro de Stockfish
 bot, rating Glicko-2 por ritmo con partidas puntuables y amistosas, bases de partidas y fuente en la
 ficha, tiempos de reflexión por ritmo, partida guiada y jugadores generados con semilla fija.
 
+**Revisión de la calibración (2026-10-21 a 2026-10-27).** El Generador ahora juega los bots como en
+una partida real (estilo y filtro) y tiene la opción **Aperturas variadas** (20 aperturas, cada una
+con ambos colores, sin repertorios). Filtro en todas las jugadas desde 2450 y corrección del estilo
+que complica. Con 40 partidas por match, la escalera 2400–2800 cae dentro del ruido de lo esperado
+(2800 quizá ~50 corto) y las personalidades no cambian la fuerza de forma medible. Regla: no
+recalibrar por un solo match de 40 partidas.
+
 Ideas: I-47, I-48 (puede adelantarse), I-49, I-50, I-52 (partida guiada).
 
 - retomar la expansión de la Fase 4;
@@ -808,6 +816,15 @@ Generador.
 ### 9.3. Interpretación estratégica avanzada
 
 Ideas: I-31 (ampliación y entrenamiento por estructura), I-43 (gemelo con estilo medido).
+
+**Implementada (2026-10-27), pendiente de validación manual.** `docs/strategic-interpretation-phase-9-3.es.md`:
+28 estructuras de peones en ocho familias (las del libro de Flores Rios, con Caro-Kann y Eslava
+separadas y la India de rey dividida en sus tipos), validadas con los esqueletos del libro y con
+20.000 partidas de la Gigabase; ficha de cada estructura con esqueleto, rupturas, planes propios,
+partidas del jugador, partidas modelo de la base de referencia y «jugar desde aquí»; estructura de
+la posición en el tablero. Gemelo con el tiempo de reflexión del jugador por ritmo (de sus
+relojes), filtro de fuerza hasta 2800 y estilo medido frente a Maia, usado solo si predice mejor
+sus partidas recientes.
 
 - temas estratégicos y planes en Opening Reports;
 - estructuras y rupturas mediante reglas demostrables;
@@ -950,6 +967,19 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-27 — Release 0.23.0
+
+- Publica la Fase 9: 9.1 (catálogo de 74 bots con estilos reales, bots fuertes hasta 2800, rating
+  por ritmo, partida guiada), 9.2 (torneos centrados en el usuario) y 9.3 (28 estructuras de peones
+  con ficha, partidas modelo y estructura en el tablero; gemelo con tiempo de reflexión y estilo
+  medido).
+- Revisión de la calibración de los bots con aperturas variadas en el Generador.
+- Mejoras tras el uso del autor: búsqueda de la estructura de peones en los repertorios, secciones
+  informativas en repertorios e importación, todas las opciones UCI en los ajustes del motor del
+  tablero y notas de actualización en el idioma de la app (con efecto desde la siguiente versión).
+- Textos de las estructuras de 8.6 refinados con las introducciones del libro de Flores Rios.
+- Detalle: `docs/release-notes-0.23.0.es.md`.
 
 ### 2026-10-17 — Release 0.22.0
 

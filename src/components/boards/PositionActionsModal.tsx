@@ -17,7 +17,11 @@ import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trainingAreasAtom } from "@/state/trainingAreas";
-import { findRepertoirePositionMatches } from "@/utils/positionActions";
+import {
+  findRepertoirePositionMatches,
+  pawnStructureKey,
+  START_PAWNS_KEY,
+} from "@/utils/positionActions";
 import { getNodeAtPath, type TreeState } from "@/utils/treeReducer";
 import PositionEndgameForm from "./PositionEndgameForm";
 import PositionTacticsForm from "./PositionTacticsForm";
@@ -36,11 +40,13 @@ export default function PositionActionsModal({
   const { t } = useTranslation();
   const areas = useAtomValue(trainingAreasAtom);
   const [section, setSection] = useState<Section>("repertoires");
+  const [mode, setMode] = useState<"position" | "pawns">("position");
   const matches = useMemo(
-    () => findRepertoirePositionMatches(areas.openings, tree),
-    [areas.openings, tree],
+    () => findRepertoirePositionMatches(areas.openings, tree, mode),
+    [areas.openings, tree, mode],
   );
   const current = getNodeAtPath(tree.root, tree.position);
+  const startPawns = pawnStructureKey(current.fen) === START_PAWNS_KEY;
 
   return (
     <Modal
@@ -66,11 +72,26 @@ export default function PositionActionsModal({
 
         {section === "repertoires" && (
           <>
+            <SegmentedControl
+              w="fit-content"
+              size="xs"
+              value={mode}
+              onChange={(value) => setMode(value as "position" | "pawns")}
+              data={[
+                { value: "position", label: t("PositionActions.ModePosition", "Position") },
+                { value: "pawns", label: t("PositionActions.ModePawns", "Pawn structure") },
+              ]}
+            />
             <Alert color="blue">
-              {t(
-                "PositionActions.MatchExplanation",
-                "An exact match uses the same move order from the same initial position. A transposition reaches the same legal position through a different route.",
-              )}
+              {mode === "pawns"
+                ? t(
+                    "PositionActions.PawnsExplanation",
+                    "Lines of your repertoires where the pawns stand exactly as on the board, wherever the other pieces are: the first moment of each line where it happens.",
+                  )
+                : t(
+                    "PositionActions.MatchExplanation",
+                    "An exact match uses the same move order from the same initial position. A transposition reaches the same legal position through a different route.",
+                  )}
             </Alert>
             <ScrollArea.Autosize mah={480} offsetScrollbars>
               <Stack>
@@ -84,24 +105,40 @@ export default function PositionActionsModal({
                             {match.variantName} · {match.lineName}
                           </Text>
                         </div>
-                        <Badge color={match.kind === "exact" ? "green" : "violet"}>
+                        <Badge
+                          color={
+                            match.kind === "exact"
+                              ? "green"
+                              : match.kind === "pawns"
+                                ? "teal"
+                                : "violet"
+                          }
+                        >
                           {match.kind === "exact"
                             ? t("PositionActions.Exact", "Exact")
-                            : t("PositionActions.Transposition", "Transposition")}
+                            : match.kind === "pawns"
+                              ? t("PositionActions.SamePawns", "Same pawns")
+                              : t("PositionActions.Transposition", "Transposition")}
                         </Badge>
                       </Group>
                       <Text size="sm">
-                        {match.kind === "exact"
+                        {match.kind === "pawns"
                           ? t(
-                              "PositionActions.ExactDetail",
-                              "The repertoire follows the same route to this position after {{count}} plies.",
+                              "PositionActions.PawnsDetail",
+                              "The pawns stand as on the board after {{count}} plies; the other pieces may be elsewhere.",
                               { count: match.ply },
                             )
-                          : t(
-                              "PositionActions.TranspositionDetail",
-                              "The board position is identical, but the repertoire reaches it with another move order after {{count}} plies.",
-                              { count: match.ply },
-                            )}
+                          : match.kind === "exact"
+                            ? t(
+                                "PositionActions.ExactDetail",
+                                "The repertoire follows the same route to this position after {{count}} plies.",
+                                { count: match.ply },
+                              )
+                            : t(
+                                "PositionActions.TranspositionDetail",
+                                "The board position is identical, but the repertoire reaches it with another move order after {{count}} plies.",
+                                { count: match.ply },
+                              )}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {t("PositionActions.Route", "Route")}: {match.routeSan.join(" ") || "—"}
@@ -138,10 +175,20 @@ export default function PositionActionsModal({
                           "PositionActions.NoRepertoires",
                           "There are no local opening repertoires to search.",
                         )
-                      : t(
-                          "PositionActions.NoMatches",
-                          "This position was not found in the trainable lines of your local repertoires.",
-                        )}
+                      : mode === "pawns" && startPawns
+                        ? t(
+                            "PositionActions.StartPawns",
+                            "All the pawns are still at home: play some moves to search their structure.",
+                          )
+                        : mode === "pawns"
+                          ? t(
+                              "PositionActions.NoPawnMatches",
+                              "This pawn structure was not found in the trainable lines of your local repertoires.",
+                            )
+                          : t(
+                              "PositionActions.NoMatches",
+                              "This position was not found in the trainable lines of your local repertoires.",
+                            )}
                   </Alert>
                 )}
               </Stack>

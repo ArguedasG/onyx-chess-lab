@@ -110,8 +110,11 @@ import {
   clampMaiaElo,
   getHumanBotProfile,
   HUMAN_BOT_CONFIG_VERSION,
+  humanBotTimingForElo,
   isMaiaEngine,
+  MAIA_ELO_MIN,
 } from "@/utils/humanBots";
+import { TWIN_ELO_MAX, twinTiming } from "@/utils/preparation/twin";
 import {
   buildHumanBotGameMeasurement,
   buildHumanBotMeasurementHeaders,
@@ -682,14 +685,23 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
 
     if (settings.type === "humanBot" && settings.twin) {
       const twin = settings.twin;
-      const elo = clampMaiaElo(twin.elo);
+      // Above Maia's range the strength filter (I-48) plays the rest, as for the catalogue.
+      const targetElo = Math.max(MAIA_ELO_MIN, Math.min(TWIN_ELO_MAX, Math.trunc(twin.elo)));
+      const elo = clampMaiaElo(targetElo);
       const opponentElo =
         opponentSettings.type === "humanBot"
           ? (opponentSettings.twin?.elo ?? getHumanBotProfile(opponentSettings.profileId).elo)
           : elo;
       const book = twinBooks[twin.id];
+      const timing = settings.timeControl
+        ? twinTiming(
+            twin.thinking,
+            rhythmOfClock(settings.timeControl),
+            humanBotTimingForElo(targetElo),
+          ).config
+        : null;
       // Plain sampling from Maia's policy: the twin should play as often as a player of that
-      // rating would, not a styled profile.
+      // rating would. Its own measured style, if any, reweighs the candidates like a profile's.
       const options = [
         ...(settings.engine?.settings ?? []).filter(
           (setting) =>
@@ -708,7 +720,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         path: settings.engine?.path ?? "",
         version: settings.engine?.version ?? "",
         presetCategory: "humanLike",
-        targetElo: elo,
+        targetElo,
         seed: settings.seed ?? null,
         args: buildHumanBotEngineArgs(settings.engine?.args ?? []),
         options: options.map((setting) => ({
@@ -716,7 +728,18 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           value: setting.value?.toString() ?? "",
         })),
         openingRepertoire: book ?? null,
-        humanTiming: null,
+        botPlay: objectiveEngine
+          ? {
+              aggression: twin.style?.aggression ?? 0,
+              simplification: twin.style?.simplification ?? 0,
+              elo: targetElo,
+              temperature: 1,
+              topP: 1,
+              verifierPath: objectiveEngine.path,
+              verifierArgs: objectiveEngine.args ?? [],
+            }
+          : null,
+        humanTiming: settings.humanTiming === false ? null : timing,
         go: settings.timeControl ? null : { t: "Depth", c: 1 },
       };
     }

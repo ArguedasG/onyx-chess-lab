@@ -1,9 +1,32 @@
-import { ActionIcon, Badge, Group, Paper, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { IconChessKnight, IconGridDots, IconInfoCircle } from "@tabler/icons-react";
-import { Fragment, useMemo } from "react";
+import {
+  ActionIcon,
+  Badge,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
+import {
+  IconChessKnight,
+  IconChevronDown,
+  IconChevronRight,
+  IconGridDots,
+  IconInfoCircle,
+} from "@tabler/icons-react";
+import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PawnStructure } from "@/bindings";
-import { gamesWithStructure, gameTypeRows, structureRows } from "@/utils/preparation/structures";
+import StructureDetailModal from "@/components/structures/StructureDetailModal";
+import { familyName } from "@/components/structures/texts";
+import {
+  gamesWithStructure,
+  gameTypeRows,
+  structureFamilyRows,
+} from "@/utils/preparation/structures";
+import type { StructureFamily } from "@/utils/structures/catalog";
 import type { ProfileGame } from "@/utils/players/profileGames";
 import type { ResultBucket } from "@/utils/players/results";
 import { RatingParValue } from "../common";
@@ -34,8 +57,9 @@ function BucketCells({ bucket }: { bucket: ResultBucket }) {
 }
 
 /**
- * The eight named pawn structures of I-31 in the player's games, with them and against them, and
- * two kinds of game that need no engine: early queen exchanges and endgames.
+ * The named pawn structures of I-31 in the player's games, with them and against them, grouped by
+ * family (each family unfolds into its structures, and each structure opens its card), and two
+ * kinds of game that need no engine: early queen exchanges and endgames.
  */
 export default function StructuresSection({
   games,
@@ -47,7 +71,16 @@ export default function StructuresSection({
   onOpenGame: (game: ProfileGame, ply: number | null) => void;
 }) {
   const { t } = useTranslation();
-  const rows = useMemo(() => structureRows(games), [games]);
+  const families = useMemo(() => structureFamilyRows(games), [games]);
+  const [open, setOpen] = useState<Set<StructureFamily>>(new Set());
+  const [card, setCard] = useState<PawnStructure | null>(null);
+  const toggle = (family: StructureFamily) =>
+    setOpen((previous) => {
+      const next = new Set(previous);
+      if (next.has(family)) next.delete(family);
+      else next.add(family);
+      return next;
+    });
   const types = useMemo(() => gameTypeRows(games), [games]);
   const withAny = useMemo(
     () => games.filter((game) => (game.structures ?? []).length > 0).length,
@@ -67,7 +100,7 @@ export default function StructuresSection({
         title={t("Preparation.Structures.Title", "Pawn structures")}
         description={t(
           "Preparation.Structures.Description",
-          "Eight named structures, looked for between moves 12 and 25 and counted when they hold for three moves. {{name}} has them (with) or faces them (against).",
+          "28 named structures in eight families, looked for between moves 12 and 25 and counted when they hold for three moves. {{name}} has them (with) or faces them (against). Open a family to see its structures, and a structure for its plans and model games.",
           { name },
         )}
         right={
@@ -76,7 +109,7 @@ export default function StructuresSection({
             w={320}
             label={t(
               "Preparation.Structures.Experimental",
-              "The rules are approximate and still being validated against labelled example games. Hover a structure to see its rule.",
+              "The rules only look at the pawns. They are checked against the skeletons of Flores Rios's book and a sample of master games, but borderline positions can still be misnamed. Hover a structure to see its rule.",
             )}
           >
             <Badge variant="outline" color="gray" leftSection={<IconInfoCircle size={12} />}>
@@ -86,11 +119,11 @@ export default function StructuresSection({
         }
       />
 
-      {rows.length === 0 ? (
+      {families.length === 0 ? (
         <EmptyState>
           {t(
             "Preparation.Structures.Empty",
-            "None of the eight structures appears in these games (games shorter than 15 moves cannot have one).",
+            "None of the named structures appears in these games (games shorter than 15 moves cannot have one).",
           )}
         </EmptyState>
       ) : (
@@ -120,26 +153,58 @@ export default function StructuresSection({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {rows.map((row) => (
-                <Table.Tr key={row.structure}>
-                  <Table.Td>
-                    <Tooltip multiline w={300} label={structureRule(row.structure, t)}>
-                      <Text size="sm" fw={600} style={{ cursor: "help" }}>
-                        {structureName(row.structure, t)}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
-                  <BucketCells bucket={row.own} />
-                  <BucketCells bucket={row.against} />
-                  <Table.Td>
-                    <Tooltip label={t("Preparation.Structures.Example", "Open the latest example")}>
-                      <ActionIcon variant="subtle" onClick={() => example(row.structure)}>
-                        <IconChessKnight size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
+              {families.map((family) => {
+                const expanded = open.has(family.family);
+                return (
+                  <Fragment key={family.family}>
+                    <Table.Tr onClick={() => toggle(family.family)} style={{ cursor: "pointer" }}>
+                      <Table.Td>
+                        <Group gap={6} wrap="nowrap">
+                          {expanded ? (
+                            <IconChevronDown size={14} />
+                          ) : (
+                            <IconChevronRight size={14} />
+                          )}
+                          <Text size="sm" fw={600}>
+                            {familyName(family.family, t)}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {family.rows.length}
+                          </Text>
+                        </Group>
+                      </Table.Td>
+                      <BucketCells bucket={family.own} />
+                      <BucketCells bucket={family.against} />
+                      <Table.Td />
+                    </Table.Tr>
+                    {expanded &&
+                      family.rows.map((row) => (
+                        <Table.Tr key={row.structure}>
+                          <Table.Td pl={34}>
+                            <Tooltip multiline w={300} label={structureRule(row.structure, t)}>
+                              <UnstyledButton onClick={() => setCard(row.structure)}>
+                                <Text size="sm" c="blue">
+                                  {structureName(row.structure, t)}
+                                </Text>
+                              </UnstyledButton>
+                            </Tooltip>
+                          </Table.Td>
+                          <BucketCells bucket={row.own} />
+                          <BucketCells bucket={row.against} />
+                          <Table.Td>
+                            <Tooltip
+                              label={t("Preparation.Structures.Example", "Open the latest example")}
+                            >
+                              <ActionIcon variant="subtle" onClick={() => example(row.structure)}>
+                                <IconChessKnight size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                  </Fragment>
+                );
+              })}
             </Table.Tbody>
           </Table>
         </Paper>
@@ -197,6 +262,11 @@ export default function StructuresSection({
           </Table.Tbody>
         </Table>
       </Paper>
+      <StructureDetailModal
+        structure={card}
+        onClose={() => setCard(null)}
+        player={{ name, games, onOpenGame }}
+      />
     </Stack>
   );
 }

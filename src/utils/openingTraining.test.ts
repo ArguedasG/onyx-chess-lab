@@ -378,7 +378,7 @@ describe("smart grouping of course exports", () => {
         ]);
     });
 
-    it("leaves out puzzles that start from their own position", () => {
+    it("puts puzzles that start from their own position in informative sections", () => {
         const inspection = course([
             white(0, "1) Main line", { chessableGroupName: "Main line" }),
             white(1, "Puzzles", { startingFen: "puzzle-a" }),
@@ -387,11 +387,19 @@ describe("smart grouping of course exports", () => {
             white(4, "Endgame", { startingFen: "shared" }),
             white(5, "Tactics", { startingFen: "shared" }),
         ]);
-        expect(getOpeningImportSuggestedExclusions(inspection, "smart")).toEqual([1, 2, 5]);
-        expect(getOpeningImportSuggestedExclusions(inspection, "single")).toEqual([]);
+        // Nothing is left out any more: puzzles go to informative sections by chapter.
+        expect(getOpeningImportSuggestedExclusions(inspection, "smart")).toEqual([]);
         expect(
-            getOpeningImportGroupPreviews(inspection, "smart").map((group) => group.recordIndexes),
-        ).toEqual([[0], [3, 4]]);
+            getOpeningImportGroupPreviews(inspection, "smart").map((group) => [
+                group.recordIndexes,
+                group.contentType,
+            ]),
+        ).toEqual([
+            [[0], "theory"],
+            [[1, 2], "reference"],
+            [[3, 4], "theory"],
+            [[5], "reference"],
+        ]);
     });
 
     it("does not treat players of a game database as chapters", () => {

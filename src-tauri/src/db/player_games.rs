@@ -71,10 +71,80 @@ pub struct PlayerGameRow {
     pub opponent_last_clock: Option<f32>,
     /// Named pawn structures of the middlegame (I-31).
     pub structures: Vec<PawnStructureHit>,
+    /// How long the player thought per move, from the clocks and the time control (I-43).
+    pub player_think: Option<ThinkTime>,
     /// First ply without queens on the board.
     pub queens_off_ply: Option<u32>,
     /// First ply of the endgame as Player Analysis defines it: no queens, at most six pieces.
     pub endgame_ply: Option<u32>,
+}
+
+/// Upper bounds, in seconds, of the think-time bins (the last one is open).
+pub const THINK_BINS: [f32; 7] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0];
+/// Plies of the opening phase for the think time (the first ten moves of each side).
+pub const THINK_OPENING_PLIES: u32 = 20;
+
+/// Time the player spent on their moves in one game, from consecutive `[%clk]` values and the
+/// increment: what a twin needs to think like them (I-43).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ThinkTime {
+    /// Moves after the first ten, and the seconds spent on them.
+    pub moves: u32,
+    pub seconds: f32,
+    /// Moves of the first ten (from the second one: the first clock is not reliable).
+    pub opening_moves: u32,
+    pub opening_seconds: f32,
+    /// Moves after the first ten by time spent (`THINK_BINS`, plus one open bin).
+    pub bins: [u32; 8],
+}
+
+/// "180+2" or "600" (Chess.com) as base and increment in seconds.
+fn parse_time_control(time_control: &str) -> Option<(f32, f32)> {
+    let mut parts = time_control.trim().split('+');
+    let base = parts.next()?.trim().parse::<f32>().ok()?;
+    let increment = match parts.next() {
+        Some(increment) => increment.trim().parse::<f32>().ok()?,
+        None => 0.0,
+    };
+    (base > 0.0).then_some((base, increment))
+}
+
+/// The player's think time from the clocks after each mainline ply. The first move of each side
+/// is left out (Lichess starts the clocks after it), and spending is never negative.
+pub(crate) fn think_time(
+    clocks: &[(u32, f32)],
+    player_white: bool,
+    time_control: Option<&str>,
+) -> Option<ThinkTime> {
+    let (base, increment) = parse_time_control(time_control?)?;
+    let parity = if player_white { 1 } else { 0 };
+    let mut previous = base;
+    let mut think = ThinkTime::default();
+    for (index, (ply, clock)) in clocks
+        .iter()
+        .filter(|(ply, _)| ply % 2 == parity)
+        .enumerate()
+    {
+        let spent = (previous - clock + increment).max(0.0);
+        previous = *clock;
+        if index == 0 {
+            continue;
+        }
+        if *ply <= THINK_OPENING_PLIES {
+            think.opening_moves += 1;
+            think.opening_seconds += spent;
+        } else {
+            think.moves += 1;
+            think.seconds += spent;
+            let bin = THINK_BINS
+                .iter()
+                .position(|bound| spent < *bound)
+                .unwrap_or(THINK_BINS.len());
+            think.bins[bin] += 1;
+        }
+    }
+    (think.moves + think.opening_moves > 0).then_some(think)
 }
 
 /// What the encoded mainline says beyond the headers.
@@ -85,6 +155,8 @@ pub(crate) struct MainlineSummary {
     pub ending: BoardEnding,
     pub white_to_move_at_end: bool,
     pub last_clock: [Option<f32>; 2],
+    /// `[%clk]` after each mainline ply that has one.
+    pub clocks: Vec<(u32, f32)>,
     pub structures: Vec<PawnStructureHit>,
     pub queens_off_ply: Option<u32>,
     pub endgame_ply: Option<u32>,
@@ -111,6 +183,7 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
     let mut depth = 0_usize;
     let mut last_mover: Option<Color> = None;
     let mut last_clock = [None, None];
+    let mut clocks = Vec::new();
     let mut cursor = 0_usize;
     let mut broken = false;
     let mut structures = StructureTracker::default();
@@ -135,6 +208,7 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
                         let comment = String::from_utf8_lossy(&moves[cursor..end]);
                         if let Some(clock) = parse_clock(&comment) {
                             last_clock[usize::from(mover == Color::Black)] = Some(clock);
+                            clocks.push((plies, clock));
                         }
                     }
                 }
@@ -187,6 +261,7 @@ pub(crate) fn summarize_mainline(moves: &[u8], initial_fen: &Fen) -> Option<Main
         ending,
         white_to_move_at_end: chess.turn() == Color::White,
         last_clock,
+        clocks,
         structures: structures.hits,
         queens_off_ply,
         endgame_ply,
@@ -290,6 +365,9 @@ pub(crate) fn load_player_games(
                 .unwrap_or_default();
             let summary = summarize_mainline(&moves, &start);
             let (player_side, opponent_side) = if is_white { (0, 1) } else { (1, 0) };
+            let player_think = summary
+                .as_ref()
+                .and_then(|summary| think_time(&summary.clocks, is_white, time_control.as_deref()));
             PlayerGameRow {
                 id,
                 player_id: if is_white { white_id } else { black_id },
@@ -327,6 +405,7 @@ pub(crate) fn load_player_games(
                     .as_ref()
                     .map(|summary| summary.structures.clone())
                     .unwrap_or_default(),
+                player_think,
                 queens_off_ply: summary.as_ref().and_then(|summary| summary.queens_off_ply),
                 endgame_ply: summary.as_ref().and_then(|summary| summary.endgame_ply),
             }
@@ -402,6 +481,35 @@ mod tests {
         );
         let json = serde_json::to_string(&games).unwrap();
         println!("payload: {} kB", json.len() / 1024);
+    }
+
+    #[test]
+    fn think_time_from_clocks_and_increment() {
+        // 3+2: White's clocks after plies 1, 3, 5, 23 and 25; Black's after 2 and 4.
+        let clocks = [
+            (1, 180.0),
+            (2, 180.0),
+            (3, 178.0),
+            (4, 175.0),
+            (5, 170.0),
+            (23, 160.0),
+            (25, 130.0),
+        ];
+        let white = think_time(&clocks, true, Some("180+2")).unwrap();
+        // The first move is skipped; 180 → 178 is 4 s with the increment, 178 → 170 is 10 s.
+        assert_eq!(white.opening_moves, 2);
+        assert_eq!(white.opening_seconds, 14.0);
+        // 170 → 160 (12 s) and 160 → 130 (32 s) are after the first ten moves.
+        assert_eq!(white.moves, 2);
+        assert_eq!(white.seconds, 44.0);
+        assert_eq!(white.bins[4], 1, "12 s is in 8–16");
+        assert_eq!(white.bins[6], 1, "32 s is in 32–64");
+        let black = think_time(&clocks, false, Some("180+2")).unwrap();
+        assert_eq!(black.opening_moves, 1);
+        assert_eq!(black.opening_seconds, 7.0);
+        assert!(think_time(&clocks, true, Some("-")).is_none());
+        assert!(think_time(&clocks, true, None).is_none());
+        assert_eq!(parse_time_control("600"), Some((600.0, 0.0)));
     }
 
     #[test]

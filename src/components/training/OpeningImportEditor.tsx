@@ -208,20 +208,23 @@ export default function OpeningImportEditor({
                   count: sample?.lineCount ?? 0,
                 })}
               </Text>
-              {sample && section && sample.contentType !== section.contentType && (
-                <Tooltip
-                  label={t(
-                    "OpeningImportEditor.TypeOverridden",
-                    "Detected as a different content type; the section type will be used.",
-                  )}
-                >
-                  <Badge size="xs" variant="outline" color="gray">
-                    {sample.contentType === "modelGame"
-                      ? t("Training.Copy.Modelgame.f131746e", "Model game")
-                      : t("OpeningImportEditor.Theory", "Theory")}
-                  </Badge>
-                </Tooltip>
-              )}
+              {sample &&
+                section &&
+                section.contentType !== "reference" &&
+                sample.contentType !== section.contentType && (
+                  <Tooltip
+                    label={t(
+                      "OpeningImportEditor.TypeOverridden",
+                      "Detected as a different content type; the section type will be used.",
+                    )}
+                  >
+                    <Badge size="xs" variant="outline" color="gray">
+                      {sample.contentType === "modelGame"
+                        ? t("Training.Copy.Modelgame.f131746e", "Model game")
+                        : t("OpeningImportEditor.Theory", "Theory")}
+                    </Badge>
+                  </Tooltip>
+                )}
               {!isEditing && (
                 <Tooltip label={t("OpeningImportEditor.RenameLine", "Rename line")}>
                   <ActionIcon
@@ -282,12 +285,19 @@ export default function OpeningImportEditor({
       (sum, recordIndex) => sum + (sampleFor(recordIndex)?.lineCount ?? 0),
       0,
     );
-    const incompatible = draggingFen !== null && draggingFen !== section.startingFen;
+    const incompatible =
+      draggingFen !== null &&
+      section.contentType !== "reference" &&
+      draggingFen !== section.startingFen;
     const mergeTargets = draft.sections.filter(
       (candidate) =>
         candidate.key !== section.key &&
-        candidate.startingFen === section.startingFen &&
+        (candidate.contentType === "reference" || candidate.startingFen === section.startingFen) &&
         candidate.recordIndexes.length > 0,
+    );
+    // Theory and model games are a single tree: all their records must share the start.
+    const mixedStarts = section.recordIndexes.some(
+      (recordIndex) => sampleFor(recordIndex)?.startingFen !== section.startingFen,
     );
     return (
       <Draggable
@@ -347,6 +357,20 @@ export default function OpeningImportEditor({
                   {t("Training.Copy.Modelgame.f131746e", "Model game")}
                 </Badge>
               )}
+              {section.contentType === "reference" && (
+                <Tooltip
+                  multiline
+                  w={280}
+                  label={t(
+                    "OpeningImportEditor.ReferenceHint",
+                    "Informative section: strategy, endgames, exercises… to look at and analyze, never trained. Its records can start from different positions.",
+                  )}
+                >
+                  <Badge color="cyan" size="sm">
+                    {t("OpeningImportEditor.Reference", "Informative")}
+                  </Badge>
+                </Tooltip>
+              )}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target>
                   <ActionIcon size="sm" variant="subtle" color="gray" disabled={disabled}>
@@ -354,19 +378,39 @@ export default function OpeningImportEditor({
                   </ActionIcon>
                 </Menu.Target>
                 <Menu.Dropdown>
-                  <Menu.Item
-                    onClick={() =>
-                      onChange(
-                        updateDraftSection(draft, section.key, {
-                          contentType: section.contentType === "theory" ? "modelGame" : "theory",
-                        }),
-                      )
-                    }
-                  >
-                    {section.contentType === "theory"
-                      ? t("OpeningImportEditor.MarkModelGame", "Mark as model games")
-                      : t("OpeningImportEditor.MarkTheory", "Mark as trainable theory")}
-                  </Menu.Item>
+                  {section.contentType !== "theory" && (
+                    <Menu.Item
+                      disabled={mixedStarts}
+                      onClick={() =>
+                        onChange(updateDraftSection(draft, section.key, { contentType: "theory" }))
+                      }
+                    >
+                      {t("OpeningImportEditor.MarkTheory", "Mark as trainable theory")}
+                    </Menu.Item>
+                  )}
+                  {section.contentType !== "modelGame" && (
+                    <Menu.Item
+                      disabled={mixedStarts}
+                      onClick={() =>
+                        onChange(
+                          updateDraftSection(draft, section.key, { contentType: "modelGame" }),
+                        )
+                      }
+                    >
+                      {t("OpeningImportEditor.MarkModelGame", "Mark as model games")}
+                    </Menu.Item>
+                  )}
+                  {section.contentType !== "reference" && (
+                    <Menu.Item
+                      onClick={() =>
+                        onChange(
+                          updateDraftSection(draft, section.key, { contentType: "reference" }),
+                        )
+                      }
+                    >
+                      {t("OpeningImportEditor.MarkReference", "Mark as informative")}
+                    </Menu.Item>
+                  )}
                   <Menu.Item
                     color="red"
                     leftSection={<IconEyeOff size={14} />}

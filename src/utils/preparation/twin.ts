@@ -8,10 +8,14 @@
  * Maia at the same level. Out of the book the twin *is* Maia, so only the book can make it better.
  */
 import type { BookLine } from "@/bindings";
+import type { Rhythm } from "@/utils/botRating";
 import type { HumanBotOpeningRepertoireConfig } from "@/utils/humanBots";
 import type { MaiaSampler } from "@/utils/repertoireGenerator/engines";
 import type { GeneratorColor } from "@/utils/repertoireGenerator/types";
 import { BOOK_PLIES, lineFens } from "./book";
+
+/** Highest twin rating: above Maia's range the strength filter plays the rest (I-48). */
+export const TWIN_ELO_MAX = 2800;
 
 /** The Rust book keeps weights as 16-bit numbers. */
 const MAX_WEIGHT = 65_535;
@@ -187,4 +191,161 @@ export async function measureFidelity(
         trainGames: plan.trainGames,
         sampled: measured.length,
     };
+}
+
+/** Rhythms of the twin's think time, as Lichess groups them (ultrabullet counts as bullet). */
+export const TWIN_RHYTHMS: readonly Rhythm[] = ["bullet", "blitz", "rapid", "classical"];
+export type TwinRhythm = Rhythm;
+
+/** How much longer than blitz a rhythm thinks (`game.rs`, `rhythm_factor`). */
+const RHYTHM_FACTOR: Record<TwinRhythm, number> = {
+    bullet: 0.6,
+    blitz: 1,
+    rapid: 1.6,
+    classical: 2.5,
+};
+
+/** Upper bounds of the think-time bins in seconds (`THINK_BINS` in Rust), and the last bin's. */
+const BIN_BOUNDS = [1, 2, 4, 8, 16, 32, 64, 128];
+
+export type TwinThinkStats = {
+    games: number;
+    /** Moves after the first ten and the seconds spent on them. */
+    moves: number;
+    seconds: number;
+    openingMoves: number;
+    openingSeconds: number;
+    bins: number[];
+};
+
+export type TwinThinking = Partial<Record<TwinRhythm, TwinThinkStats>>;
+
+/** Moves needed at a rhythm to trust its average. */
+export const MIN_THINK_MOVES = 60;
+
+function rhythmOfCategory(category: string): TwinRhythm | null {
+    if (category === "ultra_bullet" || category === "bullet") return "bullet";
+    if (category === "blitz" || category === "rapid" || category === "classical") return category;
+    return null;
+}
+
+/** The player's think time by rhythm, from the clocks of their games (I-43). */
+export function twinThinking(
+    games: readonly {
+        timeControlCategory: string;
+        playerThink?: {
+            moves: number;
+            seconds: number;
+            openingMoves: number;
+            openingSeconds: number;
+            bins: readonly number[];
+        } | null;
+    }[],
+): TwinThinking {
+    const result: TwinThinking = {};
+    for (const game of games) {
+        const rhythm = rhythmOfCategory(game.timeControlCategory);
+        const think = game.playerThink;
+        if (!rhythm || !think) continue;
+        const stats = (result[rhythm] ??= {
+            games: 0,
+            moves: 0,
+            seconds: 0,
+            openingMoves: 0,
+            openingSeconds: 0,
+            bins: Array(BIN_BOUNDS.length).fill(0),
+        });
+        stats.games += 1;
+        stats.moves += think.moves;
+        stats.seconds += think.seconds;
+        stats.openingMoves += think.openingMoves;
+        stats.openingSeconds += think.openingSeconds;
+        think.bins.forEach((count, index) => {
+            stats.bins[index] += count;
+        });
+    }
+    return result;
+}
+
+/** A percentile from the bins, interpolating inside the bin (the first starts at 0 s). */
+export function binPercentile(bins: readonly number[], share: number): number {
+    const total = bins.reduce((sum, count) => sum + count, 0);
+    if (total === 0) return 0;
+    const target = total * share;
+    let seen = 0;
+    for (let index = 0; index < bins.length; index += 1) {
+        const lower = index === 0 ? 0 : BIN_BOUNDS[index - 1];
+        const upper = BIN_BOUNDS[index];
+        if (seen + bins[index] >= target && bins[index] > 0) {
+            return lower + ((target - seen) / bins[index]) * (upper - lower);
+        }
+        seen += bins[index];
+    }
+    return BIN_BOUNDS[BIN_BOUNDS.length - 1];
+}
+
+export type TwinTiming = {
+    config: {
+        minThinkTimeMs: number;
+        averageThinkTimeMs: number;
+        maxThinkTimeMs: number;
+        repertoireTimePercent: number;
+        fixedRhythm: boolean;
+    };
+    /** Measured at this rhythm, estimated from another one of the player, or none. */
+    source: { kind: "measured" | "estimated"; rhythm: TwinRhythm; moves: number } | null;
+};
+
+function timingFrom(stats: TwinThinkStats) {
+    const average = stats.seconds / stats.moves;
+    const opening =
+        stats.openingMoves > 0 ? stats.openingSeconds / stats.openingMoves : average / 3;
+    return {
+        minThinkTimeMs: Math.round(Math.max(0.3, binPercentile(stats.bins, 0.1)) * 1000),
+        averageThinkTimeMs: Math.round(average * 1000),
+        maxThinkTimeMs: Math.round(Math.max(average * 2, binPercentile(stats.bins, 0.95)) * 1000),
+        repertoireTimePercent: Math.round(Math.min(100, Math.max(15, (opening / average) * 100))),
+    };
+}
+
+/**
+ * How the twin thinks at the rhythm of the game: the player's own times at that rhythm when
+ * there are enough moves; otherwise their times at the nearest rhythm, rescaled as the bots do;
+ * otherwise `fallback` (the catalogue's times for the rating), rescaled.
+ */
+export function twinTiming(
+    thinking: TwinThinking | undefined,
+    rhythm: TwinRhythm,
+    fallback: Omit<TwinTiming["config"], "fixedRhythm">,
+): TwinTiming {
+    const own = thinking?.[rhythm];
+    if (own && own.moves >= MIN_THINK_MOVES) {
+        return {
+            config: { ...timingFrom(own), fixedRhythm: true },
+            source: { kind: "measured", rhythm, moves: own.moves },
+        };
+    }
+    const order = [...TWIN_RHYTHMS].sort(
+        (a, b) =>
+            Math.abs(Math.log(RHYTHM_FACTOR[a] / RHYTHM_FACTOR[rhythm])) -
+            Math.abs(Math.log(RHYTHM_FACTOR[b] / RHYTHM_FACTOR[rhythm])),
+    );
+    for (const other of order) {
+        const stats = thinking?.[other];
+        if (!stats || stats.moves < MIN_THINK_MOVES) continue;
+        // To blitz times; the game rescales them to its rhythm.
+        const factor = RHYTHM_FACTOR[other];
+        const timing = timingFrom(stats);
+        return {
+            config: {
+                minThinkTimeMs: Math.round(timing.minThinkTimeMs / factor),
+                averageThinkTimeMs: Math.round(timing.averageThinkTimeMs / factor),
+                maxThinkTimeMs: Math.round(timing.maxThinkTimeMs / factor),
+                repertoireTimePercent: timing.repertoireTimePercent,
+                fixedRhythm: false,
+            },
+            source: { kind: "estimated", rhythm: other, moves: stats.moves },
+        };
+    }
+    return { config: { ...fallback, fixedRhythm: false }, source: null };
 }

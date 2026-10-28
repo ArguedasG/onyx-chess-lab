@@ -882,6 +882,12 @@ function catalogSampling(elo: number) {
     return HUMAN_BOT_SAMPLING_STYLES.find((style) => style.id === id)!;
 }
 
+/** The catalogue's think times for a rating (blitz times; the game rescales them). */
+export function humanBotTimingForElo(elo: number): HumanBotTimingConfig {
+    const { id: _id, ...timing } = catalogTiming(elo);
+    return timing;
+}
+
 function catalogTiming(elo: number) {
     const id =
         elo <= 1000

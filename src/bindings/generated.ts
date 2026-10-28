@@ -191,6 +191,37 @@ async getPlayerTree(file: string, playerIds: number[], gameIds: number[], maxPli
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The named structures of a position, for the board and the position report (9.3). It is the
+ * rule alone: a game needs the structure to hold for a few moves to count it.
+ */
+async detectPawnStructures(fen: string) : Promise<Result<PawnStructureOnBoard[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("detect_pawn_structures", { fen }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getStructureModelGames(file: string, structure: PawnStructure, ownerWhite: boolean | null, minElo: number, limit: number, searchId: string) : Promise<Result<StructureModelGames, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_structure_model_games", { file, structure, ownerWhite, minElo, limit, searchId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async measurePlayerStyle(request: PlayerStyleRequest) : Promise<Result<PlayerStyleMeasurement, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("measure_player_style", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelStructureModelGames(searchId: string) : Promise<boolean> {
+    return await TAURI_INVOKE("cancel_structure_model_games", { searchId });
+},
 async getPositionTree(id: string, token: string, options: PositionTreeOptions) : Promise<Result<PositionTree, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_position_tree", { id, token, options }) };
@@ -1213,25 +1244,6 @@ export type GameMoveEvent = { gameId: string; moves: GameMove[]; fen: string; wh
 export type GameMoveSource = "human" | "engine" | "profileRepertoire" | "polyglot" | "initial"
 export type GameOverEvent = { gameId: string; result: GameResult; moves: GameMove[] }
 export type GameQuery = { weak_games?: WeakGamesFilter | null; options?: QueryOptions<GameSort> | null; player1?: number | null; player2?: number | null; any_player?: number | null; game_id?: number | null; after_game_id?: number | null; tournament_id?: number | null; start_date?: string | null; end_date?: string | null; range1?: [number, number] | null; range2?: [number, number] | null; sides?: Sides | null; outcome?: string | null; position?: PositionQueryJs | null; wanted_result?: string | null }
-/**
- * Leaves out the games where both players are weak, judging each player by the best rating they
- * have in any game of the database (a player rated 100 in one game and 2300 in another counts as
- * 2300). Games between a strong and a weak player stay: they show how mistakes are punished.
- */
-export type WeakGamesCount = { 
-/**
- * `None`: both players without any rating.
- */
-below: number | null; games: number }
-export type WeakGamesFilter = { 
-/**
- * A player whose best known rating is below this is weak.
- */
-below?: number | null; 
-/**
- * Players with no rating in any game also count as weak.
- */
-unrated?: boolean }
 export type GameResult = { type: "whiteWins"; reason: GameEndReason } | { type: "blackWins"; reason: GameEndReason } | { type: "draw"; reason: DrawReason }
 export type GameSort = "id" | "date" | "whiteElo" | "blackElo" | "ply_count"
 export type GameState = { gameId: string; status: GameStatus; initialFen: string; moves: GameMove[]; currentFen: string; ply: number; turn: string; whiteTime: bigint | null; blackTime: bigint | null; whitePlayer: string; blackPlayer: string }
@@ -1241,7 +1253,12 @@ export type GoMode = { t: "PlayersTime"; c: PlayersTime } | { t: "Depth"; c: num
  * Target depth with a time cap: easy positions finish early, hard ones stop at `time` ms.
  */
 { t: "DepthTime"; c: DepthTime }
-export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: number; maxThinkTimeMs: number; repertoireTimePercent: number }
+export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: number; maxThinkTimeMs: number; repertoireTimePercent: number; 
+/**
+ * The times were measured at the rhythm being played (a twin, I-43), so they are not
+ * scaled from blitz.
+ */
+fixedRhythm?: boolean }
 export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
 export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
 export type ManifestHardware = { operatingSystem: string; architecture: string; logicalCpus: bigint }
@@ -1282,33 +1299,114 @@ export type PawnStructure =
  */
 "iqp" | 
 /**
- * The side with d4/e3 against c6/d5 (the minority-attack side).
- */
-"carlsbad" | 
-/**
  * c- and d-pawns side by side on the fourth rank without b- or e-pawns.
  */
 "hangingPawns" | 
 /**
- * c6/e6 without a d-pawn against d4 (Caro-Kann: no white e-pawn; Slav: no white c-pawn).
+ * c6/e6 without a d-pawn against d4, the opponent without an e-pawn.
  */
-"caroSlav" | 
+"caroKann" | 
 /**
- * The chain e6/d5 against d4/e5.
+ * c6/e6 without a d-pawn against d4 and e-pawn, the opponent without a c-pawn.
  */
-"french" | 
+"slav" | 
 /**
- * c4/e4 without a d-pawn against a Sicilian set-up (d-pawn, no c-pawn).
+ * d5/e6/f5 against d4 (not e5).
  */
-"maroczy" | 
+"stonewall" | 
+/**
+ * The d4/e4 centre against no d-pawn and a c-pawn on c5 or gone (Grünfeld exchange).
+ */
+"grunfeld" | 
+/**
+ * The side with d4/e3 against c6/d5 (the minority-attack side).
+ */
+"carlsbad" | 
+/**
+ * d6/e5 without a c-pawn against a d5-pawn and no e-pawn (exd5 in the Sicilian).
+ */
+"najdorfI" | 
+/**
+ * d6/e5 without a c-pawn against e4 and no d-pawn.
+ */
+"najdorfII" | 
 /**
  * a6/b6/d6/e6 against c4/e4.
  */
 "hedgehog" | 
 /**
- * The chain d6/e5 against d5/e4.
+ * c4/e4 without a d-pawn against a Sicilian set-up (d-pawn, no c-pawn).
  */
-"kingsIndian"
+"maroczy" | 
+/**
+ * c5/d6 without an e-pawn against d5/e4 without a c-pawn.
+ */
+"asymmetricBenoni" | 
+/**
+ * c5/d6 against c4/d5, neither side with an e-pawn.
+ */
+"symmetricBenoni" | 
+/**
+ * d6/e5 against d5/e4, no c-pawns.
+ */
+"kingsIndianI" | 
+/**
+ * c5/d6/e5 against c4/d5/e4.
+ */
+"kingsIndianII" | 
+/**
+ * c7 (or c6)/d6/e5 against c4/d5/e4.
+ */
+"kingsIndianIII" | 
+/**
+ * d6 and a c-pawn at home, no e-pawn, against c4/e4 without a d-pawn (…exd4).
+ */
+"openKingsIndian" | 
+/**
+ * d6/e5 and a c-pawn at home against c4/d4/e4, or e5 against c4/e4 after the d-pawns left.
+ */
+"kingsIndianComplex" | 
+/**
+ * e6/d5 without f5 against d4 and no e-pawn (after …f6 and exf6), c-pawns alike.
+ */
+"frenchI" | 
+/**
+ * e6/d5 without a c-pawn against e5 and no d-pawn (…cxd4).
+ */
+"frenchII" | 
+/**
+ * The chain e6/d5 against d4/e5.
+ */
+"frenchIII" | 
+/**
+ * Three pawns on each wing and no d- or e-pawn against two on the queenside and four on
+ * the kingside: the owner has the queenside majority and the opponent the kingside one.
+ */
+"threeVsFour" | 
+/**
+ * c5/d4 without an e-pawn against d5 without a c-pawn, the e-pawn at home.
+ */
+"panov" | 
+/**
+ * d6/e7/g6 without a c-pawn against e4 without a d-pawn.
+ */
+"dragon" | 
+/**
+ * d6/e6 without a c-pawn against e4 without a d-pawn.
+ */
+"scheveningen" | 
+/**
+ * c5/d6 with the e-pawn at home and no a- or b-pawns against d5.
+ */
+"benko" | 
+/**
+ * c3/d5/e4 against c4/d6/e5.
+ */
+"closedRuyLopez" | 
+/**
+ * c3/d4/e4 against d6/e5 with the c-pawn on c5, c6 or c7.
+ */
+"lopezFormation"
 export type PawnStructureHit = { structure: PawnStructure; 
 /**
  * The side that owns the structure is White.
@@ -1318,6 +1416,10 @@ ownerWhite: boolean;
  * First ply of the run that made it count.
  */
 ply: number }
+/**
+ * A structure on a board and who owns it, without the ply of a game.
+ */
+export type PawnStructureOnBoard = { structure: PawnStructure; ownerWhite: boolean }
 export type Player = { id: number; name: string | null; elo: number | null }
 export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; tablebaseDefense?: boolean | null; botPlay?: BotPlayConfig | null; go: GoMode | null }
 export type PlayerGameRow = { id: number; 
@@ -1354,6 +1456,10 @@ playerLastClock: number | null; opponentLastClock: number | null;
  */
 structures: PawnStructureHit[]; 
 /**
+ * How long the player thought per move, from the clocks and the time control (I-43).
+ */
+playerThink: ThinkTime | null; 
+/**
  * First ply without queens on the board.
  */
 queensOffPly: number | null; 
@@ -1364,6 +1470,28 @@ endgamePly: number | null }
 export type PlayerPresetCategory = "custom" | "humanLike" | "limited" | "strong" | "reference"
 export type PlayerQuery = { options: QueryOptions<PlayerSort>; name?: string | null; range?: [number, number] | null }
 export type PlayerSort = "id" | "name" | "elo" | "games"
+export type PlayerStyleMeasurement = { trainPositions: number; testPositions: number; aggression: TraitDeviation; simplification: TraitDeviation; 
+/**
+ * Best weights on the older games (from -1 to 1 each).
+ */
+weightsAggression: number; weightsSimplification: number; 
+/**
+ * Held-out games: Maia alone and Maia with the weights.
+ */
+maia: StyleFit; styled: StyleFit; 
+/**
+ * The weights predict the held-out games better than Maia alone.
+ */
+improves: boolean; cancelled: boolean }
+export type PlayerStyleRequest = { 
+/**
+ * Progress and cancellation id (`cancel_analysis`).
+ */
+id: string; games: StyleGameRef[]; maiaPath: string; maiaArgs: string[]; 
+/**
+ * Maia's rating for the player (already within Maia's range).
+ */
+elo: number; maxPositions: number }
 export type PlayerTree = { 
 /**
  * Games where the player had White, from the standard start (node 0 is the root).
@@ -1385,8 +1513,10 @@ export type PositionSummary = { token: string; fingerprint: string; fen: string;
  */
 total: number; openings: PositionStats[]; skippedGames: number; 
 /**
- * Matches counted in `openings` but left out of the list because it reached its size limit:
- * very broad positions, such as the initial one in a database of more than ~11 M games.
+ * 
+ * * Matches counted in `openings` but left out of the list because it reached its size limit:
+ * * very broad positions, such as the initial one in a database of more than ~11 M games.
+ * 
  */
 unlistedGames: number; scanMs: number; cacheHit: boolean }
 export type PositionTree = { 
@@ -1534,10 +1664,68 @@ export type ScoreValue =
 { type: "mate"; value: number }
 export type Sides = "BlackWhite" | "WhiteBlack" | "Any"
 export type SortDirection = "asc" | "desc"
+export type StructureModelGame = { id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; result: string; date: string | null; event: string; ownerWhite: boolean; 
+/**
+ * Ply where the structure has held long enough to count, and the position there.
+ */
+ply: number; fen: string }
+export type StructureModelGames = { 
+/**
+ * Strongest first (average rating).
+ */
+games: StructureModelGame[]; 
+/**
+ * Rated games looked at, to say how wide the search was.
+ */
+scanned: number; cancelled: boolean; 
+/**
+ * The budget ran out before finding `limit` games.
+ */
+truncated: boolean }
+export type StyleFit = { 
+/**
+ * Average log-probability of the move played.
+ */
+logLikelihood: number; 
+/**
+ * Share of moves where the most likely move was the one played.
+ */
+top: number }
+export type StyleGameRef = { 
+/**
+ * Database of the game: a player's games can come from several (Lichess, Chess.com…).
+ */
+file: string; id: number; playerWhite: boolean; opponentElo: number | null; 
+/**
+ * One of the most recent games, left out to check the weights.
+ */
+test: boolean }
+/**
+ * Time the player spent on their moves in one game, from consecutive `[%clk]` values and the
+ * increment: what a twin needs to think like them (I-43).
+ */
+export type ThinkTime = { 
+/**
+ * Moves after the first ten, and the seconds spent on them.
+ */
+moves: number; seconds: number; 
+/**
+ * Moves of the first ten (from the second one: the first clock is not reliable).
+ */
+openingMoves: number; openingSeconds: number; 
+/**
+ * Moves after the first ten by time spent (`THINK_BINS`, plus one open bin).
+ */
+bins: [number, number, number, number, number, number, number, number] }
 export type TimeControl = { initialTime: bigint; increment: bigint }
 export type Token = { type: "ParenOpen" } | { type: "ParenClose" } | { type: "Comment"; value: string } | { type: "San"; value: string } | { type: "Header"; value: { tag: string; value: string } } | { type: "Nag"; value: string } | { type: "Outcome"; value: string }
 export type TournamentQuery = { options: QueryOptions<TournamentSort>; name: string | null }
 export type TournamentSort = "id" | "name"
+export type TraitDeviation = { 
+/**
+ * Average trait of the moves played and of Maia's expectation, per move.
+ */
+played: number; expected: number; delta: number; stdError: number }
 /**
  * Represents a UCI option definition.
  */
@@ -1610,6 +1798,25 @@ name: string;
  * The default value of this string option.
  */
 default: string | null } }
+export type WeakGamesCount = { 
+/**
+ * `None`: both players without any rating.
+ */
+below: number | null; games: number }
+/**
+ * Leaves out the games where both players are weak, judging each player by the best rating they
+ * have in any game of the database (a player rated 100 in one game and 2300 in another counts as
+ * 2300). Games between a strong and a weak player stay: they show how mistakes are punished.
+ */
+export type WeakGamesFilter = { 
+/**
+ * A player whose best known rating is below this is weak.
+ */
+below?: number | null; 
+/**
+ * Players with no rating in any game also count as weak.
+ */
+unrated?: boolean }
 export type WeightedOpeningLine = { moves: string[]; weight?: number; side?: OpeningLineSide }
 
 /** tauri-specta globals **/

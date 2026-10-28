@@ -15,7 +15,7 @@ import {
 import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import { IconChartDots, IconPlayerPlay, IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -25,15 +25,17 @@ import {
   gamePlayer2SettingsAtom,
   tabsAtom,
 } from "@/state/atoms";
-import { twinBooksAtom } from "@/state/twinBots";
-import { clampMaiaElo, DEFAULT_HUMAN_BOT_PROFILE_ID } from "@/utils/humanBots";
+import { twinBooksAtom, twinStylesAtom } from "@/state/twinBots";
+import { clampMaiaElo, DEFAULT_HUMAN_BOT_PROFILE_ID, MAIA_ELO_MIN } from "@/utils/humanBots";
 import { type PlayerBooks, loadPlayerBooks } from "@/utils/preparation/book";
 import {
   type FidelityResult,
   fidelityPlan,
   measureFidelity,
   splitForFidelity,
+  TWIN_ELO_MAX,
   twinRepertoire,
+  twinThinking,
 } from "@/utils/preparation/twin";
 import { chronological, type ProfileGame } from "@/utils/players/profileGames";
 import { MaiaSampler } from "@/utils/repertoireGenerator/engines";
@@ -42,6 +44,7 @@ import { createTab } from "@/utils/tabs";
 import { DEFAULT_TIME_CONTROL } from "../../boards/OpponentForm";
 import { EmptyState, SectionHeader, usePreparationEngines } from "./common";
 import { colorName } from "./labels";
+import { TwinStyleCard, TwinThinkingCard } from "./TwinBehaviour";
 
 /** Samples per position when measuring: enough to compare, quick enough for 120 positions. */
 const FIDELITY_SAMPLES = 8;
@@ -81,6 +84,7 @@ export default function TwinSection({
   const cancel = useRef<(() => void) | null>(null);
   useEffect(() => () => cancel.current?.(), []);
   const setTwinBooks = useSetAtom(twinBooksAtom);
+  const style = useAtomValue(twinStylesAtom)[cardId]?.measurement;
   const setPlayer1 = useSetAtom(gamePlayer1SettingsAtom);
   const setPlayer2 = useSetAtom(gamePlayer2SettingsAtom);
   const setInputColor = useSetAtom(gameInputColorAtom);
@@ -105,16 +109,20 @@ export default function TwinSection({
       type: "humanBot",
       engine: maia,
       profileId: DEFAULT_HUMAN_BOT_PROFILE_ID,
-      humanTiming: false,
+      humanTiming: true,
       timeControl: DEFAULT_TIME_CONTROL,
       timeUnit: "m",
       incrementUnit: "s",
       twin: {
         id,
         name,
-        elo: clampMaiaElo(elo),
+        elo: Math.max(MAIA_ELO_MIN, Math.min(TWIN_ELO_MAX, Math.round(elo))),
         games: book.games,
         lines: book.lines.length,
+        thinking: twinThinking(games),
+        style: style?.improves
+          ? { aggression: style.weightsAggression, simplification: style.weightsSimplification }
+          : null,
       },
     });
     await createTab({
@@ -174,7 +182,7 @@ export default function TwinSection({
         title={t("Preparation.Twin.Title", "Play against the twin")}
         description={t(
           "Preparation.Twin.Description",
-          "A bot that plays {{name}}'s repertoire (the opening sequences of these games, with their real frequency) and, out of it, like a player of that rating. It does not imitate {{name}}'s individual style beyond the book.",
+          "A bot that plays {{name}}'s repertoire (the opening sequences of these games, with their real frequency) and, out of it, like a player of that rating, with {{name}}'s think time and, if it is measured and helps, their style. Above 2600 Stockfish checks its moves, as with the strongest catalogue bots.",
           { name },
         )}
       />
@@ -213,7 +221,7 @@ export default function TwinSection({
               description={t("Preparation.Key.EloHint", "From the latest rating")}
               w={180}
               min={600}
-              max={2600}
+              max={TWIN_ELO_MAX}
               step={50}
               value={elo}
               onChange={(value) => typeof value === "number" && setElo(value)}
@@ -244,6 +252,11 @@ export default function TwinSection({
           </Group>
         </Stack>
       </Paper>
+
+      <SimpleGrid cols={{ base: 1, lg: 2 }}>
+        <TwinThinkingCard games={games} name={name} />
+        <TwinStyleCard games={games} name={name} cardId={cardId} elo={elo} />
+      </SimpleGrid>
 
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">

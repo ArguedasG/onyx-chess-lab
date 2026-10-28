@@ -210,7 +210,13 @@ const openingVariantSchema = z.object({
     lineIds: z.array(z.string()),
     sourceRecordIndex: z.number().int().nonnegative(),
     trainingRecordIndex: z.number().int().nonnegative(),
-    contentType: z.enum(["theory", "modelGame"]),
+    /**
+     * `reference`: informative material (strategy, endgames, exercises) to look at and analyze,
+     * never trained, like model games.
+     */
+    contentType: z.enum(["theory", "modelGame", "reference"]),
+    /** Informative sections imported together share this name (one record per section). */
+    group: z.string().optional(),
     commentCount: z.number().int().nonnegative(),
     hasVariations: z.boolean(),
 });
@@ -1330,6 +1336,7 @@ export function addOpeningRepertoire(
             sourceRecordIndex: number;
             trainingRecordIndex: number;
             contentType: OpeningVariant["contentType"];
+            group?: string;
             commentCount: number;
             hasVariations: boolean;
             lines: Array<{
@@ -1381,6 +1388,7 @@ export function addOpeningRepertoire(
             sourceRecordIndex: importedVariant.sourceRecordIndex,
             trainingRecordIndex: importedVariant.trainingRecordIndex,
             contentType: importedVariant.contentType,
+            ...(importedVariant.group ? { group: importedVariant.group } : {}),
             commentCount: importedVariant.commentCount,
             hasVariations: importedVariant.hasVariations,
         };
@@ -1516,7 +1524,7 @@ export function updateOpeningVariant(
     const variant = state.variants[variantId];
     if (!variant) return state;
     const lines = { ...state.lines };
-    if (input.contentType === "modelGame") {
+    if (input.contentType !== "theory") {
         for (const lineId of variant.lineIds) {
             const line = lines[lineId];
             if (line) lines[lineId] = { ...line, trainable: false };
@@ -1547,7 +1555,7 @@ export function updateOpeningLineTrainable(
     const line = state.lines[lineId];
     if (!line) return state;
     const variant = state.variants[line.variantId];
-    if (!variant || variant.contentType === "modelGame") return state;
+    if (!variant || variant.contentType !== "theory") return state;
     return {
         ...state,
         lines: { ...state.lines, [lineId]: { ...line, trainable } },

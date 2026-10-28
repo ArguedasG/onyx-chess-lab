@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PlayerGameRow, PlayerTree, PositionTreeNode } from "@/bindings";
+import type { PlayerGameRow, PlayerTree, PositionTreeNode, ThinkTime } from "@/bindings";
 import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
 import { type ProfileGame, toProfileGame } from "@/utils/players/profileGames";
 import { playUci } from "@/utils/repertoireGenerator/positions";
@@ -17,8 +17,16 @@ import { keyPositionCandidates } from "./keyPositions";
 import { bookMovetext, preparationPackage } from "./package";
 import { repertoirePositions } from "./repertoireDifficulty";
 import { compareWithRepertoire, repertoireTree } from "./repertoireReality";
-import { gameTypeRows, structureRows } from "./structures";
-import { bookChoices, fidelityPlan, splitForFidelity, twinRepertoire } from "./twin";
+import { gameTypeRows, structureFamilyRows, structureRows } from "./structures";
+import {
+    binPercentile,
+    bookChoices,
+    fidelityPlan,
+    splitForFidelity,
+    twinRepertoire,
+    twinThinking,
+    twinTiming,
+} from "./twin";
 
 /** A tree node as Rust sends it, built by playing UCI lines (all games 1-0 unless given). */
 function treeFromLines(
@@ -111,6 +119,7 @@ function game(input: Partial<PlayerGameRow> & { result: string }): ProfileGame {
             playerLastClock: null,
             opponentLastClock: null,
             structures: [],
+            playerThink: null,
             queensOffPly: null,
             endgamePly: null,
             ...input,
@@ -355,6 +364,84 @@ describe("structures (I-31)", () => {
         const types = gameTypeRows(games);
         expect(types.earlyQueens.games).toBe(1);
         expect(types.endgames.games).toBe(1);
+    });
+});
+
+describe("structure families (I-31, 9.3)", () => {
+    it("groups the structures and counts a game once per family and role", () => {
+        const games = [
+            game({
+                result: "1-0",
+                structures: [
+                    { structure: "kingsIndianI", ownerWhite: false, ply: 24 },
+                    { structure: "kingsIndianIII", ownerWhite: false, ply: 34 },
+                ],
+            }),
+            game({
+                result: "0-1",
+                structures: [{ structure: "iqp", ownerWhite: true, ply: 30 }],
+            }),
+        ];
+        const families = structureFamilyRows(games);
+        const kingsIndian = families.find((family) => family.family === "kingsIndian")!;
+        expect(kingsIndian.games).toBe(1);
+        expect(kingsIndian.against.games).toBe(1);
+        expect(kingsIndian.rows.map((row) => row.structure).sort()).toEqual([
+            "kingsIndianI",
+            "kingsIndianIII",
+        ]);
+        expect(families.find((family) => family.family === "isolated")!.own.games).toBe(1);
+        expect(families.some((family) => family.family === "french")).toBe(false);
+    });
+});
+
+describe("twin think time (9.3)", () => {
+    const think = (moves: number, seconds: number): ThinkTime => ({
+        moves,
+        seconds,
+        openingMoves: 10,
+        openingSeconds: 10,
+        bins: [0, 0, moves, 0, 0, 0, 0, 0],
+    });
+    const blitz = { timeControl: "180+2", site: "https://lichess.org" };
+    const fallback = {
+        minThinkTimeMs: 1000,
+        averageThinkTimeMs: 3000,
+        maxThinkTimeMs: 9000,
+        repertoireTimePercent: 40,
+    };
+
+    it("adds the clocks of the games by rhythm", () => {
+        const thinking = twinThinking([
+            game({ result: "1-0", ...blitz, playerThink: think(30, 90) }),
+            game({ result: "1-0", ...blitz, playerThink: think(30, 120) }),
+            game({ result: "1-0", ...blitz, playerThink: null }),
+        ]);
+        expect(thinking.blitz).toMatchObject({ games: 2, moves: 60, seconds: 210 });
+        expect(thinking.rapid).toBeUndefined();
+    });
+
+    it("reads percentiles inside the bins", () => {
+        // Every move between 2 and 4 s.
+        expect(binPercentile([0, 0, 10, 0, 0, 0, 0, 0], 0.5)).toBe(3);
+        expect(binPercentile([0, 0, 0, 0, 0, 0, 0, 0], 0.5)).toBe(0);
+    });
+
+    it("uses the rhythm played, then the nearest one, then the rating's times", () => {
+        const thinking = twinThinking([
+            game({ result: "1-0", ...blitz, playerThink: think(100, 500) }),
+        ]);
+        const measured = twinTiming(thinking, "blitz", fallback);
+        expect(measured.source).toEqual({ kind: "measured", rhythm: "blitz", moves: 100 });
+        expect(measured.config).toMatchObject({ averageThinkTimeMs: 5000, fixedRhythm: true });
+        expect(measured.config.repertoireTimePercent).toBe(20);
+        const estimated = twinTiming(thinking, "rapid", fallback);
+        expect(estimated.source?.kind).toBe("estimated");
+        // Blitz times, rescaled by the game to its rhythm.
+        expect(estimated.config).toMatchObject({ averageThinkTimeMs: 5000, fixedRhythm: false });
+        const generic = twinTiming({}, "rapid", fallback);
+        expect(generic.source).toBeNull();
+        expect(generic.config).toEqual({ ...fallback, fixedRhythm: false });
     });
 });
 

@@ -67,13 +67,19 @@ export function findDraftRecordSection(
     return draft.sections.find((section) => section.recordIndexes.includes(recordIndex));
 }
 
-/** Records can only share a section when their trees start from the same position. */
+/**
+ * Records can only share a section when their trees start from the same position, except in
+ * informative sections, which keep one tree per record.
+ */
 export function canPlaceDraftRecord(
     inspection: Samples,
-    section: Pick<OpeningImportDraftSection, "startingFen">,
+    section: Pick<OpeningImportDraftSection, "startingFen"> &
+        Partial<Pick<OpeningImportDraftSection, "contentType">>,
     recordIndex: number,
 ): boolean {
-    return sampleByIndex(inspection, recordIndex)?.startingFen === section.startingFen;
+    const sample = sampleByIndex(inspection, recordIndex);
+    if (!sample) return false;
+    return section.contentType === "reference" || sample.startingFen === section.startingFen;
 }
 
 function withoutRecord(draft: OpeningImportDraft, recordIndex: number): OpeningImportDraft {
@@ -216,7 +222,10 @@ export function excludeDraftSection(draft: OpeningImportDraft, key: string): Ope
     };
 }
 
-/** Moves every record of `sourceKey` to the end of `targetKey` when their positions match. */
+/**
+ * Moves every record of `sourceKey` to the end of `targetKey` when their positions match (any
+ * position into an informative section).
+ */
 export function mergeDraftSections(
     draft: OpeningImportDraft,
     sourceKey: string,
@@ -224,7 +233,12 @@ export function mergeDraftSections(
 ): OpeningImportDraft | null {
     const source = draft.sections.find((section) => section.key === sourceKey);
     const target = draft.sections.find((section) => section.key === targetKey);
-    if (!source || !target || source === target || source.startingFen !== target.startingFen) {
+    if (
+        !source ||
+        !target ||
+        source === target ||
+        (target.contentType !== "reference" && source.startingFen !== target.startingFen)
+    ) {
         return null;
     }
     return {

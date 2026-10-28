@@ -15,13 +15,13 @@ import {
 import { ReleaseNotesView } from "@/components/WhatsNewModal";
 import { playerAnalysisStorage } from "@/state/playerAnalysis";
 import { trainingAreasStorage } from "@/state/trainingAreas";
-import { parseReleaseNotesMarkdown } from "@/utils/changelog";
+import { releaseNotesForLanguage } from "@/utils/changelog";
 import { formatBytes } from "@/utils/format";
 
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
 export default function AppUpdater() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const checking = useRef(false);
   const checkedAtStartup = useRef(false);
   const activeUpdate = useRef<Update | null>(null);
@@ -151,6 +151,7 @@ export default function AppUpdater() {
   return (
     <Modal
       centered
+      size="xl"
       opened={Boolean(update)}
       onClose={closeUpdate}
       closeOnClickOutside={!installing}
@@ -169,7 +170,7 @@ export default function AppUpdater() {
         </Text>
         {update?.body && (
           <ScrollArea.Autosize mah="40vh" type="auto">
-            <ReleaseNotesView notes={parseReleaseNotesMarkdown(update.body)} />
+            <ReleaseNotesView notes={releaseNotesForLanguage(update.body, i18n.language)} />
           </ScrollArea.Autosize>
         )}
         {installing && (

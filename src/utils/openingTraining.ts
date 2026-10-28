@@ -29,6 +29,12 @@ export type OpeningImportConfig = {
 
 export type OpeningGroupingMode = "smart" | "records" | "single";
 
+/**
+ * Trainable theory, model games, or informative material (`reference`: strategy, endgames,
+ * exercises), which like model games is only looked at and analyzed.
+ */
+export type OpeningContentType = "theory" | "modelGame" | "reference";
+
 export type OpeningImportLine = {
     name: string;
     fen: string;
@@ -42,7 +48,9 @@ export type OpeningImportVariant = {
     name: string;
     sourceRecordIndex: number;
     trainingRecordIndex: number;
-    contentType: "theory" | "modelGame";
+    contentType: OpeningContentType;
+    /** Name of the informative section a record was imported in (one record per variant). */
+    group?: string;
     commentCount: number;
     hasVariations: boolean;
     lines: OpeningImportLine[];
@@ -61,7 +69,7 @@ export type OpeningPgnSample = {
     lineCount: number;
     commentCount: number;
     hasVariations: boolean;
-    contentType: "theory" | "modelGame";
+    contentType: OpeningContentType;
     error?: string;
 };
 
@@ -84,7 +92,7 @@ export type OpeningImportGroupPreview = {
     recordIndexes: number[];
     lineCount: number;
     commentCount: number;
-    contentType: "theory" | "modelGame";
+    contentType: OpeningContentType;
 };
 
 export type OpeningConsolidationGroup = {
@@ -467,7 +475,7 @@ export function syncOpeningVariantTree(
             moves: entry.moves,
             path: entry.path,
             plyCount: entry.plyCount,
-            trainable: variant?.contentType !== "modelGame",
+            trainable: (variant?.contentType ?? "theory") === "theory",
             sourceRecordIndex: null,
             moveProgress: {},
             session: { attempts: 0, completions: 0, flawless: 0, totalTimeMs: 0 },
@@ -486,6 +494,7 @@ export function syncOpeningVariantTree(
         sourceRecordIndex: variant?.sourceRecordIndex ?? recordIndex,
         trainingRecordIndex: recordIndex,
         contentType: variant?.contentType ?? "theory",
+        ...(variant?.group ? { group: variant.group } : {}),
         commentCount: stats.commentCount,
         hasVariations: stats.hasVariations,
     };
@@ -797,6 +806,12 @@ export function consolidateOpeningSections(
     };
 }
 
+/** The content type a record declares (Onyx exports) or seems to have. */
+export function openingContentType(headers: GameHeaders): OpeningContentType {
+    if (headers.other?.ChessLabContentType === "reference") return "reference";
+    return isModelGame(headers) ? "modelGame" : "theory";
+}
+
 export function isModelGame(headers: GameHeaders): boolean {
     const declaredType = headers.other?.ChessLabContentType;
     if (declaredType === "theory" || declaredType === "modelGame")
@@ -872,7 +887,7 @@ function buildOpeningRecord(
     config: Pick<OpeningImportConfig, "subvariationPolicy">,
 ) {
     const stats = treeStats(tree.root);
-    const contentType = isModelGame(tree.headers) ? "modelGame" : "theory";
+    const contentType = openingContentType(tree.headers);
     const selectedLineKeys = new Set(
         extractOpeningImportLines(tree.root, config.subvariationPolicy).map((line) =>
             lineKey(line.moves),
@@ -1004,6 +1019,48 @@ export async function prepareOpeningImport(
             return parsed ? [parsed] : [];
         });
         if (entries.length === 0) continue;
+
+        if (preview.contentType === "reference") {
+            // Informative material can start from different positions (exercises, endgames), so
+            // each record keeps its own tree; the section name groups them.
+            for (const entry of entries) {
+                const recordName =
+                    overrides.recordNames?.[entry.variant.sourceRecordIndex] ?? entry.variant.name;
+                const headers: GameHeaders = {
+                    ...entry.tree.headers,
+                    orientation:
+                        config.color === "both"
+                            ? (entry.tree.headers.orientation ?? "white")
+                            : config.color,
+                    other: {
+                        ...entry.tree.headers.other,
+                        ChapterName: preview.name,
+                        ChessLabContentType: "reference",
+                    },
+                };
+                const trainingRecordIndex = trainingRecords.length;
+                trainingRecords.push(
+                    getPGN(entry.tree.root, {
+                        headers,
+                        glyphs: true,
+                        comments: true,
+                        variations: true,
+                        extraMarkups: true,
+                    }),
+                );
+                variants.push({
+                    name: recordName,
+                    sourceRecordIndex: entry.variant.sourceRecordIndex,
+                    trainingRecordIndex,
+                    contentType: "reference",
+                    group: preview.name,
+                    commentCount: entry.variant.commentCount,
+                    hasVariations: entry.variant.hasVariations,
+                    lines: entry.variant.lines.map((line) => ({ ...line, trainable: false })),
+                });
+            }
+            continue;
+        }
 
         const first = entries[0];
         const root = structuredClone(first.tree.root);

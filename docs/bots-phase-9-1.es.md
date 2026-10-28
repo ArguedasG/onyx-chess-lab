@@ -430,10 +430,70 @@ Juntando v4 y v5 (30 partidas por margen) la curva es coherente: 400 cp ~+150, 2
 200 cp ~+240, 150 cp ~+380, 130 cp ~+460, 80 cp ~+585 frente a Maia 2400. **Márgenes vigentes**: 2500
 → 400 cp con la mitad de las jugadas filtradas, 2600 → 220, 2700 → 175 y 2800 → 140 (interpolados
 para los puestos intermedios). Con 15–30 partidas por punto el ruido es de ±150–200: se afinará con
-las partidas reales.
+las partidas reales. _Revisados el 2026-10-23; ver la sección siguiente._
 
 **Techo**: el método funciona, así que el catálogo vuelve a llegar a **2800** (cuatro bots entre 2650
 y 2800).
+
+### Revisión con el laboratorio de modelos (2026-10-21 a 2026-10-27)
+
+El autor midió los bots del catálogo en el laboratorio de modelos (Generador), con matches de 40
+partidas (~30 min cada uno). Hubo tres problemas de medida antes de llegar a datos fiables:
+
+1. **El laboratorio no usaba el bot real.** En modo Generador `botPlay` era nulo: sin estilo ni
+   filtro, y un bot de 2750 era Maia pedido a 2750 (fuera de su rango) con `OppoElo` 1500. Valentina
+   2750 perdió contra Maia 2400 (8,5 – 11,5). Corregido: el Generador juega el bot como en una
+   partida real si hay Stockfish, y pasa el Elo objetivo del rival Maia como `OppoElo`.
+2. **Partidas casi idénticas.** Con repertorio (hasta el ply 18 en los teóricos) y Maia sin estilo
+   eligiendo siempre su jugada más probable (`Temperature 0`), las 40 partidas de un match salían de
+   dos líneas: todas las de Javier con negras eran la misma Najdorf. Un match medía quién juega mejor
+   esa posición. Solución: opción **Aperturas variadas** del lote (`opening_suite` en
+   `model_game_batch.rs`): 20 aperturas equilibradas de 8 plies, cada una una vez con cada color, sin
+   repertorios ni libro.
+3. **Ruido.** Con 40 partidas el intervalo al 95 % es de ±100 Elo, y la diferencia entre dos matches
+   de ±140. Un «estilo que complica cuesta 80 Elo» salió de dos matches y desapareció al repetirlos.
+   El control equilibrista contra equilibrista del laboratorio de estilos ya había dado −147 con 20
+   partidas. **Regla**: no recalibrar por un solo match de 40; repetirlo y sumar.
+
+**Cambios que quedan**:
+
+- **Filtro en todas las jugadas desde 2450** (`bot_strength.rs`). Filtrar solo una parte hasta 2600
+  dejaba 2450–2550 sin ganancia: −12 ± 28 Elo juntando 120 partidas. Márgenes: 2450 → 400 cp, 2600 →
+  220, 2700 → 175, 2800 → 140 (lineales entre medias).
+- **Estilo que complica** (`bot_style.rs`): no penaliza una recaptura en la casilla donde el rival
+  acaba de capturar, y una pieza propia atacada solo cuenta como tensión si está defendida y ningún
+  atacante vale menos. Es una corrección de lógica; su efecto en la fuerza no se pudo medir.
+
+**Resultados con aperturas variadas** (40 partidas cada uno; Elo del bot):
+
+| Match                      | Puntos      | Elo medido | Esperado |
+| -------------------------- | ----------- | ---------- | -------- |
+| Atlas 2400 – Maia 2400     | 18 – 22     | −35        | 0        |
+| Inés 2450 – Maia 2400      | 25 – 15     | +89        | +50      |
+| Javier 2500 – Maia 2400    | 29 – 11     | +169       | +100     |
+| Karla 2550 – Maia 2400     | 25,5 – 14,5 | +98        | +150     |
+| Lorenzo 2600 – Maia 2400   | 31,5 – 8,5  | +228       | +200     |
+| Sebastián 2700 – Maia 2400 | 34 – 6      | +301       | +300     |
+| Maximiliano 2800 – Lorenzo | 26,5 – 13,5 | +117       | +200     |
+
+Todos dentro de ~1σ. El tramo 2450–2550 promedia +119 en 2500 (esperado +100). Maximiliano queda en
+~+345 sobre Maia 2400 (esperado +400): dentro del ruido, pero es la tercera medida en que rinde algo
+menos; si se confirma, bajar el margen de 2800 a ~125 cp.
+
+**Estilos** (bot con estilo contra un equilibrista del mismo Elo, 40 partidas):
+
+| Match                          | Puntos      | Elo |
+| ------------------------------ | ----------- | --- |
+| Ximena (salvaje) – Tobías 1700 | 21,5 – 18,5 | +26 |
+| Julia (acechador) – Tomás 2300 | 17 – 23     | −52 |
+| Laura (guardián) – Atlas 2400  | 16,5 – 23,5 | −61 |
+| Dora (rematador) – Ariel 2000  | 23,5 – 16,5 | +61 |
+
+Media −7 ± 25: las personalidades cambian cómo juega el bot, no su nivel, al menos en nada que
+40 partidas puedan distinguir (~100 Elo).
+
+**Pendiente**: las ligas de bots del Generador juegan con repertorio, así que dos bots pueden repetir
+casi la misma partida cada vez que se enfrentan; revisar si conviene variar las aperturas también ahí.
 
 ## Paso 6 — Rating por ritmo y partidas puntuables (2026-10-18)
 

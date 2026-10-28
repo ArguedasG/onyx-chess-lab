@@ -46,6 +46,7 @@ import { formatScore } from "@/utils/score";
 import { getNodeAtPath, type TreeNode } from "@/utils/treeReducer";
 import CompleteMoveCell from "./CompleteMoveCell";
 import styles from "./GameNotation.module.css";
+import StructureBadge from "@/components/structures/StructureBadge";
 import OpeningName from "./OpeningName";
 
 /** The root comment belongs to the starting position. */
@@ -166,7 +167,10 @@ function NotationHeader() {
   return (
     <Stack gap="xs" pt="xs">
       <Group justify="space-between" px="sm">
-        <OpeningName />
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          <OpeningName />
+          <StructureBadge />
+        </Group>
         <NotationToggles />
       </Group>
       <Divider />
@@ -253,6 +257,7 @@ export function NotationZoneHeader({ title, extra }: { title: string; extra?: Re
       <Box style={{ flex: 1, minWidth: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
         <OpeningName />
       </Box>
+      <StructureBadge />
       {extra}
       <NotationToggles size="sm" />
     </Group>

@@ -82,11 +82,12 @@ use crate::chess::{
     get_engine_logs, kill_engine, kill_engines, stop_engine,
 };
 use crate::db::{
-    cancel_database_quality, cancel_position_search, clear_games, convert_pgn, create_indexes,
-    delete_database, delete_db_game, delete_empty_games, delete_indexes, export_to_pgn,
-    get_database_quality, get_database_quality_details, get_player, get_player_games,
-    get_player_tree, get_position_tree, get_tournaments, preload_reference_db, search_position,
-    MmapSearchIndex,
+    cancel_database_quality, cancel_position_search, cancel_structure_model_games, clear_games,
+    convert_pgn, create_indexes, delete_database, delete_db_game, delete_empty_games,
+    delete_indexes, detect_pawn_structures, export_to_pgn, get_database_quality,
+    get_database_quality_details, get_player, get_player_games, get_player_tree, get_position_tree,
+    get_structure_model_games, get_tournaments, measure_player_style, preload_reference_db,
+    search_position, MmapSearchIndex,
 };
 use crate::fs::set_file_as_executable;
 use crate::game::{
@@ -155,6 +156,7 @@ pub struct AppState {
     bot_league_manager: BotLeagueManager,
     progress_state: ProgressStore,
     managed_install_cancel_flags: DashMap<String, Arc<AtomicBool>>,
+    structure_search_cancel_flags: DashMap<String, Arc<AtomicBool>>,
 }
 
 #[tauri::command]
@@ -194,6 +196,10 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_opening_from_name,
             get_player_games,
             get_player_tree,
+            detect_pawn_structures,
+            get_structure_model_games,
+            measure_player_style,
+            cancel_structure_model_games,
             get_position_tree,
             get_engine_config,
             file_exists,

@@ -40,6 +40,7 @@ import {
   DEFAULT_HUMAN_BOT_PROFILE_ID,
   DEFAULT_MAIA_ELO,
   getHumanBotProfile,
+  humanBotTimingForElo,
   MAIA_ELO_MAX,
   MAIA_ELO_MIN,
   type HumanBotProfileId,
@@ -47,6 +48,9 @@ import {
   isMaiaEngine,
 } from "@/utils/humanBots";
 import { twinBooksAtom } from "@/state/twinBots";
+import { rhythmOfClock } from "@/utils/botRating";
+import { type TwinThinking, twinTiming } from "@/utils/preparation/twin";
+import { useRhythmLabel } from "./RatedGameSelector";
 import { EnginesSelect } from "./EnginesSelect";
 import { BotSummaryCard, useCatalogRepertoireLabel } from "./BotPicker";
 
@@ -92,6 +96,10 @@ export type TwinOpponent = {
   elo: number;
   games: number;
   lines: number;
+  /** The player's think time by rhythm, from their clocks (9.3). */
+  thinking?: TwinThinking;
+  /** Measured style weights, only when they predicted the player's recent games better. */
+  style?: { aggression: number; simplification: number } | null;
 };
 
 type OpponentType = OpponentSettings["type"];
@@ -449,6 +457,7 @@ export function OpponentForm({
           {opponent.twin ? (
             <TwinCard
               twin={opponent.twin}
+              timeControl={opponent.timeControl}
               onRemove={() =>
                 setOpponent((prev) =>
                   prev.type === "humanBot" ? { ...prev, twin: undefined } : prev,
@@ -472,7 +481,7 @@ export function OpponentForm({
             </>
           )}
 
-          {humanTimingEnabled && !opponent.twin && (
+          {humanTimingEnabled && (
             <Switch
               checked={opponent.humanTiming ?? true}
               label={t("HumanBots.Timing", "Human thinking time")}
@@ -688,10 +697,23 @@ export function OpponentForm({
 }
 
 /** The twin of a player card in place of a catalogue profile (I-43). */
-function TwinCard({ twin, onRemove }: { twin: TwinOpponent; onRemove: () => void }) {
+function TwinCard({
+  twin,
+  timeControl,
+  onRemove,
+}: {
+  twin: TwinOpponent;
+  timeControl?: TimeControlField;
+  onRemove: () => void;
+}) {
   const { t } = useTranslation();
+  const rhythmLabel = useRhythmLabel();
   const books = useAtomValue(twinBooksAtom);
   const loaded = Boolean(books[twin.id]);
+  const rhythm = timeControl ? rhythmOfClock(timeControl) : null;
+  const timing = rhythm
+    ? twinTiming(twin.thinking, rhythm, humanBotTimingForElo(twin.elo)).source
+    : null;
   return (
     <Paper withBorder p="sm">
       <Stack gap={6}>
@@ -708,6 +730,28 @@ function TwinCard({ twin, onRemove }: { twin: TwinOpponent; onRemove: () => void
             { name: twin.name, lines: twin.lines, games: twin.games },
           )}
         </Text>
+        <Group gap={6}>
+          {rhythm && (
+            <Badge variant="light" color={timing ? "teal" : "gray"}>
+              {timing?.kind === "measured"
+                ? t("Preparation.Twin.TimeMeasured", "Thinks like {{name}} at this rhythm", {
+                    name: twin.name,
+                  })
+                : timing?.kind === "estimated"
+                  ? t(
+                      "Preparation.Twin.TimeEstimated",
+                      "Think time from {{name}}'s {{rhythm}} games",
+                      { name: twin.name, rhythm: rhythmLabel(timing.rhythm).toLowerCase() },
+                    )
+                  : t("Preparation.Twin.TimeGeneric", "Think time of its rating")}
+            </Badge>
+          )}
+          <Badge variant="light" color={twin.style ? "grape" : "gray"}>
+            {twin.style
+              ? t("Preparation.Twin.StyleOwn", "Measured style")
+              : t("Preparation.Twin.StyleNone", "No style of its own")}
+          </Badge>
+        </Group>
         {!loaded && (
           <Alert color="yellow" icon={<IconAlertTriangle size={16} />} py={6}>
             {t(

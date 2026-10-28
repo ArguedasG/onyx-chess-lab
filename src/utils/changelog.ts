@@ -87,6 +87,24 @@ export function parseReleaseNotesMarkdown(markdown: string): ReleaseNotes {
     return { summary: summary.join(" ") || undefined, sections };
 }
 
+/** Start of the hidden Spanish notes in a release body (`scripts/release-notes.mjs`). */
+export const RELEASE_NOTES_ES_MARKER = "<!-- onyx-notes:es";
+
+/**
+ * The notes of an update in the app's language: the Spanish block of the release body when the app
+ * is in Spanish and the release has it, the English notes otherwise.
+ */
+export function releaseNotesForLanguage(markdown: string, language: string): ReleaseNotes {
+    const start = markdown.indexOf(RELEASE_NOTES_ES_MARKER);
+    if (language.toLowerCase().startsWith("es") && start >= 0) {
+        const rest = markdown.slice(start + RELEASE_NOTES_ES_MARKER.length);
+        const end = rest.indexOf("-->");
+        const spanish = parseReleaseNotesMarkdown(end >= 0 ? rest.slice(0, end) : rest);
+        if (spanish.sections.length > 0 || spanish.summary) return spanish;
+    }
+    return parseReleaseNotesMarkdown(markdown);
+}
+
 export function requestWhatsNew() {
     window.dispatchEvent(new Event(APP_WHATS_NEW_EVENT));
 }

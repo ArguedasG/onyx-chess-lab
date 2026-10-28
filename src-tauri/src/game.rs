@@ -157,6 +157,10 @@ pub struct HumanTimingConfig {
     pub average_think_time_ms: u32,
     pub max_think_time_ms: u32,
     pub repertoire_time_percent: u16,
+    /// The times were measured at the rhythm being played (a twin, I-43), so they are not
+    /// scaled from blitz.
+    #[serde(default)]
+    pub fixed_rhythm: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -2018,7 +2022,11 @@ fn calculate_human_think_time(
     context: ThinkContext,
     rng: &mut impl Rng,
 ) -> u64 {
-    let rhythm = rhythm_factor(context.initial_time_ms, context.increment_ms);
+    let rhythm = if config.fixed_rhythm {
+        1.0
+    } else {
+        rhythm_factor(context.initial_time_ms, context.increment_ms)
+    };
     let scale = |ms: u32| (f64::from(ms) * rhythm) as u64;
     let min_time = scale(config.min_think_time_ms.min(config.max_think_time_ms));
     let max_time = scale(config.max_think_time_ms.max(config.min_think_time_ms));
@@ -2809,6 +2817,7 @@ mod tests {
             average_think_time_ms: 4500,
             max_think_time_ms: 13_500,
             repertoire_time_percent: 34,
+            fixed_rhythm: false,
         }
     }
 
@@ -2819,6 +2828,7 @@ mod tests {
             average_think_time_ms: 2000,
             max_think_time_ms: 10_000,
             repertoire_time_percent: 35,
+            fixed_rhythm: false,
         };
         let mut repertoire_rng = StdRng::seed_from_u64(9);
         let mut engine_rng = StdRng::seed_from_u64(9);
@@ -2844,6 +2854,7 @@ mod tests {
             average_think_time_ms: 10_000,
             max_think_time_ms: 20_000,
             repertoire_time_percent: 100,
+            fixed_rhythm: false,
         };
         let mut rng = StdRng::seed_from_u64(9);
 
@@ -2860,6 +2871,19 @@ mod tests {
 
         assert!(target < 500);
         assert!(target <= 850);
+    }
+
+    #[test]
+    fn a_measured_rhythm_is_not_scaled() {
+        let mut timing = deliberate_timing();
+        let classical = ThinkContext {
+            initial_time_ms: Some(1_800_000),
+            ..think_context(GameMoveSource::Engine)
+        };
+        let scaled = average_think_time(&timing, classical);
+        timing.fixed_rhythm = true;
+        let fixed = average_think_time(&timing, classical);
+        assert!(scaled > fixed * 2, "{scaled} against {fixed}");
     }
 
     #[test]

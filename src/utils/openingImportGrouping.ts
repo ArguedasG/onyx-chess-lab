@@ -47,7 +47,8 @@ function sampleLabels(sample: OpeningPgnSample): string[] {
 /**
  * Records that start from a custom position and look like puzzles: their position is unique in
  * the file or a header says so. They cannot share a section with opening theory (a section is a
- * single tree), so the smart grouping leaves them out of the import by default.
+ * single tree), so the smart grouping puts them in informative sections, which keep one tree per
+ * record.
  */
 export function getOpeningImportPuzzleIndexes(inspection: Pick<Inspection, "samples">): number[] {
     const valid = inspection.samples.filter((sample) => !sample.error);
@@ -124,12 +125,15 @@ function smartSection(
         : null;
 }
 
-/** Records the smart grouping proposes to leave out; the import review can restore them. */
+/**
+ * Records the smart grouping proposes to leave out; the import review can restore them. Puzzles
+ * and other loose positions now go to informative sections instead (9.3 follow-up).
+ */
 export function getOpeningImportSuggestedExclusions(
-    inspection: Pick<Inspection, "samples">,
-    mode: OpeningGroupingMode,
+    _inspection: Pick<Inspection, "samples">,
+    _mode: OpeningGroupingMode,
 ): number[] {
-    return mode === "smart" ? getOpeningImportPuzzleIndexes(inspection) : [];
+    return [];
 }
 
 export function getOpeningImportGroupPreviews(
@@ -147,12 +151,23 @@ export function getOpeningImportGroupPreviews(
         eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
     }
     const chapterLabels = mode === "smart" ? chapterLikeWhiteLabels(valid) : new Set<string>();
+    const loose = new Set(mode === "smart" ? getOpeningImportPuzzleIndexes(inspection) : []);
 
     const groups = new Map<string, OpeningImportGroupPreview>();
     for (const sample of valid) {
         let name = sample.name;
         let identity = `record:${sample.index}`;
-        if (mode === "single" && sample.contentType === "theory") {
+        let contentType = sample.contentType;
+        if (loose.has(sample.index)) {
+            // Exercises and other loose positions: informative, grouped by their chapter.
+            const section = smartSection(sample, chapterLabels, eventCounts);
+            contentType = "reference";
+            name =
+                section && section.identity !== "smart:model-games"
+                    ? section.name
+                    : (i18n.t("OpeningImport.ExercisesSection", "Exercises") ?? "Exercises");
+            identity = `reference:${normalizedGroupKey(name)}`;
+        } else if (mode === "single" && sample.contentType === "theory") {
             name = inspection.filename.replace(/\.pgn$/i, "") || "Imported lines";
             identity = "single";
         } else if (mode === "smart") {
@@ -160,7 +175,11 @@ export function getOpeningImportGroupPreviews(
             if (section) ({ name, identity } = section);
         }
 
-        const key = `${sample.contentType}|${sample.startingFen}|${identity}`;
+        // Informative sections keep one tree per record, so their starting positions may differ.
+        const key =
+            contentType === "reference"
+                ? `${contentType}|${identity}`
+                : `${contentType}|${sample.startingFen}|${identity}`;
         const existing = groups.get(key);
         if (existing) {
             existing.recordIndexes.push(sample.index);
@@ -174,7 +193,7 @@ export function getOpeningImportGroupPreviews(
                 recordIndexes: [sample.index],
                 lineCount: sample.lineCount,
                 commentCount: sample.commentCount,
-                contentType: sample.contentType,
+                contentType,
             });
         }
     }

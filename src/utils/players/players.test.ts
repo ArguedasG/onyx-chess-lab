@@ -57,6 +57,7 @@ function game(input: Partial<PlayerGameRow> & { result: string }): ProfileGame {
             playerLastClock: null,
             opponentLastClock: null,
             structures: [],
+            playerThink: null,
             queensOffPly: null,
             endgamePly: null,
             ...input,

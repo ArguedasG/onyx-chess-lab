@@ -5,6 +5,7 @@ mod ops;
 mod pawn_structures;
 mod player_games;
 mod player_search;
+mod player_style;
 mod player_tree;
 mod position_query;
 mod position_tree;
@@ -13,8 +14,11 @@ mod quality_scan;
 mod schema;
 mod search;
 mod search_index;
+mod structure_games;
 pub use opening_report::generate_opening_report;
+pub use pawn_structures::detect_pawn_structures;
 pub use player_games::get_player_games;
+pub use player_style::measure_player_style;
 pub use player_tree::get_player_tree;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
@@ -22,6 +26,7 @@ pub use position_query::{
 pub use position_tree::get_position_tree;
 pub use quality::get_database_quality;
 pub use quality_scan::{cancel_database_quality, get_database_quality_details};
+pub use structure_games::{cancel_structure_model_games, get_structure_model_games};
 
 use crate::{
     db::{

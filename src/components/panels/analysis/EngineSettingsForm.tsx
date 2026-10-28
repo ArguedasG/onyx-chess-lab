@@ -17,6 +17,7 @@ import GoModeInput from "@/components/common/GoModeInput";
 import { activeTabAtom, enginesAtom } from "@/state/atoms";
 import { type Engine, type EngineSettings, killEngine } from "@/utils/engines";
 import CoresSlider from "./CoresSlider";
+import EngineUciOptions from "./EngineUciOptions";
 import HashSlider from "./HashSlider";
 import LinesSlider from "./LinesSlider";
 
@@ -131,6 +132,13 @@ function EngineSettingsForm({
             </Group>
           )}
         </>
+      )}
+      {!remote && !minimal && engine.type === "local" && (
+        <EngineUciOptions
+          engine={engine}
+          settings={settings.settings}
+          onChange={(next) => setSettings((prev) => ({ ...prev, settings: next }))}
+        />
       )}
       {!minimal && (
         <Group>

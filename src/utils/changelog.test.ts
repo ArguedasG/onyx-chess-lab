@@ -5,6 +5,7 @@ import {
     compareVersions,
     notesForLanguage,
     parseReleaseNotesMarkdown,
+    releaseNotesForLanguage,
     releaseNotesMarkdown,
     unseenEntries,
 } from "./changelog";
@@ -48,6 +49,23 @@ describe("changelog", () => {
             summary: "Plain text",
             sections: [],
         });
+    });
+
+    it("reads the hidden Spanish notes of a release body in Spanish", () => {
+        const en = { summary: "New", sections: [{ title: "Bots", items: ["Faster"] }] };
+        const es = { summary: "Nuevo", sections: [{ title: "Bots", items: ["Más rápidos"] }] };
+        const body = [
+            releaseNotesMarkdown(en),
+            "---",
+            "Footer.",
+            "<!-- onyx-notes:es",
+            releaseNotesMarkdown(es),
+            "-->",
+        ].join("\n");
+        expect(releaseNotesForLanguage(body, "es-ES")).toEqual(es);
+        expect(releaseNotesForLanguage(body, "en-US")).toEqual(en);
+        // A release from before the Spanish block falls back to English.
+        expect(releaseNotesForLanguage(releaseNotesMarkdown(en), "es-ES")).toEqual(en);
     });
 
     it("has Spanish and English notes, newest first", () => {

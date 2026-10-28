@@ -5,17 +5,13 @@
 import type { PawnStructure } from "@/bindings";
 import { type ResultBucket, resultBucket } from "@/utils/players/results";
 import type { ProfileGame } from "@/utils/players/profileGames";
+import {
+    ALL_STRUCTURES,
+    STRUCTURE_FAMILIES,
+    type StructureFamily,
+} from "@/utils/structures/catalog";
 
-export const PAWN_STRUCTURES: readonly PawnStructure[] = [
-    "iqp",
-    "carlsbad",
-    "hangingPawns",
-    "caroSlav",
-    "french",
-    "maroczy",
-    "hedgehog",
-    "kingsIndian",
-];
+export const PAWN_STRUCTURES: readonly PawnStructure[] = ALL_STRUCTURES;
 
 /** The player owns the structure (has the IQP, the bind…) or faces it. */
 export type StructureRole = "own" | "against";
@@ -54,6 +50,44 @@ export function structureRows(games: readonly ProfileGame[]): StructureRow[] {
         });
     }
     return rows.sort((a, b) => b.games - a.games);
+}
+
+export type StructureFamilyRow = {
+    family: StructureFamily;
+    own: ResultBucket;
+    against: ResultBucket;
+    games: number;
+    /** Its structures with at least one game, most frequent first. */
+    rows: StructureRow[];
+};
+
+/**
+ * The structures grouped by family (the general view), each family with the games of any of its
+ * structures counted once per role; families without games are left out, most frequent first.
+ */
+export function structureFamilyRows(games: readonly ProfileGame[]): StructureFamilyRow[] {
+    const rows = structureRows(games);
+    const families: StructureFamilyRow[] = [];
+    for (const { id, structures } of STRUCTURE_FAMILIES) {
+        const members = rows.filter((row) => structures.includes(row.structure));
+        if (members.length === 0) continue;
+        const own = new Map<string, ProfileGame>();
+        const against = new Map<string, ProfileGame>();
+        for (const game of games) {
+            for (const hit of game.structures ?? []) {
+                if (!structures.includes(hit.structure)) continue;
+                (structureRole(game, hit.ownerWhite) === "own" ? own : against).set(game.key, game);
+            }
+        }
+        families.push({
+            family: id,
+            own: resultBucket(`${id}:own`, [...own.values()]),
+            against: resultBucket(`${id}:against`, [...against.values()]),
+            games: new Set([...own.keys(), ...against.keys()]).size,
+            rows: members,
+        });
+    }
+    return families.sort((a, b) => b.games - a.games);
 }
 
 /** Queens off before move 25 and endgames reached, with the rest of the games for comparison. */

@@ -96,6 +96,7 @@ import OpeningExportModal from "./OpeningExportModal";
 import RepertoireDifficultyModal from "./RepertoireDifficultyModal";
 import OpeningConsolidationModal from "./OpeningConsolidationModal";
 import OpeningImportEditor from "./OpeningImportEditor";
+import ReferenceSections, { groupReferenceVariants } from "./OpeningReferenceSections";
 import {
   CreateRepertoireCard,
   ImportRepertoireCard,
@@ -755,6 +756,9 @@ export default function OpeningDashboardPage() {
   const sampleErrors = inspection?.samples.filter((sample) => sample.error).length ?? 0;
   const importGroups =
     inspection && importDraft ? draftToImportGroups(inspection, importDraft) : [];
+  const referenceRecords = importGroups
+    .filter((group) => group.contentType === "reference")
+    .reduce((sum, group) => sum + group.recordIndexes.length, 0);
   const suggestedExclusions =
     inspection && importDraft
       ? getOpeningImportSuggestedExclusions(inspection, config.groupingMode).filter((index) =>
@@ -1011,6 +1015,7 @@ export default function OpeningDashboardPage() {
                 const modelGameCount = variants.filter(
                   (variant) => variant.contentType === "modelGame",
                 ).length;
+                const referenceGroups = groupReferenceVariants(variants);
                 const repertoireMetrics = getOpeningRepertoireMetrics(
                   areas.openings,
                   repertoire.id,
@@ -1033,6 +1038,14 @@ export default function OpeningDashboardPage() {
                             {modelGameCount > 0
                               ? t("Training.Copy.v0modelgames.f637b000", " · {{v0}} model games", {
                                   v0: modelGameCount,
+                                })
+                              : ""}
+                            {referenceGroups.length > 0
+                              ? t("Repertoire.ReferenceCount", " · {{count}} informative", {
+                                  count: referenceGroups.reduce(
+                                    (sum, group) => sum + group.variants.length,
+                                    0,
+                                  ),
                                 })
                               : ""}
                           </Text>
@@ -1373,7 +1386,7 @@ export default function OpeningDashboardPage() {
                                                     color="blue"
                                                     variant="light"
                                                     disabled={
-                                                      variant.contentType === "modelGame" ||
+                                                      variant.contentType !== "theory" ||
                                                       trainable === 0
                                                     }
                                                     leftSection={<IconPlayerPlay size={14} />}
@@ -1672,6 +1685,15 @@ export default function OpeningDashboardPage() {
                                   </Card>
                                 ))}
                             </SimpleGrid>
+                            {referenceGroups.length > 0 && (
+                              <ReferenceSections
+                                groups={referenceGroups}
+                                onOpen={(variantId) =>
+                                  void openVariant(repertoire, variantId, "analysis")
+                                }
+                                onEdit={openVariantSettings}
+                              />
+                            )}
                             {!!repertoire.imports?.length && (
                               <Text size="xs" c="dimmed">
                                 {t("Repertoire.ImportCount", "Recorded additions: {{count}}", {
@@ -1726,6 +1748,12 @@ export default function OpeningDashboardPage() {
                 "The editable copy will contain {{groups}} sections. Review and adjust how the PGN records are grouped before importing.",
                 { groups: importGroups.length },
               )}
+              {referenceRecords > 0 &&
+                ` ${t(
+                  "OpeningImport.ReferenceGrouped",
+                  "{{count}} records that start from their own position (exercises, endgames…) go to informative sections: they are kept to look at and analyze, not trained. You can change it in each section's menu.",
+                  { count: referenceRecords },
+                )}`}
               {suggestedExclusions > 0 &&
                 ` ${t(
                   "OpeningImport.PuzzlesExcluded",
@@ -1980,6 +2008,10 @@ export default function OpeningDashboardPage() {
                       "Model game (analysis only)",
                     ),
                   },
+                  {
+                    value: "reference",
+                    label: t("Repertoire.ReferenceType", "Informative (analysis only)"),
+                  },
                 ]}
                 onChange={(value) =>
                   value && setVariantDraftType(value as OpeningVariant["contentType"])
@@ -2016,7 +2048,7 @@ export default function OpeningDashboardPage() {
                           description={t("Training.Copy.v0plies.26d40cf6", "{{v0}} plies", {
                             v0: line.plyCount,
                           })}
-                          disabled={variantDraftType === "modelGame"}
+                          disabled={variantDraftType !== "theory"}
                           checked={
                             variantDraftType === "theory" && trainableLineIds.includes(line.id)
                           }

@@ -73,6 +73,28 @@ describe("current-position actions", () => {
         expect(matches[0].routeSan).toEqual(["Nf3", "d5", "g3", "c5"]);
     });
 
+    it("finds the board's pawn structure wherever the other pieces stand", () => {
+        const store = createTreeStore();
+        store.getState().makeMoves({ payload: ["g3", "d5", "Bg2", "c5"] });
+        const matches = findRepertoirePositionMatches(
+            openingsWithMoveOrders(),
+            store.getState(),
+            "pawns",
+        );
+        expect(matches.map((match) => [match.lineId, match.kind, match.ply])).toEqual([
+            ["exact", "pawns", 4],
+            ["transposition", "pawns", 4],
+        ]);
+        // The start position's pawns are in every line: nothing to search.
+        expect(
+            findRepertoirePositionMatches(
+                openingsWithMoveOrders(),
+                createTreeStore().getState(),
+                "pawns",
+            ),
+        ).toEqual([]);
+    });
+
     it("promotes the reviewed branch to the copied tactical solution and keeps alternatives", () => {
         const store = createTreeStore();
         store.getState().makeMoves({ payload: ["e4", "e5", "Nf3"] });

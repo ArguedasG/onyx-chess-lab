@@ -13,7 +13,8 @@ import type {
 import { getNodeAtPath, type TreeNode, type TreeState } from "./treeReducer";
 
 export type RepertoirePositionMatch = {
-    kind: "exact" | "transposition";
+    /** `pawns`: same pawn structure, whatever the other pieces. */
+    kind: "exact" | "transposition" | "pawns";
     repertoireId: string;
     repertoireName: string;
     variantId: string;
@@ -52,6 +53,22 @@ export function positionFenKey(fen: string): string {
     return fen.trim().split(/\s+/).slice(0, 4).join(" ");
 }
 
+/** Where the pawns of each colour stand, ignoring every other piece. */
+export function pawnStructureKey(fen: string): string {
+    const board = fen.trim().split(/\s+/)[0] ?? "";
+    return board
+        .split("/")
+        .map((rank) =>
+            rank.replace(/\d/g, (count) => ".".repeat(Number(count))).replace(/[^pP]/g, "."),
+        )
+        .join("/");
+}
+
+/** The pawns of the start position: every line has them, so they are not worth searching. */
+export const START_PAWNS_KEY = pawnStructureKey(
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+);
+
 function currentPathMoves(tree: TreeState): string[] {
     const moves: string[] = [];
     let node = tree.root;
@@ -70,12 +87,19 @@ function sameMoves(left: string[], right: string[]): boolean {
     return left.length === right.length && left.every((move, index) => move === right[index]);
 }
 
+/**
+ * Lines of the trainable repertoire that reach the board position (`position`) or its pawn
+ * structure (`pawns`, only the first ply of each line where the pawns stand the same).
+ */
 export function findRepertoirePositionMatches(
     openings: OpeningsState,
     tree: TreeState,
+    mode: "position" | "pawns" = "position",
 ): RepertoirePositionMatch[] {
     const currentNode = getNodeAtPath(tree.root, tree.position);
-    const targetKey = positionFenKey(currentNode.fen);
+    const keyOf = mode === "pawns" ? pawnStructureKey : positionFenKey;
+    const targetKey = keyOf(currentNode.fen);
+    if (mode === "pawns" && targetKey === START_PAWNS_KEY) return [];
     const boardMoves = currentPathMoves(tree);
     const boardRootKey = positionFenKey(tree.root.fen);
     const matches: RepertoirePositionMatch[] = [];
@@ -90,7 +114,7 @@ export function findRepertoirePositionMatches(
         const routeSan: string[] = [];
 
         for (let ply = 0; ply <= line.moves.length; ply += 1) {
-            if (positionFenKey(makeFen(position.toSetup())) === targetKey) {
+            if (keyOf(makeFen(position.toSetup())) === targetKey) {
                 const exact =
                     boardRootKey === positionFenKey(line.fen) &&
                     sameMoves(boardMoves, line.moves.slice(0, ply));
@@ -103,7 +127,7 @@ export function findRepertoirePositionMatches(
                     continuationPosition.play(move);
                 }
                 matches.push({
-                    kind: exact ? "exact" : "transposition",
+                    kind: mode === "pawns" ? "pawns" : exact ? "exact" : "transposition",
                     repertoireId: repertoire.id,
                     repertoireName: repertoire.name,
                     variantId: variant.id,
@@ -114,6 +138,7 @@ export function findRepertoirePositionMatches(
                     routeSan: [...routeSan],
                     continuationSan,
                 });
+                if (mode === "pawns") break;
             }
             const uci = line.moves[ply];
             if (!uci) break;
@@ -126,7 +151,7 @@ export function findRepertoirePositionMatches(
 
     return matches.sort(
         (left, right) =>
-            Number(left.kind === "transposition") - Number(right.kind === "transposition") ||
+            Number(left.kind !== "exact") - Number(right.kind !== "exact") ||
             left.repertoireName.localeCompare(right.repertoireName) ||
             left.variantName.localeCompare(right.variantName) ||
             left.ply - right.ply,

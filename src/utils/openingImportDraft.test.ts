@@ -54,23 +54,26 @@ describe("opening import draft", () => {
         expect(draft.excluded).toEqual([]);
     });
 
-    it("leaves puzzles out by default in smart mode only", () => {
+    it("puts puzzles in an informative section in smart mode only", () => {
         const withPuzzle = {
             ...inspection,
             samples: [
                 ...inspection.samples,
                 sample(6, "Fantastic shot!", { startingFen: "puzzle" }),
+                sample(7, "Another shot", { startingFen: "puzzle-2" }),
             ],
         };
         const draft = createOpeningImportDraft(withPuzzle, "smart");
-        expect(draft.excluded).toEqual([6]);
-        expect(
-            draftToImportGroups(withPuzzle, draft).flatMap((g) => g.recordIndexes),
-        ).not.toContain(6);
-
-        const restored = restoreDraftRecord(withPuzzle, draft, 6);
-        expect(restored.sections.at(-1)).toMatchObject({ recordIndexes: [6] });
+        expect(draft.excluded).toEqual([]);
+        const reference = draft.sections.find((section) => section.contentType === "reference");
+        // Different starting positions share an informative section.
+        expect(reference?.recordIndexes).toEqual([6, 7]);
         expect(createOpeningImportDraft(withPuzzle, "records").excluded).toEqual([]);
+        expect(
+            createOpeningImportDraft(withPuzzle, "records").sections.some(
+                (section) => section.contentType === "reference",
+            ),
+        ).toBe(false);
     });
 
     it("moves a record between compatible sections at the requested position", () => {
