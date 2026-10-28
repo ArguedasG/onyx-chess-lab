@@ -1,5 +1,112 @@
 [
   {
+    "version": "0.23.0",
+    "notes": {
+      "en": {
+        "summary": "A big release: a new catalogue of human-like bots with real playing styles, ratings against them by time control, tournaments, named pawn structures with their plans, and a twin of any player that thinks and plays like them.",
+        "sections": [
+          {
+            "title": "Bots",
+            "items": [
+              "74 bots from 800 to 2800, each with its own playing personality, opening style and repertoire, and a bot explorer with filters.",
+              "Playing styles are real: aggressive, defensive, simplifying or complicating bots choose different moves among Maia's human candidates.",
+              "Strong bots: above 2450 Stockfish discards Maia's worst candidates, so the ladder reaches 2800 while still playing like a human.",
+              "Human think time by time control, with longer thinks when leaving the book and in critical positions.",
+              "Your rating against the bots for blitz, rapid and classical (Glicko-2), with rated and casual games saved in their own database.",
+              "Guided play: warnings at critical moments and, if you want, the piece and then the move.",
+              "A single setup panel for games against a bot: opponent, time control, game type, colour and help."
+            ]
+          },
+          {
+            "title": "Tournaments",
+            "items": [
+              "New Tournaments section where you play: round robin, Swiss, knockout and double elimination.",
+              "Templates (all at my level, I'm the favourite, everyone is stronger…) that fill the field with catalogue bots and generated players.",
+              "Optional daily, weekly and monthly calendar, armageddon tiebreaks, withdrawal, performance rating and PGN export."
+            ]
+          },
+          {
+            "title": "Pawn structures",
+            "items": [
+              "28 named structures in eight families, following Mauricio Flores Rios's Chess Structures (Caro-Kann and Slav, the King's Indian, Najdorf, French and Benoni types, Stonewall, Hedgehog…).",
+              "A card for each structure: skeleton with its typical breaks, the plans of both sides, related structures, the player's games and model games from your reference database.",
+              "Play any structure from a real position against Maia, with it or against it.",
+              "The structure of the current position is shown next to the opening name on the board."
+            ]
+          },
+          {
+            "title": "Player twin",
+            "items": [
+              "The twin now thinks like the player, from the clocks of their games at each time control.",
+              "Its style can be measured against Maia at the player's rating; the twin uses it only if it predicts the player's recent games better.",
+              "Twins above 2600 are checked by Stockfish, like the strongest bots."
+            ]
+          },
+          {
+            "title": "Openings and other improvements",
+            "items": [
+              "Search the board's pawn structure in your repertoires (Current-position actions → Repertoires).",
+              "Informative repertoire sections for strategy, endgames or exercises: to look at and analyze, never trained. Imported exercises go there instead of being left out.",
+              "All the engine's options (Maia's rating, for example) in the engine settings of the board.",
+              "Update notes in your language and a wider update window."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Una versión grande: un catálogo nuevo de bots humanos con estilos de juego reales, rating contra ellos por ritmo, torneos, estructuras de peones con nombre y sus planes, y un gemelo de cualquier jugador que piensa y juega como él.",
+        "sections": [
+          {
+            "title": "Bots",
+            "items": [
+              "74 bots de 800 a 2800, cada uno con su personalidad de juego, su estilo de apertura y su repertorio, y un explorador de bots con filtros.",
+              "Los estilos de juego son reales: los bots agresivos, defensivos, simplificadores o complicadores eligen jugadas distintas entre las candidatas humanas de Maia.",
+              "Bots fuertes: por encima de 2450 Stockfish descarta las peores candidatas de Maia, así que la escalera llega a 2800 sin dejar de jugar como un humano.",
+              "Tiempo de reflexión humano según el ritmo, con más tiempo al salir del libro y en posiciones críticas.",
+              "Tu rating contra los bots en blitz, rápidas y clásicas (Glicko-2), con las partidas puntuables y amistosas guardadas en su propia base.",
+              "Partida guiada: avisos en los momentos críticos y, si quieres, la pieza y después la jugada.",
+              "Un panel único para preparar la partida contra un bot: rival, ritmo, tipo de partida, color y ayuda."
+            ]
+          },
+          {
+            "title": "Torneos",
+            "items": [
+              "Nueva sección Torneos en la que juegas tú: todos contra todos, suizo, eliminación directa y doble eliminación.",
+              "Plantillas (todos de mi nivel, soy el favorito, todos son mejores…) que llenan el campo con bots del catálogo y jugadores generados.",
+              "Calendario diario, semanal y mensual opcional, desempate por armagedón, retirada, rendimiento y exportación PGN."
+            ]
+          },
+          {
+            "title": "Estructuras de peones",
+            "items": [
+              "28 estructuras con nombre en ocho familias, siguiendo Chess Structures de Mauricio Flores Rios (Caro-Kann y Eslava, los tipos de la India de rey, Najdorf, Francesa y Benoni, Stonewall, Erizo…).",
+              "Una ficha por estructura: esqueleto con sus rupturas típicas, los planes de cada bando, estructuras relacionadas, las partidas del jugador y partidas modelo de tu base de referencia.",
+              "Juega cualquier estructura desde una posición real contra Maia, con ella o contra ella.",
+              "La estructura de la posición actual aparece junto al nombre de la apertura en el tablero."
+            ]
+          },
+          {
+            "title": "Gemelo del jugador",
+            "items": [
+              "El gemelo ahora piensa como el jugador, según los relojes de sus partidas en cada ritmo.",
+              "Su estilo se puede medir frente a Maia a su nivel; el gemelo lo usa solo si predice mejor sus partidas recientes.",
+              "Los gemelos de más de 2600 los revisa Stockfish, como los bots más fuertes."
+            ]
+          },
+          {
+            "title": "Aperturas y otras mejoras",
+            "items": [
+              "Busca la estructura de peones del tablero en tus repertorios (Acciones de la posición → Repertorios).",
+              "Secciones informativas en los repertorios para estrategia, finales o ejercicios: para ver y analizar, nunca se entrenan. Los ejercicios importados van ahí en lugar de quedar fuera.",
+              "Todas las opciones del motor (por ejemplo, el Elo de Maia) en los ajustes del motor del tablero.",
+              "Las novedades de cada actualización en tu idioma y una ventana de actualización más ancha."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.22.0",
     "notes": {
       "en": {
