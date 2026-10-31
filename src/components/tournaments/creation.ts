@@ -1,6 +1,11 @@
 import { GENERATED_PLAYER_PREFIX } from "@/utils/botGeneratedPlayers";
 import { botRatingAt, type RatedRhythm } from "@/utils/botRating";
 import { getHumanBotProfile } from "@/utils/humanBots";
+import {
+    resolveTwinProfile,
+    type SavedTwin,
+    twinParticipantId,
+} from "@/utils/preparation/savedTwins";
 import type { CalendarEvent } from "@/utils/tournaments/calendar";
 import { createTournament } from "@/utils/tournaments/engine";
 import { buildField, templateFilters } from "@/utils/tournaments/templates";
@@ -31,6 +36,23 @@ export function entrantFor(
         name: profile.name,
         rating: botRatingAt(profile.elo, rhythm),
         kind: profile.id.startsWith(GENERATED_PLAYER_PREFIX) ? "generated" : "catalog",
+    };
+}
+
+/**
+ * A saved twin as an entrant, with the rating of the profile it plays at the rhythm. It is only
+ * added by hand: autofill never picks twins.
+ */
+export function twinEntrant(
+    twin: SavedTwin,
+    rhythm: RatedRhythm,
+): Omit<TournamentParticipant, "seed"> {
+    const profile = resolveTwinProfile(twin, rhythm)?.profile;
+    return {
+        id: twinParticipantId(twin.id),
+        name: twin.name,
+        rating: Math.round(profile?.play.elo ?? 1500),
+        kind: "twin",
     };
 }
 

@@ -17,7 +17,6 @@ import {
 } from "@mantine/core";
 import MaiaRequiredAlert, { useInstalledMaia } from "@/components/common/MaiaRequiredAlert";
 import { IconAlertTriangle, IconCpu, IconRobot, IconUser } from "@tabler/icons-react";
-import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoMode } from "@/bindings";
@@ -47,9 +46,15 @@ import {
   type HumanBotRepertoireId,
   isMaiaEngine,
 } from "@/utils/humanBots";
-import { twinBooksAtom } from "@/state/twinBots";
+import { useSavedTwins, useTwinLookup } from "@/state/savedTwins";
 import { rhythmOfClock } from "@/utils/botRating";
+import {
+  resolveTwinProfile,
+  TWIN_PROFILE_KEYS,
+  type TwinProfileKey,
+} from "@/utils/preparation/savedTwins";
 import { type TwinThinking, twinTiming } from "@/utils/preparation/twin";
+import { useProfileLabel } from "@/components/players/preparation/twinLabels";
 import { useRhythmLabel } from "./RatedGameSelector";
 import { EnginesSelect } from "./EnginesSelect";
 import { BotSummaryCard, useCatalogRepertoireLabel } from "./BotPicker";
@@ -89,16 +94,20 @@ export type OpponentSettings =
       twin?: TwinOpponent;
     };
 
-/** The twin of a player: their book (in `twinBooksAtom`) and Maia at their level out of it. */
+/**
+ * The twin of a player card (I-43): a saved or session twin, found by id, whose profile is chosen
+ * by the game's clock unless one is picked. Twins of version 1 (before saved twins) only had the
+ * other fields; without their book they play as Maia at their rating.
+ */
 export type TwinOpponent = {
   id: string;
   name: string;
+  /** Rating of the general profile, for the other side's opponent rating. */
   elo: number;
-  games: number;
-  lines: number;
-  /** The player's think time by rhythm, from their clocks (9.3). */
+  profile?: TwinProfileKey | "auto";
+  games?: number;
+  lines?: number;
   thinking?: TwinThinking;
-  /** Measured style weights, only when they predicted the player's recent games better. */
   style?: { aggression: number; simplification: number } | null;
 };
 
@@ -458,6 +467,9 @@ export function OpponentForm({
             <TwinCard
               twin={opponent.twin}
               timeControl={opponent.timeControl}
+              onChange={(twin) =>
+                setOpponent((prev) => (prev.type === "humanBot" ? { ...prev, twin } : prev))
+              }
               onRemove={() =>
                 setOpponent((prev) =>
                   prev.type === "humanBot" ? { ...prev, twin: undefined } : prev,
@@ -476,6 +488,11 @@ export function OpponentForm({
                       ? { ...prev, profileId: profileId as HumanBotProfileId, twin: undefined }
                       : prev,
                   )
+                }
+              />
+              <SavedTwinPicker
+                onPick={(twin) =>
+                  setOpponent((prev) => (prev.type === "humanBot" ? { ...prev, twin } : prev))
                 }
               />
             </>
@@ -700,20 +717,31 @@ export function OpponentForm({
 function TwinCard({
   twin,
   timeControl,
+  onChange,
   onRemove,
 }: {
   twin: TwinOpponent;
   timeControl?: TimeControlField;
+  onChange: (twin: TwinOpponent) => void;
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
   const rhythmLabel = useRhythmLabel();
-  const books = useAtomValue(twinBooksAtom);
-  const loaded = Boolean(books[twin.id]);
+  const profileLabel = useProfileLabel();
+  const lookup = useTwinLookup();
+  const saved = lookup.get(twin.id);
   const rhythm = timeControl ? rhythmOfClock(timeControl) : null;
-  const timing = rhythm
-    ? twinTiming(twin.thinking, rhythm, humanBotTimingForElo(twin.elo)).source
-    : null;
+  const resolved = saved ? resolveTwinProfile(saved, rhythm, twin.profile ?? "auto") : null;
+  const play = resolved?.profile.play;
+  const timing =
+    rhythm && (!saved || saved.timing === "player")
+      ? twinTiming(
+          saved?.thinking ?? twin.thinking,
+          rhythm,
+          humanBotTimingForElo(play?.elo ?? twin.elo),
+        ).source
+      : null;
+  const styled = play ? play.aggression !== 0 || play.simplification !== 0 : Boolean(twin.style);
   return (
     <Paper withBorder p="sm">
       <Stack gap={6}>
@@ -721,49 +749,124 @@ function TwinCard({
           <Text fw={600} lineClamp={1}>
             {t("Preparation.Twin.Name", "Twin of {{name}}", { name: twin.name })}
           </Text>
-          <Badge variant="light">{twin.elo} ELO</Badge>
+          <Badge variant="light">{play?.elo ?? twin.elo} ELO</Badge>
         </Group>
-        <Text size="sm">
-          {t(
-            "Preparation.Twin.Summary",
-            "Plays {{name}}'s repertoire ({{lines}} sequences from {{games}} games) and, out of it, like a player of that rating (Maia).",
-            { name: twin.name, lines: twin.lines, games: twin.games },
-          )}
-        </Text>
+        {saved && resolved ? (
+          <>
+            <Text size="sm">
+              {t(
+                "Preparation.Twin.ProfileSummary",
+                "Plays {{name}}'s repertoire at {{profile}} ({{games}} games) and, out of it, like a player of that rating.",
+                {
+                  name: twin.name,
+                  profile: profileLabel(resolved.profile.key).toLowerCase(),
+                  games: resolved.profile.games,
+                },
+              )}
+            </Text>
+            <Select
+              size="xs"
+              label={t("Preparation.Twin.PlayProfile", "Profile in the game")}
+              allowDeselect={false}
+              value={twin.profile ?? "auto"}
+              onChange={(value) =>
+                onChange({ ...twin, profile: (value ?? "auto") as TwinProfileKey | "auto" })
+              }
+              data={[
+                { value: "auto", label: t("Preparation.Twin.AutoProfile", "By the game's clock") },
+                ...TWIN_PROFILE_KEYS.filter((key) => saved.profiles[key]).map((key) => ({
+                  value: key,
+                  label: profileLabel(key),
+                })),
+              ]}
+            />
+            {resolved.kind === "nearest" && rhythm && (
+              <Text size="xs" c="orange">
+                {t(
+                  "Preparation.Twin.NearestProfile",
+                  "{{name}} has too few {{rhythm}} games: the twin uses their {{profile}} profile.",
+                  {
+                    name: twin.name,
+                    rhythm: rhythmLabel(rhythm).toLowerCase(),
+                    profile: profileLabel(resolved.profile.key).toLowerCase(),
+                  },
+                )}
+              </Text>
+            )}
+            {resolved.kind === "general" && rhythm && (
+              <Text size="xs" c="orange">
+                {t(
+                  "Preparation.Twin.GeneralProfile",
+                  "No rhythm of {{name}} has enough games: the twin uses all their games.",
+                  { name: twin.name },
+                )}
+              </Text>
+            )}
+          </>
+        ) : (
+          <Alert color="yellow" icon={<IconAlertTriangle size={16} />} py={6}>
+            {lookup.loaded
+              ? t(
+                  "Preparation.Twin.NotFound",
+                  "This twin is no longer available (not saved, or deleted): it will play as plain Maia. Open it again from the player card.",
+                )
+              : t("Preparation.Twin.Loading", "Loading the saved twins…")}
+          </Alert>
+        )}
         <Group gap={6}>
           {rhythm && (
             <Badge variant="light" color={timing ? "teal" : "gray"}>
-              {timing?.kind === "measured"
-                ? t("Preparation.Twin.TimeMeasured", "Thinks like {{name}} at this rhythm", {
-                    name: twin.name,
-                  })
-                : timing?.kind === "estimated"
-                  ? t(
-                      "Preparation.Twin.TimeEstimated",
-                      "Think time from {{name}}'s {{rhythm}} games",
-                      { name: twin.name, rhythm: rhythmLabel(timing.rhythm).toLowerCase() },
-                    )
-                  : t("Preparation.Twin.TimeGeneric", "Think time of its rating")}
+              {saved?.timing === "none"
+                ? t("Preparation.Twin.TimingNone", "Instant")
+                : timing?.kind === "measured"
+                  ? t("Preparation.Twin.TimeMeasured", "Thinks like {{name}} at this rhythm", {
+                      name: twin.name,
+                    })
+                  : timing?.kind === "estimated"
+                    ? t(
+                        "Preparation.Twin.TimeEstimated",
+                        "Think time from {{name}}'s {{rhythm}} games",
+                        { name: twin.name, rhythm: rhythmLabel(timing.rhythm).toLowerCase() },
+                      )
+                    : t("Preparation.Twin.TimeGeneric", "Think time of its rating")}
             </Badge>
           )}
-          <Badge variant="light" color={twin.style ? "grape" : "gray"}>
-            {twin.style
-              ? t("Preparation.Twin.StyleOwn", "Measured style")
+          <Badge variant="light" color={styled ? "grape" : "gray"}>
+            {styled
+              ? t("Preparation.Twin.StyleOwn", "Style of its own")
               : t("Preparation.Twin.StyleNone", "No style of its own")}
           </Badge>
         </Group>
-        {!loaded && (
-          <Alert color="yellow" icon={<IconAlertTriangle size={16} />} py={6}>
-            {t(
-              "Preparation.Twin.NotLoaded",
-              "The twin's book is no longer in memory: open it again from the player card, or it will play as plain Maia.",
-            )}
-          </Alert>
-        )}
         <Button size="xs" variant="subtle" color="gray" onClick={onRemove}>
           {t("Preparation.Twin.UseProfile", "Use a catalogue profile instead")}
         </Button>
       </Stack>
     </Paper>
+  );
+}
+
+/** Picks one of the saved twins as the opponent. */
+function SavedTwinPicker({ onPick }: { onPick: (twin: TwinOpponent) => void }) {
+  const { t } = useTranslation();
+  const { twins } = useSavedTwins();
+  if (!twins || twins.length === 0) return null;
+  return (
+    <Select
+      size="xs"
+      placeholder={t("Preparation.Twin.PickSaved", "Or play against a saved twin…")}
+      value={null}
+      searchable
+      data={twins.map((twin) => ({ value: twin.id, label: twin.name }))}
+      onChange={(value) => {
+        const twin = twins.find((entry) => entry.id === value);
+        if (twin)
+          onPick({
+            id: twin.id,
+            name: twin.name,
+            elo: twin.profiles.general?.play.elo ?? DEFAULT_MAIA_ELO,
+            profile: "auto",
+          });
+      }}
+    />
   );
 }

@@ -1,5 +1,6 @@
 import type { BotPlayStyleId } from "@/utils/botCatalogSpecs";
 import { getHumanBotProfile, humanBotPlayStyle } from "@/utils/humanBots";
+import { twinIdOfParticipant } from "@/utils/preparation/savedTwins";
 import { hashText, seededRandom } from "./random";
 import type { TournamentResult } from "./types";
 
@@ -48,7 +49,8 @@ function levelDrawRate(average: number): number {
 }
 
 function styleDrawFactor(participantId: string): number {
-    if (participantId === "user") return 1;
+    // The user and twins have no catalogue personality.
+    if (participantId === "user" || twinIdOfParticipant(participantId)) return 1;
     return STYLE_DRAW_FACTOR[humanBotPlayStyle(getHumanBotProfile(participantId))];
 }
 

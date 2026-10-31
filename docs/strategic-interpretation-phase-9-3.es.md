@@ -166,3 +166,60 @@ Unas 400 posiciones: uno o dos minutos con Maia 3 gestionado. El resultado se gu
 - A qué estructuras lleva una línea en el informe de posición: necesita calcular las estructuras de
   las partidas del informe.
 - Gemelo con Maia ajustada al jugador (I-43 versión 2, Fase 10).
+
+## Ampliación: gemelos guardados, editables y por ritmo (2026-10-30)
+
+Pedido del autor tras 0.23.0: poder modificar el gemelo, guardarlo, actualizarlo y afinarlo, y
+que el ajuste busque algo que prediga al jugador mejor que Maia sola (sin dar por hecho que lo
+haya). Sigue siendo I-43 versión 1: Maia ajustada al jugador (versión 2) queda en la Fase 10.
+
+### Decisiones
+
+- **Un perfil por ritmo.** Un jugador juega muy distinto en bala y en clásicas, así que el gemelo
+  guarda un perfil por ritmo con al menos 20 partidas (libro, rating, estilo y variabilidad
+  propios) y uno general con todas. La partida usa el de su reloj; si ese ritmo no tiene perfil,
+  el del ritmo más cercano (por tiempo de reflexión), y sin reloj el general. El formulario de
+  rival lo avisa y deja elegir otro perfil a mano.
+- **El gemelo lee todos los ritmos** con el resto de filtros de la ficha (fuentes, periodo,
+  últimas N…): el filtro de ritmo de la ficha ya no lo recorta. Las partidas sin control de tiempo
+  (presenciales, casi siempre) solo cuentan en el perfil general.
+- **Guardado en `twins-v1.json`**, un archivo propio en los datos de Onyx, validado con zod,
+  cargado bajo demanda y escrito de forma atómica, como la cola de errores. Un gemelo sin guardar
+  se puede jugar durante la sesión. La medición de estilo de 9.3 (`twin-styles-v1`) solo siembra
+  el perfil general del primer gemelo de la ficha.
+- **Editar a mano está permitido y se dice:** el origen de cada perfil es «Maia a su rating»,
+  «Estilo medido», «Autoajustado» o «Ajustado a mano, sin medir». «Evaluar» compara cualquier
+  configuración con Maia sola en las partidas del jugador.
+- **Actualizar** vuelve a leer las partidas de la ficha y conserva lo decidido: un perfil
+  editado, medido o autoajustado mantiene su forma de jugar; uno por defecto sigue el rating nuevo.
+- **Torneos:** un gemelo guardado se puede añadir a mano; el autorrelleno nunca lo elige. Juega el
+  perfil del ritmo del torneo, simula sin personalidad (factor de tablas 1) y sus partidas cuentan
+  en el torneo pero no para el rating del usuario, como cualquier partida contra un gemelo.
+
+### Ajuste (`db/player_style.rs`)
+
+`measure_player_style` admite ahora otros ratings de Maia, la temperatura y una configuración fija:
+
+- **Medir el estilo:** como en 9.3, los dos pesos al rating del perfil (una pasada de Maia).
+- **Autoajustar:** pesos (cuadrícula de 9 × 9), temperatura (0,6, 0,8, 1, 1,25 y 1,5, aplicada
+  sobre toda la política como hace `sample_index` al jugar) y rating de Maia (el del perfil y
+  ±100/±200, una pasada por rating, unos 5–10 min). Se elige lo mejor en las partidas antiguas y se
+  compara en el 20 % más reciente con Maia sola **al rating del jugador**; se adopta solo si gana
+  más de 0,002 de log-verosimilitud por jugada. Si gana Maia, se dice y no se usa.
+- **Evaluar:** la configuración actual, sin ajustar nada, en todas las posiciones.
+
+Cada perfil guarda sus últimas 8 mediciones. En juego, con Stockfish el bot aplica estilo y
+temperatura (`botPlay`); sin él, la temperatura va a Maia y el estilo no se aplica, como en los
+bots del catálogo. Las partidas llevan `WhiteTwinProfile`/`BlackTwinProfile` con el perfil usado.
+
+### Validación
+
+- Rust: elección de la temperatura en un jugador predecible, elección del rating que mejor
+  predice, evaluación de una configuración fija y orden de los ratings medidos (además de las
+  pruebas de 9.3).
+- Frontend: perfiles por ritmo y mínimo de partidas, último rating, resolución del perfil
+  (exacto, más cercano, general, elegido), actualización que conserva lo decidido, libro compacto,
+  validación del archivo, ratings del autoajuste, libro con las últimas N partidas y gemelos en
+  torneos.
+- **Validación manual nativa: pendiente** (en particular la duración real del autoajuste con Maia
+  3 gestionado y si mejora a Maia en jugadores reales).

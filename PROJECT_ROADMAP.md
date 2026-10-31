@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-16.
+> Última actualización: 2026-10-30.
 
 ## 1. Cómo utilizar este documento
 
@@ -765,7 +765,7 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ## 8. Fase 9 — Expansión avanzada de fases anteriores
 
-**Estado: Pendiente; posterior a Fase 8.**
+**Estado: implementada y publicada en 0.23.0; pendiente de validación manual.**
 
 ### 9.1. Bots humanos y calibración
 
@@ -831,6 +831,14 @@ sus partidas recientes.
 - finales típicos de una apertura con procedencia y cobertura;
 - patrones estratégicos con confianza visible;
 - revisión humana de ejemplos representativos.
+
+**Ampliación: gemelos guardados (2026-10-30), pendiente de validación manual.** Gemelos que se
+guardan (`twins-v1.json`), se editan a mano (rating, estilo, variabilidad, personalidad de
+partida), se actualizan con las partidas nuevas y se autoajustan (estilo, temperatura y rating de
+Maia ±200, adoptados solo si predicen mejor que Maia las partidas recientes). Un perfil por ritmo
+con al menos 20 partidas y uno general; la partida usa el de su reloj. Se eligen en el formulario
+de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
+`docs/strategic-interpretation-phase-9-3.es.md`.
 
 ---
 
@@ -967,6 +975,20 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-10-30 — Gemelos guardados, editables y por ritmo
+
+- Revisión del estado tras 0.23.0: solo queda la Fase 10, que el autor hará cuando todo lo
+  funcional esté validado; puede adelantar piezas si hacen falta.
+- Ampliación de 9.3 pedida por el autor: el gemelo se guarda, se edita, se actualiza y se
+  autoajusta, con un perfil por ritmo (el bala y las clásicas de un jugador no se mezclan).
+  También puede añadirse a mano a un torneo.
+- Tablero interactivo en «Repertorio probable»: se mueven piezas (cualquier jugada legal),
+  flechas con las jugadas más jugadas y aviso, con vuelta atrás, al salir de sus partidas.
+- Fuente «Rival» en el panel de base de datos del tablero: una línea abierta desde Preparación
+  muestra, en cada posición, las jugadas del jugador con las mismas cifras que «Repertorio
+  probable»; un clic juega la jugada. Vive en memoria: una pestaña reabierta tras reiniciar la
+  app ya no la tiene.
 
 ### 2026-10-27 — Release 0.23.0
 

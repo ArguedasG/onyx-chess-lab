@@ -11,6 +11,7 @@ import {
   USER_PARTICIPANT_ID,
 } from "@/utils/tournaments/types";
 import { formatPoints, useTournamentLabels } from "./labels";
+import { TWIN_COLOR } from "./TwinBadge";
 
 export function PlayerName({
   participant,
@@ -30,7 +31,9 @@ export function PlayerName({
   const isUser = participant.id === USER_PARTICIPANT_ID;
   const color = isUser
     ? "blue"
-    : PLAY_COLORS[humanBotPlayStyle(getHumanBotProfile(participant.id))];
+    : participant.kind === "twin"
+      ? TWIN_COLOR
+      : PLAY_COLORS[humanBotPlayStyle(getHumanBotProfile(participant.id))];
   return (
     <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
       <Avatar

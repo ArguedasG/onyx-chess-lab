@@ -69,7 +69,16 @@ import type {
   TournamentParticipant,
   TournamentTemplate,
 } from "@/utils/tournaments/types";
-import { defaultSwissRounds, entrantFor, newSeed, newTournamentId, userEntrant } from "./creation";
+import { useSavedTwins } from "@/state/savedTwins";
+import { twinIdOfParticipant } from "@/utils/preparation/savedTwins";
+import {
+  defaultSwissRounds,
+  entrantFor,
+  newSeed,
+  newTournamentId,
+  twinEntrant,
+  userEntrant,
+} from "./creation";
 import {
   clockLabel,
   EXPERIMENTAL_TEMPLATES,
@@ -79,6 +88,7 @@ import {
   tournamentRhythm,
   useTournamentLabels,
 } from "./labels";
+import { TWIN_COLOR, TwinBadge } from "./TwinBadge";
 import { useTournamentUserName } from "./useTournamentGameLauncher";
 
 const FORMATS: readonly TournamentFormat[] = [
@@ -173,6 +183,9 @@ export default function NewTournamentModal({
   const [filtersOpened, setFiltersOpened] = useState(false);
   const [removed, setRemoved] = useState<string[]>([]);
   const [added, setAdded] = useState<string[]>([]);
+  /** Saved twins added by hand; autofill never picks them. */
+  const [addedTwins, setAddedTwins] = useState<string[]>([]);
+  const { twins } = useSavedTwins();
   const [explorerOpened, setExplorerOpened] = useState(false);
 
   // Every opening of the modal starts from scratch, on the template it was opened with.
@@ -184,6 +197,7 @@ export default function NewTournamentModal({
     setSeed(newSeed());
     setRemoved([]);
     setAdded([]);
+    setAddedTwins([]);
     setFilters(null);
   }, [initialTemplate, opened]);
 
@@ -205,11 +219,15 @@ export default function NewTournamentModal({
   const effectiveRounds = swissRounds ?? defaultSwissRounds(players);
 
   // Cheap enough to rebuild on every change: a few thousand comparisons at most.
+  const twinEntrants = (twins ?? [])
+    .filter((twin) => addedTwins.includes(twin.id))
+    .map((twin) => twinEntrant(twin, rhythm));
   const field = [
     ...added.map((id) => entrantFor(id, rhythm)),
+    ...twinEntrants,
     ...buildField({
       template,
-      opponents: Math.max(0, players - 1 - added.length),
+      opponents: Math.max(0, players - 1 - added.length - twinEntrants.length),
       userRating,
       rhythm,
       filters: activeFilters,
@@ -527,6 +545,19 @@ export default function NewTournamentModal({
           >
             {t("Tournaments.Field.Add", "Add a bot")}
           </Button>
+          {(twins ?? []).some((twin) => !addedTwins.includes(twin.id)) && (
+            <Select
+              size="xs"
+              w={190}
+              searchable
+              value={null}
+              placeholder={t("Tournaments.Field.AddTwin", "Add a twin")}
+              data={(twins ?? [])
+                .filter((twin) => !addedTwins.includes(twin.id))
+                .map((twin) => ({ value: twin.id, label: twin.name }))}
+              onChange={(value) => value && setAddedTwins((list) => [...list, value])}
+            />
+          )}
         </Group>
       </Group>
 
@@ -638,6 +669,11 @@ export default function NewTournamentModal({
               key={entrant.id}
               entrant={entrant}
               onRemove={() => {
+                const twinId = twinIdOfParticipant(entrant.id);
+                if (twinId) {
+                  setAddedTwins((list) => list.filter((id) => id !== twinId));
+                  return;
+                }
                 setRemoved((list) => [...list, entrant.id]);
                 setAdded((list) => list.filter((id) => id !== entrant.id));
               }}
@@ -726,13 +762,14 @@ function EntrantRow({
 }) {
   const { t } = useTranslation();
   const profile = getHumanBotProfile(entrant.id);
+  const twin = entrant.kind === "twin";
   return (
     <Paper withBorder radius="md" px="sm" py={6}>
       <Group gap="sm" wrap="nowrap">
         <Avatar
           size={30}
           radius="xl"
-          color={PLAY_COLORS[humanBotPlayStyle(profile)]}
+          color={twin ? TWIN_COLOR : PLAY_COLORS[humanBotPlayStyle(profile)]}
           variant="light"
         >
           {initials(entrant.name)}
@@ -761,7 +798,7 @@ function EntrantRow({
             {entrant.rating}
           </Text>
         </Stack>
-        <BotBadges profile={profile} />
+        {twin ? <TwinBadge /> : <BotBadges profile={profile} />}
         <ActionIcon
           variant="subtle"
           color="gray"

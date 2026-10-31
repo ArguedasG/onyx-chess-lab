@@ -187,6 +187,11 @@ export default function PlayerCardView({
   }, [card.aliasesMigrated, card.sources, cardProfile, markMigrated, update]);
 
   const games = useMemo(() => filterProfileGames(allGames ?? [], filters), [allGames, filters]);
+  // The twin keeps one profile per rhythm, so it reads every rhythm with the other filters.
+  const twinGames = useMemo(
+    () => filterProfileGames(allGames ?? [], { ...filters, timeControls: [] }),
+    [allGames, filters],
+  );
   const timeControls = useMemo(() => timeControlsOf(allGames ?? []), [allGames]);
 
   const openGame = useOpenPlayerGame({
@@ -540,6 +545,7 @@ export default function PlayerCardView({
               <Tabs.Panel value="preparation" style={{ flex: 1, minHeight: 0 }}>
                 <PreparationTab
                   games={games}
+                  twinGames={twinGames}
                   name={card.name}
                   cardId={card.id}
                   profileId={profileId}

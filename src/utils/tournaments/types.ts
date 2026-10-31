@@ -31,14 +31,15 @@ export const gameResultSchema = z.enum(["1-0", "0-1", "1/2-1/2"]);
 export type TournamentResult = z.infer<typeof gameResultSchema>;
 
 export const participantSchema = z.object({
-    /** `user`, a catalog bot id or a generated player id (`gen-<seed>-<elo>`). */
+    /** `user`, a catalog bot id, a generated player id (`gen-<seed>-<elo>`) or a saved twin
+     * (`twin:<id>`). */
     id: z.string(),
     name: z.string(),
     /** Rating at the tournament rhythm, fixed when the tournament is created. */
     rating: z.number(),
     /** Starting rank, 1 = highest rating. */
     seed: z.number().int().positive(),
-    kind: z.enum(["user", "catalog", "generated"]),
+    kind: z.enum(["user", "catalog", "generated", "twin"]),
 });
 export type TournamentParticipant = z.infer<typeof participantSchema>;
 

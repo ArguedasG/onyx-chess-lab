@@ -58,6 +58,9 @@ const GRID: [f32; 9] = [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0];
 const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 /// Log-likelihood per move the style must gain on the held-out games to be used.
 const MIN_GAIN: f64 = 0.002;
+/// Temperatures tried when the fit includes the variability: below 1 the twin repeats its most
+/// likely moves more, above 1 it spreads its choices (and its errors) more.
+const TEMPERATURES: [f32; 5] = [0.6, 0.8, 1.0, 1.25, 1.5];
 
 #[derive(Debug, Clone, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -79,9 +82,36 @@ pub struct PlayerStyleRequest {
     pub games: Vec<StyleGameRef>,
     pub maia_path: String,
     pub maia_args: Vec<String>,
-    /// Maia's rating for the player (already within Maia's range).
+    /// Maia's rating for the player (already within Maia's range): the baseline.
     pub elo: u32,
     pub max_positions: u32,
+    /// Other Maia ratings tried by the fit (twin autotune); each one is another pass of Maia.
+    #[serde(default)]
+    pub extra_elos: Vec<u32>,
+    /// Whether the fit also tries the temperature (`TEMPERATURES`).
+    #[serde(default)]
+    pub fit_temperature: bool,
+    /// Evaluates this configuration on every game instead of fitting one (a twin edited by hand).
+    #[serde(default)]
+    pub fixed: Option<TwinPlayConfig>,
+}
+
+/// How a twin plays out of its book: Maia's rating, the style weights and the temperature.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TwinPlayConfig {
+    pub elo: u32,
+    pub aggression: f32,
+    pub simplification: f32,
+    pub temperature: f32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EloFit {
+    pub elo: u32,
+    /// Maia alone at this rating on the positions that check the result.
+    pub fit: StyleFit,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Type)]
@@ -110,14 +140,22 @@ pub struct PlayerStyleMeasurement {
     pub test_positions: u32,
     pub aggression: TraitDeviation,
     pub simplification: TraitDeviation,
-    /// Best weights on the older games (from -1 to 1 each).
+    /// Best weights on the older games (from -1 to 1 each), or the fixed ones.
     pub weights_aggression: f32,
     pub weights_simplification: f32,
-    /// Held-out games: Maia alone and Maia with the weights.
+    /// Maia's rating and temperature of the result (the baseline's and 1 when not fitted).
+    pub elo: u32,
+    pub temperature: f32,
+    /// Held-out games (every game for a fixed configuration): Maia alone at the baseline rating
+    /// and the result.
     pub maia: StyleFit,
     pub styled: StyleFit,
-    /// The weights predict the held-out games better than Maia alone.
+    /// Maia alone at each rating tried, on the same positions.
+    pub elo_fits: Vec<EloFit>,
+    /// The result predicts the held-out games better than Maia alone.
     pub improves: bool,
+    /// A fixed configuration was evaluated: nothing was fitted.
+    pub fixed: bool,
     pub cancelled: bool,
 }
 
@@ -284,14 +322,27 @@ fn styled(sample: &Sample, weights: StyleWeights) -> Vec<f32> {
     result.iter().map(|p| p / total).collect()
 }
 
-fn fit(samples: &[&Sample], weights: StyleWeights) -> StyleFit {
+/// The temperature as the bots sample with it (`bot_style::sample_index`), on the whole policy.
+fn tempered(probabilities: Vec<f32>, temperature: f32) -> Vec<f32> {
+    if (temperature - 1.0).abs() < 1e-6 {
+        return probabilities;
+    }
+    let powered: Vec<f32> = probabilities
+        .iter()
+        .map(|p| p.max(1e-9).powf(1.0 / temperature))
+        .collect();
+    let total: f32 = powered.iter().sum();
+    powered.into_iter().map(|p| p / total).collect()
+}
+
+fn fit(samples: &[&Sample], weights: StyleWeights, temperature: f32) -> StyleFit {
     if samples.is_empty() {
         return StyleFit::default();
     }
     let mut log_likelihood = 0.0_f64;
     let mut top = 0;
     for sample in samples {
-        let probabilities = styled(sample, weights);
+        let probabilities = tempered(styled(sample, weights), temperature);
         log_likelihood += f64::from(probabilities[sample.played].max(1e-9)).ln();
         let best = probabilities
             .iter()
@@ -342,41 +393,158 @@ fn deviation(samples: &[&Sample], trait_of: impl Fn(&MoveTraits) -> f32) -> Trai
     }
 }
 
-/// Deviations, best weights on the training samples and their check on the test ones.
-fn summarize(samples: &[Sample], cancelled: bool) -> PlayerStyleMeasurement {
-    let (test, train): (Vec<&Sample>, Vec<&Sample>) =
-        samples.iter().partition(|sample| sample.test);
-    let all: Vec<&Sample> = samples.iter().collect();
-    let mut best = (StyleWeights::NEUTRAL, f64::NEG_INFINITY);
-    for aggression in GRID {
-        for simplification in GRID {
-            let weights = StyleWeights {
-                aggression,
-                simplification,
-            };
-            let score = fit(&train, weights).log_likelihood;
-            if score > best.1 + 1e-9 {
-                best = (weights, score);
+/// Test and training samples.
+fn split(samples: &[Sample]) -> (Vec<&Sample>, Vec<&Sample>) {
+    samples.iter().partition(|sample| sample.test)
+}
+
+/// The samples of the same positions at one of Maia's ratings.
+struct EloSamples {
+    elo: u32,
+    samples: Vec<Sample>,
+}
+
+/// Deviations, the best configuration on the training samples and its check on the test ones.
+/// The first rating is the baseline; the others and the temperature are tried only by the fit.
+fn summarize(
+    by_elo: &[EloSamples],
+    fit_temperature: bool,
+    cancelled: bool,
+) -> PlayerStyleMeasurement {
+    let Some(base) = by_elo.first() else {
+        return PlayerStyleMeasurement {
+            cancelled,
+            temperature: 1.0,
+            ..Default::default()
+        };
+    };
+    let (base_test, base_train) = split(&base.samples);
+    let all: Vec<&Sample> = base.samples.iter().collect();
+    let temperatures: &[f32] = if fit_temperature {
+        &TEMPERATURES
+    } else {
+        &[1.0]
+    };
+    // (rating index, weights, temperature) with the best log-likelihood on the older games.
+    let mut best = (0, StyleWeights::NEUTRAL, 1.0_f32, f64::NEG_INFINITY);
+    for (index, entry) in by_elo.iter().enumerate() {
+        let (_, train) = split(&entry.samples);
+        for &temperature in temperatures {
+            for aggression in GRID {
+                for simplification in GRID {
+                    let weights = StyleWeights {
+                        aggression,
+                        simplification,
+                    };
+                    let score = fit(&train, weights, temperature).log_likelihood;
+                    if score > best.3 + 1e-9 {
+                        best = (index, weights, temperature, score);
+                    }
+                }
             }
         }
     }
-    let weights = best.0;
-    let maia = fit(&test, StyleWeights::NEUTRAL);
-    let styled_fit = fit(&test, weights);
+    let (index, weights, temperature, _) = best;
+    let (chosen_test, _) = split(&by_elo[index].samples);
+    let maia = fit(&base_test, StyleWeights::NEUTRAL, 1.0);
+    let styled_fit = fit(&chosen_test, weights, temperature);
+    let baseline_chosen =
+        index == 0 && weights == StyleWeights::NEUTRAL && (temperature - 1.0).abs() < 1e-6;
     PlayerStyleMeasurement {
-        train_positions: train.len() as u32,
-        test_positions: test.len() as u32,
+        train_positions: base_train.len() as u32,
+        test_positions: base_test.len() as u32,
         aggression: deviation(&all, |traits| traits.aggression),
         simplification: deviation(&all, |traits| traits.simplification),
         weights_aggression: weights.aggression,
         weights_simplification: weights.simplification,
-        improves: weights != StyleWeights::NEUTRAL
-            && !test.is_empty()
+        elo: by_elo[index].elo,
+        temperature,
+        elo_fits: by_elo
+            .iter()
+            .map(|entry| EloFit {
+                elo: entry.elo,
+                fit: fit(&split(&entry.samples).0, StyleWeights::NEUTRAL, 1.0),
+            })
+            .collect(),
+        improves: !baseline_chosen
+            && !base_test.is_empty()
             && styled_fit.log_likelihood > maia.log_likelihood + MIN_GAIN,
         maia,
         styled: styled_fit,
+        fixed: false,
         cancelled,
     }
+}
+
+/// A configuration chosen by hand against Maia alone at the baseline rating, on every position:
+/// nothing is fitted, so no game needs to be left out.
+fn evaluate_fixed(
+    by_elo: &[EloSamples],
+    config: TwinPlayConfig,
+    cancelled: bool,
+) -> PlayerStyleMeasurement {
+    let Some(base) = by_elo.first() else {
+        return PlayerStyleMeasurement {
+            cancelled,
+            fixed: true,
+            temperature: config.temperature,
+            ..Default::default()
+        };
+    };
+    let all: Vec<&Sample> = base.samples.iter().collect();
+    let own = by_elo
+        .iter()
+        .find(|entry| entry.elo == config.elo)
+        .unwrap_or(base);
+    let own_samples: Vec<&Sample> = own.samples.iter().collect();
+    let weights = StyleWeights {
+        aggression: config.aggression.clamp(-1.0, 1.0),
+        simplification: config.simplification.clamp(-1.0, 1.0),
+    };
+    let temperature = config.temperature.clamp(0.3, 3.0);
+    let maia = fit(&all, StyleWeights::NEUTRAL, 1.0);
+    let styled_fit = fit(&own_samples, weights, temperature);
+    PlayerStyleMeasurement {
+        train_positions: 0,
+        test_positions: all.len() as u32,
+        aggression: deviation(&all, |traits| traits.aggression),
+        simplification: deviation(&all, |traits| traits.simplification),
+        weights_aggression: weights.aggression,
+        weights_simplification: weights.simplification,
+        elo: own.elo,
+        temperature,
+        elo_fits: by_elo
+            .iter()
+            .map(|entry| EloFit {
+                elo: entry.elo,
+                fit: fit(
+                    &entry.samples.iter().collect::<Vec<_>>(),
+                    StyleWeights::NEUTRAL,
+                    1.0,
+                ),
+            })
+            .collect(),
+        improves: !all.is_empty() && styled_fit.log_likelihood > maia.log_likelihood + MIN_GAIN,
+        maia,
+        styled: styled_fit,
+        fixed: true,
+        cancelled,
+    }
+}
+
+/// The ratings measured: the baseline first, then the others once each.
+fn ratings_to_measure(request: &PlayerStyleRequest) -> Vec<u32> {
+    let mut ratings = vec![request.elo];
+    let extra = request
+        .fixed
+        .map(|config| vec![config.elo])
+        .unwrap_or_else(|| request.extra_elos.clone());
+    for elo in extra {
+        if !ratings.contains(&elo) {
+            ratings.push(elo);
+        }
+    }
+    ratings
 }
 
 #[tauri::command]
@@ -450,68 +618,75 @@ pub async fn measure_player_style(
     };
     let mut maia = BaseEngine::spawn(program, &args).await?;
     maia.init_uci().await?;
-    maia.set_option_if_supported("SelfElo", request.elo).await?;
-    maia.set_option_if_supported("Elo", request.elo).await?;
     maia.set_option_if_supported("MultiPV", "1").await?;
-    maia.new_game().await?;
 
-    let total = positions.len();
-    let mut samples: Vec<Sample> = Vec::with_capacity(total);
-    let mut opponent: Option<i32> = None;
+    let ratings = ratings_to_measure(&request);
+    let total = positions.len() * ratings.len();
+    let mut by_elo: Vec<EloSamples> = Vec::with_capacity(ratings.len());
     let mut cancelled = false;
     let mut failure: Option<Error> = None;
-    for (index, position) in positions.iter().enumerate() {
-        if cancel.load(Ordering::SeqCst) {
-            cancelled = true;
-            break;
-        }
-        let Some((chess, recapture_on)) = replay(&position.moves) else {
-            continue;
-        };
-        let opponent_elo = position.opponent_elo.map(|elo| elo.clamp(600, 2600));
-        if opponent_elo != opponent {
-            if let Some(elo) = opponent_elo {
-                maia.set_option_if_supported("OppoElo", elo).await?;
+    'ratings: for (pass, &elo) in ratings.iter().enumerate() {
+        // One pass of Maia per rating over the same positions.
+        maia.set_option_if_supported("SelfElo", elo).await?;
+        maia.set_option_if_supported("Elo", elo).await?;
+        maia.new_game().await?;
+        let mut samples: Vec<Sample> = Vec::with_capacity(positions.len());
+        let mut opponent: Option<i32> = None;
+        for (index, position) in positions.iter().enumerate() {
+            if cancel.load(Ordering::SeqCst) {
+                cancelled = true;
+                break 'ratings;
             }
-            opponent = opponent_elo;
-        }
-        let step = async {
-            maia.set_position(START_FEN, &position.moves).await?;
-            maia.go(&GoMode::Depth(1)).await?;
-            wait_for_maia_move(&mut maia).await
-        };
-        match step.await {
-            Ok((_, Some(policy))) => {
-                if let Some(sample) = sample_of(
-                    &chess,
-                    recapture_on,
-                    &policy,
-                    &position.played,
-                    position.test,
-                ) {
-                    samples.push(sample);
+            let Some((chess, recapture_on)) = replay(&position.moves) else {
+                continue;
+            };
+            let opponent_elo = position.opponent_elo.map(|elo| elo.clamp(600, 2600));
+            if opponent_elo != opponent {
+                if let Some(elo) = opponent_elo {
+                    maia.set_option_if_supported("OppoElo", elo).await?;
+                }
+                opponent = opponent_elo;
+            }
+            let step = async {
+                maia.set_position(START_FEN, &position.moves).await?;
+                maia.go(&GoMode::Depth(1)).await?;
+                wait_for_maia_move(&mut maia).await
+            };
+            match step.await {
+                Ok((_, Some(policy))) => {
+                    if let Some(sample) = sample_of(
+                        &chess,
+                        recapture_on,
+                        &policy,
+                        &position.played,
+                        position.test,
+                    ) {
+                        samples.push(sample);
+                    }
+                }
+                Ok((_, None)) => {
+                    failure = Some(Error::InvalidRequest(
+                        "Maia did not report its probabilities".into(),
+                    ));
+                    break 'ratings;
+                }
+                Err(error) => {
+                    failure = Some(error);
+                    break 'ratings;
                 }
             }
-            Ok((_, None)) => {
-                failure = Some(Error::InvalidRequest(
-                    "Maia did not report its probabilities".into(),
-                ));
-                break;
-            }
-            Err(error) => {
-                failure = Some(error);
-                break;
+            let done = pass * positions.len() + index + 1;
+            if index % 10 == 0 || done == total {
+                let _ = update_progress(
+                    &state.progress_state,
+                    &app,
+                    request.id.clone(),
+                    done as f32 * 100.0 / total.max(1) as f32,
+                    false,
+                );
             }
         }
-        if index % 10 == 0 || index + 1 == total {
-            let _ = update_progress(
-                &state.progress_state,
-                &app,
-                request.id.clone(),
-                (index + 1) as f32 * 100.0 / total.max(1) as f32,
-                false,
-            );
-        }
+        by_elo.push(EloSamples { elo, samples });
     }
     let _ = maia.quit().await;
     let _ = update_progress(&state.progress_state, &app, request.id.clone(), 100.0, true);
@@ -520,13 +695,20 @@ pub async fn measure_player_style(
         return Err(error);
     }
 
-    let measurement = summarize(&samples, cancelled);
+    let measurement = match request.fixed {
+        Some(config) => evaluate_fixed(&by_elo, config, cancelled),
+        None => summarize(&by_elo, request.fit_temperature, cancelled),
+    };
     info!(
-        "player style: {} positions in {} ms, weights {:+.2}/{:+.2}, improves {}",
-        samples.len(),
+        "player style: {} positions x {} ratings in {} ms, elo {}, weights {:+.2}/{:+.2}, \
+         temperature {:.2}, improves {}",
+        positions.len(),
+        by_elo.len(),
         timer.elapsed().as_millis(),
+        measurement.elo,
         measurement.weights_aggression,
         measurement.weights_simplification,
+        measurement.temperature,
         measurement.improves
     );
     Ok(measurement)
@@ -567,7 +749,7 @@ mod tests {
         let samples: Vec<Sample> = (0..200)
             .map(|index| sample(if index % 5 == 0 { 0 } else { 1 }, index % 4 == 0))
             .collect();
-        let measurement = summarize(&samples, false);
+        let measurement = summarize(&at(1500, samples), false, false);
         assert!(measurement.weights_aggression > 0.0);
         assert!(measurement.aggression.delta > 0.0);
         assert!(measurement.improves);
@@ -580,9 +762,108 @@ mod tests {
         let samples: Vec<Sample> = (0..300)
             .map(|index| sample(index % 3, index % 4 == 0))
             .collect();
-        let measurement = summarize(&samples, false);
+        let measurement = summarize(&at(1500, samples), false, false);
         assert!(!measurement.improves);
         assert!(measurement.aggression.delta.abs() < 2.0 * measurement.aggression.std_error + 0.05);
+    }
+
+    fn at(elo: u32, samples: Vec<Sample>) -> Vec<EloSamples> {
+        vec![EloSamples { elo, samples }]
+    }
+
+    /// One likely move much more probable than the rest.
+    fn peaked(played: usize, test: bool) -> Sample {
+        Sample {
+            probabilities: vec![0.5, 0.2, 0.2, 0.1],
+            traits: vec![traits(0.0, 0.0); 4],
+            likely: vec![true, true, true, false],
+            played,
+            phase: 1.0,
+            test,
+        }
+    }
+
+    #[test]
+    fn a_predictable_player_gets_a_low_temperature() {
+        // Always Maia's first choice: sharpening the policy predicts them better.
+        let samples: Vec<Sample> = (0..200).map(|index| peaked(0, index % 4 == 0)).collect();
+        let measurement = summarize(&at(1500, samples), true, false);
+        assert!(measurement.temperature < 1.0);
+        assert!(measurement.improves);
+        assert!(measurement.styled.log_likelihood > measurement.maia.log_likelihood);
+    }
+
+    #[test]
+    fn the_fit_picks_the_rating_that_predicts_best() {
+        let played = |index: usize| if index % 5 == 0 { 1 } else { 0 };
+        // At 1500 Maia spreads its choices; at 1700 it agrees with the player.
+        let low: Vec<Sample> = (0..200)
+            .map(|index| Sample {
+                traits: vec![traits(0.0, 0.0); 4],
+                ..sample(played(index), index % 4 == 0)
+            })
+            .collect();
+        let high: Vec<Sample> = (0..200)
+            .map(|index| peaked(played(index), index % 4 == 0))
+            .collect();
+        let by_elo = vec![
+            EloSamples {
+                elo: 1500,
+                samples: low,
+            },
+            EloSamples {
+                elo: 1700,
+                samples: high,
+            },
+        ];
+        let measurement = summarize(&by_elo, false, false);
+        assert_eq!(measurement.elo, 1700);
+        assert!(measurement.improves);
+        assert_eq!(measurement.elo_fits.len(), 2);
+        assert!(
+            measurement.elo_fits[1].fit.log_likelihood > measurement.elo_fits[0].fit.log_likelihood
+        );
+    }
+
+    #[test]
+    fn a_fixed_configuration_is_evaluated_on_every_position() {
+        let samples: Vec<Sample> = (0..100)
+            .map(|index| sample(if index % 5 == 0 { 0 } else { 1 }, index % 4 == 0))
+            .collect();
+        let aggressive = TwinPlayConfig {
+            elo: 1500,
+            aggression: 1.0,
+            simplification: 0.0,
+            temperature: 1.0,
+        };
+        let measurement = evaluate_fixed(&at(1500, samples), aggressive, false);
+        assert!(measurement.fixed);
+        assert_eq!(measurement.test_positions, 100);
+        assert!(measurement.improves);
+        let samples: Vec<Sample> = (0..100)
+            .map(|index| sample(if index % 5 == 0 { 0 } else { 1 }, false))
+            .collect();
+        let defensive = TwinPlayConfig {
+            aggression: -1.0,
+            ..aggressive
+        };
+        assert!(!evaluate_fixed(&at(1500, samples), defensive, false).improves);
+    }
+
+    #[test]
+    fn the_baseline_rating_is_measured_first_and_once() {
+        let request = PlayerStyleRequest {
+            id: String::new(),
+            games: Vec::new(),
+            maia_path: String::new(),
+            maia_args: Vec::new(),
+            elo: 1500,
+            max_positions: 10,
+            extra_elos: vec![1300, 1500, 1700],
+            fit_temperature: false,
+            fixed: None,
+        };
+        assert_eq!(ratings_to_measure(&request), vec![1500, 1300, 1700]);
     }
 
     #[test]

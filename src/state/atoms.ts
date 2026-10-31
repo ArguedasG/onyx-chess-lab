@@ -33,6 +33,7 @@ import type { SuccessDatabaseInfo } from "@/utils/db";
 import type { GuidedLevel } from "@/utils/guidedPlay";
 import { type Engine, type EngineSettings, engineSchema } from "@/utils/engines";
 import type { HumanBotGameMeasurement } from "@/utils/humanBotMeasurements";
+import type { PlayerBooks } from "@/utils/preparation/book";
 import { isMaiaEngine } from "@/utils/humanBots";
 import {
     EMPTY_HUMAN_BOT_HISTORY,
@@ -576,10 +577,17 @@ export const masterOptionsAtom = atomWithStorage<MasterGamesOptions>(
     },
 );
 
-const dbTypeFamily = atomFamily((_tab: string) =>
-    atom<"local" | "lch_all" | "lch_master">("local"),
-);
+export type DbSourceType = "local" | "lch_all" | "lch_master" | "rival";
+export const dbTypeFamily = atomFamily((_tab: string) => atom<DbSourceType>("local"));
 export const currentDbTypeAtom = tabValue(dbTypeFamily);
+
+/**
+ * The book of the player a line was opened from (Preparation), shown as the "Rival" source of
+ * the database panel. Kept in memory only: a reopened app has no rival for the tab.
+ */
+export type RivalBook = { name: string; books: PlayerBooks };
+export const rivalBookFamily = atomFamily((_tab: string) => atom<RivalBook | null>(null));
+export const currentRivalBookAtom = tabValue(rivalBookFamily);
 
 export const dbTabFamily = atomFamily((_tab: string) => atom("stats"));
 export const currentDbTabAtom = tabValue(dbTabFamily);

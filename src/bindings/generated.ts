@@ -1187,6 +1187,11 @@ implausibleElo: bigint;
 customStart: bigint }
 export type DepthTime = { depth: number; time: number }
 export type DrawReason = "stalemate" | "insufficientMaterial" | "threefoldRepetition" | "fiftyMoveRule" | "agreement"
+export type EloFit = { elo: number; 
+/**
+ * Maia alone at this rating on the positions that check the result.
+ */
+fit: StyleFit }
 export type EmpiricalWdlCalibration = { meanAbsoluteError: number; brierScore: number }
 export type EmpiricalWdlEvaluator = { engine: string; engineArgs: string[]; goMode: GoMode; uciOptions: EngineOption[] }
 export type EmpiricalWdlInterval = { lower: number; upper: number }
@@ -1472,26 +1477,51 @@ export type PlayerQuery = { options: QueryOptions<PlayerSort>; name?: string | n
 export type PlayerSort = "id" | "name" | "elo" | "games"
 export type PlayerStyleMeasurement = { trainPositions: number; testPositions: number; aggression: TraitDeviation; simplification: TraitDeviation; 
 /**
- * Best weights on the older games (from -1 to 1 each).
+ * Best weights on the older games (from -1 to 1 each), or the fixed ones.
  */
 weightsAggression: number; weightsSimplification: number; 
 /**
- * Held-out games: Maia alone and Maia with the weights.
+ * Maia's rating and temperature of the result (the baseline's and 1 when not fitted).
+ */
+elo: number; temperature: number; 
+/**
+ * Held-out games (every game for a fixed configuration): Maia alone at the baseline rating
+ * and the result.
  */
 maia: StyleFit; styled: StyleFit; 
 /**
- * The weights predict the held-out games better than Maia alone.
+ * Maia alone at each rating tried, on the same positions.
  */
-improves: boolean; cancelled: boolean }
+eloFits: EloFit[]; 
+/**
+ * The result predicts the held-out games better than Maia alone.
+ */
+improves: boolean; 
+/**
+ * A fixed configuration was evaluated: nothing was fitted.
+ */
+fixed: boolean; cancelled: boolean }
 export type PlayerStyleRequest = { 
 /**
  * Progress and cancellation id (`cancel_analysis`).
  */
 id: string; games: StyleGameRef[]; maiaPath: string; maiaArgs: string[]; 
 /**
- * Maia's rating for the player (already within Maia's range).
+ * Maia's rating for the player (already within Maia's range): the baseline.
  */
-elo: number; maxPositions: number }
+elo: number; maxPositions: number; 
+/**
+ * Other Maia ratings tried by the fit (twin autotune); each one is another pass of Maia.
+ */
+extraElos?: number[]; 
+/**
+ * Whether the fit also tries the temperature (`TEMPERATURES`).
+ */
+fitTemperature?: boolean; 
+/**
+ * Evaluates this configuration on every game instead of fitting one (a twin edited by hand).
+ */
+fixed?: TwinPlayConfig | null }
 export type PlayerTree = { 
 /**
  * Games where the player had White, from the standard start (node 0 is the root).
@@ -1726,6 +1756,10 @@ export type TraitDeviation = {
  * Average trait of the moves played and of Maia's expectation, per move.
  */
 played: number; expected: number; delta: number; stdError: number }
+/**
+ * How a twin plays out of its book: Maia's rating, the style weights and the temperature.
+ */
+export type TwinPlayConfig = { elo: number; aggression: number; simplification: number; temperature: number }
 /**
  * Represents a UCI option definition.
  */

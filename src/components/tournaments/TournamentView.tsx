@@ -36,6 +36,7 @@ import { useSetAtom } from "jotai";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BotBadges, PLAY_COLORS } from "@/components/boards/BotPicker";
+import { TWIN_COLOR, TwinBadge } from "./TwinBadge";
 import { useRhythmLabel } from "@/components/boards/RatedGameSelector";
 import { initials } from "@/components/players/common";
 import { activeTabAtom, tabsAtom } from "@/state/atoms";
@@ -206,7 +207,9 @@ export default function TournamentView({
             <Avatar
               size={56}
               radius="xl"
-              color={PLAY_COLORS[humanBotPlayStyle(profile)]}
+              color={
+                opponent.kind === "twin" ? TWIN_COLOR : PLAY_COLORS[humanBotPlayStyle(profile)]
+              }
               variant="light"
             >
               {initials(opponent.name)}
@@ -226,7 +229,7 @@ export default function TournamentView({
                 </Text>
               </Group>
               <Group gap="xs">
-                <BotBadges profile={profile} />
+                {opponent.kind === "twin" ? <TwinBadge /> : <BotBadges profile={profile} />}
                 <Badge
                   variant="default"
                   leftSection={

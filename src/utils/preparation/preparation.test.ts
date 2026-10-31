@@ -8,6 +8,7 @@ import {
     bookSource,
     booksFromTrees,
     mainLine,
+    movesInBook,
     playerPar,
     type PlayerBook,
     START_FEN,
@@ -184,6 +185,25 @@ describe("player book", () => {
         expect(line.map((step) => step.played?.san).filter(Boolean)).toEqual(["e4", "c5", "Nf3"]);
         // A given start is followed first.
         expect(mainLine(books.white, ["d2d4"])[0].played?.san).toBe("d4");
+    });
+
+    it("tells where a line tried on the board leaves the player's games", () => {
+        const books = booksFromTrees([
+            {
+                databasePath: "a.db3",
+                tree: tree(
+                    treeFromLines([
+                        { moves: ["e2e4", "e7e5", "g1f3"] },
+                        { moves: ["d2d4", "d7d5", "c2c4"] },
+                    ]),
+                    [],
+                ),
+            },
+        ]);
+        expect(movesInBook(books.white, ["e2e4", "e7e5", "g1f3"])).toBe(3);
+        expect(movesInBook(books.white, ["e2e4", "c7c5", "g1f3"])).toBe(1);
+        expect(movesInBook(books.white, ["c2c4"])).toBe(0);
+        expect(movesInBook(books.white, [])).toBe(0);
     });
 });
 

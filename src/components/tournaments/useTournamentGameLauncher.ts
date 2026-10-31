@@ -15,7 +15,8 @@ import {
     tabsAtom,
     activeTabAtom,
 } from "@/state/atoms";
-import { isMaiaEngine } from "@/utils/humanBots";
+import { DEFAULT_HUMAN_BOT_PROFILE_ID, isMaiaEngine } from "@/utils/humanBots";
+import { twinIdOfParticipant } from "@/utils/preparation/savedTwins";
 import { accountPlayerNames } from "@/utils/players/accountSources";
 import { createTab } from "@/utils/tabs";
 import { defaultTree } from "@/utils/treeReducer";
@@ -81,12 +82,23 @@ export function useTournamentGameLauncher() {
                 increment: tournament.clock.increment,
             };
             setPlayer1({ type: "human", name: userName, timeControl: clock });
+            // A twin plays the profile of the tournament's rhythm; the board finds it by id.
+            const twinId = twinIdOfParticipant(opponentId);
+            const opponent = tournament.participants.find((entry) => entry.id === opponentId);
             setPlayer2({
                 type: "humanBot",
                 engine: maia,
-                profileId: opponentId,
+                profileId: twinId ? DEFAULT_HUMAN_BOT_PROFILE_ID : opponentId,
                 humanTiming: true,
                 timeControl: clock,
+                twin: twinId
+                    ? {
+                          id: twinId,
+                          name: opponent?.name ?? twinId,
+                          elo: opponent?.rating ?? 1500,
+                          profile: "auto",
+                      }
+                    : undefined,
             });
             setInputColor(userWhite ? "white" : "black");
             setSameTimeControl(true);

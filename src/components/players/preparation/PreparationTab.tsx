@@ -86,6 +86,7 @@ function stepsOf(path: readonly string[]): GeneratorLine {
  */
 export default function PreparationTab({
   games,
+  twinGames,
   name,
   cardId,
   profileId,
@@ -94,6 +95,8 @@ export default function PreparationTab({
   onOpenGame,
 }: {
   games: ProfileGame[];
+  /** The games with every rhythm, for the twin's profiles. */
+  twinGames: ProfileGame[];
   name: string;
   cardId: string;
   profileId: string;
@@ -106,7 +109,6 @@ export default function PreparationTab({
   const section: Section = isSelf && stored === "howTo" ? "book" : stored;
   const [generator, setGenerator] = useState<GeneratorRequest | null>(null);
   const documentDir = useAtomValue(storedDocumentDirAtom);
-  const openLine = useOpenLine({ profileId, playerName: name });
   const {
     data: books,
     error,
@@ -116,6 +118,7 @@ export default function PreparationTab({
     () => loadPlayerBooks(games),
     { revalidateOnFocus: false, revalidateIfStale: false },
   );
+  const openLine = useOpenLine({ profileId, playerName: name, books });
   const verdict = useMemo(() => howToPlay(games, engine), [engine, games]);
   // The rating of the most played time control, for Maia and the difficulty.
   const elo = useMemo(() => ratingSummaries(games)[0]?.current ?? 1500, [games]);
@@ -393,7 +396,7 @@ export default function PreparationTab({
             onOpenLine={(moves) => void openLine(moves, name)}
           />
         ) : (
-          <TwinSection books={books} games={games} name={name} cardId={cardId} defaultElo={elo} />
+          <TwinSection games={twinGames} name={name} cardId={cardId} />
         )}
       </ScrollArea>
     </Group>

@@ -257,6 +257,16 @@ export function lineFens(moves: readonly string[]): string[] {
     return fens;
 }
 
+/** How many moves of a line follow the player's games, before the first one never played there. */
+export function movesInBook(book: PlayerBook, moves: readonly string[]): number {
+    const fens = lineFens(moves);
+    for (const [index, uci] of moves.entries()) {
+        const position = fens[index] ? bookPosition(book, fens[index]) : null;
+        if (!position?.moves.some((move) => move.uci === uci)) return index;
+    }
+    return moves.length;
+}
+
 /** A short stable key of a set of games, to cache the books of a filter. */
 export function gamesKey(games: readonly ProfileGame[]): string {
     let hash = 0;

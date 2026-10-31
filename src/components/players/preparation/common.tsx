@@ -1,13 +1,13 @@
 import { Alert, Badge, Group, Paper, Stack, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconFlask, IconInfoCircle } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { activeTabAtom, enginesAtom, tabsAtom } from "@/state/atoms";
+import { activeTabAtom, dbTypeFamily, enginesAtom, rivalBookFamily, tabsAtom } from "@/state/atoms";
 import type { LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
-import { lineSan } from "@/utils/preparation/book";
+import { lineSan, type PlayerBooks } from "@/utils/preparation/book";
 import { createTab } from "@/utils/tabs";
 
 /**
@@ -111,18 +111,24 @@ export function LineText({ moves, max = 10 }: { moves: readonly string[]; max?: 
 }
 
 /** Opens a line (UCI from the start) in a new analysis tab that returns to the player card. */
-export function useOpenLine(returnTo: { profileId: string; playerName: string }) {
+export function useOpenLine(returnTo: {
+  profileId: string;
+  playerName: string;
+  /** The player's book, which the board's database panel then shows as its "Rival" source. */
+  books?: PlayerBooks;
+}) {
   const navigate = useNavigate();
   const setTabs = useSetAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
-  const { profileId, playerName } = returnTo;
+  const store = useStore();
+  const { profileId, playerName, books } = returnTo;
   return useCallback(
     async (moves: readonly string[], name: string, extraPgn?: string) => {
       const san = lineSan(moves);
       const pgn =
         extraPgn ??
         `[Event "${name.replace(/"/g, "'")}"]\n[Site "Onyx Chess Lab"]\n[Result "*"]\n\n${san} *\n`;
-      await createTab({
+      const id = await createTab({
         tab: {
           name,
           type: "analysis",
@@ -135,9 +141,13 @@ export function useOpenLine(returnTo: { profileId: string; playerName: string })
         position: Array(moves.length).fill(0),
         preserveNewTab: true,
       });
+      if (books) {
+        store.set(rivalBookFamily(id), { name: playerName, books });
+        store.set(dbTypeFamily(id), "rival");
+      }
       navigate({ to: "/" });
     },
-    [navigate, playerName, profileId, setActiveTab, setTabs],
+    [books, navigate, playerName, profileId, setActiveTab, setTabs, store],
   );
 }
 

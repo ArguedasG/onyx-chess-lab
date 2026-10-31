@@ -35,7 +35,9 @@ import {
   currentDbTabAtom,
   currentDbTypeAtom,
   currentLocalOptionsAtom,
+  currentRivalBookAtom,
   currentTabAtom,
+  type DbSourceType,
   lichessOptionsAtom,
   masterOptionsAtom,
   referenceDbAtom,
@@ -59,6 +61,7 @@ import OpeningsTable from "./OpeningsTable";
 import OpeningReportPanel from "./OpeningReportPanel";
 import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
 import ReferenceGamePreview, { type ReferencePreview } from "./ReferenceGamePreview";
+import RivalExplorer from "./RivalExplorer";
 import classes from "./DatabasePanel.module.css";
 import LichessOptionsPanel from "./options/LichessOptionsPanel";
 import LocalOptionsPanel from "./options/LocalOptionsPanel";
@@ -178,30 +181,34 @@ function DatabasePanel() {
   const [masterOptions, setMasterOptions] = useAtom(masterOptionsAtom);
   const [localOptions, setLocalOptions] = useAtom(currentLocalOptionsAtom);
   const [db, setDb] = useAtom(currentDbTypeAtom);
+  const rival = useAtomValue(currentRivalBookAtom);
+  // The rival's book is read in memory; every query below runs on the other sources.
+  const rivalActive = db === "rival" && rival != null;
+  const source = db === "rival" ? "local" : db;
   const weakFilter = useAtomValue(weakGamesFilterAtom);
   const explorerToken = sessions.find((session) => session.lichess?.accessToken)?.lichess
     ?.accessToken;
-  const missingExplorerToken = db !== "local" && !explorerToken;
+  const missingExplorerToken = source !== "local" && !explorerToken;
 
-  const { data: databases } = useSWR(db === "local" ? "databases" : null, () => getDatabases());
+  const { data: databases } = useSWR(source === "local" ? "databases" : null, () => getDatabases());
 
   const dbSelectData = (databases ?? [])
     .filter((d) => d.type === "success")
     .map((d) => ({ value: d.file, label: d.title || d.filename }));
 
   useEffect(() => {
-    if (db === "local") {
+    if (source === "local") {
       setLocalOptions((q) => ({ ...q, fen: debouncedFen }));
     }
-  }, [debouncedFen, setLocalOptions, setMasterOptions, setLichessOptions, db]);
+  }, [debouncedFen, setLocalOptions, setMasterOptions, setLichessOptions, source]);
 
   useEffect(() => {
-    if (db === "local") {
+    if (source === "local") {
       setLocalOptions((q) => ({ ...q, path: referenceDatabase }));
     }
-  }, [referenceDatabase, setLocalOptions, db]);
+  }, [referenceDatabase, setLocalOptions, source]);
 
-  const dbType: DBType = match(db)
+  const dbType: DBType = match(source)
     .with("local", (v) => ({
       type: v,
       options: { ...localOptions, weak: activeWeakFilter(weakFilter) },
@@ -248,7 +255,7 @@ function DatabasePanel() {
     error,
     mutate,
   } = useSWR(
-    !missingExplorerToken ? [dbType, tabId] : null,
+    !missingExplorerToken && !rivalActive ? [dbType, tabId] : null,
     async ([source, owner]: [DBType, string | undefined]) => {
       activeQuery.current?.controller.abort();
       const controller = new AbortController();
@@ -294,20 +301,25 @@ function DatabasePanel() {
     setFocusGames(true);
   }, [tabType, setSections]);
 
+  const sourceControl = (
+    <SegmentedControl
+      size="xs"
+      data={[
+        ...(rival ? [{ label: t("Board.Database.Rival", "Rival"), value: "rival" }] : []),
+        { label: t("Board.Database.Local"), value: "local" },
+        { label: t("Board.Database.LichessAll"), value: "lch_all" },
+        { label: t("Board.Database.LichessMaster"), value: "lch_master" },
+      ]}
+      value={rivalActive ? "rival" : source}
+      onChange={(value) => setDb(value as DbSourceType)}
+    />
+  );
+
   const toolbar = (
     <>
       <Group gap={6} wrap="wrap" mb={4}>
-        <SegmentedControl
-          size="xs"
-          data={[
-            { label: t("Board.Database.Local"), value: "local" },
-            { label: t("Board.Database.LichessAll"), value: "lch_all" },
-            { label: t("Board.Database.LichessMaster"), value: "lch_master" },
-          ]}
-          value={db}
-          onChange={(value) => setDb(value as "local" | "lch_all" | "lch_master")}
-        />
-        {db === "local" && (
+        {sourceControl}
+        {source === "local" && (
           <Select
             data={dbSelectData}
             value={referenceDatabase}
@@ -321,7 +333,7 @@ function DatabasePanel() {
             allowDeselect={false}
           />
         )}
-        {db === "local" && (
+        {source === "local" && (
           <Button
             size="compact-xs"
             variant={localOptions.type === "pawns" ? "filled" : "default"}
@@ -350,7 +362,7 @@ function DatabasePanel() {
         >
           {t("Board.Database.Filters", "Filters")}
         </Button>
-        {db === "local" && activeWeakFilter(weakFilter) && (
+        {source === "local" && activeWeakFilter(weakFilter) && (
           <Tooltip
             multiline
             w={260}
@@ -374,7 +386,7 @@ function DatabasePanel() {
             </Badge>
           </Tooltip>
         )}
-        {db === "local" && (
+        {source === "local" && (
           <Tooltip label={t("Board.Database.Refresh")}>
             <ActionIcon
               size="sm"
@@ -425,7 +437,7 @@ function DatabasePanel() {
       )}
       <Collapse in={filtersOpen}>
         <ScrollArea.Autosize mah="40vh" offsetScrollbars className={classes.filters}>
-          {match(db)
+          {match(source)
             .with("local", () => <LocalOptionsPanel boardFen={debouncedFen} />)
             .with("lch_all", () => <LichessOptionsPanel />)
             .with("lch_master", () => <MasterOptionsPanel />)
@@ -436,7 +448,7 @@ function DatabasePanel() {
   );
 
   const blocked = blockingMessage({
-    type: db,
+    type: source,
     referenceDatabase,
     missingExplorerToken,
     error: transientError ? undefined : error,
@@ -470,6 +482,16 @@ function DatabasePanel() {
   const gamesFirst = !!sections.gamesFirst;
   const swapSections = () =>
     setSections((current) => ({ ...current, gamesFirst: !current.gamesFirst }));
+
+  if (rivalActive)
+    return (
+      <Stack h="100%" gap={4} px="sm" py="xs" style={{ overflow: "hidden" }}>
+        <Group gap={6} wrap="wrap">
+          {sourceControl}
+        </Group>
+        <RivalExplorer rival={rival} fen={debouncedFen} />
+      </Stack>
+    );
 
   return (
     <Stack h="100%" gap={0} px="sm" py="xs" style={{ overflow: "hidden" }}>

@@ -81,7 +81,7 @@ import {
   tabsAtom,
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
-import { twinBooksAtom } from "@/state/twinBots";
+import { useTwinLookup } from "@/state/savedTwins";
 import { findTournamentGame, updateTournaments } from "@/state/tournaments";
 import { recordUserGame } from "@/utils/tournaments/engine";
 import { positionFromFen } from "@/utils/chessops";
@@ -114,7 +114,8 @@ import {
   isMaiaEngine,
   MAIA_ELO_MIN,
 } from "@/utils/humanBots";
-import { TWIN_ELO_MAX, twinTiming } from "@/utils/preparation/twin";
+import { profileBook, resolveTwinProfile } from "@/utils/preparation/savedTwins";
+import { TWIN_ELO_MAX, twinRepertoire, twinTiming } from "@/utils/preparation/twin";
 import {
   buildHumanBotGameMeasurement,
   buildHumanBotMeasurementHeaders,
@@ -378,7 +379,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
   const [blackTime, setBlackTime] = useState<number | null>(null);
   const [gameId, setGameId] = useAtom(currentGameIdAtom);
   const setHistory = useSetAtom(humanBotHistoryAtom);
-  const twinBooks = useAtomValue(twinBooksAtom);
+  const twinLookup = useTwinLookup();
   const setMeasurements = useSetAtom(humanBotMeasurementsAtom);
   const historySavedRef = useRef(false);
   const [ratedPreference, setRatedPreference] = useAtom(ratedBotGameAtom);
@@ -672,9 +673,26 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     return positionFromFen(node.fen);
   }, [root]);
 
+  /** The saved or session twin of a side and the profile its clock uses. */
+  function resolveTwin(settings: OpponentSettings) {
+    if (settings.type !== "humanBot" || !settings.twin) return null;
+    const twin = twinLookup.get(settings.twin.id);
+    if (!twin) return null;
+    const rhythm = settings.timeControl ? rhythmOfClock(settings.timeControl) : null;
+    const resolved = resolveTwinProfile(twin, rhythm, settings.twin.profile ?? "auto");
+    return resolved ? { twin, profile: resolved.profile } : null;
+  }
+
+  /** The rating a bot side plays at: its twin profile's or its catalogue profile's. */
+  function botElo(settings: OpponentSettings & { type: "humanBot" }) {
+    if (!settings.twin) return getHumanBotProfile(settings.profileId).elo;
+    return resolveTwin(settings)?.profile.play.elo ?? settings.twin.elo;
+  }
+
   function toPlayerConfig(
     settings: OpponentSettings,
     opponentSettings: OpponentSettings,
+    color: "white" | "black",
   ): PlayerConfig {
     if (settings.type === "human") {
       return {
@@ -685,23 +703,41 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
 
     if (settings.type === "humanBot" && settings.twin) {
       const twin = settings.twin;
+      // A saved or session twin plays with the profile of the game's rhythm; a twin of version 1
+      // whose book is gone plays as Maia at its rating.
+      const resolved = resolveTwin(settings);
+      const play = resolved?.profile.play ?? {
+        elo: twin.elo,
+        aggression: twin.style?.aggression ?? 0,
+        simplification: twin.style?.simplification ?? 0,
+        temperature: 1,
+      };
       // Above Maia's range the strength filter (I-48) plays the rest, as for the catalogue.
-      const targetElo = Math.max(MAIA_ELO_MIN, Math.min(TWIN_ELO_MAX, Math.trunc(twin.elo)));
+      const targetElo = Math.max(MAIA_ELO_MIN, Math.min(TWIN_ELO_MAX, Math.trunc(play.elo)));
       const elo = clampMaiaElo(targetElo);
-      const opponentElo =
-        opponentSettings.type === "humanBot"
-          ? (opponentSettings.twin?.elo ?? getHumanBotProfile(opponentSettings.profileId).elo)
-          : elo;
-      const book = twinBooks[twin.id];
-      const timing = settings.timeControl
-        ? twinTiming(
-            twin.thinking,
-            rhythmOfClock(settings.timeControl),
-            humanBotTimingForElo(targetElo),
-          ).config
+      const opponentElo = opponentSettings.type === "humanBot" ? botElo(opponentSettings) : elo;
+      const book = resolved
+        ? twinRepertoire(
+            profileBook(resolved.profile, color),
+            color,
+            `${resolved.twin.id}-${resolved.profile.key}`,
+            resolved.twin.bookPlies,
+          )
         : null;
-      // Plain sampling from Maia's policy: the twin should play as often as a player of that
-      // rating would. Its own measured style, if any, reweighs the candidates like a profile's.
+      const timingMode = resolved?.twin.timing ?? "player";
+      const timing =
+        settings.timeControl && timingMode !== "none"
+          ? timingMode === "catalog"
+            ? { ...humanBotTimingForElo(targetElo), fixedRhythm: false }
+            : twinTiming(
+                resolved?.twin.thinking ?? twin.thinking,
+                rhythmOfClock(settings.timeControl),
+                humanBotTimingForElo(targetElo),
+              ).config
+          : null;
+      // Sampling from Maia's policy with the profile's temperature (1 by default: as often as a
+      // player of that rating would). Its style reweighs the candidates like a catalogue
+      // profile's; with Stockfish the bot applies the temperature itself.
       const options = [
         ...(settings.engine?.settings ?? []).filter(
           (setting) =>
@@ -710,7 +746,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         { name: "Elo", value: elo },
         { name: "SelfElo", value: elo },
         { name: "OppoElo", value: clampMaiaElo(opponentElo) },
-        { name: "Temperature", value: 1 },
+        { name: "Temperature", value: objectiveEngine ? 1 : play.temperature },
         { name: "TopP", value: 1 },
         { name: "MultiPV", value: 1 },
       ];
@@ -727,13 +763,13 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
           name: setting.name,
           value: setting.value?.toString() ?? "",
         })),
-        openingRepertoire: book ?? null,
+        openingRepertoire: book,
         botPlay: objectiveEngine
           ? {
-              aggression: twin.style?.aggression ?? 0,
-              simplification: twin.style?.simplification ?? 0,
+              aggression: play.aggression,
+              simplification: play.simplification,
               elo: targetElo,
-              temperature: 1,
+              temperature: play.temperature,
               topP: 1,
               verifierPath: objectiveEngine.path,
               verifierArgs: objectiveEngine.args ?? [],
@@ -852,8 +888,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     const initialMoves = getTreeMoves();
 
     const config: GameConfig = {
-      white: toPlayerConfig(playerSettings.white, playerSettings.black),
-      black: toPlayerConfig(playerSettings.black, playerSettings.white),
+      white: toPlayerConfig(playerSettings.white, playerSettings.black, "white"),
+      black: toPlayerConfig(playerSettings.black, playerSettings.white, "black"),
       whiteTimeControl: playerSettings.white.timeControl
         ? {
             initialTime: playerSettings.white.timeControl.seconds,
@@ -1075,6 +1111,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
 
       if (playerSettings.white.type === "humanBot" && playerSettings.white.twin) {
         humanBotHeaders.WhiteTwinOf = playerSettings.white.twin.name;
+        const profile = resolveTwin(playerSettings.white)?.profile.key;
+        if (profile) humanBotHeaders.WhiteTwinProfile = profile;
       } else if (playerSettings.white.type === "humanBot") {
         Object.assign(
           humanBotHeaders,
@@ -1088,6 +1126,8 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
       }
       if (playerSettings.black.type === "humanBot" && playerSettings.black.twin) {
         humanBotHeaders.BlackTwinOf = playerSettings.black.twin.name;
+        const profile = resolveTwin(playerSettings.black)?.profile.key;
+        if (profile) humanBotHeaders.BlackTwinProfile = profile;
       } else if (playerSettings.black.type === "humanBot") {
         Object.assign(
           humanBotHeaders,
@@ -1104,15 +1144,9 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         white: state.whitePlayer,
         black: state.blackPlayer,
         white_elo:
-          playerSettings.white.type === "humanBot"
-            ? (playerSettings.white.twin?.elo ??
-              getHumanBotProfile(playerSettings.white.profileId).elo)
-            : undefined,
+          playerSettings.white.type === "humanBot" ? botElo(playerSettings.white) : undefined,
         black_elo:
-          playerSettings.black.type === "humanBot"
-            ? (playerSettings.black.twin?.elo ??
-              getHumanBotProfile(playerSettings.black.profileId).elo)
-            : undefined,
+          playerSettings.black.type === "humanBot" ? botElo(playerSettings.black) : undefined,
         event: inTournament ? headers.event : eventStr,
         site: "Onyx Chess Lab",
         date: dateStr,
@@ -1347,6 +1381,47 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         };
       }
       setHeaders(finalHeaders);
+
+      // A tournament game against a twin stays out of the bot history and databases, but its
+      // result counts in the tournament.
+      const twinTournamentId = finalHeaders.other?.[TOURNAMENT_HEADERS.id];
+      const twinTournamentGameId = finalHeaders.other?.[TOURNAMENT_HEADERS.game];
+      const againstTwin =
+        (players.white.type === "humanBot" && players.white.twin) ||
+        (players.black.type === "humanBot" && players.black.twin);
+      if (
+        againstTwin &&
+        twinTournamentId &&
+        twinTournamentGameId &&
+        outcome !== "*" &&
+        !historySavedRef.current
+      ) {
+        historySavedRef.current = true;
+        const twinPgn = getPGN(store.getState().root, {
+          headers: finalHeaders,
+          comments: false,
+          extraMarkups: false,
+          glyphs: false,
+          variations: false,
+        });
+        void updateTournaments((state) => ({
+          ...state,
+          tournaments: state.tournaments.map((tournament) =>
+            tournament.id === twinTournamentId
+              ? recordUserGame(tournament, twinTournamentGameId, outcome, twinPgn, recordedAt)
+              : tournament,
+          ),
+        })).catch((error) =>
+          notifications.show({
+            title: ratingContextRef.current.t(
+              "Tournaments.SaveError",
+              "Could not save the result in the tournament",
+            ),
+            message: error instanceof Error ? error.message : String(error),
+            color: "red",
+          }),
+        );
+      }
 
       const historyMatch = getHumanBotHistoryMatch(players);
       if (historyMatch && !historySavedRef.current) {

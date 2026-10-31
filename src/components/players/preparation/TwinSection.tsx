@@ -3,21 +3,32 @@ import {
   Badge,
   Button,
   Group,
+  Loader,
+  Menu,
   NumberInput,
   Paper,
-  Progress,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
-  Table,
   Text,
+  TextInput,
 } from "@mantine/core";
-import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
-import { IconChartDots, IconPlayerPlay, IconPlayerStop, IconRobot } from "@tabler/icons-react";
+import { ask } from "@tauri-apps/plugin-dialog";
+import {
+  IconChevronDown,
+  IconDeviceFloppy,
+  IconPlayerPlay,
+  IconPlus,
+  IconRefresh,
+  IconRobot,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAtomValue, useSetAtom } from "jotai";
-import { useEffect, useRef, useState } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import {
   activeTabAtom,
   gameInputColorAtom,
@@ -25,79 +36,172 @@ import {
   gamePlayer2SettingsAtom,
   tabsAtom,
 } from "@/state/atoms";
-import { twinBooksAtom, twinStylesAtom } from "@/state/twinBots";
-import { clampMaiaElo, DEFAULT_HUMAN_BOT_PROFILE_ID, MAIA_ELO_MIN } from "@/utils/humanBots";
-import { type PlayerBooks, loadPlayerBooks } from "@/utils/preparation/book";
+import { twinDraftsAtom, useSavedTwins } from "@/state/savedTwins";
+import { twinStylesAtom } from "@/state/twinBots";
+import { DEFAULT_HUMAN_BOT_PROFILE_ID } from "@/utils/humanBots";
+import type { ProfileGame } from "@/utils/players/profileGames";
+import { BOOK_PLIES } from "@/utils/preparation/book";
 import {
-  type FidelityResult,
-  fidelityPlan,
-  measureFidelity,
-  splitForFidelity,
-  TWIN_ELO_MAX,
-  twinRepertoire,
-  twinThinking,
-} from "@/utils/preparation/twin";
-import { chronological, type ProfileGame } from "@/utils/players/profileGames";
-import { MaiaSampler } from "@/utils/repertoireGenerator/engines";
+  gamesOfProfile,
+  type SavedTwin,
+  TWIN_PROFILE_KEYS,
+  TWIN_PROFILE_MIN_GAMES,
+  type TwinProfile,
+  type TwinProfileKey,
+  type TwinTimingMode,
+} from "@/utils/preparation/savedTwins";
+import { buildTwin } from "@/utils/preparation/twinBuilder";
 import type { GeneratorColor } from "@/utils/repertoireGenerator/types";
 import { createTab } from "@/utils/tabs";
 import { DEFAULT_TIME_CONTROL } from "../../boards/OpponentForm";
-import { EmptyState, SectionHeader, usePreparationEngines } from "./common";
+import { SectionHeader, usePreparationEngines } from "./common";
 import { colorName } from "./labels";
-import { TwinStyleCard, TwinThinkingCard } from "./TwinBehaviour";
+import { useProfileLabel } from "./twinLabels";
+import { TwinThinkingCard } from "./TwinBehaviour";
+import TwinFidelityCard from "./TwinFidelityCard";
+import TwinProfileEditor, { OriginBadge } from "./TwinProfileEditor";
 
-/** Samples per position when measuring: enough to compare, quick enough for 120 positions. */
-const FIDELITY_SAMPLES = 8;
-
-type Measure =
-  | { status: "idle" }
-  | { status: "running"; done: number; total: number }
-  | { status: "done"; result: FidelityResult; color: GeneratorColor; elo: number }
-  | { status: "error"; message: string };
+/** Games of the book offered: all, or the most recent N with each color. */
+const RECENT_OPTIONS = [null, 200, 100, 50, 25] as const;
 
 /**
- * Twin bot, version 1 (I-43): the player's own opening sequences, then Maia at their rating.
- * The fidelity check uses their most recent games, left out of the book.
+ * The twin of a player (I-43, 9.3 extension): one profile per rhythm and a general one, saved,
+ * edited by hand, measured or autotuned on the player's games, and updated when there are newer
+ * ones. An unsaved twin can be played during the session.
  */
 export default function TwinSection({
-  books,
   games,
   name,
   cardId,
-  defaultElo,
 }: {
-  books: PlayerBooks;
+  /** The card's games with every rhythm: each profile takes its own. */
   games: ProfileGame[];
   name: string;
   cardId: string;
-  defaultElo: number;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const profileLabel = useProfileLabel();
   const { maia } = usePreparationEngines();
-  const [color, setColor] = useState<GeneratorColor>(
-    books.white.games >= books.black.games ? "white" : "black",
-  );
-  const [elo, setElo] = useState(defaultElo);
-  useEffect(() => setElo(defaultElo), [defaultElo]);
-  const [measure, setMeasure] = useState<Measure>({ status: "idle" });
-  const cancel = useRef<(() => void) | null>(null);
-  useEffect(() => () => cancel.current?.(), []);
-  const setTwinBooks = useSetAtom(twinBooksAtom);
-  const style = useAtomValue(twinStylesAtom)[cardId]?.measurement;
+  const { twins, save, remove } = useSavedTwins();
+  const [drafts, setDrafts] = useAtom(twinDraftsAtom);
+  const legacyStyle = useAtomValue(twinStylesAtom)[cardId]?.measurement;
   const setPlayer1 = useSetAtom(gamePlayer1SettingsAtom);
   const setPlayer2 = useSetAtom(gamePlayer2SettingsAtom);
   const setInputColor = useSetAtom(gameInputColorAtom);
   const setTabs = useSetAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
-  const book = books[color];
+
+  const saved = useMemo(
+    () => (twins ?? []).filter((twin) => twin.cardId === cardId),
+    [cardId, twins],
+  );
+  const draft = useMemo(
+    () => Object.values(drafts).find((twin) => twin.cardId === cardId) ?? null,
+    [cardId, drafts],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const twin =
+    saved.find((entry) => entry.id === selectedId) ??
+    (draft && draft.id === selectedId ? draft : null) ??
+    saved[0] ??
+    draft;
+  const isSaved = Boolean(twin && saved.some((entry) => entry.id === twin.id));
+  const [building, setBuilding] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [profileKey, setProfileKey] = useState<TwinProfileKey>("general");
+  const [color, setColor] = useState<GeneratorColor>("white");
+  const [playProfile, setPlayProfile] = useState<TwinProfileKey | "auto">("auto");
+
+  async function build(previous?: SavedTwin, bookRecent?: number | null) {
+    setBuilding(true);
+    setBuildError(null);
+    try {
+      const next = await buildTwin({
+        games,
+        cardId,
+        playerName: name,
+        previous,
+        bookRecent,
+      });
+      // The style measured with 9.3 seeds a new twin's general profile.
+      const general = next.profiles.general;
+      if (!previous && general && legacyStyle?.improves) {
+        next.profiles.general = {
+          ...general,
+          play: {
+            ...general.play,
+            aggression: legacyStyle.weightsAggression,
+            simplification: legacyStyle.weightsSimplification,
+          },
+          origin: "measured",
+        };
+      }
+      if (previous && isSaved) save(next);
+      else setDrafts((current) => ({ ...withoutCardDraft(current, cardId), [next.id]: next }));
+      setSelectedId(next.id);
+    } catch (error) {
+      setBuildError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBuilding(false);
+    }
+  }
+
+  // A card with no twin yet gets an unsaved one to look at and play.
+  const loaded = twins !== null;
+  useEffect(() => {
+    if (loaded && saved.length === 0 && !draft && !building && games.length > 0) void build();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, saved.length, draft, games.length]);
+
+  const profile: TwinProfile | undefined =
+    twin?.profiles[profileKey] ?? twin?.profiles.general ?? undefined;
+  useEffect(() => {
+    if (twin && !twin.profiles[profileKey]) setProfileKey("general");
+  }, [profileKey, twin]);
+  const profileGames = useMemo(
+    () => gamesOfProfile(games, profile?.key ?? "general"),
+    [games, profile?.key],
+  );
+
+  function change(next: SavedTwin) {
+    const stamped = { ...next, updatedAt: new Date().toISOString() };
+    if (isSaved) save(stamped);
+    else setDrafts((current) => ({ ...current, [stamped.id]: stamped }));
+  }
+
+  function changeProfile(next: TwinProfile) {
+    if (!twin) return;
+    change({ ...twin, profiles: { ...twin.profiles, [next.key]: next } });
+  }
+
+  function saveDraft() {
+    if (!twin || isSaved) return;
+    save(twin);
+    setDrafts((current) => withoutCardDraft(current, cardId));
+    setSelectedId(twin.id);
+  }
+
+  async function confirmDelete() {
+    if (!twin) return;
+    const confirmed = await ask(
+      t(
+        "Preparation.Twin.DeleteConfirm",
+        "Delete «{{name}}» and its measurements? The player's games are not touched.",
+        { name: twin.name },
+      ),
+      { kind: "warning" },
+    );
+    if (!confirmed) return;
+    remove(twin.id);
+    setSelectedId(null);
+  }
 
   async function play() {
-    if (!maia) return;
-    const id = `${cardId}:${color}`;
-    setTwinBooks((previous) => ({ ...previous, [id]: twinRepertoire(book.lines, color, id) }));
-    const userColor = color === "white" ? "black" : "white";
-    setInputColor(userColor);
+    if (!maia || !twin) return;
+    // Unsaved twins are found by the board among the drafts.
+    if (!isSaved) setDrafts((current) => ({ ...current, [twin.id]: twin }));
+    setInputColor(color === "white" ? "black" : "white");
     setPlayer1({
       type: "human",
       name: t("Preparation.Twin.You", "You"),
@@ -109,71 +213,30 @@ export default function TwinSection({
       type: "humanBot",
       engine: maia,
       profileId: DEFAULT_HUMAN_BOT_PROFILE_ID,
-      humanTiming: true,
+      humanTiming: twin.timing !== "none",
       timeControl: DEFAULT_TIME_CONTROL,
       timeUnit: "m",
       incrementUnit: "s",
       twin: {
-        id,
-        name,
-        elo: Math.max(MAIA_ELO_MIN, Math.min(TWIN_ELO_MAX, Math.round(elo))),
-        games: book.games,
-        lines: book.lines.length,
-        thinking: twinThinking(games),
-        style: style?.improves
-          ? { aggression: style.weightsAggression, simplification: style.weightsSimplification }
-          : null,
+        id: twin.id,
+        name: twin.name,
+        elo: twin.profiles.general?.play.elo ?? 1500,
+        profile: playProfile,
       },
     });
     await createTab({
-      tab: { name: t("Preparation.Twin.Name", "Twin of {{name}}", { name }), type: "play" },
+      tab: {
+        name: t("Preparation.Twin.Name", "Twin of {{name}}", { name: twin.name }),
+        type: "play",
+      },
       setTabs,
       setActiveTab,
     });
     navigate({ to: "/" });
   }
 
-  async function runFidelity() {
-    if (!maia) return;
-    // Newest first, so the test games are the most recent ones.
-    const own = chronological(
-      games.filter((game) => game.isWhite === (color === "white") && !game.customStart),
-    ).reverse();
-    const { train, test } = splitForFidelity(own);
-    if (train.length < 10) return;
-    const id = `twin-fidelity-${Date.now()}`;
-    const sampler = new MaiaSampler(maia, clampMaiaElo(elo), id, FIDELITY_SAMPLES);
-    let cancelled = false;
-    cancel.current = () => {
-      cancelled = true;
-      sampler.cancel();
-    };
-    setMeasure({ status: "running", done: 0, total: 1 });
-    try {
-      const [trainBooks, testBooks] = await Promise.all([
-        loadPlayerBooks(train),
-        loadPlayerBooks(test),
-      ]);
-      const plan = fidelityPlan(trainBooks[color].lines, testBooks[color].lines, color);
-      const result = await measureFidelity(plan, sampler, (done, total) =>
-        setMeasure({ status: "running", done, total }),
-      );
-      if (!cancelled) setMeasure({ status: "done", result, color, elo });
-    } catch (error) {
-      setMeasure(
-        cancelled
-          ? { status: "idle" }
-          : { status: "error", message: error instanceof Error ? error.message : String(error) },
-      );
-    } finally {
-      sampler.close();
-      cancel.current = null;
-    }
-  }
-
-  const ownGames = games.filter((game) => game.isWhite === (color === "white")).length;
-  const result = measure.status === "done" ? measure.result : null;
-  const better = result ? result.twin.probability - result.maia.probability : 0;
+  const profileKeys = TWIN_PROFILE_KEYS.filter((key) => twin?.profiles[key]);
+  const sequences = profile ? profile.books[color].length : 0;
 
   return (
     <Stack gap="md">
@@ -182,8 +245,8 @@ export default function TwinSection({
         title={t("Preparation.Twin.Title", "Play against the twin")}
         description={t(
           "Preparation.Twin.Description",
-          "A bot that plays {{name}}'s repertoire (the opening sequences of these games, with their real frequency) and, out of it, like a player of that rating, with {{name}}'s think time and, if it is measured and helps, their style. Above 2600 Stockfish checks its moves, as with the strongest catalogue bots.",
-          { name },
+          "A bot that plays {{name}}'s repertoire (the opening sequences of these games, with their real frequency) and, out of it, like a player of that rating, with {{name}}'s think time and the style it is given. Each rhythm with at least {{count}} games has its own profile; a game uses the one of its clock.",
+          { name, count: TWIN_PROFILE_MIN_GAMES },
         )}
       />
 
@@ -198,199 +261,289 @@ export default function TwinSection({
 
       <Paper withBorder radius="md" p="md">
         <Stack gap="sm">
-          <Group gap="md" align="flex-end" wrap="wrap">
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed">
-                {t("Preparation.Twin.TwinPlays", "The twin plays")}
-              </Text>
-              <SegmentedControl
-                size="xs"
-                value={color}
-                onChange={(value) => {
-                  setColor(value as GeneratorColor);
-                  setMeasure({ status: "idle" });
-                }}
-                data={(["white", "black"] as const).map((value) => ({
-                  value,
-                  label: `${colorName(value, t)} · ${books[value].games}`,
-                }))}
-              />
-            </Stack>
-            <NumberInput
-              label={t("Preparation.Twin.Elo", "Rating out of the book")}
-              description={t("Preparation.Key.EloHint", "From the latest rating")}
-              w={180}
-              min={600}
-              max={TWIN_ELO_MAX}
-              step={50}
-              value={elo}
-              onChange={(value) => typeof value === "number" && setElo(value)}
-            />
-            <Button
-              leftSection={<IconPlayerPlay size={16} />}
-              disabled={!maia || book.games === 0}
-              onClick={() => void play()}
-            >
-              {t("Preparation.Twin.Play", "Play against the twin")}
-            </Button>
-          </Group>
-          <Group gap="xs">
-            <Badge variant="light">
-              {t("Preparation.Twin.Sequences", "{{count}} sequences", {
-                count: book.lines.length,
-              })}
-            </Badge>
-            <Badge variant="light" color="gray">
-              {t("Preparation.Twin.BookDepth", "Book: first 10 moves")}
-            </Badge>
-            <Text size="xs" c="dimmed">
-              {t(
-                "Preparation.Twin.Honest",
-                "Ratings from other sites or over the board do not match Maia's scale exactly: adjust the level if it feels off.",
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <Group gap="sm" wrap="wrap">
+              {saved.length + (draft ? 1 : 0) > 1 && (
+                <Select
+                  size="xs"
+                  w={220}
+                  allowDeselect={false}
+                  value={twin?.id ?? null}
+                  onChange={(value) => setSelectedId(value)}
+                  data={[
+                    ...saved.map((entry) => ({ value: entry.id, label: entry.name })),
+                    ...(draft
+                      ? [
+                          {
+                            value: draft.id,
+                            label: t("Preparation.Twin.DraftLabel", "{{name}} (not saved)", {
+                              name: draft.name,
+                            }),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
               )}
-            </Text>
+              {twin && (
+                <TextInput
+                  size="xs"
+                  w={220}
+                  aria-label={t("Preparation.Twin.TwinName", "Twin name")}
+                  value={twin.name}
+                  onChange={(event) => change({ ...twin, name: event.currentTarget.value })}
+                />
+              )}
+              {twin && !isSaved && (
+                <Badge variant="light" color="yellow">
+                  {t("Preparation.Twin.NotSaved", "Not saved: it goes away when Onyx closes")}
+                </Badge>
+              )}
+            </Group>
+            <Group gap="xs">
+              {twin && !isSaved && (
+                <Button size="xs" leftSection={<IconDeviceFloppy size={14} />} onClick={saveDraft}>
+                  {t("Preparation.Twin.Save", "Save twin")}
+                </Button>
+              )}
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <Button
+                    size="xs"
+                    variant="default"
+                    rightSection={<IconChevronDown size={14} />}
+                    disabled={building || games.length === 0}
+                  >
+                    {t("Preparation.Twin.Actions", "Twin")}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {twin && (
+                    <Menu.Item
+                      leftSection={<IconRefresh size={14} />}
+                      onClick={() => void build(twin)}
+                    >
+                      {t("Preparation.Twin.Update", "Update with the current games")}
+                    </Menu.Item>
+                  )}
+                  <Menu.Item leftSection={<IconPlus size={14} />} onClick={() => void build()}>
+                    {t("Preparation.Twin.New", "New twin from the current games")}
+                  </Menu.Item>
+                  {twin && isSaved && (
+                    <Menu.Item
+                      color="red"
+                      leftSection={<IconTrash size={14} />}
+                      onClick={() => void confirmDelete()}
+                    >
+                      {t("Preparation.Twin.Delete", "Delete twin")}
+                    </Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
           </Group>
+
+          {building && (
+            <Group gap="xs">
+              <Loader size="xs" />
+              <Text size="sm" c="dimmed">
+                {t("Preparation.Twin.Building", "Reading the books of each rhythm…")}
+              </Text>
+            </Group>
+          )}
+          {buildError && <Alert color="red">{buildError}</Alert>}
+
+          {twin && (
+            <>
+              <Text size="xs" c="dimmed">
+                {t(
+                  "Preparation.Twin.BuiltFrom",
+                  "From {{games}} games (the card's filters except the rhythm), up to {{day}}; updated on {{updated}}. «Update» reads the card's games again and keeps the settings and measurements of each profile.",
+                  {
+                    games: twin.gamesUsed,
+                    day: twin.lastDay ?? "—",
+                    updated: twin.updatedAt.slice(0, 10),
+                  },
+                )}
+              </Text>
+              <Group gap="md" align="flex-end" wrap="wrap">
+                <Stack gap={4}>
+                  <Text size="xs" c="dimmed">
+                    {t("Preparation.Twin.TwinPlays", "The twin plays")}
+                  </Text>
+                  <SegmentedControl
+                    size="xs"
+                    value={color}
+                    onChange={(value) => setColor(value as GeneratorColor)}
+                    data={(["white", "black"] as const).map((value) => ({
+                      value,
+                      label: colorName(value, t),
+                    }))}
+                  />
+                </Stack>
+                <Select
+                  size="xs"
+                  w={200}
+                  label={t("Preparation.Twin.PlayProfile", "Profile in the game")}
+                  allowDeselect={false}
+                  value={playProfile}
+                  onChange={(value) => setPlayProfile((value ?? "auto") as TwinProfileKey | "auto")}
+                  data={[
+                    {
+                      value: "auto",
+                      label: t("Preparation.Twin.AutoProfile", "By the game's clock"),
+                    },
+                    ...profileKeys.map((key) => ({ value: key, label: profileLabel(key) })),
+                  ]}
+                />
+                <Button
+                  leftSection={<IconPlayerPlay size={16} />}
+                  disabled={!maia || twin.gamesUsed === 0}
+                  onClick={() => void play()}
+                >
+                  {t("Preparation.Twin.Play", "Play against the twin")}
+                </Button>
+              </Group>
+            </>
+          )}
         </Stack>
       </Paper>
 
-      <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        <TwinThinkingCard games={games} name={name} />
-        <TwinStyleCard games={games} name={name} cardId={cardId} elo={elo} />
-      </SimpleGrid>
-
-      <Paper withBorder radius="md" p="md">
-        <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
-          <Stack gap={2} style={{ flex: 1, minWidth: 260 }}>
-            <Group gap="xs">
-              <IconChartDots size={16} />
-              <Text fw={700}>{t("Preparation.Twin.Fidelity", "How faithful is it?")}</Text>
-            </Group>
-            <Text size="xs" c="dimmed">
-              {t(
-                "Preparation.Twin.FidelityHint",
-                "The most recent 20% of the games are left out of the book. In each of {{name}}'s positions inside the book, how often the twin would play the move really played, against plain Maia at the same rating. Out of the book the twin is Maia, so both match there.",
-                { name },
-              )}
-            </Text>
-          </Stack>
-          {measure.status === "running" ? (
-            <Button
-              variant="default"
-              leftSection={<IconPlayerStop size={16} />}
-              onClick={() => cancel.current?.()}
-            >
-              {t("Common.Cancel", "Cancel")}
-            </Button>
-          ) : (
-            <Button
-              variant="light"
-              disabled={!maia || ownGames < 15}
-              onClick={() => void runFidelity()}
-            >
-              {t("Preparation.Twin.Measure", "Measure")}
-            </Button>
-          )}
-        </Group>
-        {ownGames < 15 && (
-          <Text size="xs" c="dimmed" mt="xs">
-            {t("Preparation.Twin.FewGames", "At least 15 games with this color are needed.")}
-          </Text>
-        )}
-        {measure.status === "running" && (
-          <Progress
-            mt="sm"
-            value={measure.total ? (measure.done / measure.total) * 100 : 0}
-            animated
-            striped
-          />
-        )}
-        {measure.status === "error" && (
-          <Alert color="red" mt="sm">
-            {measure.message}
-          </Alert>
-        )}
-        {result &&
-          (result.sampled === 0 ? (
-            <Text size="sm" c="dimmed" mt="sm">
-              {t(
-                "Preparation.Twin.NoBookPositions",
-                "None of the test games stays in the book: the twin plays like Maia from the first move.",
-              )}
-            </Text>
-          ) : (
-            <Stack gap="sm" mt="sm">
-              <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                <Table withTableBorder verticalSpacing={4}>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th />
-                      <Table.Th ta="right">
-                        {t("Preparation.Twin.Probability", "Plays the real move")}
-                      </Table.Th>
-                      <Table.Th ta="right">{t("Preparation.Twin.Top", "First choice")}</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    <Table.Tr>
-                      <Table.Td fw={600}>{t("Preparation.Twin.TwinRow", "Twin")}</Table.Td>
-                      <Table.Td ta="right">{`${result.twin.probability.toFixed(0)}%`}</Table.Td>
-                      <Table.Td ta="right">{`${result.twin.top.toFixed(0)}%`}</Table.Td>
-                    </Table.Tr>
-                    <Table.Tr>
-                      <Table.Td>
-                        {t("Preparation.Twin.MaiaRow", "Maia {{elo}}", {
-                          elo: measure.status === "done" ? measure.elo : elo,
-                        })}
-                      </Table.Td>
-                      <Table.Td ta="right">{`${result.maia.probability.toFixed(0)}%`}</Table.Td>
-                      <Table.Td ta="right">{`${result.maia.top.toFixed(0)}%`}</Table.Td>
-                    </Table.Tr>
-                  </Table.Tbody>
-                </Table>
-                <Stack gap={4}>
-                  <Text size="sm">
-                    {better >= 5
-                      ? t(
-                          "Preparation.Twin.Better",
-                          "Inside the book the twin reproduces {{name}}'s moves clearly better than plain Maia.",
-                          { name },
-                        )
-                      : better > -5
-                        ? t(
-                            "Preparation.Twin.Same",
-                            "The twin does not improve on plain Maia here: {{name}}'s repertoire is close to what that rating usually plays, or too varied.",
-                            { name },
-                          )
-                        : t(
-                            "Preparation.Twin.Worse",
-                            "The book reproduces these games worse than Maia: the recent games depart from the older ones.",
-                          )}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {t(
-                      "Preparation.Twin.Sample",
-                      "{{positions}} positions in the book ({{sampled}} measured, {{samples}} Maia samples each), {{out}} moves out of the book; book from {{train}} games, test with {{test}}.",
-                      {
-                        positions: result.positions,
-                        sampled: result.sampled,
-                        samples: FIDELITY_SAMPLES,
-                        out: result.outOfBook,
-                        train: result.trainGames,
-                        test: result.testGames,
-                      },
+      {twin && profile && (
+        <>
+          <Paper withBorder radius="md" p="md">
+            <Stack gap="sm">
+              <Group justify="space-between" wrap="wrap" gap="sm">
+                <SegmentedControl
+                  size="xs"
+                  value={profile.key}
+                  onChange={(value) => setProfileKey(value as TwinProfileKey)}
+                  data={profileKeys.map((key) => ({
+                    value: key,
+                    label: `${profileLabel(key)} · ${twin.profiles[key]!.games}`,
+                  }))}
+                />
+                <OriginBadge origin={profile.origin} />
+              </Group>
+              <Text size="xs" c="dimmed">
+                {profile.key === "general"
+                  ? t(
+                      "Preparation.Twin.GeneralHint",
+                      "Every game, whatever the rhythm: used without a clock, or when no rhythm has a profile of its own.",
+                    )
+                  : t(
+                      "Preparation.Twin.RhythmHint",
+                      "Only the {{rhythm}} games: their book, rating and style are used in games at that rhythm.",
+                      { rhythm: profileLabel(profile.key).toLowerCase() },
                     )}
-                  </Text>
-                </Stack>
-              </SimpleGrid>
+              </Text>
+              <Group gap="xs">
+                <Badge variant="light">
+                  {t(
+                    "Preparation.Twin.ProfileGames",
+                    "{{white}} with White · {{black}} with Black",
+                    {
+                      white: profile.white,
+                      black: profile.black,
+                    },
+                  )}
+                </Badge>
+                <Badge variant="light" color="gray">
+                  {t("Preparation.Twin.Sequences", "{{count}} sequences", { count: sequences })}
+                </Badge>
+              </Group>
             </Stack>
-          ))}
-      </Paper>
+          </Paper>
 
-      {book.games === 0 && (
-        <EmptyState>
-          {t("Preparation.Book.Empty", "No games with this color in the current filters.")}
-        </EmptyState>
+          <TwinProfileEditor
+            profile={profile}
+            games={profileGames}
+            name={name}
+            maia={maia}
+            onChange={changeProfile}
+          />
+
+          <SimpleGrid cols={{ base: 1, lg: 2 }}>
+            <Paper withBorder radius="md" p="md">
+              <Stack gap="sm">
+                <Text fw={700}>{t("Preparation.Twin.Book", "Book")}</Text>
+                <Text size="xs" c="dimmed">
+                  {t(
+                    "Preparation.Twin.BookHint",
+                    "The opening sequences of the games of each profile, chosen with their real frequency. With only the most recent games the twin plays its current repertoire.",
+                  )}
+                </Text>
+                <Group gap="md" wrap="wrap" align="flex-end">
+                  <NumberInput
+                    size="xs"
+                    w={160}
+                    label={t("Preparation.Twin.BookMoves", "Moves of the book")}
+                    min={1}
+                    max={BOOK_PLIES / 2}
+                    value={twin.bookPlies / 2}
+                    onChange={(value) =>
+                      typeof value === "number" &&
+                      change({
+                        ...twin,
+                        bookPlies: Math.max(2, Math.min(BOOK_PLIES, Math.round(value) * 2)),
+                      })
+                    }
+                  />
+                  <Select
+                    size="xs"
+                    w={220}
+                    label={t("Preparation.Twin.BookGames", "Games of the book")}
+                    allowDeselect={false}
+                    disabled={building}
+                    value={String(twin.bookRecent ?? "all")}
+                    onChange={(value) =>
+                      void build(twin, value === "all" || !value ? null : Number(value))
+                    }
+                    data={RECENT_OPTIONS.map((value) => ({
+                      value: String(value ?? "all"),
+                      label:
+                        value === null
+                          ? t("Preparation.Twin.AllGames", "All")
+                          : t("Preparation.Twin.RecentGames", "Last {{count}} with each color", {
+                              count: value,
+                            }),
+                    }))}
+                  />
+                </Group>
+                <SegmentedControl
+                  size="xs"
+                  value={twin.timing}
+                  onChange={(value) => change({ ...twin, timing: value as TwinTimingMode })}
+                  data={[
+                    {
+                      value: "player",
+                      label: t("Preparation.Twin.TimingPlayer", "Their think time"),
+                    },
+                    {
+                      value: "catalog",
+                      label: t("Preparation.Twin.TimingCatalog", "Think time of its rating"),
+                    },
+                    { value: "none", label: t("Preparation.Twin.TimingNone", "Instant") },
+                  ]}
+                />
+              </Stack>
+            </Paper>
+            <TwinThinkingCard games={games} name={name} />
+          </SimpleGrid>
+
+          <TwinFidelityCard
+            games={profileGames}
+            color={color}
+            elo={profile.play.elo}
+            name={name}
+            maia={maia}
+          />
+        </>
       )}
     </Stack>
   );
+}
+
+function withoutCardDraft(drafts: Record<string, SavedTwin>, cardId: string) {
+  return Object.fromEntries(Object.entries(drafts).filter(([, twin]) => twin.cardId !== cardId));
 }
