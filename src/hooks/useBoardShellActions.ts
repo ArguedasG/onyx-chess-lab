@@ -5,10 +5,17 @@ import { useTranslation } from "react-i18next";
 import {
     activeTabAtom,
     importModalOpenAtom,
+    lastBoardTabAtom,
     reuseEmptyAnalysisTabAtom,
     tabsAtom,
 } from "@/state/atoms";
-import { createOrReuseBoardTab } from "@/utils/tabs";
+import {
+    boardTabToShow,
+    createOrReuseBoardTab,
+    createTab,
+    startTab,
+    unusedTabLike,
+} from "@/utils/tabs";
 
 export function useBoardShellActions() {
     const { t } = useTranslation();
@@ -17,6 +24,7 @@ export function useBoardShellActions() {
     const [activeTab, setActiveTab] = useAtom(activeTabAtom);
     const reuseEmpty = useAtomValue(reuseEmptyAnalysisTabAtom);
     const setImportModalOpen = useSetAtom(importModalOpenAtom);
+    const lastBoardTab = useAtomValue(lastBoardTabAtom);
 
     const openMode = useCallback(
         async (type: "analysis" | "play" | "generator", name: string, allowReuse: boolean) => {
@@ -34,17 +42,35 @@ export function useBoardShellActions() {
         [activeTab, navigate, setActiveTab, setTabs, tabs],
     );
 
+    /**
+     * The board used last, from anywhere (the home screen, a section page). The tab is chosen
+     * before going to "/", so the workspace does not fall back to another one on the way.
+     */
     const openBoard = useCallback(async () => {
-        await navigate({ to: "/" });
-        if (tabs.length === 0) {
-            await openMode("analysis", t("Home.Card.AnalysisBoard.Title"), true);
+        const board = boardTabToShow(tabs, lastBoardTab);
+        if (board) {
+            setActiveTab(board.value);
+            await navigate({ to: "/" });
+            return;
         }
-    }, [navigate, openMode, t, tabs.length]);
+        await navigate({ to: "/" });
+        await createTab({
+            tab: { name: "Home.Card.AnalysisBoard.Title", type: "analysis" },
+            setTabs,
+            setActiveTab,
+        });
+    }, [lastBoardTab, navigate, setActiveTab, setTabs, tabs]);
 
-    const startGame = useCallback(
-        () => openMode("play", t("Home.NewGame", "New Game"), reuseEmpty),
-        [openMode, reuseEmpty, t],
-    );
+    /** A game still in its setup is shown again rather than opening a second one. */
+    const startGame = useCallback(async () => {
+        const waiting = unusedTabLike(tabs, null, "play");
+        if (waiting) {
+            setActiveTab(waiting.value);
+            await navigate({ to: "/" });
+            return;
+        }
+        await openMode("play", t("Home.NewGame", "New Game"), reuseEmpty);
+    }, [navigate, openMode, reuseEmpty, setActiveTab, t, tabs]);
 
     const importGame = useCallback(async () => {
         await openMode("analysis", t("Home.Card.AnalysisBoard.Title"), reuseEmpty);
@@ -58,5 +84,13 @@ export function useBoardShellActions() {
 
     const openTraining = useCallback(() => navigate({ to: "/training" }), [navigate]);
 
-    return { openBoard, startGame, importGame, openLaboratory, openTraining };
+    /** The home screen: the open one if there is one, otherwise a new home tab. */
+    const openHome = useCallback(async () => {
+        await navigate({ to: "/" });
+        const home = tabs.find((tab) => tab.type === "new");
+        if (home) setActiveTab(home.value);
+        else await createTab({ tab: startTab("home"), setTabs, setActiveTab });
+    }, [navigate, setActiveTab, setTabs, tabs]);
+
+    return { openHome, openBoard, startGame, importGame, openLaboratory, openTraining };
 }

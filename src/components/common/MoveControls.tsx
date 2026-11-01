@@ -1,18 +1,36 @@
-import { ActionIcon, Group } from "@mantine/core";
+import { ActionIcon, Box, Divider, Group } from "@mantine/core";
 import {
   IconChevronLeft,
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
+  IconArrowBarToDown,
+  IconArrowBarToUp,
 } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
 import { memo, useContext } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { keyMapAtom } from "@/state/keybinds";
+import type { TreeNode } from "@/utils/treeReducer";
+import FirstTimeHint from "./FirstTimeHint";
+import ShortcutTooltip, { ShortcutKeys } from "./ShortcutTooltip";
 import { TreeStateContext } from "./TreeStateContext";
 
-function MoveControls({ readOnly }: { readOnly?: boolean }) {
+/** Whether the game has any variation: a move with more than one continuation. */
+function hasVariations(node: TreeNode): boolean {
+  const stack = [node];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current.children.length > 1) return true;
+    stack.push(...current.children);
+  }
+  return false;
+}
+
+function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?: boolean }) {
+  const { t } = useTranslation();
   const store = useContext(TreeStateContext)!;
   const next = useStore(store, (s) => s.goToNext);
   const previous = useStore(store, (s) => s.goToPrevious);
@@ -25,6 +43,7 @@ function MoveControls({ readOnly }: { readOnly?: boolean }) {
   const previousBranch = useStore(store, (s) => s.previousBranch);
   const nextBranching = useStore(store, (s) => s.nextBranching);
   const previousBranching = useStore(store, (s) => s.previousBranching);
+  const variations = useStore(store, (s) => hasVariations(s.root));
 
   const keyMap = useAtomValue(keyMapAtom);
   useHotkeys(keyMap.PREVIOUS_MOVE.keys, previous);
@@ -39,21 +58,147 @@ function MoveControls({ readOnly }: { readOnly?: boolean }) {
   useHotkeys(keyMap.NEXT_BRANCHING.keys, nextBranching);
   useHotkeys(keyMap.PREVIOUS_BRANCHING.keys, previousBranching);
 
-  return (
-    <Group grow gap="xs">
-      <ActionIcon variant="default" size="lg" onClick={start}>
-        <IconChevronsLeft />
-      </ActionIcon>
-      <ActionIcon variant="default" size="lg" onClick={previous}>
-        <IconChevronLeft />
-      </ActionIcon>
-      <ActionIcon variant="default" size="lg" onClick={next}>
-        <IconChevronRight />
-      </ActionIcon>
-      <ActionIcon variant="default" size="lg" onClick={end}>
-        <IconChevronsRight />
-      </ActionIcon>
+  const controls = (
+    <Group gap="xs" wrap="nowrap">
+      <Group grow gap="xs" style={{ flex: 1 }}>
+        <ShortcutTooltip
+          label={t("Board.Controls.Start", "Start of the game")}
+          keys={keyMap.GO_TO_START.keys}
+        >
+          <ActionIcon
+            variant="default"
+            size="lg"
+            onClick={start}
+            aria-label={t("Board.Controls.Start", "Start of the game")}
+          >
+            <IconChevronsLeft />
+          </ActionIcon>
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={t("Board.Controls.Previous", "Previous move")}
+          keys={keyMap.PREVIOUS_MOVE.keys}
+        >
+          <ActionIcon
+            variant="default"
+            size="lg"
+            onClick={previous}
+            aria-label={t("Board.Controls.Previous", "Previous move")}
+          >
+            <IconChevronLeft />
+          </ActionIcon>
+        </ShortcutTooltip>
+        <ShortcutTooltip label={t("Board.Controls.Next", "Next move")} keys={keyMap.NEXT_MOVE.keys}>
+          <ActionIcon
+            variant="default"
+            size="lg"
+            onClick={next}
+            aria-label={t("Board.Controls.Next", "Next move")}
+          >
+            <IconChevronRight />
+          </ActionIcon>
+        </ShortcutTooltip>
+        <ShortcutTooltip
+          label={t("Board.Controls.End", "End of the game")}
+          keys={keyMap.GO_TO_END.keys}
+        >
+          <ActionIcon
+            variant="default"
+            size="lg"
+            onClick={end}
+            aria-label={t("Board.Controls.End", "End of the game")}
+          >
+            <IconChevronsRight />
+          </ActionIcon>
+        </ShortcutTooltip>
+      </Group>
+      {/* Only with variations: they would be dead buttons in a game without them. */}
+      {variations && (
+        <>
+          <Divider orientation="vertical" />
+          <Group gap="xs" wrap="nowrap">
+            <ShortcutTooltip
+              label={t("Board.Controls.PreviousVariation", "Previous variation")}
+              keys={keyMap.PREVIOUS_BRANCH.keys}
+            >
+              <ActionIcon
+                variant="default"
+                size="lg"
+                onClick={previousBranch}
+                aria-label={t("Board.Controls.PreviousVariation", "Previous variation")}
+              >
+                <IconArrowBarToUp size={18} />
+              </ActionIcon>
+            </ShortcutTooltip>
+            <ShortcutTooltip
+              label={t("Board.Controls.NextVariation", "Next variation")}
+              keys={keyMap.NEXT_BRANCH.keys}
+            >
+              <ActionIcon
+                variant="default"
+                size="lg"
+                onClick={nextBranch}
+                aria-label={t("Board.Controls.NextVariation", "Next variation")}
+              >
+                <IconArrowBarToDown size={18} />
+              </ActionIcon>
+            </ShortcutTooltip>
+          </Group>
+        </>
+      )}
     </Group>
+  );
+
+  if (!hints) return controls;
+
+  return (
+    <FirstTimeHint
+      id="board-controls"
+      title={t("Hints.Board.Title", "Every button has a shortcut")}
+      shortcutsLink
+      target={
+        <FirstTimeHint
+          id="variations"
+          when={variations}
+          title={t("Hints.Variations.Title", "This game has variations")}
+          shortcutsLink
+          // Its arrow points at the two variation buttons, at the right end.
+          position="top-end"
+          width={360}
+          target={controls}
+        >
+          {t(
+            "Hints.Variations.Body",
+            "Go through them with the two new buttons on the right, or with these keys:",
+          )}
+          <Box
+            mt={8}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              columnGap: 12,
+              rowGap: 6,
+              alignItems: "center",
+            }}
+          >
+            <Group gap={4} wrap="nowrap">
+              <ShortcutKeys keys={keyMap.PREVIOUS_BRANCH.keys} />
+              <ShortcutKeys keys={keyMap.NEXT_BRANCH.keys} />
+            </Group>
+            <span>{t("Hints.Variations.Switch", "change variation")}</span>
+            <Group gap={4} wrap="nowrap">
+              <ShortcutKeys keys={keyMap.PREVIOUS_BRANCHING.keys} />
+              <ShortcutKeys keys={keyMap.NEXT_BRANCHING.keys} />
+            </Group>
+            <span>{t("Hints.Variations.Jump", "jump to the next fork")}</span>
+          </Box>
+        </FirstTimeHint>
+      }
+    >
+      {t(
+        "Hints.Board.Body",
+        "Rest the mouse on any button to see what it does and its keyboard shortcut. The shortcuts, and what each key does, can be changed in Settings.",
+      )}
+    </FirstTimeHint>
   );
 }
 

@@ -12,6 +12,13 @@
   text-decoration: none;
 }
 
+/* Short windows (a laptop with a large font): tighter entries before the list has to scroll. */
+@media (max-height: 820px) {
+  .link {
+    min-height: 2.5rem;
+  }
+}
+
 .link.expanded {
   justify-content: flex-start;
 }

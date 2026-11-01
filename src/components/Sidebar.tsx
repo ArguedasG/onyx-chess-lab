@@ -1,5 +1,13 @@
 "use no memo";
-import { AppShellSection, Divider, Stack, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import {
+  AppShellSection,
+  Divider,
+  ScrollArea,
+  Stack,
+  Text,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
 import {
   type Icon,
   IconChess,
@@ -8,6 +16,7 @@ import {
   IconFileImport,
   IconFiles,
   IconFlask,
+  IconHome,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconPlayerPlay,
@@ -18,12 +27,14 @@ import {
   IconUser,
   IconUsersGroup,
 } from "@tabler/icons-react";
-import { Link, useMatchRoute } from "@tanstack/react-router";
+import { Link, useLocation, useMatchRoute } from "@tanstack/react-router";
 import cx from "clsx";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useBoardShellActions } from "@/hooks/useBoardShellActions";
-import { sidebarExpandedAtom } from "@/state/atoms";
+import { activeTabAtom, lastBoardTabAtom, sidebarExpandedAtom, tabsAtom } from "@/state/atoms";
+import { isBoardTab } from "@/utils/tabs";
 import classes from "./Sidebar.module.css";
 
 interface NavbarLinkProps {
@@ -68,11 +79,13 @@ function NavbarAction({
   icon,
   label,
   expanded,
+  active = false,
   onClick,
 }: {
   icon: Icon;
   label: string;
   expanded: boolean;
+  active?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -80,7 +93,10 @@ function NavbarAction({
       <UnstyledButton
         type="button"
         aria-label={label}
-        className={cx(classes.link, classes.action, { [classes.expanded]: expanded })}
+        className={cx(classes.link, classes.action, {
+          [classes.active]: active,
+          [classes.expanded]: expanded,
+        })}
         onClick={onClick}
       >
         <NavContent icon={icon} label={label} expanded={expanded} />
@@ -92,22 +108,44 @@ function NavbarAction({
 export function SideBar() {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useAtom(sidebarExpandedAtom);
-  const { startGame, importGame, openLaboratory } = useBoardShellActions();
+  const { openHome, openBoard, startGame, importGame, openLaboratory } = useBoardShellActions();
+  const tabs = useAtomValue(tabsAtom);
+  const activeTab = useAtomValue(activeTabAtom);
+  const setLastBoardTab = useSetAtom(lastBoardTabAtom);
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const current = tabs.find((tab) => tab.value === activeTab);
+  // Home, board, game and generator all live on "/": the active tab says which one is shown.
+  const shown = pathname === "/" ? current?.type : undefined;
+
+  useEffect(() => {
+    if (isBoardTab(current)) setLastBoardTab(current!.value);
+  }, [current, setLastBoardTab]);
 
   return (
     <>
-      <AppShellSection grow>
+      {/* Scrolls when the window is short or the font large, so no section is out of reach;
+          Settings and the collapse button below always stay visible. */}
+      <AppShellSection grow component={ScrollArea} type="auto" scrollbarSize={4} mih={0}>
         <Stack gap={2} py="xs">
-          <NavbarLink
+          <NavbarAction
+            icon={IconHome}
+            label={t("SideBar.Home", "Home")}
+            expanded={expanded}
+            active={shown === "new"}
+            onClick={() => void openHome()}
+          />
+          <NavbarAction
             icon={IconChess}
             label={t("SideBar.Board", "Board")}
-            url="/"
             expanded={expanded}
+            active={shown === "analysis" || shown === "puzzles"}
+            onClick={() => void openBoard()}
           />
           <NavbarAction
             icon={IconPlayerPlay}
             label={t("SideBar.Play", "Play")}
             expanded={expanded}
+            active={shown === "play"}
             onClick={() => void startGame()}
           />
           <NavbarLink
@@ -170,6 +208,7 @@ export function SideBar() {
             icon={IconFlask}
             label={t("SideBar.Laboratory", "Model Game Generator")}
             expanded={expanded}
+            active={shown === "generator"}
             onClick={() => void openLaboratory()}
           />
         </Stack>

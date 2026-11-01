@@ -989,6 +989,14 @@ en la documentación de la fase.
   muestra, en cada posición, las jugadas del jugador con las mismas cifras que «Repertorio
   probable»; un clic juega la jugada. Vive en memoria: una pestaña reabierta tras reiniciar la
   app ya no la tiene.
+- Primera impresión, tras la crítica de un usuario («no puedo ir a la siguiente variante», «no
+  encuentro la repetición espaciada»): pantalla de inicio nueva (tablero de análisis como acción
+  principal, Jugar, Continuar y todas las secciones con su propósito, con vista compacta), ajuste
+  «Al abrir: Inicio / Tablero» (en Ajustes y en el propio inicio), entrada «Inicio» en la barra
+  lateral, botones de variante (solo si la partida tiene variantes), tooltips con el atajo de cada
+  botón de movimiento y consejos de primer uso que se descartan y se pueden volver a mostrar. El
+  botón «+» muestra una pestaña sin usar del mismo tipo en vez de abrir otra igual; nunca
+  reutiliza una pestaña con trabajo.
 
 ### 2026-10-27 — Release 0.23.0
 

@@ -21,12 +21,14 @@ import {
   activeTabAtom,
   dbTabFamily,
   importModalOpenAtom,
+  lastBoardTabAtom,
   openingExpandedFamily,
   openingScrollFamily,
   openingReportCacheFamily,
   openingReportReopenFamily,
   playRunFamily,
   positionGamesViewFamily,
+  startScreenAtom,
   tabFamily,
   tabsAtom,
 } from "@/state/atoms";
@@ -34,7 +36,16 @@ import { keyMapAtom } from "@/state/keybinds";
 import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
 import { rightColumnLayoutKey } from "@/state/rightColumnLayout";
-import { createTab, genID, getTabFile, isPersistentGameOrigin, type Tab } from "@/utils/tabs";
+import {
+  boardTabToShow,
+  createTab,
+  genID,
+  getTabFile,
+  isPersistentGameOrigin,
+  startTab,
+  type Tab,
+  unusedTabLike,
+} from "@/utils/tabs";
 import {
   getTabPath,
   getTrainingTabName,
@@ -97,11 +108,13 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
           });
       }
     } else if (!current || current.type === "training") {
-      const board = currentTabs.find((tab) => tab.type !== "training");
+      const board =
+        boardTabToShow(currentTabs, atomStore.get(lastBoardTabAtom)) ??
+        currentTabs.find((tab) => tab.type !== "training");
       if (board) setActiveTab(board.value);
       else
         void createTab({
-          tab: { name: "Home.Card.AnalysisBoard.Title", type: "analysis" },
+          tab: startTab(atomStore.get(startScreenAtom)),
           setTabs,
           setActiveTab,
         });
@@ -170,7 +183,7 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         playRunFamily.remove(value);
         if (tabs.length === 1) {
           await createTab({
-            tab: { name: "Home.Card.AnalysisBoard.Title", type: "analysis" },
+            tab: startTab(atomStore.get(startScreenAtom)),
             setTabs,
             setActiveTab,
           });
@@ -340,15 +353,12 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
                   <ActionIcon
                     variant="default"
                     radius={0}
+                    aria-label={t("Tabs.New", "New tab")}
                     onClick={async () => {
-                      await createTab({
-                        tab: {
-                          name: t("Home.Card.AnalysisBoard.Title"),
-                          type: "analysis",
-                        },
-                        setTabs,
-                        setActiveTab,
-                      });
+                      const target = startTab(atomStore.get(startScreenAtom));
+                      const unused = unusedTabLike(tabs, activeTab, target.type);
+                      if (unused) setActiveTab(unused.value);
+                      else await createTab({ tab: target, setTabs, setActiveTab });
                       await navigate({ to: "/" });
                     }}
                     classNames={{

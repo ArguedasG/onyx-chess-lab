@@ -32,6 +32,7 @@ import {
   activeTabAtom,
   nativeBarAtom,
   reuseEmptyAnalysisTabAtom,
+  startScreenAtom,
   sidebarExpandedAtom,
   tabsAtom,
 } from "@/state/atoms";
@@ -39,7 +40,7 @@ import { keyMapAtom } from "@/state/keybinds";
 import { useReleaseFocusAfterClick } from "@/hooks/useReleaseFocusAfterClick";
 import { TRAINING_AREAS_KEY, trainingAreasStorage } from "@/state/trainingAreas";
 import { openFile } from "@/utils/files";
-import { createTab, isEmptyAnalysisTab } from "@/utils/tabs";
+import { createTab, isEmptyAnalysisTab, startTab, unusedTabLike } from "@/utils/tabs";
 
 type MenuGroup = {
   label: string;
@@ -110,6 +111,7 @@ function RootLayout() {
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
   const reuseEmptyAnalysisTab = useAtomValue(reuseEmptyAnalysisTabAtom);
   const sidebarExpanded = useAtomValue(sidebarExpandedAtom);
+  const startScreen = useAtomValue(startScreenAtom);
 
   const { t } = useTranslation();
 
@@ -130,12 +132,11 @@ function RootLayout() {
 
   const createNewTab = useCallback(() => {
     navigate({ to: "/" });
-    createTab({
-      tab: { name: t("Home.Card.AnalysisBoard.Title"), type: "analysis" },
-      setTabs,
-      setActiveTab,
-    });
-  }, [navigate, setActiveTab, setTabs, t]);
+    const target = startTab(startScreen);
+    const unused = unusedTabLike(tabs, activeTab, target.type);
+    if (unused) setActiveTab(unused.value);
+    else createTab({ tab: target, setTabs, setActiveTab });
+  }, [activeTab, navigate, setActiveTab, setTabs, startScreen, tabs]);
 
   const openSettings = useCallback(async () => {
     navigate({ to: "/settings" });

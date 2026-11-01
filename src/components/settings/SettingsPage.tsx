@@ -26,7 +26,7 @@ import {
   IconShield,
   IconVolume,
 } from "@tabler/icons-react";
-import { useLoaderData } from "@tanstack/react-router";
+import { useLoaderData, useSearch } from "@tanstack/react-router";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
 import { RESET } from "jotai/utils";
@@ -76,6 +76,7 @@ import RepertoireMinGamesSetting from "./RepertoireMinGamesSetting";
 import classes from "./SettingsPage.module.css";
 import SettingsSwitch from "./SettingsSwitch";
 import SoundSelect from "./SoundSelect";
+import { ResetHintsButton, StartScreenControl } from "./StartScreenControl";
 import ThemeButton from "./ThemeButton";
 import VolumeSlider from "./VolumeSlider";
 
@@ -159,6 +160,7 @@ export default function Page() {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const { section } = useSearch({ from: "/settings" });
   const [keyMap, setKeyMap] = useAtom(keyMapAtom);
   const [isNative, setIsNative] = useAtom(nativeBarAtom);
   const {
@@ -415,6 +417,28 @@ export default function Page() {
         render: () => <SettingsSwitch atom={forcedEnPassantAtom} />,
       },
       // Appearance settings
+      {
+        id: "start-screen",
+        category: "appearance",
+        title: t("Settings.StartScreen", "When the app opens"),
+        description: t(
+          "Settings.StartScreen.Desc",
+          "Start on the home screen, with every section of Onyx, or directly on an analysis board. It also decides what a new tab (+) opens.",
+        ),
+        keywords: ["start", "home", "startup", "open", "tab", "inicio"],
+        render: () => <StartScreenControl />,
+      },
+      {
+        id: "first-time-hints",
+        category: "appearance",
+        title: t("Settings.Hints", "First-time hints"),
+        description: t(
+          "Settings.Hints.Desc",
+          "The small cards that explain a part of the interface the first time you use it.",
+        ),
+        keywords: ["hints", "tips", "help", "tutorial", "consejos"],
+        render: () => <ResetHintsButton />,
+      },
       {
         id: "theme",
         category: "appearance",
@@ -850,7 +874,7 @@ export default function Page() {
         </ScrollArea>
       ) : (
         <Tabs
-          defaultValue="board"
+          defaultValue={section ?? "board"}
           orientation="vertical"
           flex={1}
           style={{ overflow: "hidden" }}

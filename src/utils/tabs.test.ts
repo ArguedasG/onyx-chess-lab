@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tab } from "./tabs";
-import { createOrReuseBoardTab, createTab, isEmptyAnalysisTab, tabSchema } from "./tabs";
+import {
+    boardTabToShow,
+    createOrReuseBoardTab,
+    createTab,
+    isEmptyAnalysisTab,
+    startTab,
+    tabSchema,
+    unusedTabLike,
+} from "./tabs";
+import { defaultTree } from "./treeReducer";
 import { createDebouncedSessionStorage } from "@/state/store/debouncedStorage";
 import { commands } from "@/bindings";
 import { createTreeStore } from "@/state/store/tree";
@@ -184,5 +193,98 @@ describe("board shell tab reuse", () => {
             playerName: "Second",
         });
         expect(activeTab).toBe(id);
+    });
+});
+
+describe("start screen and the new tab button", () => {
+    beforeEach(() => sessionStorage.clear());
+
+    it("opens the home screen or a board, per the setting", () => {
+        expect(startTab("home")).toEqual({ name: "Home.Tab", type: "new" });
+        expect(startTab("board")).toEqual({
+            name: "Home.Card.AnalysisBoard.Title",
+            type: "analysis",
+        });
+    });
+
+    it("treats a board only looked at as unused, and one with any work as used", () => {
+        const tab = analysisTab("looked-at");
+        sessionStorage.setItem(tab.value, JSON.stringify({ version: 0, state: defaultTree() }));
+        expect(isEmptyAnalysisTab(tab)).toBe(true);
+
+        const commented = defaultTree();
+        commented.root.comment = "Idea: ...";
+        sessionStorage.setItem(tab.value, JSON.stringify({ version: 0, state: commented }));
+        expect(isEmptyAnalysisTab(tab)).toBe(false);
+
+        const store = createTreeStore();
+        store.getState().makeMoves({ payload: ["e4"] });
+        const { root, headers, position, report } = store.getState();
+        sessionStorage.setItem(
+            tab.value,
+            JSON.stringify({
+                version: 0,
+                state: { root, headers, position, report, dirty: false },
+            }),
+        );
+        expect(isEmptyAnalysisTab(tab)).toBe(false);
+    });
+
+    it("shows an unused tab of the same kind instead of opening a twin of it", () => {
+        const home: Tab = {
+            name: "Home.Tab",
+            value: "home",
+            type: "new",
+            gameOrigin: { kind: "none" },
+        };
+        const used = analysisTab("used");
+        sessionStorage.setItem(used.value, JSON.stringify({ version: 0, state: { dirty: true } }));
+        const unused = analysisTab("unused");
+        const tabs = [home, used, unused];
+        expect(unusedTabLike(tabs, "used", "analysis")?.value).toBe("unused");
+        expect(unusedTabLike(tabs, "used", "new")?.value).toBe("home");
+        // The active tab is never "another" tab: the button then opens a new one.
+        expect(unusedTabLike([unused], "unused", "analysis")).toBeUndefined();
+        expect(unusedTabLike([used], null, "analysis")).toBeUndefined();
+    });
+});
+
+describe("the sidebar's board", () => {
+    beforeEach(() => sessionStorage.clear());
+
+    it("goes to the board used last, otherwise the newest one, never home or training", () => {
+        const home: Tab = {
+            name: "Home.Tab",
+            value: "home",
+            type: "new",
+            gameOrigin: { kind: "none" },
+        };
+        const training: Tab = {
+            name: "Training",
+            value: "training",
+            type: "training",
+            trainingPath: "/training",
+            gameOrigin: { kind: "none" },
+        };
+        const first = analysisTab("first");
+        const second = analysisTab("second");
+        const game: Tab = { ...analysisTab("game"), type: "play" };
+        const tabs = [first, home, second, game, training];
+        expect(boardTabToShow(tabs, "first")?.value).toBe("first");
+        // Games have their own entry: the board is an analysis board.
+        expect(boardTabToShow(tabs, "game")?.value).toBe("second");
+        expect(boardTabToShow(tabs, null)?.value).toBe("second");
+        expect(boardTabToShow([home, game, training], null)).toBeUndefined();
+    });
+
+    it("shows a game still in its setup instead of opening another", () => {
+        const waiting: Tab = { ...analysisTab("waiting"), type: "play" };
+        const played: Tab = { ...analysisTab("played"), type: "play" };
+        sessionStorage.setItem(
+            played.value,
+            JSON.stringify({ version: 0, state: { dirty: true } }),
+        );
+        expect(unusedTabLike([played, waiting], null, "play")?.value).toBe("waiting");
+        expect(unusedTabLike([played], null, "play")).toBeUndefined();
     });
 });

@@ -48,7 +48,7 @@ import {
 } from "@/utils/lichess/explorer";
 import type { RetroState } from "@/utils/retro";
 import { getWinChance, normalizeScore } from "@/utils/score";
-import { genID, type Tab, tabSchema } from "@/utils/tabs";
+import { genID, startTab, type Tab, tabSchema } from "@/utils/tabs";
 import type { TreeState } from "@/utils/treeReducer";
 import { getEnginesDir } from "../utils/directories";
 import type { Session } from "../utils/session";
@@ -67,10 +67,30 @@ const zodArray = <Input, Output>(itemSchema: z.ZodType<Output, z.ZodTypeDef, Inp
 
 // Tabs
 
+/** What the app opens on: the home screen or an analysis board. */
+export type StartScreen = "home" | "board";
+const START_SCREEN_KEY = "start-screen";
+
+function storedStartScreen(): StartScreen {
+    try {
+        return JSON.parse(localStorage.getItem(START_SCREEN_KEY) ?? "null") === "board"
+            ? "board"
+            : "home";
+    } catch {
+        return "home";
+    }
+}
+
+export const startScreenAtom = atomWithStorage<StartScreen>(
+    START_SCREEN_KEY,
+    storedStartScreen(),
+    undefined,
+    { getOnInit: true },
+);
+
 const firstTab: Tab = {
-    name: "Home.Card.AnalysisBoard.Title",
+    ...startTab(storedStartScreen()),
     value: genID(),
-    type: "analysis",
     gameOrigin: {
         kind: "none",
     },
@@ -246,6 +266,8 @@ export const sessionsAtom = atomWithStorage<Session[]>("sessions", [], undefined
 export const nativeBarAtom = atomWithStorage<boolean>("native-bar", false);
 export const reuseEmptyAnalysisTabAtom = atomWithStorage<boolean>("reuse-empty-analysis-tab", true);
 export const sidebarExpandedAtom = atomWithStorage<boolean>("sidebar-expanded", false);
+/** The board tab used last (analysis, game, generator or puzzles), for the sidebar's "Board". */
+export const lastBoardTabAtom = atom<string | null>(null);
 export const importModalOpenAtom = atom(false);
 export const telemetryEnabledAtom = atomWithStorage<boolean>(
     "telemetry-enabled",

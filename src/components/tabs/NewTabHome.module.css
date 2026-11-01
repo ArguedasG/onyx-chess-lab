@@ -1,3 +1,100 @@
+.page {
+  /* As wide as the training page's cards (Mantine's xl container). */
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-md) var(--mantine-spacing-xl);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-lg);
+  border: 1px solid var(--mantine-primary-color-light-hover);
+  background:
+    linear-gradient(125deg, var(--mantine-primary-color-light) 0%, transparent 60%),
+    var(--mantine-color-body);
+  padding: var(--mantine-spacing-xl);
+  height: 100%;
+}
+
+.heroBoard {
+  width: 188px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  box-shadow: var(--mantine-shadow-md);
+  pointer-events: none;
+}
+
+.panel {
+  border-radius: var(--mantine-radius-lg);
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  padding: var(--mantine-spacing-lg);
+  height: 100%;
+}
+
+.tile {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  border-radius: var(--mantine-radius-lg);
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  padding: var(--mantine-spacing-lg);
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--tile-color, var(--mantine-primary-color-filled));
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+.arrow {
+  color: var(--mantine-color-dimmed);
+  transition:
+    transform 120ms ease,
+    color 120ms ease;
+}
+
+.tile:hover .arrow {
+  color: var(--tile-color, var(--mantine-primary-color-filled));
+  transform: translateX(3px);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+.subTile {
+  composes: tile;
+  padding: var(--mantine-spacing-md);
+  background: var(--mantine-color-default);
+}
+
+.compactTile {
+  composes: tile;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.step {
+  flex: 1 1 0;
+  min-width: 150px;
+  border-left: 2px solid var(--tile-color);
+  padding-left: var(--mantine-spacing-sm);
+}
+
+.recentFileRow {
+  border-radius: var(--mantine-radius-sm);
+}
+
 [data-mantine-color-scheme="dark"] .recentFileRow:hover {
   background-color: var(--mantine-color-dark-5);
 }

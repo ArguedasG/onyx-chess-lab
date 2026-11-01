@@ -643,7 +643,7 @@ function BoardAnalysis() {
               }
             />
             {showAnnotationBar && !practicing && <AnnotationToolbar />}
-            <MoveControls />
+            <MoveControls hints />
           </Stack>
         )}
       </Portal>

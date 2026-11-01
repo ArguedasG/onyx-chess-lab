@@ -10,6 +10,7 @@ import type { TreeStoreState } from "@/state/store/tree";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
 import { getPGN, parsePGN } from "./chess";
 import { saveStudyChapterPgn } from "./studies";
+import { INITIAL_FEN } from "chessops/fen";
 import { type GameHeaders, getGameName } from "./treeReducer";
 import { unwrap } from "./unwrap";
 
@@ -169,11 +170,89 @@ export async function createTab({
     return id;
 }
 
+/**
+ * A tab the sidebar's "Board" stands for: an analysis board (or puzzles). Games and the
+ * generator have their own entries ("Play", the laboratory).
+ */
+export function isBoardTab(tab: Tab | undefined): boolean {
+    return tab?.type === "analysis" || tab?.type === "puzzles";
+}
+
+/** The board the sidebar's "Board" goes to: the one used last, otherwise the newest one. */
+export function boardTabToShow(tabs: readonly Tab[], lastBoardTab: string | null): Tab | undefined {
+    const last = tabs.find((tab) => tab.value === lastBoardTab);
+    if (isBoardTab(last)) return last;
+    return [...tabs].reverse().find(isBoardTab);
+}
+
+/** The tab a new session, the "+" button or the last closed tab opens, per the setting. */
+export function startTab(screen: "home" | "board"): Pick<Tab, "name" | "type"> {
+    return screen === "board"
+        ? { name: "Home.Card.AnalysisBoard.Title", type: "analysis" }
+        : { name: "Home.Tab", type: "new" };
+}
+
+type StoredTree = {
+    state?: {
+        dirty?: boolean;
+        root?: {
+            fen?: string;
+            children?: unknown[];
+            comment?: string;
+            shapes?: unknown[];
+            annotations?: unknown[];
+        };
+        headers?: { white?: string; black?: string };
+    };
+};
+
+/**
+ * A board nobody has used: the start position with no moves, comments, drawings or players.
+ * A board only opened and looked at stores its tree too, so the stored tree is read, not only
+ * whether there is one.
+ */
+function isUntouchedTree(stored: StoredTree | null): boolean {
+    if (!stored) return true;
+    const state = stored.state;
+    const root = state?.root;
+    if (!state || !root || state.dirty) return false;
+    return (
+        root.fen === INITIAL_FEN &&
+        (root.children?.length ?? 0) === 0 &&
+        !root.comment &&
+        (root.shapes?.length ?? 0) === 0 &&
+        (root.annotations?.length ?? 0) === 0 &&
+        !state.headers?.white &&
+        !state.headers?.black
+    );
+}
+
 export function isEmptyAnalysisTab(tab: Tab | undefined): boolean {
     if (!tab) return false;
-    const hasTreeState = getLatestSessionStorageValue(tab.value) !== null;
-    if (tab.type === "new") return !hasTreeState;
-    return tab.type === "analysis" && tab.gameOrigin.kind === "none" && !hasTreeState;
+    const untouched = isUntouchedTree(getLatestSessionStorageValue<StoredTree["state"]>(tab.value));
+    if (tab.type === "new") return untouched;
+    return tab.type === "analysis" && tab.gameOrigin.kind === "none" && untouched;
+}
+
+/** An open tab nobody has used: the home screen, an empty board or a game not yet played. */
+function isUnusedTab(tab: Tab): boolean {
+    if (tab.type === "play")
+        return isUntouchedTree(getLatestSessionStorageValue<StoredTree["state"]>(tab.value));
+    return isEmptyAnalysisTab(tab);
+}
+
+/**
+ * The "+" button and "Play": a tab that is already open and unused (the home screen, a board
+ * nobody has touched, a game still in its setup) is shown instead of opening a twin of it, so
+ * tabs do not pile up by accident. Tabs with any work in them are never reused. `except` is the
+ * tab the user is on, when showing it again would look like the button did nothing.
+ */
+export function unusedTabLike(
+    tabs: readonly Tab[],
+    except: string | null,
+    type: Tab["type"],
+): Tab | undefined {
+    return tabs.find((tab) => tab.value !== except && tab.type === type && isUnusedTab(tab));
 }
 
 export async function createOrReuseBoardTab({
