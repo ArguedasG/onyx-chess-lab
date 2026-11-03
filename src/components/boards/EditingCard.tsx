@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import { TreeStateContext } from "../common/TreeStateContext";
 import FenInput from "../panels/info/FenInput";
 import classes from "./EditingCard.module.css";
+import ImageReader from "./ImageReader";
 import PiecesGrid from "./PiecesGrid";
 
 function EditingCard({
@@ -35,6 +36,8 @@ function EditingCard({
         onClick={() => setEditingMode(false)}
       />
       <FenInput currentFen={fen} />
+      <Divider my="md" />
+      <ImageReader currentFen={fen} onRead={setFen} />
       <Divider my="md" />
       <PiecesGrid
         fen={fen}

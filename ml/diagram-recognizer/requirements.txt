@@ -1,0 +1,9 @@
+# Phase 9.4 — diagram recognizer (I-56). CPU-only training environment.
+# Install: see README.md (torch comes from the CPU index).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.9.1+cpu
+numpy>=1.26,<3
+pillow>=11
+onnx>=1.19
+onnxruntime>=1.23
+chess==1.11.2

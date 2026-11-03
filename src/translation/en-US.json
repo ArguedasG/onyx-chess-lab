@@ -4308,6 +4308,22 @@
     "Preparation.Twin.PickSaved": "Or play against a saved twin…",
     "Tournaments.Twin.Desc": "The twin of a player card: their repertoire and their way of playing at the rhythm of the tournament. Added by hand (autofill never picks twins); games against it count in the tournament but not for your rating.",
     "Tournaments.Twin": "Twin",
-    "Tournaments.Field.AddTwin": "Add a twin"
+    "Tournaments.Field.AddTwin": "Add a twin",
+    "Board.ImageReader.Open": "From image",
+    "Board.ImageReader.Hint": "or paste (Ctrl+V) or drop an image of a board",
+    "Board.ImageReader.Images": "Images",
+    "Board.ImageReader.Pasted": "Pasted image",
+    "Board.ImageReader.Reading": "Reading the position…",
+    "Board.ImageReader.Error": "The image could not be read: {{error}}",
+    "Board.ImageReader.Accepted": "Position read",
+    "Board.ImageReader.Review": "Check the position: {{count}} doubtful squares are marked in red",
+    "Board.ImageReader.NoBoard": "No board found in the image",
+    "Board.ImageReader.Check": "Compare it with the image before using it; side to move and castling are not read.",
+    "Board.ImageReader.Flip": "Flip the reading",
+    "Board.ImageReader.Timing": "{{ms}} ms · model {{version}}",
+    "Board.ImageReader.ProblemKings": "there is not exactly one king per side",
+    "Board.ImageReader.ProblemPawnOnEdge": "a pawn is on the first or last rank",
+    "Board.ImageReader.ProblemTooManyPawns": "more than 8 pawns of one color",
+    "Board.ImageReader.ProblemTooManyPieces": "more than 16 pieces of one color"
   }
 }

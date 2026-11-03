@@ -12,7 +12,7 @@ import {
   type SquareName,
 } from "chessops";
 import { chessgroundDests, chessgroundMove } from "chessops/compat";
-import { makeFen, parseFen } from "chessops/fen";
+import { makeFen, makePiece, parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -49,6 +49,7 @@ import {
   showVariationArrowsAtom,
   snapArrowsAtom,
 } from "@/state/atoms";
+import { diagramDoubtsAtom } from "@/state/diagramReading";
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import classes from "@/styles/Chessboard.module.css";
@@ -214,6 +215,7 @@ function Board({
   const showDests = useAtomValue(showDestsAtom);
   const moveHighlight = useAtomValue(moveHighlightAtom);
   const showArrows = useAtomValue(showArrowsAtom);
+  const diagramDoubts = useAtomValue(diagramDoubtsAtom);
   const showVariationArrows = useAtomValue(showVariationArrowsAtom);
   const showConsecutiveArrows = useAtomValue(showConsecutiveArrowsAtom);
   const eraseDrawablesOnClick = useAtomValue(eraseDrawablesOnClickAtom);
@@ -591,6 +593,22 @@ function Board({
   }
   if (overlayShapes && overlayShapes.length > 0) {
     shapes = [...shapes, ...overlayShapes];
+  }
+  // Squares read from an image with low confidence, until the user changes them.
+  if (editingMode && diagramDoubts) {
+    const board = parseFen(currentNode.fen).unwrap(
+      (setup) => setup.board,
+      () => null,
+    );
+    if (board) {
+      const doubtShapes: DrawShape[] = Object.entries(diagramDoubts)
+        .filter(([square, piece]) => {
+          const current = board.get(parseSquare(square as SquareName)!);
+          return (current ? makePiece(current) : null) === piece;
+        })
+        .map(([square]) => ({ orig: square as SquareName, brush: "red" }));
+      shapes = [...shapes, ...doubtShapes];
+    }
   }
 
   const hasClock =

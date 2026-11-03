@@ -4308,6 +4308,22 @@
     "Preparation.Twin.PickSaved": "O jugar contra un gemelo guardado…",
     "Tournaments.Twin.Desc": "El gemelo de una ficha de jugador: su repertorio y su forma de jugar al ritmo del torneo. Se añade a mano (el autorrelleno nunca elige gemelos); sus partidas cuentan en el torneo, pero no para tu rating.",
     "Tournaments.Twin": "Gemelo",
-    "Tournaments.Field.AddTwin": "Añadir un gemelo"
+    "Tournaments.Field.AddTwin": "Añadir un gemelo",
+    "Board.ImageReader.Open": "Desde imagen",
+    "Board.ImageReader.Hint": "o pega (Ctrl+V) o arrastra la imagen de un tablero",
+    "Board.ImageReader.Images": "Imágenes",
+    "Board.ImageReader.Pasted": "Imagen pegada",
+    "Board.ImageReader.Reading": "Leyendo la posición…",
+    "Board.ImageReader.Error": "No se pudo leer la imagen: {{error}}",
+    "Board.ImageReader.Accepted": "Posición leída",
+    "Board.ImageReader.Review": "Revisa la posición: hay {{count}} casillas dudosas marcadas en rojo",
+    "Board.ImageReader.NoBoard": "No se encontró un tablero en la imagen",
+    "Board.ImageReader.Check": "Compárala con la imagen antes de usarla; el turno y los enroques no se leen.",
+    "Board.ImageReader.Flip": "Girar la lectura",
+    "Board.ImageReader.Timing": "{{ms}} ms · modelo {{version}}",
+    "Board.ImageReader.ProblemKings": "no hay exactamente un rey por bando",
+    "Board.ImageReader.ProblemPawnOnEdge": "hay un peón en la primera o la última fila",
+    "Board.ImageReader.ProblemTooManyPawns": "más de 8 peones de un color",
+    "Board.ImageReader.ProblemTooManyPieces": "más de 16 piezas de un color"
   }
 }

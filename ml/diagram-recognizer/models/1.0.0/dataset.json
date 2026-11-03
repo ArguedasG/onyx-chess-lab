@@ -1,0 +1,133 @@
+{
+  "version": "v5",
+  "seed": 20261102,
+  "classes": [
+    "empty",
+    "P",
+    "N",
+    "B",
+    "R",
+    "Q",
+    "K",
+    "p",
+    "n",
+    "b",
+    "r",
+    "q",
+    "k"
+  ],
+  "square_size": 48,
+  "train_sets": [
+    "cburnett",
+    "merida",
+    "chessnut",
+    "fantasy",
+    "spatial",
+    "pixel",
+    "shapes",
+    "mpchess",
+    "celtic",
+    "glyph-freeserif",
+    "glyph-dejavu",
+    "glyph-noto"
+  ],
+  "heldout_sets": [
+    "pirouetti"
+  ],
+  "splits": {
+    "train": {
+      "n": 9000,
+      "sets": [
+        "cburnett",
+        "merida",
+        "chessnut",
+        "fantasy",
+        "spatial",
+        "pixel",
+        "shapes",
+        "mpchess",
+        "celtic",
+        "glyph-freeserif",
+        "glyph-dejavu",
+        "glyph-noto"
+      ],
+      "keep_empty": 0.3,
+      "jitter": true
+    },
+    "val": {
+      "n": 600,
+      "sets": [
+        "cburnett",
+        "merida",
+        "chessnut",
+        "fantasy",
+        "spatial",
+        "pixel",
+        "shapes",
+        "mpchess",
+        "celtic",
+        "glyph-freeserif",
+        "glyph-dejavu",
+        "glyph-noto"
+      ],
+      "keep_empty": 0.3,
+      "jitter": true
+    },
+    "test": {
+      "n": 1000,
+      "sets": [
+        "cburnett",
+        "merida",
+        "chessnut",
+        "fantasy",
+        "spatial",
+        "pixel",
+        "shapes",
+        "mpchess",
+        "celtic",
+        "glyph-freeserif",
+        "glyph-dejavu",
+        "glyph-noto"
+      ],
+      "keep_empty": 1.0,
+      "jitter": true
+    },
+    "heldout": {
+      "n": 600,
+      "sets": [
+        "pirouetti"
+      ],
+      "keep_empty": 1.0,
+      "jitter": true
+    }
+  },
+  "positions_sha256": "494b07e17a4c9cb5ecc0e32c1ff7a04db4db6fabfbfc176d82972e41ad6ef39c",
+  "pieces_manifest_sha256": "8c0adce3653152f2edbc38507ab8c196cebb9ebee5db4461902aacf91b07d13a",
+  "shards": {
+    "train-000.npz": "c6cf4258f205c522ef5907f3d35a89b8de6e029060ea64b3bb8cbd69fac8fe46",
+    "train-001.npz": "9cb39557eeac980671841ee73fc110fbcc59dd8c8fca486403d54d856358b24d",
+    "train-002.npz": "9d67cc81ab5beb3ec27637fec15b9416fcb7621b7555cb73847a0d29128d91bd",
+    "train-003.npz": "98c1f2c03f2130bcbdece3f39598d0552287ba2738a51d254a557f2d55b6ce33",
+    "train-004.npz": "6a69756cc3e71421bf384cda1bf4b2ebb382353ba3d627ade3fe7dd032027d7b",
+    "train-005.npz": "84e7850126f98fc61d6c36ee8c3c7bdb6e15bb074da459e39e3e468d3a44a679",
+    "train-006.npz": "268ecf8ee894521d4088046e5fbd18e77ff716e8b94db68db5c1f8eeafeceaef",
+    "train-007.npz": "af6839db365c7f6413bd7e91df1ce5f3887a140eb68a054c9360ad1ee6efe1b5",
+    "train-008.npz": "2d9781ab04ceb7eaf4b06ed3c8ae638956a78f6c50d03bebbb62de0dd462dce7",
+    "train-009.npz": "df4178feb25f335c5e88914606c0f6dd56b6e1b139f4ff590e8417d2b4b76c6f",
+    "train-010.npz": "440e18ac12e04024d5fd2ae3a9f758e86977c87715c3e021d63d9c2532a72ec9",
+    "train-011.npz": "13d29bb933eeaadcc9b41ad6e30a18338854255aab2a247295725cab1ce695bc",
+    "train-012.npz": "4d3d20ede27f31e399b1279ecf659fc96614991b2f07654041fda50abf56bbef",
+    "train-013.npz": "0c95c4c52216d9bae9c41adf3cbac5bcfb5ec16a5d13619efd0c51370233ab3d",
+    "train-014.npz": "d2d43dae8aa00e31979d5070483b298f34b8c948abe2e8e7ed3eeadb79db4e39",
+    "train-015.npz": "50ab14b2b252154a79b39d769a744b5b5ccc067b0a64e4746a4f52b692e570ac",
+    "train-016.npz": "4fb67a1fe1845ae4f5f0f0c1ebfe9b9cedba207cf32a71b67536f92cd0c49d46",
+    "train-017.npz": "1f486a23c9a350f107c51796ff857996a05e618457b3ab27b1f70e9a431516b4",
+    "val-000.npz": "d6b8525b7f80a3c4fd2bac52aa81a029fbde988fdf574beeb071328d832062e1",
+    "val-001.npz": "962c2e0dccb6ad90c9d728d69eb23aef6ade636605fda283fc93a140768cc4e7",
+    "test-000.npz": "d6b2e06e1e8f0d38e7915dde7841a542321005ad96b917c45e5b73232eb949f1",
+    "test-001.npz": "57ce773b33c31f9d8cf5a5554c5a3c90e772ed7fe759661ee5a08c10936def2f",
+    "heldout-000.npz": "c08dc1a9505c1118ed03ebd180172a19b74f51532c96b08cd38bfdee686e9dc0",
+    "heldout-001.npz": "989ae697485c8348edaf91090db7b2e331a96681618a80872d20bb39409bb71a"
+  },
+  "seconds": 263
+}

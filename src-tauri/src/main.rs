@@ -13,6 +13,7 @@ mod bot_strength;
 mod bot_style;
 mod chess;
 mod db;
+mod diagram;
 mod engine;
 mod engine_budget;
 mod error;
@@ -304,7 +305,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             secure_token_storage_available,
             store_lichess_token,
             get_lichess_token,
-            delete_lichess_token
+            delete_lichess_token,
+            diagram::recognize_board_image,
+            diagram::recognize_board_image_file
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,

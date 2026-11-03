@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-10-30.
+> Última actualización: 2026-11-01.
 
 ## 1. Cómo utilizar este documento
 
@@ -94,7 +94,8 @@ prueban y comunican problemas.
   Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
   implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, y se publicaron en
   0.22.0. La **Fase 9** completa (9.1 Bots, 9.2 Torneos y 9.3 Interpretación estratégica) se
-  publicó en 0.23.0; queda la **Fase 10**, la última. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
+  publicó en 0.23.0. Antes de la **Fase 10**, la última, queda **9.4 Libros y posiciones desde
+  imagen** (añadida el 2026-11-01 desde `docs/market-study-2.es.md`). La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
   sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -153,23 +154,23 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 
 ## 4. Estado de las fases
 
-| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                                                                        |
-| ------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                                                                 |
-| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                                                                             |
-| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                                                                       |
-| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                                                                             |
-| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                                                                             |
-| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10.                                               |
-| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                                                                     |
-| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                                                              |
-| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                                                                   |
-| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                                                                   |
-| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                        |
-| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                      |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                |
-| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots), 9.2 (torneos) y 9.3 (estructuras y el gemelo) implementadas, pendientes de validación manual. Ver: `docs/strategic-interpretation-phase-9-3.es.md`. |
-| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                      |
+| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                                                                                                |
+| ------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                                                                                         |
+| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                                                                                                     |
+| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                                                                                               |
+| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                                                                                                     |
+| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                                                                                                     |
+| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10.                                                                       |
+| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                                                                                             |
+| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                                                                                      |
+| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                                                                                           |
+| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                                                                                           |
+| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                                                |
+| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                                              |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                                        |
+| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots), 9.2 (torneos) y 9.3 (estructuras y el gemelo) implementadas, pendientes de validación manual; 9.4 (Libros) pendiente. Ver: `docs/strategic-interpretation-phase-9-3.es.md`. |
+| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                                              |
 
 ### Documentación de fases cerradas
 
@@ -765,7 +766,8 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ## 8. Fase 9 — Expansión avanzada de fases anteriores
 
-**Estado: implementada y publicada en 0.23.0; pendiente de validación manual.**
+**Estado: 9.1–9.3 implementadas y publicadas en 0.23.0, pendientes de validación manual; 9.4
+pendiente.**
 
 ### 9.1. Bots humanos y calibración
 
@@ -840,6 +842,68 @@ con al menos 20 partidas y uno general; la partida usa el de su reloj. Se eligen
 de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
 `docs/strategic-interpretation-phase-9-3.es.md`.
 
+### 9.4. Libros y posiciones desde imagen
+
+**Estado: En curso desde el 2026-11-02; pasos 0 a 3 hechos** (detalle en
+`docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
+entrega de I-59, del segundo estudio de mercado (`docs/market-study-2.es.md`, §2, §5 y §6). Es una
+funcionalidad nueva, no una ampliación; va antes de la Fase 10 por decisión del autor y **se cierra
+completa dentro de 9.4**, modelo incluido. La Fase 10 no depende de ella ni la reabre.
+
+- **posición desde imagen (I-57):** pegar, arrastrar o recortar una imagen (captura de Chess.com o
+  Lichess, de un vídeo o de un PDF) en el editor de posición, con las casillas dudosas marcadas para
+  corregir; nunca un FEN imposible presentado como seguro;
+- **reconocedor propio (I-56):** clasificador por casilla incluido en la app (pocos MB: el tamaño no
+  es un límite duro, la latencia sí), inferido en Rust sin DLL por plataforma, con decodificación
+  por reglas (dos reyes, peones, orientación, bando) y umbral de confianza calibrado. Se entrena
+  **solo con datos sintéticos** de licencia limpia: posiciones de la base de puzzles de Lichess
+  (CC0) dibujadas en estilo impreso y en estilo pantalla con los juegos de piezas libres de Onyx;
+- **Libros (I-55):** biblioteca local de PDF (rutas, no copias) con el último punto de lectura;
+  lector junto al tablero de análisis existente; doble clic en un diagrama → tablero en esa
+  posición (I-56 sobre la imagen del diagrama, incrustada en el PDF o detectada en la página
+  escaneada), con el bando y el número de jugada tomados del texto; correcciones guardadas por libro
+  (huella del archivo) en JSON versionado; **«Abrir esta partida»** desde la notación (idiomas,
+  figurines, variantes entre paréntesis, partidas que cruzan páginas), con un clic en una jugada que
+  lleva a su posición y un clic en el tablero que vuelve al lugar de la página. Funciona con la capa
+  de texto de un PDF digital y de un escaneo con OCR o vectorizado; las jugadas imposibles se marcan
+  en vez de saltarse;
+- **opcional: vídeo local junto al tablero (I-59, entrega 1):** reproductor de archivos propios con
+  «Capturar posición» sobre el fotograma pausado (usa I-57; sin FFmpeg). Es opcional solo porque
+  queda fuera de I-55 a I-57; el autor decide al llegar.
+
+**Entrenamiento y evaluación del modelo, completos en 9.4:** generador de datos sintéticos con
+semilla y versión, entrenamiento reproducible, manifiesto del modelo (preprocesado exacto, clases,
+temperatura, hashes), prueba de paridad entre entrenamiento y runtime, model card, dataset card y
+evaluación (conjunto sintético en CI y conjunto privado de libros en local). Es lo que el modelo
+necesita para estar terminado, no un recorte: no queda nada de él pendiente para la Fase 10.
+
+**Reglas:**
+
+- los libros del usuario nunca entrenan un modelo distribuido ni salen de su PC: solo sirven de
+  evaluación privada;
+- Onyx no distribuye libros, fuentes comerciales ni pesos de terceros (ChessQ, PdfCraft-xadrez);
+- coste cero para quien no usa Libros: `pdf.js` y el modelo se cargan de forma diferida, con el
+  presupuesto de I-54 medido a mano antes y después;
+- un libro de 700 páginas no carga nada que no se vea; el escaneo completo del libro es opcional, en
+  segundo plano y cancelable.
+
+**Orden:** (0) diagnóstico de una muestra de la biblioteca del autor (digital, escaneado o escaneado
+y vectorizado; qué fuentes de diagramas usa); (1) pruebas rápidas de `pdf.js` y del runtime; (2)
+datos sintéticos e I-56; (3) I-57; (4) Libros con doble clic en diagramas; (5) «Abrir esta
+partida»; (6) opcional, I-59 entrega 1.
+
+**Criterios de salida:** doble clic → tablero en < 300 ms en un diagrama incrustado como imagen
+(medido); exactitud por
+tablero publicada en el conjunto sintético y en el privado; ninguna lectura dudosa presentada como
+segura; una partida abierta desde la notación reproduce sus jugadas o marca la primera imposible;
+sin regresión medible para quien no usa Libros.
+
+**Fuera de alcance:** leer la notación de un escaneo **sin** capa de texto (exigiría un OCR propio;
+sus diagramas sí se leen con I-56), la lectura exacta por fuente de diagramas (ninguno de los 19
+libros de prueba la usa; se retoma si aparecen PDF que la necesiten), fotos de tableros reales (I-58),
+seguimiento automático de vídeo (I-59, entrega 2), ChessDB como fuente (I-63, pendiente de medir) y
+el coach con IA (I-60 a I-62).
+
 ---
 
 ## 9. Fase 10 — Consolidación pública, multiplataforma y MLOps
@@ -873,7 +937,8 @@ personalizada), I-54 (en CI).
 - pipeline de bases con procedencia, deduplicación y versiones (I-04), clasificación automática de
   ejercicios (I-11), rendimiento estimado calibrado (I-16), objetivos medidos en partidas reales
   (I-23), índice de árbol de aperturas precalculado si las mediciones lo justifican (I-27), gemelo
-  con Maia ajustada al jugador (I-43 v2) y presupuesto de rendimiento integrado en CI (I-54).
+  con Maia ajustada al jugador (I-43 v2) y presupuesto de rendimiento integrado en CI (I-54);
+- independiente de 9.4: el modelo de Libros (I-56) sale terminado de allí y esta fase no lo reabre.
 
 ### Aplazadas, sin fase
 
@@ -975,6 +1040,43 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-02 — 9.4, paso 3: posición desde imagen
+
+- «Desde imagen» en el editor de posición: abrir, pegar o arrastrar; casillas dudosas en rojo
+  hasta corregirlas; reglas de ajedrez y aviso de revisión. Runtime en Rust (`src-tauri/src/diagram/`)
+  idéntico bit a bit al preprocesado y al localizador de Python; 394/394 lecturas de los libros del
+  autor con el mismo estado que Python; 76 ms de mediana por imagen.
+
+### 2026-11-02 — 9.4, paso 2: reconocedor propio
+
+- Modelo **diagram-squares 1.0.0** (`ml/diagram-recognizer/`): 293 k parámetros, 1,17 MB, 36 ms
+  por tablero con `rten`, entrenado solo con datos sintéticos (12 juegos de piezas libres) en CPU.
+  Sintético: 99,81 % por casilla y 93,9 % de tableros exactos; 99,5 % exactos entre los aceptados
+  con umbral 0,95. Libros del autor: 242 de 387 aceptados, 18 de 18 revisados correctos.
+- Cinco versiones del dataset, cada una corregida tras ver un fallo en libros reales; límite
+  conocido: la fuente Alpha (Everyman) queda casi siempre por revisar. Dataset card y model card
+  en la carpeta.
+
+### 2026-11-02 — 9.4, pasos 0 y 1
+
+- Diagnóstico de 19 libros del autor (`scripts/books/diagnose-pdfs.mjs`): 4 digitales, 9 escaneos
+  vectorizados con ClearScan, 2 escaneos con OCR y 4 escaneos sin texto. **Ninguno usa fuente de
+  diagramas**: el reconocedor I-56 pasa a ser el camino crítico de Libros y el autor saca la lectura
+  por fuente de la fase.
+- Runtime elegido: `rten` 0.24.0 (+4,3 MB, 34 ms por tablero a 48 px, paridad 7,5e-9), frente a
+  `tract` (+24 MB, 140 ms). `pdfjs-dist` 6.5.438 añadido; necesita servir sus decodificadores WASM.
+
+### 2026-11-01 — Segundo estudio de mercado y fase 9.4
+
+- Segundo estudio de mercado (`docs/market-study-2.es.md`, ideas I-55 a I-65): reconocimiento de
+  tableros y libros, coaches con IA, DanceChess y ChessDB.
+- El autor añade **9.4 Libros y posiciones desde imagen** (I-55, I-56, I-57 y, opcional, I-59
+  entrega 1) antes de la Fase 10. Se cierra completa allí, modelo incluido (datos, entrenamiento,
+  evaluación y model card). La Fase 10 queda aparte, como integración general de MLOps, y sigue al
+  final.
+- Fuera de 9.4: ChessDB como fuente (I-63, se mide antes contra el Stockfish del generador), el coach
+  con IA (I-60 a I-62) y la firma de macOS (I-65, cuando haya un usuario con Mac).
 
 ### 2026-10-30 — Gemelos guardados, editables y por ritmo
 

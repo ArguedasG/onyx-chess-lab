@@ -1023,6 +1023,28 @@ async deleteLichessToken(username: string) : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Reads a position from an image given as base64 (pasted from the clipboard).
+ */
+async recognizeBoardImage(dataBase64: string) : Promise<Result<BoardReading, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("recognize_board_image", { dataBase64 }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reads a position from an image file (opened or dropped by the user).
+ */
+async recognizeBoardImageFile(path: string) : Promise<Result<BoardReading, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("recognize_board_image_file", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1096,6 +1118,31 @@ export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: st
  * in the database, so they all read as `Open`.
  */
 export type BoardEnding = "checkmate" | "stalemate" | "insufficientMaterial" | "open"
+export type BoardReading = { status: ReadingStatus; 
+/**
+ * Board field of the FEN, from White's side (after the orientation guess).
+ */
+placement: string | null; 
+/**
+ * Whether the image shows the board from Black's side (guessed from the pieces).
+ */
+flipped: boolean; 
+/**
+ * Grid box in the image's pixels.
+ */
+grid: [number, number, number, number] | null; imageWidth: number; imageHeight: number; locateScore: number; 
+/**
+ * The 64 squares from a8 to h1.
+ */
+squares: SquareReading[]; 
+/**
+ * Squares below the confidence threshold.
+ */
+doubtful: string[]; 
+/**
+ * Broken chess rules: `kings`, `pawnOnEdge`, `tooManyPawns`, `tooManyPieces`.
+ */
+problems: string[]; modelVersion: string; elapsedMs: number }
 export type BookLine = { moves: string[]; games: number }
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }
 export type BotLeagueDetail = { summary: BotLeagueSummary; config: BotLeagueConfig; results: BotLeagueGameResult[]; standings: BotLeagueStanding[] }
@@ -1641,6 +1688,19 @@ maxPieces?: number | null }
 export type PuzzleWithThemes = { id: number; fen: string; moves: string; rating: number; rating_deviation: number; popularity: number; nb_plays: number; themes: string[] }
 export type QueryOptions<SortT> = { skipCount: boolean; page?: number | null; pageSize?: number | null; sort: SortT; direction: SortDirection }
 export type QueryResponse<T> = { data: T; count: number | null }
+export type ReadingStatus = 
+/**
+ * Every square is confident and the position follows the chess rules.
+ */
+"accepted" | 
+/**
+ * Some square is doubtful or a rule is broken: the user must check it.
+ */
+"review" | 
+/**
+ * No board was found in the image.
+ */
+"noBoard"
 export type ReportEloBand = { minElo: number; maxElo: number; results: ReportResults }
 export type ReportFilters = { whitePlayer: number | null; blackPlayer: number | null; anyPlayer: number | null; whiteElo: [number, number] | null; blackElo: [number, number] | null; startDate: string | null; endDate: string | null; result: string | null; event?: string | null; timeControl?: string | null }
 export type ReportLine = { moves: string[]; fen: string; statistics: ReportStatistics; exampleOffset: number; example: PositionGameMetadata }
@@ -1694,6 +1754,11 @@ export type ScoreValue =
 { type: "mate"; value: number }
 export type Sides = "BlackWhite" | "WhiteBlack" | "Any"
 export type SortDirection = "asc" | "desc"
+export type SquareReading = { square: string; 
+/**
+ * FEN letter, or `None` for an empty square.
+ */
+piece: string | null; confidence: number }
 export type StructureModelGame = { id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; result: string; date: string | null; event: string; ownerWhite: boolean; 
 /**
  * Ply where the structure has held long enough to count, and the position there.

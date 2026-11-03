@@ -1,0 +1,14 @@
+{
+  "name": "v5",
+  "data": "data/v5",
+  "epochs": 3,
+  "batch": 256,
+  "lr": 0.003,
+  "minutes": 12.0,
+  "threads": 4,
+  "seed": 7,
+  "eval_every": 400,
+  "train_squares": 289284,
+  "val_squares": 19329,
+  "total_steps": 3390
+}
