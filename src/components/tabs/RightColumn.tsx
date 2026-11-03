@@ -23,7 +23,7 @@ const ZONES: PanelZone[] = ["tools", "notation"];
 
 /** Portal target ids. Only the active board tab is mounted, so they are unique. */
 export const panelZoneId = (zone: PanelZone) => `panel-${zone}`;
-const panelHeaderId = (zone: PanelZone) => `panel-${zone}-header`;
+export const panelHeaderId = (zone: PanelZone) => `panel-${zone}-header`;
 
 /**
  * The right side of a board tab: two zones (tools and notation) that can be folded,

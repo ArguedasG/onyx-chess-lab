@@ -29,7 +29,16 @@ function hasVariations(node: TreeNode): boolean {
   return false;
 }
 
-function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?: boolean }) {
+function MoveControls({
+  readOnly,
+  hints = false,
+  compact = false,
+}: {
+  readOnly?: boolean;
+  hints?: boolean;
+  /** A thin strip (under the board beside a book) instead of the full-size buttons. */
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const store = useContext(TreeStateContext)!;
   const next = useStore(store, (s) => s.goToNext);
@@ -67,11 +76,11 @@ function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?:
         >
           <ActionIcon
             variant="default"
-            size="lg"
+            size={compact ? "md" : "lg"}
             onClick={start}
             aria-label={t("Board.Controls.Start", "Start of the game")}
           >
-            <IconChevronsLeft />
+            <IconChevronsLeft size={compact ? 18 : undefined} />
           </ActionIcon>
         </ShortcutTooltip>
         <ShortcutTooltip
@@ -80,21 +89,21 @@ function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?:
         >
           <ActionIcon
             variant="default"
-            size="lg"
+            size={compact ? "md" : "lg"}
             onClick={previous}
             aria-label={t("Board.Controls.Previous", "Previous move")}
           >
-            <IconChevronLeft />
+            <IconChevronLeft size={compact ? 18 : undefined} />
           </ActionIcon>
         </ShortcutTooltip>
         <ShortcutTooltip label={t("Board.Controls.Next", "Next move")} keys={keyMap.NEXT_MOVE.keys}>
           <ActionIcon
             variant="default"
-            size="lg"
+            size={compact ? "md" : "lg"}
             onClick={next}
             aria-label={t("Board.Controls.Next", "Next move")}
           >
-            <IconChevronRight />
+            <IconChevronRight size={compact ? 18 : undefined} />
           </ActionIcon>
         </ShortcutTooltip>
         <ShortcutTooltip
@@ -103,11 +112,11 @@ function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?:
         >
           <ActionIcon
             variant="default"
-            size="lg"
+            size={compact ? "md" : "lg"}
             onClick={end}
             aria-label={t("Board.Controls.End", "End of the game")}
           >
-            <IconChevronsRight />
+            <IconChevronsRight size={compact ? 18 : undefined} />
           </ActionIcon>
         </ShortcutTooltip>
       </Group>
@@ -122,11 +131,11 @@ function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?:
             >
               <ActionIcon
                 variant="default"
-                size="lg"
+                size={compact ? "md" : "lg"}
                 onClick={previousBranch}
                 aria-label={t("Board.Controls.PreviousVariation", "Previous variation")}
               >
-                <IconArrowBarToUp size={18} />
+                <IconArrowBarToUp size={compact ? 16 : 18} />
               </ActionIcon>
             </ShortcutTooltip>
             <ShortcutTooltip
@@ -135,11 +144,11 @@ function MoveControls({ readOnly, hints = false }: { readOnly?: boolean; hints?:
             >
               <ActionIcon
                 variant="default"
-                size="lg"
+                size={compact ? "md" : "lg"}
                 onClick={nextBranch}
                 aria-label={t("Board.Controls.NextVariation", "Next variation")}
               >
-                <IconArrowBarToDown size={18} />
+                <IconArrowBarToDown size={compact ? 16 : 18} />
               </ActionIcon>
             </ShortcutTooltip>
           </Group>

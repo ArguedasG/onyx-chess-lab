@@ -1,4 +1,12 @@
-import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import {
+    BaseDirectory,
+    exists,
+    mkdir,
+    readFile,
+    readTextFile,
+    writeFile,
+    writeTextFile,
+} from "@tauri-apps/plugin-fs";
 import { z } from "zod";
 import { commands } from "@/bindings";
 import { unwrap } from "./unwrap";
@@ -147,6 +155,35 @@ export async function addBooks(paths: string[]): Promise<BookLibrary> {
         }
         return { ...library, books };
     });
+}
+
+/**
+ * Points a book whose file moved to its new path. The file must be the same book (same SHA-256),
+ * so the reading point and the corrections still apply; otherwise nothing changes.
+ */
+export async function relocateBook(id: string, path: string): Promise<BookLibrary | null> {
+    const fingerprint = unwrap(await commands.bookFingerprint(path));
+    const library = await loadBookLibrary();
+    const book = library.books.find((b) => b.id === id);
+    if (!book || fingerprint.sha256 !== book.sha256) return null;
+    return updateBookLibrary((current) => ({
+        ...current,
+        books: current.books.map((b) => (b.id === id ? { ...b, path } : b)),
+    }));
+}
+
+const coverFile = (bookId: string) => `${DIRECTORY}/covers/${bookId}.jpg`;
+
+/** The small picture of the first page kept for the library, if it was made already. */
+export async function loadCover(bookId: string): Promise<Uint8Array | null> {
+    if (!(await exists(coverFile(bookId), options))) return null;
+    return readFile(coverFile(bookId), options);
+}
+
+export async function saveCover(bookId: string, jpeg: Uint8Array): Promise<void> {
+    if (!(await exists(`${DIRECTORY}/covers`, options)))
+        await mkdir(`${DIRECTORY}/covers`, { ...options, recursive: true });
+    await writeFile(coverFile(bookId), jpeg, options);
 }
 
 /** Removes a book from the library (its file is never touched). */

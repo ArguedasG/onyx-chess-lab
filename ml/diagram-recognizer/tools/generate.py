@@ -27,7 +27,7 @@ from onyx_diagrams.positions import placement_grid, sample_positions  # noqa: E4
 from onyx_diagrams.render import Sprites, render  # noqa: E402
 from onyx_diagrams.squares import crop_squares, square_labels  # noqa: E402
 
-DATASET_VERSION = "v5"
+DATASET_VERSION = "v7"
 TRAIN_SETS = [
     "cburnett",
     "merida",
@@ -41,6 +41,14 @@ TRAIN_SETS = [
     "glyph-freeserif",
     "glyph-dejavu",
     "glyph-noto",
+    "maestro",
+    "staunty",
+    "cardinal",
+    "tatiana",
+    "fresca",
+    "gioco",
+    "dubrovny",
+    "icpieces",
 ]
 HELDOUT_SETS = ["pirouetti"]
 ALL_SETS = TRAIN_SETS + HELDOUT_SETS
@@ -83,7 +91,7 @@ def main() -> None:
     p.add_argument("--out", default=f"data/{DATASET_VERSION}")
     p.add_argument("--pieces", default="data/pieces")
     p.add_argument("--seed", type=int, default=20261102)
-    p.add_argument("--train", type=int, default=9000)
+    p.add_argument("--train", type=int, default=12000)
     p.add_argument("--val", type=int, default=600)
     p.add_argument("--test", type=int, default=1000)
     p.add_argument("--heldout", type=int, default=600)

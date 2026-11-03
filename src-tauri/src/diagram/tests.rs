@@ -17,7 +17,7 @@ fn fixtures() -> PathBuf {
 }
 
 fn model_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ml/diagram-recognizer/models/1.0.0")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ml/diagram-recognizer/models/1.1.0")
 }
 
 fn load(name: &str) -> image::DynamicImage {
@@ -34,8 +34,8 @@ fn sha256(bytes: &[u8]) -> String {
 fn recognizer() -> Recognizer {
     let dir = model_dir();
     Recognizer::load(
-        &dir.join("diagram-squares-1.0.0.onnx"),
-        &dir.join("diagram-squares-1.0.0.json"),
+        &dir.join("diagram-squares-1.1.0.onnx"),
+        &dir.join("diagram-squares-1.1.0.json"),
     )
     .expect("model")
 }
@@ -178,7 +178,7 @@ fn private_books() {
     };
     let dir = PathBuf::from(dir);
     let report: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("report-v5/results.json")).unwrap())
+        serde_json::from_slice(&std::fs::read(dir.join("report-v7/results.json")).unwrap())
             .unwrap();
     let recognizer = recognizer();
     let (mut same, mut total, mut times) = (0, 0, Vec::new());

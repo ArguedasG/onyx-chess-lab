@@ -31,12 +31,23 @@ export type EmbeddedImage = { objId: string; box: PdfBox; width: number };
  * Full-page images (scans) are left out; their diagrams are found by cropping instead.
  */
 export async function diagramImages(page: PdfPage): Promise<EmbeddedImage[]> {
+    return (await pageImages(page)).diagrams;
+}
+
+/**
+ * The diagram-like images of the page and whether the page is a scan (an image covering most of
+ * it), where diagrams can only be found with the page detector.
+ */
+export async function pageImages(
+    page: PdfPage,
+): Promise<{ diagrams: EmbeddedImage[]; scan: boolean }> {
     const [px0, py0, px1, py1] = page.view;
     const pageArea = (px1 - px0) * (py1 - py0);
     const ops = await page.getOperatorList();
     let ctm: Matrix = [1, 0, 0, 1, 0, 0];
     const stack: Matrix[] = [];
     const found: EmbeddedImage[] = [];
+    let scan = false;
     for (let i = 0; i < ops.fnArray.length; i++) {
         const fn = ops.fnArray[i];
         const args = ops.argsArray[i];
@@ -54,10 +65,21 @@ export async function diagramImages(page: PdfPage): Promise<EmbeddedImage[]> {
             const cover = (w * h) / pageArea;
             if (h > 0 && cover >= 0.02 && cover <= 0.6 && w / h > 0.8 && w / h < 1.25) {
                 found.push({ objId: args[0], box, width: args[1] ?? 0 });
+            } else if (cover > 0.6) {
+                scan = true;
             }
         }
     }
-    return found;
+    return { diagrams: found, scan };
+}
+
+/** Diagrams in reading order: by rows from the top (boxes level within half a box), then left. */
+export function readingOrder<T extends { box: PdfBox }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+        const half = Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]) / 2;
+        if (Math.abs(a.box[3] - b.box[3]) > half) return b.box[3] - a.box[3];
+        return a.box[0] - b.box[0];
+    });
 }
 
 export const contains = (box: PdfBox, x: number, y: number) =>

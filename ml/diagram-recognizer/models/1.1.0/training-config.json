@@ -1,0 +1,14 @@
+{
+  "name": "v7",
+  "data": "data/v7",
+  "epochs": 3,
+  "batch": 256,
+  "lr": 0.003,
+  "minutes": 12.0,
+  "threads": 4,
+  "seed": 7,
+  "eval_every": 400,
+  "train_squares": 385996,
+  "val_squares": 19444,
+  "total_steps": 4521
+}

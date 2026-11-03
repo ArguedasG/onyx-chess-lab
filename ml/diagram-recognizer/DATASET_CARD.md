@@ -17,21 +17,23 @@ puzzle database.
 
 ## Versions
 
-| Version | Date       | Boards (train / val / test / heldout) | Why it changed                                                                                                                                                                 |
-| ------- | ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| v1      | 2026-11-02 | 9 000 / 600 / 1 000 / 600             | First version. Stopped after 1.2 epochs: on real books, black pieces on hatched squares read as white kings                                                                    |
-| v2      | 2026-11-02 | same                                  | + paper halo around pieces on dark squares, faded print, teaching marks, clean 1-bit dithering. Piece _type_ still confused on Everyman (Alpha-font) books                     |
-| v3      | 2026-11-02 | same                                  | + three print-style sets from the Unicode chess glyphs of free fonts, ink weight variation. Black king still read as white (Alpha's black pieces have large white inner lines) |
-| v4      | 2026-11-02 | same                                  | + "inverted" black pieces (white piece silhouette in black with its inner lines in white), width/height variation                                                              |
-| v5      | 2026-11-02 | same                                  | + procedural pawns (head, neck, collar, body and base with random proportions) in 35 % of printed boards: Alpha-style pawns still read as bishops or rooks in v4               |
+| Version | Date       | Boards (train / val / test / heldout) | Why it changed                                                                                                                                                                     |
+| ------- | ---------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v1      | 2026-11-02 | 9 000 / 600 / 1 000 / 600             | First version. Stopped after 1.2 epochs: on real books, black pieces on hatched squares read as white kings                                                                        |
+| v2      | 2026-11-02 | same                                  | + paper halo around pieces on dark squares, faded print, teaching marks, clean 1-bit dithering. Piece _type_ still confused on Everyman (Alpha-font) books                         |
+| v3      | 2026-11-02 | same                                  | + three print-style sets from the Unicode chess glyphs of free fonts, ink weight variation. Black king still read as white (Alpha's black pieces have large white inner lines)     |
+| v4      | 2026-11-02 | same                                  | + "inverted" black pieces (white piece silhouette in black with its inner lines in white), width/height variation                                                                  |
+| v5      | 2026-11-02 | same                                  | + procedural pawns (head, neck, collar, body and base with random proportions) in 35 % of printed boards: Alpha-style pawns still read as bishops or rooks in v4                   |
+| v6      | 2026-11-03 | 12 000 / 600 / 1 000 / 600            | + the 8 sets of sadsnake1, used with permission (maestro, Onyx's default set, was misread in screenshots of Onyx itself); more training boards for the larger set pool             |
+| v7      | 2026-11-03 | same as v6                            | The 4 shaded sets (staunty, tatiana, gioco, dubrovny) only in the screen style: as ink they become solid black pieces, and v6 read Alpha's black king (white inner lines) as white |
 
-All versions share the seed 20261102 and therefore the same positions; only the rendering
-changed. Each run keeps a copy of its `dataset.json` in `runs/<version>/` (v3's was not kept).
+All versions share the seed 20261102 and therefore the same positions (v6 draws 3 000 more for
+training, which shifts the later splits); only the rendering changed. Each run keeps a copy of its `dataset.json` in `runs/<version>/` (v3's was not kept).
 
 ## Splits
 
-- **train / val:** the 9 training piece sets; empty squares kept with probability 0.3 (they are
-  ~60 % of a board) so that the classes are less unbalanced.
+- **train / val:** the training piece sets (12 up to v5, 20 from v6); empty squares kept with
+  probability 0.3 (they are ~60 % of a board) so that the classes are less unbalanced.
 - **test:** same distribution as training, new positions, all 64 squares per board (board
   accuracy).
 - **heldout:** one piece set never used in training (`pirouetti`), all 64 squares. It measures
@@ -70,13 +72,27 @@ Licenses as listed in lichess-org/lila `COPYING.md`. Only sets compatible with G
 | glyph-freeserif | GPL-3.0-or-later WITH Font-exception-2.0 | GNU FreeFont (FreeSerif.otf), from v3 | train   |
 | glyph-dejavu    | Bitstream-Vera                           | DejaVu Sans 2.37, from v3             | train   |
 | glyph-noto      | OFL-1.1                                  | Noto Sans Symbols 2, from v3          | train   |
+| maestro         | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| staunty         | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| cardinal        | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| tatiana         | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| fresca          | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| gioco           | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| dubrovny        | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
+| icpieces        | CC-BY-NC-SA-4.0, with permission         | Onyx, from v6                         | train   |
 
 The `glyph-*` sets are drawn by `tools/render_glyph_pieces.py` from the chess glyphs
 (U+2654–U+265F) of the fonts; white glyphs get their silhouette filled with white. GNU FreeSans was
 tried and has no chess glyphs.
 
-Excluded: every CC BY-NC-SA set (horsey, california, cardinal, maestro, fresca, gioco, tatiana,
-staunty, dubrovny, icpieces, anarcandy, disguised), the "freeware" ones without a free license
+**Permission for the sadsnake1 sets.** maestro, staunty, cardinal, tatiana, fresca, gioco,
+dubrovny and icpieces are by sadsnake1 under CC BY-NC-SA 4.0, which on its own is not compatible
+with a GPL model. On 2026-11-02 their author answered the Onyx author's request (via Buy Me a
+Coffee): _"Yes, use the sets. I am happy if more people will use the piece sets."_ They are used
+as training data from v6 (model 1.1.0) on the strength of that permission; the sets themselves are
+not redistributed by the model.
+
+Excluded: the other CC BY-NC-SA sets (horsey, california, anarcandy, disguised), the "freeware" ones without a free license
 (alpha, leipzig, companion, chess7, reillycraig, riohacha) and those whose license could not be
 verified (governor, kosal, libra). `data/pieces/pieces.json` keeps the SHA-256 of every SVG.
 

@@ -27,6 +27,16 @@ export const SETS = {
   pirouetti: { license: "AGPL-3.0-or-later", source: "onyx" },
   mpchess: { license: "GPL-3.0-or-later", source: "lila" },
   celtic: { license: "MIT", source: "lila" },
+  // CC BY-NC-SA 4.0 sets by sadsnake1, used with the author's permission (2026-11-02; see the
+  // dataset card). From model 1.1.0.
+  ...Object.fromEntries(
+    ["maestro", "staunty", "cardinal", "tatiana", "fresca", "gioco", "dubrovny", "icpieces"].map(
+      (set) => [
+        set,
+        { license: "CC-BY-NC-SA-4.0", permission: "sadsnake1, 2026-11-02", source: "onyx" },
+      ],
+    ),
+  ),
 };
 const LILA_COMMIT = "2e3e641c32b361c113e696cee34f9fddefef6727";
 const LILA = `https://raw.githubusercontent.com/lichess-org/lila/${LILA_COMMIT}/public/piece`;

@@ -14,6 +14,7 @@ desde imagen) y, opcional, I-59 entrega 1 (vídeo local), del segundo estudio de
 | 2    | Datos sintéticos, entrenamiento de I-56, manifiesto y cards | Hecho (2026-11-02)          |
 | 3    | I-57: posición desde imagen en el editor                    | Hecho (2026-11-02)          |
 | 4    | I-55: biblioteca, lector y doble clic en diagramas          | Hecho (2026-11-02)          |
+| —    | Rediseño de Libros y modelo 1.1.0                           | Hecho (2026-11-03)          |
 | 5    | I-55: «Abrir esta partida» desde la notación                | Siguiente                   |
 | 6    | Opcional: I-59 entrega 1                                    | Pendiente (decide el autor) |
 
@@ -116,8 +117,9 @@ añade cada runtime.
 ## Paso 2 — Reconocedor propio (I-56)
 
 Todo está en `ml/diagram-recognizer/`: generador, entrenamiento, evaluación, exportación,
-`DATASET_CARD.md` y `MODEL_CARD.md`. El modelo publicado es **diagram-squares 1.0.0**
-(`models/1.0.0/`): 293 k parámetros, 1,17 MB en ONNX, 36 ms por tablero con `rten`.
+`DATASET_CARD.md` y `MODEL_CARD.md`. El primer modelo publicado fue **diagram-squares 1.0.0**
+(`models/1.0.0/`): 293 k parámetros, 1,17 MB en ONNX, 36 ms por tablero con `rten`. Desde el
+2026-11-03 la app usa **1.1.0** (abajo, «Modelo 1.1.0»).
 
 ### Cómo se hizo
 
@@ -190,7 +192,8 @@ torres en sus casillas iniciales.
   reyes).
 - Comandos `recognize_board_image` (base64, para pegar) y `recognize_board_image_file` (ruta,
   para abrir o arrastrar). Imágenes de más de 1600 px se reducen antes.
-- El modelo y su manifiesto viajan como recursos desde `ml/diagram-recognizer/models/1.0.0/`.
+- El modelo y su manifiesto viajan como recursos desde `ml/diagram-recognizer/models/<versión>/`
+  (1.1.0 desde el 2026-11-03).
   El binario crece por `rten` e `image`; el modelo pesa 1,17 MB.
 
 ### Paridad y rendimiento
@@ -297,3 +300,96 @@ posición»**, que cierra el editor para jugar desde ella.
   (1,3 MB) y los recursos de `/pdfjs/` (3,5 MB), que solo se piden al abrir un libro.
 - **Latencia del doble clic**: la tarjeta muestra los milisegundos de cada lectura; pendiente de
   medir en la app con los libros del autor (criterio: < 300 ms en un diagrama incrustado).
+
+## Rediseño de Libros (2026-11-03)
+
+Tras usarlo con _How to Reassess Your Chess_, el problema principal era el espacio: el libro ocupaba
+media pantalla y tablero y columna derecha se repartían la otra mitad, «la mitad de la mitad» para
+cada uno. Inspiración: PdfCraft-xadrez (libro a un lado, tablero y el resto debajo), adaptada a los
+paneles de Onyx.
+
+### Dos columnas: libro | estudio
+
+- **Columna de estudio** (`src/components/tabs/BookStudyColumn.tsx`), que se desplaza como una
+  página. La primera versión (tablero sobre las dos zonas de siempre, con un divisor) dejaba el
+  tablero pequeño, porque tomaba su tamaño de la altura y desperdiciaba el ancho, y dejaba
+  inutilizables la notación y las pestañas. Se rehízo el mismo día:
+  - Arriba, la franja del último diagrama leído.
+  - Debajo, el tablero más grande que cabe en el alto visible (medido: barras, eval bar, motor). Al
+    lado lleva un riel con sus herramientas (`BoardControls`) y, al editar la posición, la paleta de
+    piezas en vertical. Debajo, botones de jugada delgados y la franja del motor, que aquí no se
+    oculta con la pestaña Análisis porque está más abajo.
+  - La notación se coloca al lado del tablero si quedan ≥ 300 px de ancho, y debajo si no. Debajo
+    tiene alto ajustable con un tirador (doble clic: 340 px). Se puede ocultar, pero se muestra por
+    defecto (`bookStudyColumn-v1`).
+  - Más abajo, las pestañas Análisis, Base de datos, Partidas e Info, con el alto de la columna.
+  - Si el tablero sale de la vista, una barra fija arriba muestra ‹ ›, la jugada actual y
+    «Tablero ↑».
+  - El análisis normal no cambia: `BoardAnalysis` solo cambia la colocación cuando la pestaña
+    tiene un libro (`Board` con `fitWidth`, `MoveControls` con `compact`, `EditingCard` sin paleta).
+- El reparto libro | estudio empieza al 50 % y se guarda (`bookWindowsState-v2`).
+
+### Lector
+
+- Barra única: **volver a la biblioteca**, título, **Diagramas**, diagrama anterior/siguiente,
+  herramienta (seleccionar texto o mano), página y zoom; «Cerrar el libro» pasa al menú «⋯».
+- **Zoom continuo** con Ctrl + rueda, anclado bajo el cursor; menú con ajustar al ancho, página
+  completa y 100 %. Mientras se hace zoom la página se estira y se vuelve a dibujar al parar
+  (180 ms), sin parpadeo: se dibuja fuera de pantalla y se copia.
+- **Seleccionar texto**: capa de texto de pdf.js (solo sus reglas de selección, sin el CSS del
+  visor). Un doble clic en una palabra la selecciona; en un diagrama, lo lee.
+- **Mano**: arrastrar para moverse; el puntero solo se captura al moverse, así que el doble clic
+  sigue llegando a la página.
+- Virtualización propia: todas las páginas se colocan con el tamaño de la primera, así que las
+  visibles y el salto a una página son aritmética.
+
+### Diagramas
+
+- **Modo Diagramas**: marca los diagramas de las páginas visibles en segundo plano (verde seguro,
+  naranja por revisar, azul con corrección guardada); un clic monta la posición. Las imágenes
+  incrustadas se leen una a una; las páginas escaneadas pasan por el detector; las de solo texto no
+  cuestan nada. Cada página se lee una vez.
+- **Diagrama anterior/siguiente**: en orden de lectura (por filas, después de izquierda a derecha),
+  desde el último leído o desde la página actual, hasta 40 páginas. Para libros de ejercicios.
+- **Franja del diagrama** encima del tablero (sustituye a la tarjeta que tapaba la página): estado,
+  «Pág. N» (vuelve al diagrama en el libro), turno y número de jugada editables con un clic, de
+  dónde salió el turno, girar, guardar corrección y «Usar esta posición» cuando el editor está
+  abierto. Los milisegundos pasan al título del botón de página.
+
+### Biblioteca
+
+- Rejilla de portadas (la primera página, 320 px en JPEG, guardada en `books/covers/<id>.jpg`; se
+  dibuja una vez y solo entonces se carga pdf.js), progreso de lectura, «Continuar leyendo» con el
+  último libro, búsqueda, arrastrar PDF a la ventana y **Localizar el archivo…** para un libro
+  movido (se acepta solo si su SHA-256 es el mismo, así conserva punto de lectura y correcciones).
+- Un libro que ya está abierto en una pestaña lleva la marca «Abierto» y abrirlo vuelve a esa
+  pestaña.
+
+## Modelo 1.1.0 (2026-11-03)
+
+**Permiso.** sadsnake1, autor de maestro, staunty, cardinal, tatiana, fresca, gioco, dubrovny e
+icpieces (CC BY-NC-SA 4.0), respondió el 2026-11-02 por Buy Me a Coffee: «Yes, use the sets. I am
+happy if more people will use the piece sets.» Queda registrado en la dataset card. Alpha
+(Everyman) sigue sin permiso.
+
+| Dataset | Cambio                                                          | Resultado en los libros del autor                                               |
+| ------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| v6      | + 8 juegos (impreso y pantalla), 12 000 tableros                | 236 aceptados (antes 242): el rey negro de Alpha vuelve a leerse blanco         |
+| v7      | Los 4 juegos sombreados solo en pantalla (en tinta son macizos) | **250 aceptados**, 0 diagramas aceptados por ambos modelos con lectura distinta |
+
+| Medida                             |     1.0.0 |   1.1.0 |
+| ---------------------------------- | --------: | ------: |
+| Sintético v7, casillas             |   99,42 % | 99,85 % |
+| Sintético v7, tableros exactos     |    80,7 % |  94,0 % |
+| Sintético v7, por revisar (0,95)   |    39,9 % |  16,1 % |
+| Sintético, exactos entre aceptados | 99,51 % ¹ | 99,64 % |
+| Libros del autor, aceptados        |       242 |     250 |
+| Nuevos aceptados revisados a mano  |         — |   18/18 |
+
+¹ En su propio test (v5). Una captura de tablero del autor que 1.0.0 leía con tres casillas mal
+(dos damas como reyes y una torre negra como blanca) sale exacta y sin dudas. La captura de Lichess
+girada sigue fallando, pero en el localizador, no en el modelo (caso abierto).
+
+Bajan los «plausibles» (323 → 311) solo en dos libros que quedan por revisar con ambos modelos:
+McDonald (fuente Alpha) e Illescas (casillas con textura de mármol, un estilo que ningún juego de
+entrenamiento tiene).

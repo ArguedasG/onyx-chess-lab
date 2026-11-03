@@ -1,0 +1,114 @@
+{
+  "name": "diagram-squares",
+  "version": "1.1.0",
+  "created": "2026-11-03T18:28:15+00:00",
+  "task": "Classify one chess diagram square into empty or one of the 12 pieces",
+  "architecture": {
+    "name": "SquareNet",
+    "widths": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "params": 293053
+  },
+  "input": {
+    "name": "squares",
+    "shape": [
+      "batch",
+      1,
+      48,
+      48
+    ],
+    "dtype": "float32",
+    "color": "grayscale, L = R*299/1000 + G*587/1000 + B*114/1000 (PIL 'L')",
+    "crop": "board grid box split in 8 x 8 equal squares, row by row from the top-left of the image",
+    "resize": "area average (PIL Image.Resampling.BOX) of the square box to 48 x 48",
+    "scale": "value / 255"
+  },
+  "output": {
+    "name": "logits",
+    "shape": [
+      "batch",
+      13
+    ],
+    "classes": [
+      "empty",
+      "P",
+      "N",
+      "B",
+      "R",
+      "Q",
+      "K",
+      "p",
+      "n",
+      "b",
+      "r",
+      "q",
+      "k"
+    ]
+  },
+  "calibration": {
+    "temperature": 0.6273351311683655,
+    "review_threshold": 0.95,
+    "rule": "a board is 'to review' if any square has max softmax(logits / T) below the threshold"
+  },
+  "metrics": {
+    "test": {
+      "square_acc": 0.99846875,
+      "board_acc": 0.94,
+      "ece": 0.0006223132116720278,
+      "board_acc_by_style": {
+        "print": 0.9202772963604853,
+        "screen": 0.966903073286052
+      },
+      "review_rule_at_threshold": {
+        "threshold": 0.95,
+        "flagged": 0.161,
+        "accepted_board_acc": 0.9964243146603099,
+        "wrong_but_accepted": 3
+      }
+    },
+    "heldout": {
+      "square_acc": 0.9125260416666666,
+      "board_acc": 0.0,
+      "ece": 0.07007161248475316,
+      "board_acc_by_style": {
+        "print": 0.0,
+        "screen": 0.0
+      },
+      "review_rule_at_threshold": {
+        "threshold": 0.95,
+        "flagged": 0.995,
+        "accepted_board_acc": 0.0,
+        "wrong_but_accepted": 3
+      }
+    }
+  },
+  "training": {
+    "epochs": 3,
+    "batch": 256,
+    "lr": 0.003,
+    "seed": 7,
+    "train_squares": 385996,
+    "total_steps": 4521
+  },
+  "dataset": {
+    "version": "v7",
+    "seed": 20261102,
+    "positions_sha256": "a4ee8e6baa92d06d963660007d7b1263001c56241c5a65dcd17042b2dcf867f6",
+    "dataset_json_sha256": "fed06f5f6baae251e98f512562c6e436c7accf36c8810220beed825eb34f35bd"
+  },
+  "parity": {
+    "input": "parity.input.u8",
+    "logits": "parity.logits.f32",
+    "torch_vs_onnxruntime_max_diff": 1.9073486328125e-06,
+    "tolerance": 0.0001
+  },
+  "sha256": {
+    "onnx": "886f44cee9c7524421d00a3784ae25412205ffaf92640793c4e5f76da4317e95",
+    "checkpoint": "0f53dbf7c15487193037fd801851d6a2a55c4866cc0d8a96d977983678feb054"
+  },
+  "license": "GPL-3.0-only (trained only on synthetic data; see the dataset card)"
+}

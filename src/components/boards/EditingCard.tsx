@@ -13,11 +13,14 @@ function EditingCard({
   setEditingMode,
   selectedPiece,
   setSelectedPiece,
+  palette = true,
 }: {
   boardRef: React.MutableRefObject<HTMLDivElement | null>;
   setEditingMode: (editing: boolean) => void;
   selectedPiece: Piece | null;
   setSelectedPiece: (piece: Piece | null) => void;
+  /** False when the caller shows the piece palette elsewhere (beside the board, for books). */
+  palette?: boolean;
 }) {
   const store = useContext(TreeStateContext)!;
   const fen = useStore(store, (s) => s.currentNode().fen);
@@ -42,19 +45,21 @@ function EditingCard({
         <Divider my="md" />
         <ImageReader currentFen={fen} onRead={setFen} />
       </ScrollArea>
-      <Divider my="md" />
-      <Box className={classes.palette}>
-        <PiecesGrid
-          fen={fen}
-          boardRef={boardRef}
-          onPut={(newFen) => {
-            setFen(newFen);
-          }}
-          selectedPiece={selectedPiece}
-          onSelectPiece={setSelectedPiece}
-          orientation={headers.orientation}
-        />
-      </Box>
+      {palette && <Divider my="md" />}
+      {palette && (
+        <Box className={classes.palette}>
+          <PiecesGrid
+            fen={fen}
+            boardRef={boardRef}
+            onPut={(newFen) => {
+              setFen(newFen);
+            }}
+            selectedPiece={selectedPiece}
+            onSelectPiece={setSelectedPiece}
+            orientation={headers.orientation}
+          />
+        </Box>
+      )}
     </Card>
   );
 }

@@ -19,13 +19,16 @@ HI = 96
 BOARD = 8 * HI
 PIECE_NAMES = {s: ("w" if s.isupper() else "b") + s.upper() for s in "PNBRQKpnbrqk"}
 
-# Sets that look like book diagrams get more weight in the printed style.
-PRINT_WEIGHTS = {"cburnett": 3, "merida": 3, "mpchess": 3, "chessnut": 2, "celtic": 1, "fantasy": 1, "spatial": 1, "pixel": 0.3, "shapes": 0.2, "glyph-freeserif": 3, "glyph-dejavu": 3, "glyph-noto": 3}
-SCREEN_WEIGHTS = {"cburnett": 2, "merida": 2, "mpchess": 1, "chessnut": 2, "celtic": 2, "fantasy": 1, "spatial": 2, "pixel": 1, "shapes": 0.3, "glyph-freeserif": 0.5, "glyph-dejavu": 0.5, "glyph-noto": 0.5}
+# Sets that look like book diagrams get more weight in the printed style; maestro, Onyx's default
+# set, more weight on screen (screenshots of Onyx itself). Shaded sets without ink lines (staunty,
+# tatiana, gioco, dubrovny) are screen-only from v7: as ink they turn into solid black pieces and
+# taught that a black piece with white inner lines (Alpha) is white.
+PRINT_WEIGHTS = {"cburnett": 3, "merida": 3, "mpchess": 3, "chessnut": 2, "celtic": 1, "fantasy": 1, "spatial": 1, "pixel": 0.3, "shapes": 0.2, "glyph-freeserif": 3, "glyph-dejavu": 3, "glyph-noto": 3, "maestro": 1, "cardinal": 1.5, "fresca": 1.5, "icpieces": 1.5}
+SCREEN_WEIGHTS = {"cburnett": 2, "merida": 2, "mpchess": 1, "chessnut": 2, "celtic": 2, "fantasy": 1, "spatial": 2, "pixel": 1, "shapes": 0.3, "glyph-freeserif": 0.5, "glyph-dejavu": 0.5, "glyph-noto": 0.5, "maestro": 3, "staunty": 1.5, "cardinal": 1.5, "tatiana": 1.5, "fresca": 1.5, "gioco": 1, "dubrovny": 1, "icpieces": 1}
 
 # Sets whose white pieces give a clean inverted black piece (mpchess has an opaque padding,
 # celtic has no inner lines).
-INVERTIBLE = {"cburnett", "merida", "chessnut", "fantasy", "spatial", "glyph-freeserif", "glyph-dejavu", "glyph-noto"}
+INVERTIBLE = {"cburnett", "merida", "chessnut", "fantasy", "spatial", "glyph-freeserif", "glyph-dejavu", "glyph-noto", "maestro", "cardinal", "fresca", "icpieces"}
 
 SCREEN_PALETTES = [
     ((240, 217, 181), (181, 136, 99)),

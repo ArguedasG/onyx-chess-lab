@@ -62,6 +62,7 @@ import { BoardTab } from "./BoardTab";
 import ConfirmChangesModal from "./ConfirmChangesModal";
 import ImportModal from "./ImportModal";
 import NewTabHome from "./NewTabHome";
+import BookStudyColumn from "./BookStudyColumn";
 import RightColumn from "./RightColumn";
 
 import "react-mosaic-component/react-mosaic-component.css";
@@ -404,7 +405,7 @@ export default function BoardsPage() {
   );
 }
 
-type ViewId = "left" | "right" | "book";
+type ViewId = "left" | "right" | "book" | "study";
 
 interface WindowsState {
   currentNode: MosaicNode<ViewId> | null;
@@ -425,14 +426,12 @@ function initialWindowsState(): WindowsState {
 
 const windowsStateAtom = atomWithStorage<WindowsState>("windowsState-v2", initialWindowsState());
 
-/** Book | board | right column, for analysis tabs with a book open (phase 9.4). */
-const bookWindowsStateAtom = atomWithStorage<WindowsState>("bookWindowsState-v1", {
-  currentNode: {
-    direction: "row",
-    first: "book",
-    second: { direction: "row", first: "left", second: "right", splitPercentage: 55 },
-    splitPercentage: 42,
-  },
+/**
+ * Book | study column (board over the panels), for analysis tabs with a book open (phase 9.4).
+ * Two columns instead of three: each half of the screen stays wide enough to use.
+ */
+const bookWindowsStateAtom = atomWithStorage<WindowsState>("bookWindowsState-v2", {
+  currentNode: { direction: "row", first: "book", second: "study", splitPercentage: 50 },
 });
 
 // pdf.js and the reader load only when a book is opened.
@@ -466,6 +465,8 @@ function TabSwitch({ tab }: { tab: Tab }) {
             >
               <BookReader book={tab.book} tabId={tab.value} />
             </Suspense>
+          ) : id === "study" ? (
+            <BookStudyColumn />
           ) : (
             <RightColumn layoutKey={layoutKey} />
           )

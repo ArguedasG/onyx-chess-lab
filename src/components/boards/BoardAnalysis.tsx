@@ -68,6 +68,8 @@ import AnnotationSymbolHotkeys from "./AnnotationSymbolHotkeys";
 import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
+import PiecesGrid from "./PiecesGrid";
+import { BOOK_RAIL_ID } from "../tabs/BookStudyColumn";
 import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
 import ChaptersPanel, { hasChapters } from "../panels/chapters/ChaptersPanel";
 import EngineStrip from "./EngineStrip";
@@ -83,6 +85,9 @@ function BoardAnalysis() {
   const isRepertoire = tabFile?.metadata.type === "repertoire";
   // Repertoire records are sections trained from the Practice tab, not chapters to browse.
   const showChapters = hasChapters(currentTab) && !isRepertoire;
+  // Beside a book the column scrolls: the board's tools sit in a rail at its side and the move
+  // buttons under it, instead of inside the notation (phase 9.4).
+  const bookLayout = Boolean(currentTab?.book);
   const hasPersistentOrigin = currentTab?.gameOrigin.kind !== "none";
   const autoSave = useAtomValue(autoSaveAtom);
   const { documentDir } = useLoaderData({ from: "/" });
@@ -103,6 +108,8 @@ function BoardAnalysis() {
   const root = useStore(store, (s) => s.root);
   const headers = useStore(store, (s) => s.headers);
   const position = useStore(store, (s) => s.position);
+  const currentFen = useStore(store, (s) => s.currentNode().fen);
+  const setFen = useStore(store, (s) => s.setFen);
   const [, setTabs] = useAtom(tabsAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
   const [trainingAreas, setTrainingAreas] = useAtom(trainingAreasAtom);
@@ -306,12 +313,14 @@ function BoardAnalysis() {
       !showEngineStrip ||
       currentTabSelected === "practice" ||
       editingMode ||
-      (currentTabSelected === "analysis" &&
+      // Beside a book the Analysis tab is further down the column, out of sight.
+      (!bookLayout &&
+        currentTabSelected === "analysis" &&
         analysisTab !== "report" &&
         analysisTab !== "logs") ? undefined : (
         <EngineStrip />
       ),
-    [showEngineStrip, currentTabSelected, editingMode, analysisTab],
+    [showEngineStrip, currentTabSelected, editingMode, analysisTab, bookLayout],
   );
 
   // The first line of the first engine that has lines, the same one drawn as the main arrow.
@@ -469,9 +478,43 @@ function BoardAnalysis() {
           editingMode={editingMode}
           boardRef={boardRef}
           selectedPiece={selectedPiece}
-          footer={engineStrip}
+          fitWidth={bookLayout}
+          footer={
+            bookLayout ? (
+              <Stack gap={6}>
+                <MoveControls hints compact />
+                {engineStrip}
+              </Stack>
+            ) : (
+              engineStrip
+            )
+          }
         />
       </Portal>
+      {bookLayout && (
+        <Portal target={`#${BOOK_RAIL_ID}`}>
+          <Group gap={6} align="flex-start" wrap="nowrap">
+            {editingMode && (
+              <PiecesGrid
+                vertical
+                fen={currentFen}
+                boardRef={boardRef}
+                onPut={setFen}
+                selectedPiece={selectedPiece}
+                onSelectPiece={setSelectedPiece}
+                orientation={headers.orientation}
+              />
+            )}
+            <BoardControls
+              editingMode={editingMode}
+              toggleEditingMode={toggleEditingMode}
+              dirty={dirty}
+              saveFile={userSaveFile}
+              onGenerateModelGame={generateModelGameFromPosition}
+            />
+          </Group>
+        </Portal>
+      )}
       <Portal target="#panel-tools">
         <Paper
           withBorder
@@ -594,6 +637,7 @@ function BoardAnalysis() {
             setEditingMode={toggleEditingMode}
             selectedPiece={selectedPiece}
             setSelectedPiece={setSelectedPiece}
+            palette={!bookLayout}
           />
         ) : (
           <Stack h="100%" gap="xs">
@@ -643,17 +687,19 @@ function BoardAnalysis() {
               topBar
               headerless
               controls={
-                <BoardControls
-                  editingMode={editingMode}
-                  toggleEditingMode={toggleEditingMode}
-                  dirty={dirty}
-                  saveFile={userSaveFile}
-                  onGenerateModelGame={generateModelGameFromPosition}
-                />
+                !bookLayout && (
+                  <BoardControls
+                    editingMode={editingMode}
+                    toggleEditingMode={toggleEditingMode}
+                    dirty={dirty}
+                    saveFile={userSaveFile}
+                    onGenerateModelGame={generateModelGameFromPosition}
+                  />
+                )
               }
             />
             {showAnnotationBar && !practicing && <AnnotationToolbar />}
-            <MoveControls hints />
+            {!bookLayout && <MoveControls hints />}
           </Stack>
         )}
       </Portal>

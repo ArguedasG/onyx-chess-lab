@@ -20,8 +20,8 @@ use crate::error::Error;
 use preprocess::{crop_squares, resize_box, to_gray, Gray};
 use recognizer::{looks_flipped, rule_problems, Recognizer};
 
-const MODEL: &str = "models/diagram-squares-1.0.0.onnx";
-const MANIFEST: &str = "models/diagram-squares-1.0.0.json";
+const MODEL: &str = "models/diagram-squares-1.1.0.onnx";
+const MANIFEST: &str = "models/diagram-squares-1.1.0.json";
 /// Below this locator score there is probably no board in the image.
 const NO_BOARD_SCORE: f64 = 0.15;
 /// Larger images are reduced first: the fine pass grows with the square of the resolution.

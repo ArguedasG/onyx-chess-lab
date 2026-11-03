@@ -44,19 +44,26 @@ py -3.11 -m venv .venv
 | `runs/`, `data/`                   | Salidas locales (ignoradas por git)                                         |
 | `private-eval/`                    | Recortes de los libros del autor: **nunca** se suben ni entrenan nada       |
 
-## Reproducir el modelo 1.0.0
+## Reproducir el modelo 1.1.0
 
 Las fuentes (FreeSerif, DejaVu Sans y Noto Sans Symbols 2) se descargan de sus sitios oficiales a
-`data/fonts-download/`. La generación tarda ~4 min y el entrenamiento ~27 min en CPU, en tandas.
+`data/fonts-download/`. La generación tarda ~8 min y el entrenamiento ~39 min en CPU, en tandas.
 
 ```bash
 node ml/diagram-recognizer/tools/render_pieces.mjs
 .venv/Scripts/python tools/render_glyph_pieces.py
-.venv/Scripts/python tools/generate.py --db "<Lichess Puzzles.db3>" --out data/v5
-.venv/Scripts/python tools/train.py --name v5 --data data/v5 --epochs 3
-.venv/Scripts/python tools/evaluate.py --run runs/v5 --data data/v5
-.venv/Scripts/python tools/export.py --run runs/v5 --data data/v5 --version 1.0.0 --threshold 0.95
+.venv/Scripts/python tools/generate.py --db "<Lichess Puzzles.db3>" --out data/v7
+.venv/Scripts/python tools/train.py --name v7 --data data/v7 --epochs 3 --minutes 12
+.venv/Scripts/python tools/evaluate.py --run runs/v7 --data data/v7
+.venv/Scripts/python tools/export.py --run runs/v7 --data data/v7 --version 1.1.0 --threshold 0.95
 ```
+
+`export.py` escribe en `runs/v7/export/`; `models/1.1.0/` reúne esos archivos con
+`runs/v7/config.json` (`training-config.json`), `metrics.jsonl` (`training-metrics.jsonl`),
+`eval.json` (`eval-synthetic.json`) y el `dataset.json` del dataset. Después,
+`tools/make_parity_fixtures.py --db <…>` actualiza los fixtures de Rust. El modelo 1.0.0 (dataset
+v5, 9 000 tableros de entrenamiento con `--train 9000` y los juegos de entonces) queda en
+`models/1.0.0/`.
 
 `render_pieces.mjs` se lanza desde la raíz del repositorio; lo demás, desde esta carpeta.
 `train.py` se repite hasta que diga «training finished».

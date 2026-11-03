@@ -1,0 +1,65 @@
+.scroll {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Always room for the scrollbar: it must not change the width the board is sized from. */
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+/* Board and rail centered, the notation under them at the column's full width. */
+.stage {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-areas:
+    ". board rail ."
+    "notes notes notes notes";
+}
+
+/* Wide column: the notation takes the room beside the board. */
+.stage[data-wide] {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas: "board rail notes";
+}
+
+.board {
+  grid-area: board;
+  min-width: 0;
+}
+
+.rail {
+  grid-area: rail;
+  padding-top: 4px;
+}
+
+.notes {
+  grid-area: notes;
+  min-width: 0;
+}
+
+/* Sticky but taking no room, so the column does not jump when the bar appears. */
+.miniBarAnchor {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 20;
+  flex: none;
+  margin-bottom: -8px;
+}
+
+.miniBar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+}

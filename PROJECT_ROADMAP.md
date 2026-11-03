@@ -844,7 +844,8 @@ de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
 
 ### 9.4. Libros y posiciones desde imagen
 
-**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos** (detalle en
+**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos, rediseño de Libros y modelo 1.1.0
+(2026-11-03)** (detalle en
 `docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
 entrega de I-59, del segundo estudio de mercado (`docs/market-study-2.es.md`, §2, §5 y §6). Es una
 funcionalidad nueva, no una ampliación; va antes de la Fase 10 por decisión del autor y **se cierra
@@ -1040,6 +1041,18 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-03 — 9.4: rediseño de Libros y modelo 1.1.0
+
+- Libros en **dos columnas**: libro | columna de estudio (franja del diagrama, tablero y, debajo,
+  notación y herramientas con divisor). Lector con volver a la biblioteca, zoom con Ctrl + rueda,
+  seleccionar texto o mano, modo **Diagramas** (marcas en las páginas visibles) y diagrama
+  anterior/siguiente; la franja del diagrama sustituye a la tarjeta flotante (turno y jugada en un
+  clic). Biblioteca con portadas, «Continuar leyendo», búsqueda, arrastrar PDF y «Localizar…».
+- **diagram-squares 1.1.0** (dataset v7): con los 8 juegos de sadsnake1 (permiso del 2026-11-02);
+  sintético 99,85 % por casilla y 99,64 % exactos entre aceptados; libros del autor 250/387
+  aceptados (antes 242), los 18 nuevos correctos. El dataset v6 se descartó: los juegos sombreados en
+  estilo impreso hacían leer como blanco el rey negro de Alpha.
 
 ### 2026-11-02 — 9.4, paso 4: Libros
 

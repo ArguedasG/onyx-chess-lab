@@ -103,6 +103,11 @@ interface ChessboardProps {
   footer?: React.ReactNode;
   /** Temporary marks drawn on top, never saved to the game (e.g. the mated king). */
   overlayShapes?: DrawShape[];
+  /**
+   * Take the parent's width and let the height follow, instead of fitting the parent's height.
+   * For a column that scrolls (beside a book), where the caller decides the board's size.
+   */
+  fitWidth?: boolean;
 }
 
 function Board({
@@ -120,6 +125,7 @@ function Board({
   enablePremoves = false,
   footer,
   overlayShapes,
+  fitWidth = false,
 }: ChessboardProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -134,7 +140,7 @@ function Board({
     const root = rootRef.current;
     const column = columnRef.current;
     const board = boardRef.current;
-    if (!root || !column || !board) return;
+    if (!root || !column || !board || fitWidth) return;
     const fit = () => {
       // Height comes from the whole area minus the footer, never from the column itself:
       // the column's own height can lag behind the board it contains.
@@ -178,7 +184,7 @@ function Board({
       observer.disconnect();
       mutations.disconnect();
     };
-  }, [boardRef, hasFooter]);
+  }, [boardRef, hasFooter, fitWidth]);
 
   const store = useContext(TreeStateContext)!;
 
@@ -691,7 +697,7 @@ function Board({
       <Box
         ref={rootRef}
         w="100%"
-        h="100%"
+        h={fitWidth ? undefined : "100%"}
         style={{ display: "flex", flexDirection: "column", gap: "0.5rem", overflow: "hidden" }}
       >
         <Box
@@ -701,13 +707,14 @@ function Board({
             display: "flex",
             flexDirection: "column",
             width: "100%",
-            flex: "1 1 0",
+            flex: fitWidth ? "0 0 auto" : "1 1 0",
             minHeight: 0,
             gap: "0.5rem",
             flexWrap: "nowrap",
             overflow: "hidden",
-            maxWidth:
-              fittedWidth !== null
+            maxWidth: fitWidth
+              ? undefined
+              : fittedWidth !== null
                 ? fittedWidth
                 : //            topbar   bottompadding                tabs                                  bottomb    topbar   evalbar                                gaps    ???
                   `calc(100vh - 2.25rem - var(--mantine-spacing-sm) - 2.5rem - var(--mantine-spacing-sm) - ${BAR_HEIGHT} - ${BAR_HEIGHT} + 1.563rem + var(--mantine-spacing-md) - 1rem  - 0.2rem)`,

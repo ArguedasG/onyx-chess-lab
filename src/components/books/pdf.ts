@@ -11,6 +11,7 @@ export type PdfDocument = pdfjs.PDFDocumentProxy;
 export type PdfPage = pdfjs.PDFPageProxy;
 export const OPS = pdfjs.OPS;
 export const ImageKind = pdfjs.ImageKind;
+export const TextLayer = pdfjs.TextLayer;
 
 /**
  * Opens a book from its path. The file is read in ranges through the asset protocol, so a long
