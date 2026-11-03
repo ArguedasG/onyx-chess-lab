@@ -844,7 +844,7 @@ de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
 
 ### 9.4. Libros y posiciones desde imagen
 
-**Estado: En curso desde el 2026-11-02; pasos 0 a 3 hechos** (detalle en
+**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos** (detalle en
 `docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
 entrega de I-59, del segundo estudio de mercado (`docs/market-study-2.es.md`, §2, §5 y §6). Es una
 funcionalidad nueva, no una ampliación; va antes de la Fase 10 por decisión del autor y **se cierra
@@ -1040,6 +1040,21 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-02 — 9.4, paso 4: Libros
+
+- Sección **Libros**: biblioteca de PDF (rutas y huella SHA-256, último punto de lectura) y lector
+  junto al tablero de análisis en la misma pestaña. `pdf.js` en un chunk diferido; páginas
+  virtualizadas y lectura del archivo por rangos.
+- Doble clic en un diagrama: imagen incrustada o recorte alrededor del clic, reconocedor del paso 3,
+  turno y número de jugada desde el texto (215/394 diagramas), editor abierto si hay dudas y
+  correcciones guardadas por libro.
+- Arreglo: el editor de posición ya no se desborda sobre la notación (la paleta queda fija abajo).
+- Tras la prueba del autor: **detector de página** (acuerdo entre casillas vecinas medido en las
+  esquinas; ~1 s por página en Rust, paridad exacta con Python) que encuentra todos los tableros de
+  escaneos y páginas densas (_Steps_ 24/24, Prio 16/16, sin falsos positivos en texto); marcas verde
+  y naranja en la página, marca de turno impresa junto al diagrama, turno legal y «Usar esta
+  posición».
 
 ### 2026-11-02 — 9.4, paso 3: posición desde imagen
 

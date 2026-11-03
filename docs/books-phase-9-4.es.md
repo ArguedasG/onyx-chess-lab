@@ -13,8 +13,8 @@ desde imagen) y, opcional, I-59 entrega 1 (vídeo local), del segundo estudio de
 | 1    | Pruebas de `pdf.js` y del runtime ONNX en Rust              | Hecho (2026-11-02)          |
 | 2    | Datos sintéticos, entrenamiento de I-56, manifiesto y cards | Hecho (2026-11-02)          |
 | 3    | I-57: posición desde imagen en el editor                    | Hecho (2026-11-02)          |
-| 4    | I-55: biblioteca, lector y doble clic en diagramas          | Siguiente                   |
-| 5    | I-55: «Abrir esta partida» desde la notación                | Pendiente                   |
+| 4    | I-55: biblioteca, lector y doble clic en diagramas          | Hecho (2026-11-02)          |
+| 5    | I-55: «Abrir esta partida» desde la notación                | Siguiente                   |
 | 6    | Opcional: I-59 entrega 1                                    | Pendiente (decide el autor) |
 
 ## Paso 0 — Diagnóstico de la biblioteca
@@ -207,3 +207,93 @@ Tiempo del pipeline completo en Rust (release, i5-1135G7) sobre los 394 diagrama
 
 Fixtures: `src-tauri/fixtures/diagram/`, escritos por
 `ml/diagram-recognizer/tools/make_parity_fixtures.py`.
+
+## Paso 4 — Libros: biblioteca, lector y doble clic (I-55)
+
+**Libros** en el menú lateral: biblioteca de PDF que guarda solo la ruta y la huella (SHA-256 del
+archivo, en Rust), con el último punto de lectura; avisa si un archivo ya no está y quitar un libro
+nunca toca el archivo. Al abrir un libro, la pestaña de análisis pasa a tener tres paneles: **lector
+| tablero | columna derecha**, con el tablero de análisis de siempre (motor, notación, guardar).
+
+### Lector
+
+- `pdf.js` 6.5 (build _legacy_, por el WebKit de macOS y Linux) en un **chunk diferido** que solo se
+  descarga al abrir un libro; el archivo se lee por rangos desde el protocolo `asset:`, así que un
+  libro de 700 páginas no se carga entero. Las páginas están virtualizadas: solo se dibujan las
+  visibles (y una más).
+- Los decodificadores WASM (JBIG2, JPEG 2000), CMaps y fuentes estándar se sirven en `/pdfjs/` con
+  un plugin de Vite. La CSP añade `asset:` a `connect-src` y `'wasm-unsafe-eval'` a `script-src`
+  (conserva los orígenes que antes heredaba de `default-src`).
+- Zoom, salto de página, cerrar el libro (vuelve al diseño normal) y vuelta al último punto.
+
+### Doble clic en un diagrama
+
+1. **Imagen incrustada bajo el clic** (13 de los 19 libros de prueba): se toman sus píxeles ya
+   decodificados por `pdf.js`, sin volver a dibujar la página.
+2. **Si no hay** (escaneos, diagramas vectoriales): el detector de página (abajo) encuentra todos
+   los tableros de la página y se toma el que está bajo el clic.
+3. El reconocedor del paso 3 lee la posición; si hay casillas dudosas o rompe una regla, se abre el
+   editor con las dudas en rojo.
+4. **Turno y número de jugada** salen del texto (`src/utils/bookText.ts`): una frase («Juegan las
+   negras», «White to move»), la primera jugada debajo del diagrama («15...», «8.0-0»), la última
+   encima («7.Nge2 c6» → juegan blancas, 8), o la jugada que sigue a una referencia «Diagram 11-7»
+   cuando el diagrama está en otra columna. La tarjeta muestra de qué texto salió; si no lo
+   encuentra, lo dice.
+5. **Correcciones por libro**: «Guardar corrección» guarda la posición del tablero para ese diagrama
+   (`books/<id>.json`, versionado, con lo que leyó el modelo); la próxima vez se abre esa. Son, a la
+   vez, etiquetas reales para medir el modelo en privado.
+
+### Detector de página (tras la primera prueba del autor)
+
+La primera prueba con _How to Reassess Your Chess_ y _Steps Method 3_ falló en todos los tableros:
+el doble clic recortaba el 60 % o el 90 % del ancho de la página y el localizador exige que el
+tablero ocupe al menos el 45 % del recorte, pero esos diagramas ocupan ~27 % de la página (y
+_Steps_ tiene 12 por página). PdfCraft-xadrez sí los leía porque busca en la página entera.
+
+**Detector de página** (`onyx_diagrams/detect.py` y `src-tauri/src/diagram/detect.rs`, con paridad
+exacta entre ambos):
+
+- prueba todas las posiciones y tamaños de 8 % a 70 % del ancho (paso del 3 %) sobre la página
+  reducida a 400 px, con la señal (oscuridad + textura) medida a resolución completa antes de
+  reducir, para que una trama tenue no se vuelva gris liso;
+- puntúa cada candidato por **acuerdo entre vecinas**: de los 112 pares de casillas adyacentes, la
+  proporción en que la oscura es más oscura que la clara, midiendo cada casilla en sus **cuatro
+  esquinas** (las piezas son redondas y van centradas). Un tablero da 0,85–1 aunque esté lleno de
+  piezas; el texto y el papel, ~0,5, sea cual sea su contraste. El contraste medio, que se probó
+  antes, confundía párrafos con tableros;
+- toma máximos locales de mayor a menor sin solaparse y afina cada uno a resolución completa con la
+  pasada fina del localizador, en su vecindad (una búsqueda más amplia saltaba al tablero vecino);
+- en Rust, cada tamaño en paralelo y un corte temprano cuando un candidato ya no puede llegar al
+  umbral (mismo resultado que el cálculo completo): de 5,8 s a ~1 s por página.
+
+| Páginas renderizadas (tableros 8 × 8)            | Encontrados | Falsos positivos |
+| ------------------------------------------------ | ----------: | ---------------: |
+| _Steps_ (2 páginas de 12)                        |       24/24 |                0 |
+| Prio y Vilela, de colores (3 páginas)            |       16/16 |                0 |
+| Hellsten, Kornev, Silman, _Reassess_ (5 páginas) |       18/19 |                0 |
+| Páginas solo de texto (_Reassess_)               |           — |                0 |
+
+Los mini-tableros de 4 × 4 («posiciones finales» de Prio) quedan fuera, como diagramas parciales.
+
+**Marca de turno junto al diagrama**: una marca compacta (punto, triángulo, cuadrado) a la derecha
+del tablero, a la altura de la última fila (negras) o de la primera (blancas). En _Steps_ coincide
+con los puntos impresos; un cuadro de texto pegado al diagrama ya no cuenta como marca.
+
+**Turno legal**: si el bando que no juega está en jaque, el turno se cambia (para el editor y para
+Libros).
+
+**Interfaz**: botón **«Encontrar los diagramas de esta página»** que marca cada tablero en verde
+(seguro) o naranja (por revisar); un clic lo monta. En escaneos, el doble clic usa el mismo
+detector. La tarjeta dice de dónde salió el turno (marca, texto o jaque) y tiene **«Usar esta
+posición»**, que cierra el editor para jugar desde ella.
+
+### Mediciones
+
+- **Turno encontrado en el texto**: 215 de 394 diagramas de los libros del autor (55 %); 60 % sin
+  McDonald, cuya capa de texto es ilegible. Yusupov pasó de 0 a 26/30 con la regla de las
+  referencias «Diagram N». Herramienta: `ml/diagram-recognizer/tools/eval_turns.mjs`.
+- **Coste para quien no usa Libros**: el bundle principal queda en ~5,66 MB (la referencia del
+  estudio era 5,67 MB); `pdf.js` y el lector van en un chunk propio de 577 KB, más el worker
+  (1,3 MB) y los recursos de `/pdfjs/` (3,5 MB), que solo se piden al abrir un libro.
+- **Latencia del doble clic**: la tarjeta muestra los milisegundos de cada lectura; pendiente de
+  medir en la app con los libros del autor (criterio: < 300 ms en un diagrama incrustado).

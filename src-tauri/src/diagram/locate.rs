@@ -20,7 +20,7 @@ pub struct Located {
 }
 
 /// Darkness plus texture (|horizontal| + |vertical| differences), as f64.
-fn signal(image: &Gray) -> Vec<f64> {
+pub(crate) fn signal(image: &Gray) -> Vec<f64> {
     let (w, h) = (image.width, image.height);
     let mut out = vec![0.0; w * h];
     for y in 0..h {
@@ -39,13 +39,13 @@ fn signal(image: &Gray) -> Vec<f64> {
     out
 }
 
-struct Integral {
+pub(crate) struct Integral {
     stride: usize,
     data: Vec<f64>,
 }
 
 impl Integral {
-    fn new(values: &[f64], w: usize, h: usize) -> Self {
+    pub(crate) fn new(values: &[f64], w: usize, h: usize) -> Self {
         let stride = w + 1;
         let mut data = vec![0.0; stride * (h + 1)];
         for y in 0..h {
@@ -58,7 +58,7 @@ impl Integral {
         Integral { stride, data }
     }
 
-    fn sum(&self, x0: usize, y0: usize, x1: usize, y1: usize) -> f64 {
+    pub(crate) fn sum(&self, x0: usize, y0: usize, x1: usize, y1: usize) -> f64 {
         let s = self.stride;
         self.data[y1 * s + x1] - self.data[y0 * s + x1] - self.data[y1 * s + x0]
             + self.data[y0 * s + x0]
@@ -93,7 +93,8 @@ fn contrast(
 /// `np.arange(start, stop, step)` for floats, value by value as NumPy fills it.
 fn arange(start: f64, stop: f64, step: f64) -> Vec<f64> {
     let len = ((stop - start) / step).ceil();
-    if !(len > 0.0) {
+    // Also catches NaN (no values), as NumPy does.
+    if len.is_nan() || len <= 0.0 {
         return Vec::new();
     }
     let len = len as usize;
@@ -148,7 +149,32 @@ pub fn find_grid(image: &Gray) -> Option<Located> {
     // Fine pass at full resolution: position ± one coarse pixel, each side ± 2 coarse pixels.
     let (_, y0, x0, side) = best;
     let integral = Integral::new(&dark, w, h);
-    let (fy, fx, fside) = (y0 as f64 / s, x0 as f64 / s, side as f64 / s);
+    let (grid, score) = refine(
+        &integral,
+        h,
+        w,
+        x0 as f64 / s,
+        y0 as f64 / s,
+        side as f64 / s,
+        s,
+    )?;
+    Some(Located {
+        grid,
+        score: score / spread,
+    })
+}
+
+/// Best grid near (fx, fy, fside) at full resolution: position ± 1/s + 1 px, side ± 2/s px and
+/// height within ±3 % of the width. Returns the grid box and the raw contrast.
+pub(crate) fn refine(
+    integral: &Integral,
+    h: usize,
+    w: usize,
+    fx: f64,
+    fy: f64,
+    fside: f64,
+    s: f64,
+) -> Option<([f64; 4], f64)> {
     let r = (1.0 / s).ceil() as i64 + 1;
     let mut best_full = (f64::NEG_INFINITY, 0.0, 0.0, 0.0, 0.0);
     for sx in arange(fside - 2.0 / s, fside + 2.0 / s + 1.0, 1.0) {
@@ -168,7 +194,7 @@ pub fn find_grid(image: &Gray) -> Option<Located> {
             let mut local = (f64::NEG_INFINITY, 0i64, 0i64);
             for y in y_lo..=y_hi {
                 for x in x_lo..=x_hi {
-                    let c = contrast(&integral, x as usize, y as usize, &ex, &ey, sx, sy);
+                    let c = contrast(integral, x as usize, y as usize, &ex, &ey, sx, sy);
                     if c > local.0 {
                         local = (c, x, y);
                     }
@@ -180,11 +206,5 @@ pub fn find_grid(image: &Gray) -> Option<Located> {
         }
     }
     let (score, gx, gy, sx, sy) = best_full;
-    if score == f64::NEG_INFINITY {
-        return None;
-    }
-    Some(Located {
-        grid: [gx, gy, gx + sx, gy + sy],
-        score: score / spread,
-    })
+    (score != f64::NEG_INFINITY).then_some(([gx, gy, gx + sx, gy + sy], score))
 }

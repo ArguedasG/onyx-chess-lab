@@ -7,6 +7,15 @@
   flex-direction: column;
 }
 
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.palette {
+  flex: 0 0 auto;
+}
+
 [data-mantine-color-scheme="light"] .card {
   background-color: var(--mantine-color-white);
 }

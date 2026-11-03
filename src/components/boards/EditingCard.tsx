@@ -1,4 +1,4 @@
-import { Card, CloseButton, Divider } from "@mantine/core";
+import { Box, Card, CloseButton, Divider, ScrollArea } from "@mantine/core";
 import type { Piece } from "chessops";
 import { useContext } from "react";
 import { useStore } from "zustand";
@@ -35,20 +35,26 @@ function EditingCard({
         style={{ position: "absolute", top: 10, right: 15 }}
         onClick={() => setEditingMode(false)}
       />
-      <FenInput currentFen={fen} />
+      {/* The upper part scrolls; the piece palette stays visible below it and outside the
+          scroll area, so a piece dragged to the board is never clipped. */}
+      <ScrollArea className={classes.scroll} type="auto" offsetScrollbars>
+        <FenInput currentFen={fen} />
+        <Divider my="md" />
+        <ImageReader currentFen={fen} onRead={setFen} />
+      </ScrollArea>
       <Divider my="md" />
-      <ImageReader currentFen={fen} onRead={setFen} />
-      <Divider my="md" />
-      <PiecesGrid
-        fen={fen}
-        boardRef={boardRef}
-        onPut={(newFen) => {
-          setFen(newFen);
-        }}
-        selectedPiece={selectedPiece}
-        onSelectPiece={setSelectedPiece}
-        orientation={headers.orientation}
-      />
+      <Box className={classes.palette}>
+        <PiecesGrid
+          fen={fen}
+          boardRef={boardRef}
+          onPut={(newFen) => {
+            setFen(newFen);
+          }}
+          selectedPiece={selectedPiece}
+          onSelectPiece={setSelectedPiece}
+          orientation={headers.orientation}
+        />
+      </Box>
     </Card>
   );
 }

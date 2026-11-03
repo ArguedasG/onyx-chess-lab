@@ -70,6 +70,8 @@ export const tabSchema = z.object({
     name: z.string(),
     value: z.string(),
     type: z.enum(["new", "play", "generator", "analysis", "puzzles", "training"]),
+    /** Books (phase 9.4): an analysis tab with a book open beside the board. */
+    book: z.object({ id: z.string(), path: z.string(), title: z.string() }).optional(),
     trainingPath: z
         .string()
         .regex(/^\/training(?:\/[^?#]*)?$/)

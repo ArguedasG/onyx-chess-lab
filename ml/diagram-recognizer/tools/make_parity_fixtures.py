@@ -20,9 +20,10 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from onyx_diagrams.detect import detect_boards  # noqa: E402
 from onyx_diagrams.locate import find_grid  # noqa: E402
 from onyx_diagrams.positions import sample_positions  # noqa: E402
 from onyx_diagrams.render import Sprites, render_print, render_screen  # noqa: E402
@@ -83,6 +84,28 @@ def main() -> None:
         )
         print(name, r.style, r.image.size, [round(v, 2) for v in grid], round(score, 3))
     (OUT / "boards.json").write_text(json.dumps(boards))
+
+    # Pages with several boards among lines of fake text, for the page detector.
+    pages = []
+    font = ImageFont.load_default(size=22)
+    for n in range(2):
+        page = Image.new("L", (1000, 1400), 250)
+        d = ImageDraw.Draw(page)
+        for y in range(40, 1380, 34):
+            words = " ".join("".join(chr(97 + int(c)) for c in rng.integers(0, 26, int(rng.integers(2, 9)))) for _ in range(9))
+            d.text((40, y), words, fill=30, font=font)
+        fens_page = sample_positions(a.db, 4, 500 + n)
+        for k, fen in enumerate(fens_page):
+            r = render_print(fen, rng, sprites, SETS)
+            board = r.image.resize((280, 280))
+            page.paste(Image.new("L", (300, 300), 250), (90 + (k % 2) * 460, 150 + (k // 2) * 560))
+            page.paste(board, (100 + (k % 2) * 460, 160 + (k // 2) * 560))
+        name = f"page-{n}.png"
+        page.save(OUT / name)
+        found = detect_boards(page)
+        pages.append({"file": name, "boards": [{"grid": list(box), "agreement": value} for box, value in found]})
+        print(name, len(found), [round(v, 3) for _, v in found])
+    (OUT / "pages.json").write_text(json.dumps(pages))
     assert SIZE == 48
 
 

@@ -1,12 +1,14 @@
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
-import { ActionIcon, ScrollArea, Tabs } from "@mantine/core";
+import { ActionIcon, Center, Loader, ScrollArea, Tabs } from "@mantine/core";
 import { useHotkeys } from "@mantine/hooks";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { IconPlus } from "@tabler/icons-react";
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   type ReactNode,
+  Suspense,
   createContext,
+  lazy,
   startTransition,
   useCallback,
   useContext,
@@ -402,7 +404,7 @@ export default function BoardsPage() {
   );
 }
 
-type ViewId = "left" | "right";
+type ViewId = "left" | "right" | "book";
 
 interface WindowsState {
   currentNode: MosaicNode<ViewId> | null;
@@ -423,8 +425,24 @@ function initialWindowsState(): WindowsState {
 
 const windowsStateAtom = atomWithStorage<WindowsState>("windowsState-v2", initialWindowsState());
 
+/** Book | board | right column, for analysis tabs with a book open (phase 9.4). */
+const bookWindowsStateAtom = atomWithStorage<WindowsState>("bookWindowsState-v1", {
+  currentNode: {
+    direction: "row",
+    first: "book",
+    second: { direction: "row", first: "left", second: "right", splitPercentage: 55 },
+    splitPercentage: 42,
+  },
+});
+
+// pdf.js and the reader load only when a book is opened.
+const BookReader = lazy(() => import("../books/BookReader"));
+
 function TabSwitch({ tab }: { tab: Tab }) {
-  const [windowsState, setWindowsState] = useAtom(windowsStateAtom);
+  const [plainWindowsState, setPlainWindowsState] = useAtom(windowsStateAtom);
+  const [bookWindowsState, setBookWindowsState] = useAtom(bookWindowsStateAtom);
+  const windowsState = tab.book ? bookWindowsState : plainWindowsState;
+  const setWindowsState = tab.book ? setBookWindowsState : setPlainWindowsState;
   const { pendingClose, cancelClose, closeTab } = useContext(TabCloseContext)!;
 
   if (tab.type === "training") return null;
@@ -438,6 +456,16 @@ function TabSwitch({ tab }: { tab: Tab }) {
         renderTile={(id) =>
           id === "left" ? (
             <div id="left" style={{ height: "100%" }} />
+          ) : id === "book" && tab.book ? (
+            <Suspense
+              fallback={
+                <Center h="100%">
+                  <Loader size="sm" />
+                </Center>
+              }
+            >
+              <BookReader book={tab.book} tabId={tab.value} />
+            </Suspense>
           ) : (
             <RightColumn layoutKey={layoutKey} />
           )

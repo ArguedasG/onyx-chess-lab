@@ -44,6 +44,7 @@ import {
   practiceStateAtom,
   tabsAtom,
 } from "@/state/atoms";
+import { diagramEditRequestAtom } from "@/state/diagramReading";
 import { keyMapAtom } from "@/state/keybinds";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { defaultPGN, getVariationLine, parsePGN } from "@/utils/chess";
@@ -88,6 +89,15 @@ function BoardAnalysis() {
   const boardRef = useRef(null);
 
   const store = useContext(TreeStateContext)!;
+  // A book diagram that needs review opens this tab's position editor; "use this position"
+  // closes it (phase 9.4).
+  const editRequest = useAtomValue(diagramEditRequestAtom);
+  const seenEditRequest = useRef(editRequest);
+  useEffect(() => {
+    if (editRequest === seenEditRequest.current) return;
+    seenEditRequest.current = editRequest;
+    if (editRequest?.store === store) toggleEditingMode(editRequest.open);
+  }, [editRequest, store, toggleEditingMode]);
 
   const dirty = useStore(store, (s) => s.dirty);
   const root = useStore(store, (s) => s.root);

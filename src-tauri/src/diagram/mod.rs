@@ -2,6 +2,7 @@
 //! with the bundled diagram-squares model and checks the result with chess rules. A reading is
 //! never presented as sure when a square is doubtful or the position breaks a rule.
 
+pub mod detect;
 pub mod locate;
 pub mod preprocess;
 pub mod recognizer;
@@ -67,6 +68,8 @@ pub struct BoardReading {
     pub doubtful: Vec<String>,
     /// Broken chess rules: `kings`, `pawnOnEdge`, `tooManyPawns`, `tooManyPieces`.
     pub problems: Vec<String>,
+    /// Side to move from a mark printed next to the board ("w" or "b"), if any.
+    pub turn_mark: Option<String>,
     pub model_version: String,
     pub elapsed_ms: u32,
 }
@@ -114,52 +117,53 @@ fn placement(board: &[char]) -> String {
         .join("/")
 }
 
-/// The whole pipeline on a decoded image.
-pub fn read_board(
-    recognizer: &Recognizer,
-    image: &image::DynamicImage,
-) -> Result<BoardReading, Error> {
-    let started = Instant::now();
-    let (image_width, image_height) = (image.width(), image.height());
+/// The image in gray, reduced if it is larger than `MAX_SIDE`, and the factor back to its pixels.
+fn prepare(image: &image::DynamicImage) -> (Gray, f64) {
     let full = to_gray(image);
-    let (gray, scale) = if full.width.max(full.height) > MAX_SIDE {
-        let s = MAX_SIDE as f64 / full.width.max(full.height) as f64;
-        let (w, h) = (
-            ((full.width as f64 * s).round() as usize).max(1),
-            ((full.height as f64 * s).round() as usize).max(1),
-        );
-        let reduced: Gray = resize_box(
-            &full,
-            [0.0, 0.0, full.width as f32, full.height as f32],
-            w,
-            h,
-        );
-        (reduced, full.width as f64 / w as f64)
-    } else {
-        (full, 1.0)
-    };
+    if full.width.max(full.height) <= MAX_SIDE {
+        return (full, 1.0);
+    }
+    let s = MAX_SIDE as f64 / full.width.max(full.height) as f64;
+    let (w, h) = (
+        ((full.width as f64 * s).round() as usize).max(1),
+        ((full.height as f64 * s).round() as usize).max(1),
+    );
+    let reduced = resize_box(
+        &full,
+        [0.0, 0.0, full.width as f32, full.height as f32],
+        w,
+        h,
+    );
+    (reduced, full.width as f64 / w as f64)
+}
 
-    let mut reading = BoardReading {
+fn empty_reading(recognizer: &Recognizer, image: &image::DynamicImage) -> BoardReading {
+    BoardReading {
         status: ReadingStatus::NoBoard,
         placement: None,
         flipped: false,
         grid: None,
-        image_width,
-        image_height,
+        image_width: image.width(),
+        image_height: image.height(),
         locate_score: 0.0,
         squares: Vec::new(),
         doubtful: Vec::new(),
         problems: Vec::new(),
+        turn_mark: None,
         model_version: recognizer.version.clone(),
         elapsed_ms: 0,
-    };
-    let located = locate::find_grid(&gray);
-    let Some(located) = located.filter(|l| l.score >= NO_BOARD_SCORE) else {
-        reading.elapsed_ms = started.elapsed().as_millis() as u32;
-        return Ok(reading);
-    };
+    }
+}
 
-    let squares = crop_squares(&gray, located.grid);
+/// Classifies the 64 squares of a grid already found and checks the position.
+fn read_grid(
+    recognizer: &Recognizer,
+    gray: &Gray,
+    grid: [f64; 4],
+    mut reading: BoardReading,
+    scale: f64,
+) -> Result<BoardReading, Error> {
+    let squares = crop_squares(gray, grid);
     let classified = recognizer.classify(&recognizer.logits(&squares)?);
     let labels: Vec<char> = classified.iter().map(|(s, _)| *s).collect();
     let flipped = looks_flipped(&labels);
@@ -194,10 +198,71 @@ pub fn read_board(
     };
     reading.placement = Some(placement(&board));
     reading.flipped = flipped;
-    reading.grid = Some(located.grid.map(|v| v * scale));
-    reading.locate_score = located.score;
+    // The mark is printed beside the board as the book shows it: with the board turned, top
+    // and bottom swap sides.
+    reading.turn_mark = detect::turn_mark(gray, grid).map(|side| {
+        let side = if flipped {
+            if side == 'w' {
+                'b'
+            } else {
+                'w'
+            }
+        } else {
+            side
+        };
+        side.to_string()
+    });
+    reading.grid = Some(grid.map(|v| v * scale));
+    Ok(reading)
+}
+
+/// The whole pipeline on a decoded image with one board (a diagram or a screenshot).
+pub fn read_board(
+    recognizer: &Recognizer,
+    image: &image::DynamicImage,
+) -> Result<BoardReading, Error> {
+    let started = Instant::now();
+    let (gray, scale) = prepare(image);
+    let reading = empty_reading(recognizer, image);
+    let located = locate::find_grid(&gray);
+    let mut reading = match located.filter(|l| l.score >= NO_BOARD_SCORE) {
+        Some(located) => {
+            let score = located.score;
+            let mut r = read_grid(recognizer, &gray, located.grid, reading, scale)?;
+            r.locate_score = score;
+            r
+        }
+        None => reading,
+    };
     reading.elapsed_ms = started.elapsed().as_millis() as u32;
     Ok(reading)
+}
+
+/// Every board found on a page image (scanned books, pages with many diagrams), best first.
+/// `locate_score` holds the detector's neighbour agreement (0.8–1).
+pub fn read_page(
+    recognizer: &Recognizer,
+    image: &image::DynamicImage,
+) -> Result<Vec<BoardReading>, Error> {
+    let started = Instant::now();
+    let (gray, scale) = prepare(image);
+    let mut out = Vec::new();
+    for found in detect::detect_boards(&gray) {
+        let mut reading = read_grid(
+            recognizer,
+            &gray,
+            found.grid,
+            empty_reading(recognizer, image),
+            scale,
+        )?;
+        reading.locate_score = found.agreement;
+        out.push(reading);
+    }
+    let elapsed = started.elapsed().as_millis() as u32;
+    for reading in out.iter_mut() {
+        reading.elapsed_ms = elapsed;
+    }
+    Ok(out)
 }
 
 async fn read_bytes(app: AppHandle, bytes: Vec<u8>) -> Result<BoardReading, Error> {
@@ -205,6 +270,25 @@ async fn read_bytes(app: AppHandle, bytes: Vec<u8>) -> Result<BoardReading, Erro
         let image = image::load_from_memory(&bytes)
             .map_err(|e| Error::InvalidRequest(format!("image: {e}")))?;
         read_board(&*recognizer(&app)?, &image)
+    })
+    .await
+    .map_err(|e| Error::InvalidRequest(format!("diagram reader: {e}")))?
+}
+
+/// Reads every board on a page image given as base64 (a page of a book).
+#[tauri::command]
+#[specta::specta]
+pub async fn detect_board_images(
+    app: AppHandle,
+    data_base64: String,
+) -> Result<Vec<BoardReading>, Error> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.trim())
+        .map_err(|e| Error::InvalidRequest(format!("image: {e}")))?;
+    tokio::task::spawn_blocking(move || {
+        let image = image::load_from_memory(&bytes)
+            .map_err(|e| Error::InvalidRequest(format!("image: {e}")))?;
+        read_page(&*recognizer(&app)?, &image)
     })
     .await
     .map_err(|e| Error::InvalidRequest(format!("diagram reader: {e}")))?

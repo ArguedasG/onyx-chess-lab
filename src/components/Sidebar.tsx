@@ -23,6 +23,7 @@ import {
   IconSettings,
   IconTarget,
   IconTrophy,
+  IconBook,
   IconNotebook,
   IconUser,
   IconUsersGroup,
@@ -170,6 +171,12 @@ export function SideBar() {
             icon={IconNotebook}
             label={t("SideBar.Studies", "Studies")}
             url="/studies"
+            expanded={expanded}
+          />
+          <NavbarLink
+            icon={IconBook}
+            label={t("SideBar.Books", "Books")}
+            url="/books"
             expanded={expanded}
           />
           <NavbarLink

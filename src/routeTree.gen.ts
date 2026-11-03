@@ -16,6 +16,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PlayersRouteImport } from './routes/players'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as EnginesRouteImport } from './routes/engines'
+import { Route as BooksRouteImport } from './routes/books'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TrainingIndexRouteImport } from './routes/training/index'
@@ -66,6 +67,11 @@ const FilesRoute = FilesRouteImport.update({
 const EnginesRoute = EnginesRouteImport.update({
   id: '/engines',
   path: '/engines',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BooksRoute = BooksRouteImport.update({
+  id: '/books',
+  path: '/books',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountsRoute = AccountsRouteImport.update({
@@ -156,6 +162,7 @@ const TrainingOpeningsRepertoireIdVariantIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/books': typeof BooksRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
   '/players': typeof PlayersRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/books': typeof BooksRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
   '/players': typeof PlayersRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/books': typeof BooksRoute
   '/engines': typeof EnginesRoute
   '/files': typeof FilesRoute
   '/players': typeof PlayersRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/accounts'
+    | '/books'
     | '/engines'
     | '/files'
     | '/players'
@@ -255,6 +265,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accounts'
+    | '/books'
     | '/engines'
     | '/files'
     | '/players'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/accounts'
+    | '/books'
     | '/engines'
     | '/files'
     | '/players'
@@ -302,6 +314,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountsRoute: typeof AccountsRoute
+  BooksRoute: typeof BooksRoute
   EnginesRoute: typeof EnginesRoute
   FilesRoute: typeof FilesRoute
   PlayersRoute: typeof PlayersRoute
@@ -362,6 +375,13 @@ declare module '@tanstack/react-router' {
       path: '/engines'
       fullPath: '/engines'
       preLoaderRoute: typeof EnginesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/books': {
+      id: '/books'
+      path: '/books'
+      fullPath: '/books'
+      preLoaderRoute: typeof BooksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accounts': {
@@ -550,6 +570,7 @@ const TrainingRouteWithChildren = TrainingRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
+  BooksRoute: BooksRoute,
   EnginesRoute: EnginesRoute,
   FilesRoute: FilesRoute,
   PlayersRoute: PlayersRoute,

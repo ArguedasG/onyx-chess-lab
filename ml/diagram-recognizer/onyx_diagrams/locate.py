@@ -85,7 +85,15 @@ def find_grid(image: Image.Image) -> tuple[tuple[float, float, float, float], fl
     # Fine pass at full resolution: position ± one coarse pixel, each side ± 2 coarse pixels.
     _, y0, x0, side = best
     I = _integral(dark)
-    fy, fx, fside = y0 / s, x0 / s, side / s
+    (gx, gy, sx, sy), score = refine(I, h, w, x0 / s, y0 / s, side / s, s)
+    return (gx, gy, gx + sx, gy + sy), score / spread
+
+
+def refine(
+    I: np.ndarray, h: int, w: int, fx: float, fy: float, fside: float, s: float
+) -> tuple[tuple[float, float, float, float], float]:
+    """Best grid near (fx, fy, fside) at full resolution: position ± 1/s + 1 px, side ± 2/s px and
+    height within ±3 % of the width. Returns (x, y, width, height) and the raw contrast."""
     r = int(np.ceil(1 / s)) + 1
     best_full = (-np.inf, 0.0, 0.0, 0.0, 0.0)
     for sx in np.arange(fside - 2 / s, fside + 2 / s + 1):
@@ -100,4 +108,4 @@ def find_grid(image: Image.Image) -> tuple[tuple[float, float, float, float], fl
                 yi, xi = divmod(k, c.shape[1])
                 best_full = (float(c.flat[k]), float(xs[0, xi]), float(ys[yi, 0]), float(sx), float(sy))
     score, gx, gy, sx, sy = best_full
-    return (gx, gy, gx + sx, gy + sy), score / spread
+    return (gx, gy, sx, sy), score

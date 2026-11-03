@@ -155,8 +155,8 @@ pub fn resize_box(image: &Gray, box_: [f32; 4], out_w: usize, out_h: usize) -> G
         let k = &vert.weights[yy * vert.ksize..];
         for xx in 0..out_w {
             let mut ss: i64 = 1 << (PRECISION_BITS - 1);
-            for y in 0..count {
-                ss += temp.pixels[(y + ymin) * temp.width + xx] as i64 * k[y] as i64;
+            for (y, &weight) in k.iter().enumerate().take(count) {
+                ss += temp.pixels[(y + ymin) * temp.width + xx] as i64 * weight as i64;
             }
             out[yy * out_w + xx] = clip8(ss);
         }

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type BoardReading, commands } from "@/bindings";
 import { diagramDoubtsAtom } from "@/state/diagramReading";
+import { diagramFen, doubtMarks, flipPlacement, legalTurn } from "@/utils/diagramFen";
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "gif"];
 const IMAGE_PATH = new RegExp(`\\.(${IMAGE_EXTENSIONS.join("|")})$`, "i");
@@ -20,34 +21,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
-}
-
-/** The same board seen from the other side: placement reversed, squares mirrored. */
-function flipPlacement(placement: string): string {
-  return placement
-    .split("/")
-    .reverse()
-    .map((rank) => [...rank].reverse().join(""))
-    .join("/");
-}
-
-function flipSquare(square: string): string {
-  const file = String.fromCharCode("a".charCodeAt(0) + "h".charCodeAt(0) - square.charCodeAt(0));
-  return `${file}${9 - Number(square[1])}`;
-}
-
-/** Castling rights a diagram allows: king and rook still on their starting squares. */
-function inferCastling(placement: string): string {
-  const ranks = placement
-    .split("/")
-    .map((rank) => rank.replace(/\d/g, (n) => ".".repeat(Number(n))));
-  const at = (square: string) => ranks[8 - Number(square[1])]?.[square.charCodeAt(0) - 97];
-  let rights = "";
-  if (at("e1") === "K" && at("h1") === "R") rights += "K";
-  if (at("e1") === "K" && at("a1") === "R") rights += "Q";
-  if (at("e8") === "k" && at("h8") === "r") rights += "k";
-  if (at("e8") === "k" && at("a8") === "r") rights += "q";
-  return rights || "-";
 }
 
 type Source = { preview: string | null; label: string };
@@ -76,17 +49,11 @@ function ImageReader({
       }
       const placement = flip ? flipPlacement(result.placement) : result.placement;
       const turn = parseFen(currentFen).unwrap(
-        (setup) => (setup.turn === "white" ? "w" : "b"),
-        () => "w",
+        (setup): "w" | "b" => (setup.turn === "white" ? "w" : "b"),
+        (): "w" | "b" => "w",
       );
-      onRead(`${placement} ${turn} ${inferCastling(placement)} - 0 1`);
-      const doubts: Record<string, string | null> = {};
-      for (const square of result.squares) {
-        if (result.doubtful.includes(square.square)) {
-          doubts[flip ? flipSquare(square.square) : square.square] = square.piece;
-        }
-      }
-      setDoubts(Object.keys(doubts).length > 0 ? doubts : null);
+      onRead(legalTurn(diagramFen(placement, turn, null)).fen);
+      setDoubts(doubtMarks(result.squares, result.doubtful, flip));
     },
     [currentFen, onRead, setDoubts],
   );
@@ -261,7 +228,7 @@ function ImageReader({
               </Text>
             )}
             {source?.preview && (
-              <Box pos="relative" maw={220}>
+              <Box pos="relative" maw={200} style={{ alignSelf: "flex-start" }}>
                 <Image src={source.preview} alt={source.label} radius="xs" />
                 {grid && (
                   <Box

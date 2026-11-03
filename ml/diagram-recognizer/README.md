@@ -35,6 +35,8 @@ py -3.11 -m venv .venv
 | `tools/export.py`                  | ONNX, manifiesto y referencia de paridad                                    |
 | `tools/extract_diagrams.mjs`       | Extrae los diagramas de los libros del autor (evaluación privada)           |
 | `tools/eval_books.py`              | Evaluación privada en los libros, con galerías                              |
+| `tools/eval_turns.mjs`             | Evaluación privada del turno leído del texto (Libros, paso 4)               |
+| `tools/make_parity_fixtures.py`    | Fixtures de paridad para las pruebas de Rust (`src-tauri/fixtures/diagram`) |
 | `tools/export_probe.py`            | Paso 1: red sin entrenar para medir runtimes                                |
 | `runtime-bench/`                   | Paso 1: banco en Rust de `rten` y `tract` (no entra en la app)              |
 | `models/<versión>/`                | Modelos publicados: ONNX, manifiesto, paridad y métricas                    |

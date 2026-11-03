@@ -7,6 +7,7 @@
 mod analysis_benchmark;
 mod analysis_cache;
 mod analysis_library;
+mod books;
 mod bot_candidates;
 mod bot_league;
 mod bot_strength;
@@ -307,7 +308,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             get_lichess_token,
             delete_lichess_token,
             diagram::recognize_board_image,
-            diagram::recognize_board_image_file
+            diagram::recognize_board_image_file,
+            diagram::detect_board_images,
+            books::book_fingerprint
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,

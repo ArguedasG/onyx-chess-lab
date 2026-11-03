@@ -210,3 +210,79 @@ fn private_books() {
         times[times.len() - 1]
     );
 }
+
+#[derive(Deserialize)]
+struct PageBoard {
+    grid: [f64; 4],
+    agreement: f64,
+}
+
+#[derive(Deserialize)]
+struct Page {
+    file: String,
+    boards: Vec<PageBoard>,
+}
+
+fn same_detections(dir: &std::path::Path, pages: Vec<Page>) {
+    for page in pages {
+        let gray = to_gray(&image::open(dir.join(&page.file)).unwrap());
+        let found = super::detect::detect_boards(&gray);
+        assert_eq!(
+            found.len(),
+            page.boards.len(),
+            "{}: number of boards",
+            page.file
+        );
+        for (a, b) in found.iter().zip(&page.boards) {
+            assert!(
+                (a.agreement - b.agreement).abs() < 1e-12,
+                "{}: agreement",
+                page.file
+            );
+            for (x, y) in a.grid.iter().zip(b.grid) {
+                assert!(
+                    (x - y).abs() < 1e-9,
+                    "{}: grid {:?} vs {:?}",
+                    page.file,
+                    a.grid,
+                    b.grid
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn page_detector_matches_python() {
+    let pages: Vec<Page> =
+        serde_json::from_slice(&std::fs::read(fixtures().join("pages.json")).unwrap()).unwrap();
+    same_detections(&fixtures(), pages);
+}
+
+/// Detector parity on rendered pages of the author's books (private).
+/// `ONYX_DIAGRAM_EVAL=<ml/diagram-recognizer/private-eval> cargo test --release -- --ignored private_pages`
+#[test]
+#[ignore = "needs the author's private evaluation set"]
+fn private_pages() {
+    let Ok(dir) = std::env::var("ONYX_DIAGRAM_EVAL") else {
+        return;
+    };
+    let dir = PathBuf::from(dir).join("pages");
+    let pages: Vec<Page> =
+        serde_json::from_slice(&std::fs::read(dir.join("detections.json")).unwrap()).unwrap();
+    for page in &pages {
+        let gray = to_gray(&image::open(dir.join(&page.file)).unwrap());
+        let marks: String = super::detect::detect_boards(&gray)
+            .iter()
+            .map(|d| super::detect::turn_mark(&gray, d.grid).unwrap_or('-'))
+            .collect();
+        println!("{}: turn marks {marks}", page.file);
+    }
+    let started = std::time::Instant::now();
+    let n = pages.len();
+    same_detections(&dir, pages);
+    println!(
+        "{n} pages, {:.0} ms per page",
+        started.elapsed().as_secs_f64() * 1000.0 / n as f64
+    );
+}

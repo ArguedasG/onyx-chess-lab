@@ -1045,6 +1045,28 @@ async recognizeBoardImageFile(path: string) : Promise<Result<BoardReading, strin
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Reads every board on a page image given as base64 (a page of a book).
+ */
+async detectBoardImages(dataBase64: string) : Promise<Result<BoardReading[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("detect_board_images", { dataBase64 }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * SHA-256 and size of a book file, read in 1 MB blocks off the UI thread.
+ */
+async bookFingerprint(path: string) : Promise<Result<BookFingerprint, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("book_fingerprint", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1142,7 +1164,16 @@ doubtful: string[];
 /**
  * Broken chess rules: `kings`, `pawnOnEdge`, `tooManyPawns`, `tooManyPieces`.
  */
-problems: string[]; modelVersion: string; elapsedMs: number }
+problems: string[]; 
+/**
+ * Side to move from a mark printed next to the board ("w" or "b"), if any.
+ */
+turnMark: string | null; modelVersion: string; elapsedMs: number }
+export type BookFingerprint = { sha256: string; 
+/**
+ * File size in bytes (f64 so the frontend gets a plain number).
+ */
+size: number }
 export type BookLine = { moves: string[]; games: number }
 export type BotLeagueConfig = { ownerId: string; players: BotLeaguePlayer[]; gamesPerPair: number; alternateColors: boolean; baseSeed: number; seedStep: number; requestedConcurrency: number; maxCpuThreads: number; maxMemoryMb: number; maxRetries: number; timeControl: TimeControl | null; openingBook: OpeningBookConfig | null }
 export type BotLeagueDetail = { summary: BotLeagueSummary; config: BotLeagueConfig; results: BotLeagueGameResult[]; standings: BotLeagueStanding[] }

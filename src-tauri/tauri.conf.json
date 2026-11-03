@@ -91,7 +91,8 @@
       },
       "csp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost https://app.posthog.com",
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost https://app.posthog.com",
+        "script-src": "'self' customprotocol: asset: 'wasm-unsafe-eval'",
         "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost blob: data:",
         "media-src": "'self' asset: http://asset.localhost http://127.0.0.1:* blob: data:",
@@ -102,7 +103,8 @@
       },
       "devCsp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost ws://localhost:* http://localhost:* https://app.posthog.com",
+        "connect-src": "ipc: http://ipc.localhost ws://localhost:* http://localhost:* asset: http://asset.localhost https://app.posthog.com",
+        "script-src": "'self' customprotocol: asset: 'wasm-unsafe-eval'",
         "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost blob: data:",
         "media-src": "'self' asset: http://asset.localhost http://127.0.0.1:* blob: data:",
