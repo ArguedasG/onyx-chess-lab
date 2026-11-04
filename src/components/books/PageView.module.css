@@ -100,3 +100,18 @@
   border-radius: 3px;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--mantine-color-blue-5) 25%, transparent);
 }
+
+/* The move of the book's text the board is on (or, in red, the one that could not be played). */
+.moveMark {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mantine-color-yellow-4) 45%, transparent);
+  box-shadow: 0 2px 0 0 var(--mantine-color-yellow-7);
+}
+
+.moveMark[data-failed] {
+  background: color-mix(in srgb, var(--mantine-color-red-4) 35%, transparent);
+  box-shadow: 0 2px 0 0 var(--mantine-color-red-7);
+}

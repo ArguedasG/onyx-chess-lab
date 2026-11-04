@@ -30,6 +30,8 @@ export type DiagramBarState = {
   canSave: boolean;
   needsReview: boolean;
   ms: number;
+  /** A line of the book's text: no side to move or move number to edit. */
+  compact?: boolean;
 };
 
 /**
@@ -125,49 +127,51 @@ export default function DiagramBar({
                 </Tooltip>
               </Group>
             </Group>
-            <Group gap="sm" mt={6} wrap="wrap">
-              <Group gap={6} wrap="nowrap">
-                <Text size="xs" c="dimmed">
-                  {t("Books.Bar.ToMove")}
-                </Text>
-                <SegmentedControl
-                  size="xs"
-                  value={turn}
-                  onChange={(value) => onTurn(value as "w" | "b")}
-                  data={[
-                    { value: "w", label: t("Books.Bar.White") },
-                    { value: "b", label: t("Books.Bar.Black") },
-                  ]}
-                />
+            {!state.compact && (
+              <Group gap="sm" mt={6} wrap="wrap">
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed">
+                    {t("Books.Bar.ToMove")}
+                  </Text>
+                  <SegmentedControl
+                    size="xs"
+                    value={turn}
+                    onChange={(value) => onTurn(value as "w" | "b")}
+                    data={[
+                      { value: "w", label: t("Books.Bar.White") },
+                      { value: "b", label: t("Books.Bar.Black") },
+                    ]}
+                  />
+                </Group>
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed">
+                    {t("Books.Bar.Move")}
+                  </Text>
+                  <NumberInput
+                    size="xs"
+                    w={58}
+                    min={1}
+                    max={999}
+                    value={fullmove}
+                    hideControls
+                    onChange={(value) => {
+                      const n = Number(value);
+                      if (Number.isInteger(n) && n >= 1) onFullmove(n);
+                    }}
+                  />
+                </Group>
+                {state.needsReview && (
+                  <Button
+                    size="compact-sm"
+                    leftSection={<IconCheck size="0.9rem" />}
+                    onClick={onUse}
+                    ml="auto"
+                  >
+                    {t("Books.Result.Use")}
+                  </Button>
+                )}
               </Group>
-              <Group gap={6} wrap="nowrap">
-                <Text size="xs" c="dimmed">
-                  {t("Books.Bar.Move")}
-                </Text>
-                <NumberInput
-                  size="xs"
-                  w={58}
-                  min={1}
-                  max={999}
-                  value={fullmove}
-                  hideControls
-                  onChange={(value) => {
-                    const n = Number(value);
-                    if (Number.isInteger(n) && n >= 1) onFullmove(n);
-                  }}
-                />
-              </Group>
-              {state.needsReview && (
-                <Button
-                  size="compact-sm"
-                  leftSection={<IconCheck size="0.9rem" />}
-                  onClick={onUse}
-                  ml="auto"
-                >
-                  {t("Books.Result.Use")}
-                </Button>
-              )}
-            </Group>
+            )}
             {(state.turnNote || state.problems || state.learnedNote) && (
               <Text size="xs" c="dimmed" mt={4} lineClamp={2}>
                 {[

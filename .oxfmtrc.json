@@ -4,6 +4,7 @@
     "public/**/*",
     "src-tauri/**/*",
     ".github/**/*",
+    "ml/diagram-recognizer/models/**/*",
     "src/bindings/generated.ts",
     "src/routeTree.gen.ts"
   ]

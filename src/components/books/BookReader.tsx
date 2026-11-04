@@ -48,7 +48,9 @@ import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { BOOK_DIAGRAM_BAR_ID } from "@/components/tabs/BookStudyColumn";
 import { tabsAtom } from "@/state/atoms";
 import { diagramDoubtsAtom, diagramEditRequestAtom } from "@/state/diagramReading";
-import { type MoveContext, moveContext } from "@/utils/bookText";
+import { INITIAL_FEN } from "chessops/fen";
+import { type Line, openLine, plyOfFen } from "@/utils/bookGame";
+import { type MoveContext, moveContext, type TextRun } from "@/utils/bookText";
 import {
   type BookNotes,
   type DiagramCorrection,
@@ -74,7 +76,8 @@ import {
   textRuns,
 } from "./diagram";
 import DiagramBar, { type DiagramBarState } from "./DiagramBar";
-import PageView, { type Detection } from "./PageView";
+import { moveAt, type TextWindow, textWindow, tokenBox } from "./bookLine";
+import PageView, { type Detection, type MoveMark } from "./PageView";
 import { openPdf, type PdfDocument, type PdfPage } from "./pdf";
 
 const GAP = 10;
@@ -146,6 +149,15 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
   const [forgetOpen, setForgetOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  // A line of the book's text opened on the board («Abrir esta partida»).
+  const [line, setLine] = useState<{
+    line: Line;
+    window: TextWindow;
+    page: number;
+    ms: number;
+  } | null>(null);
+  const position = useStore(store, (s) => s.position);
+  const runsCache = useRef(new Map<number, TextRun[]>());
   const [readError, setReadError] = useState<string | null>(null);
   const [scanned, setScanned] = useState<Map<number, Detection[]>>(new Map());
   const [scanning, setScanning] = useState(false);
@@ -453,6 +465,7 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
     async (page: PdfPage, box: PdfBox, reading: BoardReading | null, started: number) => {
       const correction = notes ? findCorrection(notes, page.pageNumber, box) : null;
       if (!correction) reading = await adaptReading(reading);
+      setLine(null);
       const context = moveContext(await textRuns(page), box);
       setResult(
         apply({
@@ -511,6 +524,92 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
       }
       await finish(page, hit.box, hit.reading, started);
     });
+
+  const pageRuns = async (n: number): Promise<TextRun[]> => {
+    const cached = runsCache.current.get(n);
+    if (cached || !doc) return cached ?? [];
+    const runs = await textRuns(await doc.getPage(n));
+    runsCache.current.set(n, runs);
+    return runs;
+  };
+
+  /**
+   * Where a line of the text may start, most likely first: the diagrams above the move on its
+   * page (nearest first), the board as it is, the diagrams of the page before, and the initial
+   * position. The first one from which the line is legal wins.
+   */
+  const lineStarts = async (n: number, y: number): Promise<string[]> => {
+    const out: string[] = [];
+    const push = (fen: string | null) => fen && !out.includes(fen) && out.push(fen);
+    const fenOf = async (p: number, d: Detection): Promise<string | null> => {
+      const correction = notes ? findCorrection(notes, p, d.box) : null;
+      if (correction) return correction.fen;
+      const reading = await adaptReading(d.reading);
+      if (!reading?.placement) return null;
+      const context = moveContext(await pageRuns(p), d.box);
+      if (!context.turn || !context.fullmove) return null;
+      return legalTurn(diagramFen(reading.placement, context.turn, context.fullmove)).fen;
+    };
+    const bottomUp = (a: Detection, b: Detection) => a.box[1] - b.box[1];
+    const here = (await scanPage(n)).filter((d) => d.box[1] >= y - 2).sort(bottomUp);
+    for (const d of here) push(await fenOf(n, d));
+    push(store.getState().root.fen);
+    if (n > 1)
+      for (const d of [...(await scanPage(n - 1))].sort(bottomUp)) push(await fenOf(n - 1, d));
+    push(INITIAL_FEN);
+    return out;
+  };
+
+  /**
+   * A double click on the text: when it is on a move, the line of the book up to that move goes
+   * to the board (the rest of the line after it too). A move that cannot be played is marked on
+   * the page and the board stays on the one before; anything else does nothing.
+   */
+  const openMoveAt = async (page: PdfPage, x: number, y: number) => {
+    if (!doc || busy) return;
+    const started = performance.now();
+    const n = page.pageNumber;
+    const numbers = [n - 1, n, n + 1].filter((p) => p >= 1 && p <= doc.numPages);
+    const w = textWindow(
+      await Promise.all(numbers.map(async (p) => ({ page: p, runs: await pageRuns(p) }))),
+    );
+    const at = moveAt(w, n, x, y);
+    if (at === null) return;
+    window.getSelection()?.removeAllRanges();
+    await run(t("Books.Line.Opening"), async () => {
+      const opened = openLine(w.tokens, at, await lineStarts(n, y));
+      if (!opened) {
+        setReadError(t("Books.Line.NotFound"));
+        return;
+      }
+      const s = store.getState();
+      s.setFen(opened.fen);
+      if (opened.moves.length > 0)
+        s.makeMoves({ payload: opened.moves.map((m) => m.san), mainline: true });
+      const upTo = opened.clicked >= 0 ? opened.clicked : opened.moves.length - 1;
+      s.goToMove(Array(upTo + 1).fill(0));
+      setResult(null);
+      setDoubts(null);
+      setEditRequest((previous) => ({ store, count: (previous?.count ?? 0) + 1, open: false }));
+      setLine({ line: opened, window: w, page: n, ms: Math.round(performance.now() - started) });
+    });
+  };
+
+  /** The marks of the line on the pages: the board's move, and the move that failed. */
+  const lineMarks = useMemo(() => {
+    const out = new Map<number, MoveMark[]>();
+    if (!line) return out;
+    const add = (token: number, failed: boolean) => {
+      const at = tokenBox(line.window, token);
+      if (at) out.set(at.page, [...(out.get(at.page) ?? []), { box: at.box, failed }]);
+    };
+    const sameRoot =
+      rootFen.split(" ").slice(0, 4).join(" ") === line.line.fen.split(" ").slice(0, 4).join(" ");
+    const index = sameRoot && position.every((p) => p === 0) ? position.length - 1 : -1;
+    if (index >= 0 && index < line.line.moves.length) add(line.line.moves[index].token, false);
+    if (line.line.failure) add(line.line.failure.token, true);
+    return out;
+  }, [line, rootFen, position]);
 
   const pick = (page: PdfPage, detection: Detection) =>
     run(t("Board.ImageReader.Reading"), () =>
@@ -669,6 +768,52 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
         needsReview: result.needsReview,
       }
     : null;
+
+  const lineBar: DiagramBarState | null = line
+    ? (() => {
+        const { line: l, window: w } = line;
+        const fromPly = plyOfFen(l.fen) ?? 0;
+        const label = (i: number) => {
+          const ply = fromPly + i;
+          return `${Math.floor(ply / 2) + 1}${ply % 2 ? "…" : "."}${l.moves[i].san}`;
+        };
+        const failed = l.failure
+          ? w.text.slice(w.tokens[l.failure.token].start, w.tokens[l.failure.token].end)
+          : "";
+        const notes = [
+          l.clicked >= 0 && l.failure ? t("Books.Line.EndsAt", { move: failed }) : null,
+          l.moves.some((m) => m.fuzzy) ? t("Books.Line.Fuzzy") : null,
+        ].filter(Boolean);
+        return {
+          page: line.page,
+          ms: line.ms,
+          status:
+            l.clicked >= 0
+              ? {
+                  color: "green",
+                  text: t("Books.Line.Opened", { move: label(l.clicked), count: l.moves.length }),
+                }
+              : { color: "orange", text: t("Books.Line.Stopped", { move: failed }) },
+          learnedNote: null,
+          turnNote: notes.length > 0 ? notes.join(" · ") : null,
+          problems: false,
+          canFlip: false,
+          canSave: false,
+          needsReview: false,
+          compact: true,
+        };
+      })()
+    : null;
+
+  /** The page and box of the move the board is on (or the clicked one), to scroll to it. */
+  const lineAnchor = () => {
+    if (!line) return null;
+    for (const [page, marks] of lineMarks) {
+      const mark = marks.find((m) => !m.failed) ?? marks[0];
+      if (mark) return { page, box: mark.box };
+    }
+    return null;
+  };
 
   const zoomPercent = Math.round((scale / ACTUAL_SIZE) * 100);
   const fitPageZoom =
@@ -875,7 +1020,10 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
                       selectable={prefs.tool === "select"}
                       highlight={result && result.page === n ? result.box : null}
                       detections={prefs.diagrams ? marks.get(n) : undefined}
-                      onDoubleClick={(page, x, y) => void readAt(page, x, y)}
+                      moveMarks={lineMarks.get(n)}
+                      onDoubleClick={(page, x, y, onText) =>
+                        void (onText ? openMoveAt(page, x, y) : readAt(page, x, y))
+                      }
                       onPick={(page, detection) => void pick(page, detection)}
                     />
                   </div>
@@ -886,11 +1034,11 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
       </Box>
 
       <Portal target={`#${BOOK_DIAGRAM_BAR_ID}`}>
-        {busy || readError || barState ? (
+        {busy || readError || lineBar || barState ? (
           <DiagramBar
             busy={busy}
             error={readError}
-            state={barState}
+            state={lineBar ?? barState}
             turn={turn}
             fullmove={fullmove}
             onTurn={(value) => editFen(1, value)}
@@ -898,10 +1046,15 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
             onUse={usePosition}
             onFlip={flip}
             onSave={() => void save()}
-            onGoTo={() => result && reveal(result.page, result.box)}
+            onGoTo={() => {
+              const at = lineAnchor();
+              if (at) reveal(at.page, at.box);
+              else if (result) reveal(result.page, result.box);
+            }}
             onDismiss={() => {
               setReadError(null);
               setResult(null);
+              setLine(null);
             }}
           />
         ) : (

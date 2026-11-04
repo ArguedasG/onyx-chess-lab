@@ -39,6 +39,8 @@ py -3.11 -m venv .venv
 | `tools/label_books.py`             | Etiquetado local de los diagramas privados (página en 127.0.0.1)            |
 | `tools/eval_labels.py`             | Mide los informes de `eval_books.py` contra esas etiquetas                  |
 | `tools/sim_adapt.py`               | Simula la adaptación por libro sobre las etiquetas (y fija su regla)        |
+| `tools/sample_notation.mjs`        | Vuelca muestras de la capa de texto de los libros (cómo sale la notación)   |
+| `tools/eval_lines.mjs`             | Evaluación privada de «Abrir esta partida» desde los diagramas etiquetados  |
 | `tools/make_parity_fixtures.py`    | Fixtures de paridad para las pruebas de Rust (`src-tauri/fixtures/diagram`) |
 | `tools/export_probe.py`            | Paso 1: red sin entrenar para medir runtimes                                |
 | `runtime-bench/`                   | Paso 1: banco en Rust de `rten` y `tract` (no entra en la app)              |

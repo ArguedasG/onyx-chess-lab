@@ -8,6 +8,9 @@ import classes from "./PageView.module.css";
 /** A board found on a page, with its box in PDF units. */
 export type Detection = { box: PdfBox; reading: BoardReading; corrected?: boolean };
 
+/** A move of the book's text marked on the page: the board's move, or the one that failed. */
+export type MoveMark = { box: PdfBox; failed: boolean };
+
 export function markColor(detection: Detection): string {
   if (detection.corrected) return "var(--mantine-color-blue-6)";
   return detection.reading.status === "accepted"
@@ -27,6 +30,7 @@ function PageView({
   selectable,
   highlight,
   detections,
+  moveMarks,
   onDoubleClick,
   onPick,
 }: {
@@ -36,7 +40,9 @@ function PageView({
   selectable: boolean;
   highlight: PdfBox | null;
   detections: Detection[] | undefined;
-  onDoubleClick: (page: PdfPage, x: number, y: number) => void;
+  moveMarks: MoveMark[] | undefined;
+  /** `onText`: the double click was on the text layer (a word, maybe a move). */
+  onDoubleClick: (page: PdfPage, x: number, y: number, onText: boolean) => void;
   onPick: (page: PdfPage, detection: Detection) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -103,11 +109,11 @@ function PageView({
       style={{ height: "100%", "--total-scale-factor": scale } as React.CSSProperties}
       onDoubleClick={(event) => {
         if (!page || !viewport) return;
-        // A double click on a word selects it; only blank areas and pictures read diagrams.
-        if ((event.target as HTMLElement).closest(".textLayer span")) return;
+        // On a word it may be a move of the text («Abrir esta partida»); elsewhere, a diagram.
+        const onText = !!(event.target as HTMLElement).closest(".textLayer span");
         const r = event.currentTarget.getBoundingClientRect();
         const [x, y] = viewport.convertToPdfPoint(event.clientX - r.left, event.clientY - r.top);
-        onDoubleClick(page, x, y);
+        onDoubleClick(page, x, y, onText);
       }}
     >
       <canvas ref={canvasRef} className={classes.canvas} />
@@ -129,6 +135,15 @@ function PageView({
           />
         ))}
       {viewport && highlight && <div className={classes.highlight} style={rect(highlight)} />}
+      {viewport &&
+        moveMarks?.map((mark, i) => (
+          <div
+            key={`m${i}`}
+            className={classes.moveMark}
+            data-failed={mark.failed || undefined}
+            style={rect(mark.box)}
+          />
+        ))}
     </div>
   );
 }
