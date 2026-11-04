@@ -119,29 +119,106 @@ def _font(px: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=max(6, px))
 
 
-def _dark_pattern(rng: np.random.Generator, paper: int, ink: int) -> Image.Image:
-    """Grayscale fill for the dark squares, as large as the board."""
-    kind = rng.choice(["hatch", "hatch", "hatch", "flat", "dots", "cross"])
-    if kind == "flat":
-        return Image.new("L", (BOARD, BOARD), int(rng.integers(120, 215)))
+# Dark-square fills of the printed style. Hatching is what most books use; "broken" is hatching
+# printed faint or scanned with dropouts (only fragments of the lines are left), and the textures
+# (stipple, marble, wood) are the grain of boards drawn by ChessBase-like programs and printed.
+DARK_KINDS = {"hatch": 4, "flat": 1, "dots": 0.6, "cross": 0.6, "broken": 2, "stipple": 0.8, "marble": 0.6, "wood": 0.5}
+# Textures that often cover the light squares too (more faintly).
+TEXTURED = {"stipple", "marble", "wood"}
+
+
+def _fractal(rng: np.random.Generator, base: int, octaves: int = 4) -> np.ndarray:
+    """Smooth value noise in 0–1 over the board: random grids of base × base cells and finer,
+    upsampled and summed with halving weights."""
+    acc = np.zeros((BOARD, BOARD), np.float32)
+    amp, total = 1.0, 0.0
+    for o in range(octaves):
+        n = int(base * 2**o)
+        cells = Image.fromarray((rng.random((n, n)) * 255).astype(np.uint8))
+        acc += amp * np.asarray(cells.resize((BOARD, BOARD), Image.Resampling.BICUBIC), np.float32) / 255
+        total += amp
+        amp *= 0.5
+    acc /= total
+    return (acc - acc.min()) / max(1e-6, float(acc.max() - acc.min()))
+
+
+def _hatch(rng: np.random.Generator, paper: int, ink: int, cross: bool) -> Image.Image:
     im = Image.new("L", (BOARD, BOARD), paper)
     d = ImageDraw.Draw(im)
     spacing = HI / rng.uniform(6, 15)
     width = max(1, int(round(spacing * rng.uniform(0.18, 0.45))))
-    if kind == "dots":
-        r = spacing * rng.uniform(0.15, 0.3)
-        for y in np.arange(0, BOARD, spacing):
-            for x in np.arange((y / spacing % 2) * spacing / 2, BOARD, spacing):
-                d.ellipse((x - r, y - r, x + r, y + r), fill=ink)
-        return im
-    angles = [rng.choice([45, 135])] if kind == "hatch" else [45, 135]
-    for angle in angles:
+    for angle in [45, 135] if cross else [rng.choice([45, 135])]:
         for k in np.arange(-BOARD, 2 * BOARD, spacing):
             if angle == 45:
                 d.line((k, 0, k + BOARD, BOARD), fill=ink, width=width)
             else:
                 d.line((k, BOARD, k + BOARD, 0), fill=ink, width=width)
     return im
+
+
+def _texture(kind: str, rng: np.random.Generator) -> np.ndarray:
+    """A grain in 0–1 (1 = darkest) for the stipple, marble and wood kinds."""
+    if kind == "stipple":
+        # Random dots (mezzotint, or a dithered gray): density sets the tone.
+        dot = int(rng.integers(1, 4))
+        n = BOARD // dot + 1
+        dots = (rng.random((n, n)) < rng.uniform(0.12, 0.45)).astype(np.uint8) * 255
+        a = np.asarray(Image.fromarray(dots).resize((n * dot, n * dot), Image.Resampling.NEAREST), np.float32)[:BOARD, :BOARD] / 255
+        return a
+    noise = _fractal(rng, int(rng.integers(3, 9)), octaves=5)
+    y, x = np.mgrid[0:BOARD, 0:BOARD].astype(np.float32) / BOARD
+    angle = rng.uniform(0, np.pi)
+    along = x * np.cos(angle) + y * np.sin(angle)
+    if kind == "marble":
+        # Veins: thin dark lines where a distorted sine crosses zero, on a cloudy ground.
+        veins = 1 - np.abs(np.sin(2 * np.pi * (along * rng.uniform(1.5, 4) + noise * rng.uniform(1, 3))))
+        veins = veins ** rng.uniform(4, 12)
+        return np.clip(0.55 * noise + 0.6 * veins, 0, 1)
+    # Wood: rings along one axis, distorted by the noise, plus a fine grain.
+    rings = 0.5 + 0.5 * np.sin(2 * np.pi * (along * rng.uniform(4, 12) + noise * rng.uniform(0.5, 2)))
+    grain = _fractal(rng, int(rng.integers(40, 90)), octaves=2)
+    return np.clip(0.6 * rings ** rng.uniform(1, 3) + 0.25 * grain + 0.15 * noise, 0, 1)
+
+
+def _dark_pattern(rng: np.random.Generator, paper: int, ink: int) -> tuple[Image.Image, str]:
+    """Grayscale fill for the dark squares, as large as the board, and its kind."""
+    names = list(DARK_KINDS)
+    w = np.array([DARK_KINDS[n] for n in names])
+    kind = names[int(rng.choice(len(names), p=w / w.sum()))]
+    if kind == "flat":
+        return Image.new("L", (BOARD, BOARD), int(rng.integers(120, 215))), kind
+    if kind == "dots":
+        im = Image.new("L", (BOARD, BOARD), paper)
+        d = ImageDraw.Draw(im)
+        spacing = HI / rng.uniform(6, 15)
+        r = spacing * rng.uniform(0.15, 0.3)
+        for y in np.arange(0, BOARD, spacing):
+            for x in np.arange((y / spacing % 2) * spacing / 2, BOARD, spacing):
+                d.ellipse((x - r, y - r, x + r, y + r), fill=ink)
+        return im, kind
+    if kind in ("hatch", "cross"):
+        return _hatch(rng, paper, ink, cross=kind == "cross"), kind
+    if kind == "broken":
+        # Faint ink, and only fragments of the lines: blotches (uneven inking) and fine breaks.
+        faint = int(min(paper - 40, ink + rng.uniform(0, 110)))
+        a = np.asarray(_hatch(rng, paper, faint, cross=rng.random() < 0.15), np.float32)
+        blotches = _fractal(rng, int(rng.integers(10, 28)), octaves=2) > rng.uniform(0.15, 0.5)
+        breaks = _fractal(rng, int(rng.integers(80, 170)), octaves=1) > rng.uniform(0.2, 0.55)
+        dropout = rng.random(a.shape) < rng.uniform(0.0, 0.12)
+        keep = blotches & breaks & ~dropout
+        return Image.fromarray(np.where(keep, a, paper).astype(np.uint8)), kind
+    # Textures: a grain mapped between two gray levels.
+    t = _texture(kind, rng)
+    lo = rng.uniform(70, 170) if kind != "stipple" else float(ink + rng.uniform(0, 80))
+    hi = min(paper, lo + rng.uniform(40, 120)) if kind != "stipple" else float(paper)
+    return Image.fromarray(np.clip(hi - (hi - lo) * t, 0, 255).astype(np.uint8)), kind
+
+
+def _light_texture(kind: str, rng: np.random.Generator, level: int) -> Image.Image:
+    """The light squares of a textured board: the same kind of grain, much fainter."""
+    t = _texture(kind, rng)
+    depth = rng.uniform(10, 45)
+    return Image.fromarray(np.clip(level - depth * t, 0, 255).astype(np.uint8))
 
 
 def _coords_outside(d: ImageDraw.ImageDraw, margin: int, flipped: bool, ink: int, rng) -> None:
@@ -310,9 +387,12 @@ def render_print(board_fen: str, rng, sprites: Sprites, sets: list[str]) -> Rend
     size = BOARD + 2 * margin
 
     canvas = Image.new("RGBA", (size, size), (paper,) * 3 + (255,))
-    dark = _dark_pattern(rng, paper, ink)
+    dark, kind = _dark_pattern(rng, paper, ink)
     light_level = paper if rng.random() < 0.85 else int(rng.integers(215, 250))
-    board = Image.new("L", (BOARD, BOARD), light_level)
+    if kind in TEXTURED and rng.random() < 0.5:
+        board = _light_texture(kind, rng, light_level)
+    else:
+        board = Image.new("L", (BOARD, BOARD), light_level)
     mask = Image.new("L", (BOARD, BOARD), 0)
     md = ImageDraw.Draw(mask)
     for r in range(8):
@@ -391,6 +471,26 @@ def render_screen(board_fen: str, rng, sprites: Sprites, sets: list[str]) -> Ren
         tex = Image.fromarray(np.clip(128 + noise, 0, 255).astype(np.uint8)).resize((BOARD, BOARD), Image.Resampling.BICUBIC)
         layer = Image.merge("RGBA", [tex] * 3 + [Image.new("L", tex.size, int(rng.integers(30, 80)))])
         canvas.alpha_composite(layer, (margin, margin))
+    if rng.random() < 0.15:
+        # Bevelled squares (3D boards of older programs): a light top-left edge, a dark
+        # bottom-right edge and a soft gradient across each square.
+        bevel = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        bd = ImageDraw.Draw(bevel)
+        e = max(2, int(HI * rng.uniform(0.03, 0.08)))
+        strength = int(rng.integers(50, 130))
+        for r in range(8):
+            for c in range(8):
+                x, y = margin + c * HI, margin + r * HI
+                bd.polygon([(x, y), (x + HI, y), (x + HI - e, y + e), (x + e, y + e), (x + e, y + HI - e), (x, y + HI)], fill=(255, 255, 255, strength))
+                bd.polygon([(x + HI, y + HI), (x, y + HI), (x + e, y + HI - e), (x + HI - e, y + HI - e), (x + HI - e, y + e), (x + HI, y)], fill=(0, 0, 0, strength))
+        ramp = np.linspace(rng.uniform(-40, 0), rng.uniform(0, 40), HI, dtype=np.float32)
+        tile = np.add.outer(ramp, ramp) / 2
+        shade = np.tile(tile, (8, 8))
+        alpha = np.clip(np.abs(shade) * 2, 0, 255).astype(np.uint8)
+        tone = np.where(shade > 0, 255, 0).astype(np.uint8)
+        grad = Image.merge("RGBA", [Image.fromarray(tone)] * 3 + [Image.fromarray(alpha)])
+        bevel.alpha_composite(grad, (margin, margin))
+        canvas.alpha_composite(bevel)
 
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)

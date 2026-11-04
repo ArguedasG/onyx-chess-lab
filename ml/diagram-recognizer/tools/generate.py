@@ -27,7 +27,7 @@ from onyx_diagrams.positions import placement_grid, sample_positions  # noqa: E4
 from onyx_diagrams.render import Sprites, render  # noqa: E402
 from onyx_diagrams.squares import crop_squares, square_labels  # noqa: E402
 
-DATASET_VERSION = "v7"
+DATASET_VERSION = "v8"
 TRAIN_SETS = [
     "cburnett",
     "merida",

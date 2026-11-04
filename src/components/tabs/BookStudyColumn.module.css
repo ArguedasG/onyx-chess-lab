@@ -33,8 +33,11 @@
   min-width: 0;
 }
 
+/* Never squeezed: its real width (wider with the piece palette while editing) is what the board
+   is sized from, so the board shrinks instead of the palette. */
 .rail {
   grid-area: rail;
+  min-width: max-content;
   padding-top: 4px;
 }
 

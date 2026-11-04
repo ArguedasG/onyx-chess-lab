@@ -844,8 +844,8 @@ de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
 
 ### 9.4. Libros y posiciones desde imagen
 
-**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos, rediseño de Libros y modelo 1.1.0
-(2026-11-03)** (detalle en
+**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos, rediseño de Libros y modelos 1.1.0
+y 1.2.0 (2026-11-03)** (detalle en
 `docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
 entrega de I-59, del segundo estudio de mercado (`docs/market-study-2.es.md`, §2, §5 y §6). Es una
 funcionalidad nueva, no una ampliación; va antes de la Fase 10 por decisión del autor y **se cierra
@@ -1041,6 +1041,21 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-03 — 9.4: etiquetas del autor y modelo 1.2.0
+
+- Columna de estudio de Libros rehecha como una página que se desplaza: tablero grande con botones
+  rápidos al lado, notación (ocultable) y herramientas debajo, barra mínima al bajar. Tarjeta
+  **Libros** en el Inicio.
+- Herramienta local de etiquetado (`label_books.py`) y medida contra etiquetas (`eval_labels.py`):
+  150 diagramas del autor etiquetados, que quedan en su PC.
+- **diagram-squares 1.2.0** (dataset v8: rayado roto, punteado, mármol, madera y relieve 3D): libros
+  del autor 272/387 aceptados (antes 250); contra las etiquetas, 104/144 exactos (antes 95) y 0
+  aceptados mal leídos. Los libros en fuente Alpha siguen por revisar.
+- **Adaptación por libro**: el lector aprende de las correcciones del usuario en cada libro
+  (features del modelo, vecinos más cercanos, memoria local por libro). Simulado con las etiquetas:
+  104 → 138 tableros exactos de 143 y 382 → 43 casillas que corregir, sin errores silenciosos; en
+  los libros con Alpha, 352 → 15 casillas. Las casillas que cambia quedan siempre por revisar.
 
 ### 2026-11-03 — 9.4: rediseño de Libros y modelo 1.1.0
 

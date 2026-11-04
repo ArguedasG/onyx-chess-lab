@@ -8,7 +8,7 @@ Output: src-tauri/fixtures/diagram/
   `locate.find_grid`, the SHA-256 of the 64 cropped squares and the ONNX Runtime logits of the
   shipped model.
 
-Usage: python tools/make_parity_fixtures.py [--model models/1.1.0/diagram-squares-1.1.0.onnx]
+Usage: python tools/make_parity_fixtures.py [--model models/1.2.0/diagram-squares-1.2.0.onnx]
 """
 
 import argparse
@@ -35,7 +35,7 @@ SETS = ["cburnett", "merida", "chessnut", "glyph-dejavu", "glyph-noto", "mpchess
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/1.1.0/diagram-squares-1.1.0.onnx")
+    p.add_argument("--model", default="models/1.2.0/diagram-squares-1.2.0.onnx")
     p.add_argument("--db", required=True)
     a = p.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)

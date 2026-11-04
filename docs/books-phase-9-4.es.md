@@ -15,6 +15,8 @@ desde imagen) y, opcional, I-59 entrega 1 (vídeo local), del segundo estudio de
 | 3    | I-57: posición desde imagen en el editor                    | Hecho (2026-11-02)          |
 | 4    | I-55: biblioteca, lector y doble clic en diagramas          | Hecho (2026-11-02)          |
 | —    | Rediseño de Libros y modelo 1.1.0                           | Hecho (2026-11-03)          |
+| —    | Etiquetas del autor y modelo 1.2.0                          | Hecho (2026-11-03)          |
+| —    | Adaptación por libro                                        | Hecho (2026-11-03)          |
 | 5    | I-55: «Abrir esta partida» desde la notación                | Siguiente                   |
 | 6    | Opcional: I-59 entrega 1                                    | Pendiente (decide el autor) |
 
@@ -119,7 +121,7 @@ añade cada runtime.
 Todo está en `ml/diagram-recognizer/`: generador, entrenamiento, evaluación, exportación,
 `DATASET_CARD.md` y `MODEL_CARD.md`. El primer modelo publicado fue **diagram-squares 1.0.0**
 (`models/1.0.0/`): 293 k parámetros, 1,17 MB en ONNX, 36 ms por tablero con `rten`. Desde el
-2026-11-03 la app usa **1.1.0** (abajo, «Modelo 1.1.0»).
+2026-11-03 la app usa **1.2.0** (abajo, «Modelo 1.2.0»).
 
 ### Cómo se hizo
 
@@ -393,3 +395,81 @@ girada sigue fallando, pero en el localizador, no en el modelo (caso abierto).
 Bajan los «plausibles» (323 → 311) solo en dos libros que quedan por revisar con ambos modelos:
 McDonald (fuente Alpha) e Illescas (casillas con textura de mármol, un estilo que ningún juego de
 entrenamiento tiene).
+
+## Modelo 1.2.0 (2026-11-03)
+
+### Etiquetas del autor
+
+Hasta 1.1.0 solo se sabía si el modelo **dudaba** en los libros del autor, no si acertaba. Ahora
+hay verdad de referencia:
+
+- `tools/label_books.py` abre una página local (solo 127.0.0.1) con el recorte junto al tablero
+  leído, para confirmarlo con Enter o corregirlo casilla a casilla. Orden: 10 diagramas de cada
+  libro por turnos (muestra equilibrada) y después los libros peor leídos. Se guarda en
+  `private-eval/labels.json`, ignorado por git; nada sale del PC.
+- `tools/eval_labels.py` mide cualquier informe de `eval_books.py` contra esas etiquetas, sobre
+  todo los **aceptados pero mal leídos** (errores silenciosos). Las etiquetas valen para cualquier
+  modelo futuro: no hay que repetirlas.
+- El autor etiquetó 150: 95 bien leídos, 49 corregidos, 3 que no son diagramas y 3 saltados
+  (tableros de números o letras, sin posición que leer). Las etiquetas **no entrenan** el modelo
+  distribuido.
+
+### Texturas (dataset v8)
+
+Mirar las casillas que fallaban señaló dos estilos que el generador no tenía: el rayado desvaído y
+roto de Hellsten (solo quedan fragmentos de las líneas) y los tableros grises en 3D de Illescas.
+El v8 añade al estilo impreso rayado roto, punteado, mármol y madera (los tres últimos a veces
+también, más suaves, en las casillas claras) y relieve 3D al 15 % de los tableros de pantalla.
+Mismos juegos, misma arquitectura y mismo entrenamiento.
+
+| Medida (umbral 0,95)                     |   1.1.0 |   1.2.0 |
+| ---------------------------------------- | ------: | ------: |
+| Sintético v8, casillas                   | 97,60 % | 99,75 % |
+| Sintético v8, tableros exactos           |  78,0 % |  91,0 % |
+| Sintético v8, por revisar                |  36,2 % |  23,3 % |
+| Libros del autor, aceptados (de 387)     |     250 | **272** |
+| Etiquetas: tableros exactos (de 144)     |      95 | **104** |
+| Etiquetas: aceptados                     |      84 |      92 |
+| Etiquetas: **aceptados pero mal leídos** |   **0** |   **0** |
+
+Hellsten pasa de 4 a 8 tableros exactos de 10 e Illescas de 3 a 7 de 9. Los dos libros con la
+fuente Alpha (McDonald y Lakdawala) siguen en 0 de 36, todos marcados para revisar: las piezas
+negras de esa fuente, macizas con líneas blancas, se confunden sobre todo en casillas rayadas.
+Eso no lo arregla el generador sin una fuente parecida a Alpha; es el caso para el que se pensó
+la adaptación por libro (aprender de las correcciones del usuario en ese mismo libro).
+
+## Adaptación por libro (2026-11-03)
+
+Las fuentes muy distintas de los juegos libres (Alpha, sobre todo) no se arreglan con el
+generador. En su lugar, el lector **aprende de las correcciones del usuario dentro de cada libro**:
+
+- El ONNX de 1.2.0 tiene una segunda salida, `features` (los 128 valores antes del clasificador).
+- Al guardar un diagrama o pulsar «Usar esta posición» en uno que pedía revisión, Rust guarda las
+  features de sus casillas con la pieza correcta en `books/<id>.memory.bin` (datos de la app,
+  junto a las notas del libro; nunca sale del PC). Todas las piezas y 8 casillas vacías por
+  tablero; volver a guardar el mismo diagrama sustituye lo aprendido de él.
+- Al leer otro diagrama del libro, cada casilla se compara con las recordadas (similitud del
+  coseno, las 5 más cercanas). Si se parece lo bastante, su voto se mezcla con la respuesta del
+  modelo. Las constantes van en el manifiesto (`adaptation`); `tools/sim_adapt.py` es la
+  referencia y la prueba privada `private_adaptation` de Rust reproduce sus totales.
+- **Una casilla que la memoria cambia queda siempre dudosa**: la memoria corrige la lectura, pero
+  nunca hace aceptar un tablero que el modelo solo marcaría para revisar. Dejar que las
+  coincidencias claras contaran como seguras costaba 2 errores silenciosos en 143 tableros.
+- La franja del diagrama dice cuántas casillas cambió lo aprendido. En el menú «⋯» del lector,
+  **Olvidar lo aprendido (N)** borra la memoria del libro (las correcciones guardadas se quedan).
+- Coste: unos milisegundos por tablero. Si cambia el modelo, la memoria se ignora y se empieza de
+  nuevo.
+
+Simulación con las etiquetas del autor (cada libro en orden de páginas, aprendiendo de cada
+tablero que queda por revisar):
+
+| 143 tableros etiquetados        |  Solo el modelo | Adaptado al libro |
+| ------------------------------- | --------------: | ----------------: |
+| Tableros exactos                |             104 |           **138** |
+| Aceptados                       |              92 |                92 |
+| Aceptados pero mal leídos       |               0 |                 0 |
+| Casillas que corregir a mano    |             382 |            **43** |
+| — los dos libros con Alpha (36) | 352 (0 exactos) |   15 (32 exactos) |
+
+En un libro con Alpha, el primer diagrama se corrige a mano; desde el segundo, el lector propone
+las piezas bien casi siempre y el usuario solo confirma.

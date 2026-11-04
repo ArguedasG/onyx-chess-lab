@@ -310,6 +310,10 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             diagram::recognize_board_image,
             diagram::recognize_board_image_file,
             diagram::detect_board_images,
+            diagram::adapt_board_reading,
+            diagram::learn_board_reading,
+            diagram::book_memory_size,
+            diagram::forget_book_memory,
             books::book_fingerprint
         ))
         .events(tauri_specta::collect_events!(

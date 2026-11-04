@@ -23,6 +23,8 @@ export type DiagramBarState = {
   status: { color: string; text: string };
   /** Where the side to move came from, already worded; null when nothing was read. */
   turnNote: string | null;
+  /** Squares changed by what was learned in this book, already worded. */
+  learnedNote: string | null;
   problems: boolean;
   canFlip: boolean;
   canSave: boolean;
@@ -166,9 +168,13 @@ export default function DiagramBar({
                 </Button>
               )}
             </Group>
-            {(state.turnNote || state.problems) && (
+            {(state.turnNote || state.problems || state.learnedNote) && (
               <Text size="xs" c="dimmed" mt={4} lineClamp={2}>
-                {[state.turnNote, state.problems ? t("Books.Result.CheckRules") : null]
+                {[
+                  state.learnedNote,
+                  state.turnNote,
+                  state.problems ? t("Books.Result.CheckRules") : null,
+                ]
                   .filter(Boolean)
                   .join(" · ")}
               </Text>

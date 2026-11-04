@@ -38,8 +38,8 @@
       "resources/endgames/FinalesParte1.pgn": "training/endgames/FinalesParte1.pgn",
       "resources/endgames/FinalesParte2.pgn": "training/endgames/FinalesParte2.pgn",
       "resources/endgames/FinalesParte3.pgn": "training/endgames/FinalesParte3.pgn",
-      "../ml/diagram-recognizer/models/1.1.0/diagram-squares-1.1.0.onnx": "models/diagram-squares-1.1.0.onnx",
-      "../ml/diagram-recognizer/models/1.1.0/diagram-squares-1.1.0.json": "models/diagram-squares-1.1.0.json"
+      "../ml/diagram-recognizer/models/1.2.0/diagram-squares-1.2.0.onnx": "models/diagram-squares-1.2.0.onnx",
+      "../ml/diagram-recognizer/models/1.2.0/diagram-squares-1.2.0.json": "models/diagram-squares-1.2.0.json"
     },
     "targets": "all",
     "createUpdaterArtifacts": true

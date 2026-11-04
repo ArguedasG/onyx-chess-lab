@@ -1058,6 +1058,55 @@ async detectBoardImages(dataBase64: string) : Promise<Result<BoardReading[], str
 }
 },
 /**
+ * The reading `reading_id` adapted to what was learned in that book; `None` when the reading
+ * is no longer kept (the caller keeps the one it has).
+ */
+async adaptBoardReading(readingId: number, bookId: string) : Promise<Result<BoardReading | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("adapt_board_reading", { readingId, bookId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Learns from a corrected diagram of a book: the squares of reading `reading_id` with the
+ * position the user saved (`placement`, from White's side; `image_flipped` when the picture
+ * shows the board from Black's side). `key` identifies the diagram, so saving it again
+ * replaces what was learned from it. Returns the boards in the memory, or `None` when the
+ * reading is no longer kept and nothing was learned.
+ */
+async learnBoardReading(readingId: number, bookId: string, key: string, placement: string, imageFlipped: boolean) : Promise<Result<number | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("learn_board_reading", { readingId, bookId, key, placement, imageFlipped }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Corrected boards remembered for a book (with the current model).
+ */
+async bookMemorySize(bookId: string) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("book_memory_size", { bookId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Forgets everything learned in a book (its corrections themselves are kept).
+ */
+async forgetBookMemory(bookId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("forget_book_memory", { bookId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * SHA-256 and size of a book file, read in 1 MB blocks off the UI thread.
  */
 async bookFingerprint(path: string) : Promise<Result<BookFingerprint, string>> {
@@ -1140,7 +1189,11 @@ export type BestMovesPayload = { bestLines: BestMoves[]; engine: string; tab: st
  * in the database, so they all read as `Open`.
  */
 export type BoardEnding = "checkmate" | "stalemate" | "insufficientMaterial" | "open"
-export type BoardReading = { status: ReadingStatus; 
+export type BoardReading = { 
+/**
+ * Handle to adapt this reading to a book or learn from its correction (0: not kept).
+ */
+id: number; status: ReadingStatus; 
 /**
  * Board field of the FEN, from White's side (after the orientation guess).
  */
@@ -1168,7 +1221,11 @@ problems: string[];
 /**
  * Side to move from a mark printed next to the board ("w" or "b"), if any.
  */
-turnMark: string | null; modelVersion: string; elapsedMs: number }
+turnMark: string | null; modelVersion: string; elapsedMs: number; 
+/**
+ * Squares whose answer the book's memory changed (always left doubtful).
+ */
+adapted: number }
 export type BookFingerprint = { sha256: string; 
 /**
  * File size in bytes (f64 so the frontend gets a plain number).

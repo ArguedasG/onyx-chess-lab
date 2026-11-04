@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Etiquetar diagramas</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #1a1b1e;
+        --panel: #25262b;
+        --line: #3a3b40;
+        --text: #e4e4e7;
+        --dim: #9a9aa3;
+        --accent: #4dabf7;
+        --ok: #51cf66;
+        --warn: #fcc419;
+        --bad: #ff6b6b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      header b {
+        font-weight: 600;
+      }
+      .bar {
+        flex: 1;
+        min-width: 160px;
+        height: 6px;
+        background: var(--line);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar > div {
+        height: 100%;
+        background: var(--accent);
+      }
+      main {
+        display: flex;
+        gap: 24px;
+        padding: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .crop img {
+        display: block;
+        width: 440px;
+        max-width: 100%;
+        image-rendering: auto;
+        background: #fff;
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(8, 52px);
+        grid-template-rows: repeat(8, 52px);
+        border: 1px solid var(--line);
+        user-select: none;
+      }
+      .sq {
+        position: relative;
+        cursor: pointer;
+      }
+      .sq.l {
+        background: #f0d9b5;
+      }
+      .sq.d {
+        background: #b58863;
+      }
+      .sq img {
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .sq.changed::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        border: 3px solid var(--warn);
+        border-radius: 3px;
+      }
+      .palette {
+        display: flex;
+        gap: 4px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .palette button {
+        width: 44px;
+        height: 44px;
+        padding: 2px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text);
+        font-size: 18px;
+      }
+      .palette button.sel {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+      .palette img {
+        width: 100%;
+        height: 100%;
+      }
+      .meta {
+        color: var(--dim);
+        margin: 0 0 8px;
+      }
+      .tag {
+        display: inline-block;
+        padding: 0 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .tag.accepted {
+        background: #2b8a3e55;
+        color: var(--ok);
+      }
+      .tag.review {
+        background: #e6770055;
+        color: var(--warn);
+      }
+      .tag.done {
+        background: #1971c255;
+        color: var(--accent);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .actions button {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+      }
+      .actions button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0b1a2a;
+        font-weight: 600;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 6px 8px;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font:
+          13px ui-monospace,
+          monospace;
+      }
+      .help {
+        color: var(--dim);
+        font-size: 13px;
+        max-width: 520px;
+      }
+      kbd {
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 5px;
+        font-size: 12px;
+      }
+      .msg {
+        min-height: 20px;
+        color: var(--bad);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>Etiquetar diagramas</b>
+      <span id="progress"></span>
+      <div class="bar"><div id="fill" style="width: 0"></div></div>
+      <span id="counts" class="meta" style="margin: 0"></span>
+    </header>
+    <main>
+      <div class="card crop">
+        <p class="meta" id="where"></p>
+        <img id="crop" alt="Recorte del libro" />
+      </div>
+      <div class="card">
+        <p class="meta"><span id="model"></span> <span id="state"></span></p>
+        <div class="board" id="board"></div>
+        <div class="palette" id="palette"></div>
+        <div style="margin-top: 10px">
+          <input
+            type="text"
+            id="fen"
+            spellcheck="false"
+            title="Posición (como se ve el diagrama, fila de arriba primero). Puedes pegar un FEN."
+          />
+          <label class="meta" style="display: block; margin-top: 4px"
+            ><input type="checkbox" id="black" /> El FEN pegado está visto desde las blancas pero el
+            diagrama desde las negras (girarlo)</label
+          >
+        </div>
+        <div class="actions">
+          <button class="primary" id="save">Correcto / guardar <kbd>Enter</kbd></button>
+          <button id="reset">Volver a la lectura <kbd>Esc</kbd></button>
+          <button id="notDiagram">No es un diagrama <kbd>1</kbd></button>
+          <button id="skip">No sé / saltar <kbd>2</kbd></button>
+          <button id="prev">← Anterior</button>
+          <button id="next">Siguiente →</button>
+        </div>
+        <p class="msg" id="msg"></p>
+      </div>
+      <div class="help">
+        <p>
+          Compara el recorte con el tablero. Si coincide casilla por casilla, pulsa
+          <kbd>Enter</kbd>. Si no, corrígelo y pulsa <kbd>Enter</kbd>: las casillas cambiadas quedan
+          marcadas en amarillo.
+        </p>
+        <p>
+          Corregir: elige una pieza en la paleta (o pulsa su letra: <kbd>Mayús</kbd>+letra para
+          blancas, letra sola para negras; <kbd>X</kbd> borra) y haz clic en las casillas. Clic
+          derecho vacía una casilla.
+        </p>
+        <p>
+          El tablero se etiqueta <b>tal como está impreso</b>, aunque el diagrama esté visto desde
+          las negras: no hace falta girar nada. Sin cuadrícula detectada, el tablero empieza vacío.
+        </p>
+        <p>Se guarda al responder; puedes cerrar cuando quieras y seguir otro día.</p>
+      </div>
+    </main>
+    <script>
+      const SYMS = "PNBRQKpnbrqk";
+      const name = (s) => (s === s.toUpperCase() ? "w" : "b") + s.toUpperCase();
+      let items = [],
+        labels = {},
+        index = 0,
+        cells = [],
+        original = [],
+        selected = "P";
+
+      const $ = (id) => document.getElementById(id);
+
+      function toFen(list) {
+        const rows = [];
+        for (let r = 0; r < 8; r++) {
+          let row = "",
+            empty = 0;
+          for (const s of list.slice(r * 8, r * 8 + 8)) {
+            if (s === ".") {
+              empty++;
+              continue;
+            }
+            if (empty) {
+              row += empty;
+              empty = 0;
+            }
+            row += s;
+          }
+          rows.push(row + (empty ? empty : ""));
+        }
+        return rows.join("/");
+      }
+
+      function fromFen(text) {
+        const placement = text.trim().split(/\s+/)[0];
+        const rows = placement.split("/");
+        if (rows.length !== 8) return null;
+        const list = [];
+        for (const row of rows) {
+          let count = 0;
+          for (const ch of row) {
+            if (/[1-8]/.test(ch)) {
+              for (let i = 0; i < +ch; i++) list.push(".");
+              count += +ch;
+            } else if (SYMS.includes(ch)) {
+              list.push(ch);
+              count++;
+            } else return null;
+          }
+          if (count !== 8) return null;
+        }
+        return $("black").checked ? list.reverse() : list;
+      }
+
+      function render() {
+        const board = $("board");
+        board.innerHTML = "";
+        cells.forEach((s, i) => {
+          const sq = document.createElement("div");
+          const r = Math.floor(i / 8),
+            c = i % 8;
+          sq.className = "sq " + ((r + c) % 2 ? "d" : "l") + (s !== original[i] ? " changed" : "");
+          if (s !== ".") {
+            const img = document.createElement("img");
+            img.src = "/piece/" + name(s) + ".png";
+            sq.appendChild(img);
+          }
+          sq.onclick = () => {
+            cells[i] = cells[i] === selected ? "." : selected;
+            render();
+          };
+          sq.oncontextmenu = (e) => {
+            e.preventDefault();
+            cells[i] = ".";
+            render();
+          };
+          board.appendChild(sq);
+        });
+        $("fen").value = toFen(cells);
+      }
+
+      function renderPalette() {
+        const palette = $("palette");
+        palette.innerHTML = "";
+        for (const s of SYMS + ".") {
+          const b = document.createElement("button");
+          b.className = s === selected ? "sel" : "";
+          b.title = s === "." ? "Vaciar (X)" : s;
+          if (s === ".") b.textContent = "✕";
+          else {
+            const img = document.createElement("img");
+            img.src = "/piece/" + name(s) + ".png";
+            b.appendChild(img);
+          }
+          b.onclick = () => {
+            selected = s;
+            renderPalette();
+          };
+          palette.appendChild(b);
+        }
+      }
+
+      function header() {
+        const done = items.filter((it) => labels[it.file]).length;
+        $("progress").textContent = `${index + 1} / ${items.length}`;
+        $("fill").style.width = (100 * done) / items.length + "%";
+        const by = {};
+        for (const l of Object.values(labels)) by[l.status] = (by[l.status] || 0) + 1;
+        $("counts").textContent =
+          `${done} etiquetados · ${by.ok || 0} correctos · ${by.fixed || 0} corregidos · ${by.not_diagram || 0} no diagrama · ${by.skip || 0} saltados`;
+      }
+
+      function show(i) {
+        index = Math.max(0, Math.min(items.length - 1, i));
+        const it = items[index];
+        const saved = labels[it.file];
+        original = it.labels ? it.labels.split("") : Array(64).fill(".");
+        cells = saved && saved.placement ? saved.placement.split("") : original.slice();
+        $("crop").src = "/img/" + it.file;
+        $("where").textContent =
+          `${it.book} · pág. ${it.page ?? "?"}${it.phase === "sample" ? " · muestra" : ""}`;
+        $("model").innerHTML =
+          `Modelo: <span class="tag ${it.status === "accepted" ? "accepted" : "review"}">${it.status === "accepted" ? "aceptado" : "por revisar"}</span>` +
+          (it.reason ? ` ${it.reason}` : "") +
+          (it.doubtful ? ` · ${it.doubtful} dudosas` : "");
+        $("state").innerHTML = saved
+          ? `<span class="tag done">ya etiquetado: ${saved.status}</span>`
+          : "";
+        $("msg").textContent = "";
+        render();
+        header();
+      }
+
+      async function answer(status) {
+        const it = items[index];
+        const changed = cells.some((s, i) => s !== original[i]);
+        if (status === "ok" && (changed || !it.labels)) status = "fixed";
+        const body = {
+          file: it.file,
+          status,
+          placement: status === "ok" || status === "fixed" ? cells.join("") : null,
+        };
+        const res = await fetch("/api/label", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          $("msg").textContent = "No se pudo guardar: " + (await res.text());
+          return;
+        }
+        labels[it.file] = { status, placement: body.placement };
+        const next = items.findIndex((x, j) => j > index && !labels[x.file]);
+        show(next === -1 ? index + 1 : next);
+      }
+
+      $("save").onclick = () => answer("ok");
+      $("notDiagram").onclick = () => answer("not_diagram");
+      $("skip").onclick = () => answer("skip");
+      $("reset").onclick = () => {
+        cells = original.slice();
+        render();
+      };
+      $("prev").onclick = () => show(index - 1);
+      $("next").onclick = () => show(index + 1);
+      $("fen").onchange = () => {
+        const list = fromFen($("fen").value);
+        if (!list) {
+          $("msg").textContent = "FEN no válido";
+          return;
+        }
+        cells = list;
+        $("msg").textContent = "";
+        render();
+      };
+
+      document.addEventListener("keydown", (e) => {
+        if (e.target === $("fen")) {
+          if (e.key === "Enter") $("fen").onchange();
+          return;
+        }
+        if (e.ctrlKey || e.altKey || e.metaKey) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          answer("ok");
+        } else if (e.key === "Escape") $("reset").onclick();
+        else if (e.key === "ArrowLeft") show(index - 1);
+        else if (e.key === "ArrowRight") show(index + 1);
+        else if (e.key === "1") answer("not_diagram");
+        else if (e.key === "2") answer("skip");
+        else if (e.key === "x" || e.key === "X" || e.key === "Delete") {
+          selected = ".";
+          renderPalette();
+        } else if (SYMS.includes(e.key)) {
+          selected = e.key;
+          renderPalette();
+        }
+      });
+
+      fetch("/api/items")
+        .then((r) => r.json())
+        .then((data) => {
+          items = data.items;
+          labels = data.labels;
+          renderPalette();
+          const first = items.findIndex((it) => !labels[it.file]);
+          show(first === -1 ? 0 : first);
+        });
+    </script>
+  </body>
+</html>

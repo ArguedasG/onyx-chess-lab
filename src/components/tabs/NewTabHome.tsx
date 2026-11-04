@@ -16,6 +16,7 @@ import {
 import {
   type Icon,
   IconArrowRight,
+  IconBook,
   IconBook2,
   IconChess,
   IconChessKnight,
@@ -77,6 +78,7 @@ type Destination =
   | "/training/endgames"
   | "/tournaments"
   | "/studies"
+  | "/books"
   | "/databases"
   | "/files";
 
@@ -414,6 +416,17 @@ export default function NewTabHome({ id }: { id: string }) {
       onClick: go("/databases"),
     },
     {
+      id: "books",
+      icon: IconBook,
+      color: "grape",
+      title: t("Home.Launch.Books", "Books"),
+      description: t(
+        "Home.Launch.Books.Desc",
+        "Your chess PDFs beside the board: diagrams read into positions.",
+      ),
+      onClick: go("/books"),
+    },
+    {
       id: "laboratory",
       icon: IconFlask,
       color: "pink",
@@ -561,7 +574,7 @@ export default function NewTabHome({ id }: { id: string }) {
           </SectionTitle>
 
           {compact ? (
-            <SimpleGrid cols={{ base: 1, xs: 2, md: 3, lg: 4 }} spacing="sm">
+            <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }} spacing="sm">
               {training.map((item) => (
                 <CompactTile key={item.id} {...item} onClick={go(item.to)} />
               ))}
@@ -623,7 +636,7 @@ export default function NewTabHome({ id }: { id: string }) {
                 </Group>
               </Tile>
 
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing="md">
                 {more.map((item) => (
                   <Tile key={item.id} {...item} />
                 ))}

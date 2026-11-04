@@ -4,30 +4,53 @@
 
 pub mod detect;
 pub mod locate;
+pub mod memory;
 pub mod preprocess;
 pub mod recognizer;
 
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use base64::Engine;
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use serde::Serialize;
 use specta::Type;
 use tauri::{AppHandle, Manager};
 
 use crate::error::Error;
+use memory::BookMemory;
 use preprocess::{crop_squares, resize_box, to_gray, Gray};
 use recognizer::{looks_flipped, rule_problems, Recognizer};
 
-const MODEL: &str = "models/diagram-squares-1.1.0.onnx";
-const MANIFEST: &str = "models/diagram-squares-1.1.0.json";
+const MODEL: &str = "models/diagram-squares-1.2.0.onnx";
+const MANIFEST: &str = "models/diagram-squares-1.2.0.json";
 /// Below this locator score there is probably no board in the image.
 const NO_BOARD_SCORE: f64 = 0.15;
 /// Larger images are reduced first: the fine pass grows with the square of the resolution.
 const MAX_SIDE: usize = 1600;
 
 static RECOGNIZER: OnceCell<Arc<Recognizer>> = OnceCell::new();
+
+/// What a reading needs to be adapted to a book later without the image: the model's
+/// probabilities and features of its 64 squares (display order) and the printed turn mark.
+struct CachedReading {
+    reading: BoardReading,
+    probabilities: Vec<f32>,
+    features: Vec<f32>,
+    mark: Option<char>,
+}
+
+/// Readings kept for adaptation and learning (about 9 MB at most).
+const CACHED_READINGS: usize = 256;
+type ReadingCache = VecDeque<(u32, Arc<CachedReading>)>;
+static READINGS: Lazy<Mutex<ReadingCache>> = Lazy::new(|| Mutex::new(VecDeque::new()));
+static NEXT_READING: AtomicU32 = AtomicU32::new(1);
+/// Book memories already read from disk, by book id.
+static MEMORIES: Lazy<Mutex<HashMap<String, Arc<BookMemory>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Serialize, Type, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +75,8 @@ pub struct SquareReading {
 #[derive(Serialize, Type, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardReading {
+    /// Handle to adapt this reading to a book or learn from its correction (0: not kept).
+    pub id: u32,
     pub status: ReadingStatus,
     /// Board field of the FEN, from White's side (after the orientation guess).
     pub placement: Option<String>,
@@ -72,6 +97,8 @@ pub struct BoardReading {
     pub turn_mark: Option<String>,
     pub model_version: String,
     pub elapsed_ms: u32,
+    /// Squares whose answer the book's memory changed (always left doubtful).
+    pub adapted: u32,
 }
 
 fn recognizer(app: &AppHandle) -> Result<Arc<Recognizer>, Error> {
@@ -139,6 +166,7 @@ fn prepare(image: &image::DynamicImage) -> (Gray, f64) {
 
 fn empty_reading(recognizer: &Recognizer, image: &image::DynamicImage) -> BoardReading {
     BoardReading {
+        id: 0,
         status: ReadingStatus::NoBoard,
         placement: None,
         flipped: false,
@@ -152,19 +180,18 @@ fn empty_reading(recognizer: &Recognizer, image: &image::DynamicImage) -> BoardR
         turn_mark: None,
         model_version: recognizer.version.clone(),
         elapsed_ms: 0,
+        adapted: 0,
     }
 }
 
-/// Classifies the 64 squares of a grid already found and checks the position.
-fn read_grid(
+/// Builds the reading from the class and confidence of each square (display order) and the turn
+/// mark as printed: orientation, rules, doubtful squares, status and placement.
+fn decode(
     recognizer: &Recognizer,
-    gray: &Gray,
-    grid: [f64; 4],
+    classified: Vec<(char, f32)>,
+    mark: Option<char>,
     mut reading: BoardReading,
-    scale: f64,
-) -> Result<BoardReading, Error> {
-    let squares = crop_squares(gray, grid);
-    let classified = recognizer.classify(&recognizer.logits(&squares)?);
+) -> BoardReading {
     let labels: Vec<char> = classified.iter().map(|(s, _)| *s).collect();
     let flipped = looks_flipped(&labels);
     // From White's side: a board seen from Black's side is the same list reversed.
@@ -200,20 +227,88 @@ fn read_grid(
     reading.flipped = flipped;
     // The mark is printed beside the board as the book shows it: with the board turned, top
     // and bottom swap sides.
-    reading.turn_mark = detect::turn_mark(gray, grid).map(|side| {
-        let side = if flipped {
-            if side == 'w' {
-                'b'
-            } else {
-                'w'
-            }
-        } else {
-            side
+    reading.turn_mark = mark.map(|side| {
+        let side = match (flipped, side) {
+            (true, 'w') => 'b',
+            (true, _) => 'w',
+            (false, side) => side,
         };
         side.to_string()
     });
+    reading
+}
+
+/// Keeps a reading for later adaptation and returns its id.
+fn remember(cached: CachedReading) -> u32 {
+    let id = NEXT_READING.fetch_add(1, Ordering::Relaxed);
+    let mut readings = READINGS.lock().unwrap_or_else(|e| e.into_inner());
+    readings.push_back((id, Arc::new(cached)));
+    while readings.len() > CACHED_READINGS {
+        readings.pop_front();
+    }
+    id
+}
+
+fn cached_reading(id: u32) -> Option<Arc<CachedReading>> {
+    let readings = READINGS.lock().unwrap_or_else(|e| e.into_inner());
+    readings
+        .iter()
+        .find(|(i, _)| *i == id)
+        .map(|(_, c)| c.clone())
+}
+
+/// Classifies the 64 squares of a grid already found and checks the position.
+fn read_grid(
+    recognizer: &Recognizer,
+    gray: &Gray,
+    grid: [f64; 4],
+    mut reading: BoardReading,
+    scale: f64,
+) -> Result<BoardReading, Error> {
+    let squares = crop_squares(gray, grid);
+    let (logits, features) = recognizer.run(&squares)?;
+    let probabilities = recognizer.probabilities(&logits);
+    let mark = detect::turn_mark(gray, grid);
     reading.grid = Some(grid.map(|v| v * scale));
+    let mut reading = decode(recognizer, recognizer.decide(&probabilities), mark, reading);
+    if let Some(mut features) = features {
+        memory::normalize(&mut features);
+        reading.id = remember(CachedReading {
+            reading: reading.clone(),
+            probabilities,
+            features,
+            mark,
+        });
+    }
     Ok(reading)
+}
+
+/// A kept reading adjusted with a book's memory (unchanged when the memory is empty).
+fn adapt_reading(
+    recognizer: &Recognizer,
+    cached: &CachedReading,
+    memory: &BookMemory,
+) -> BoardReading {
+    let Some(rule) = recognizer.adaptation.as_ref() else {
+        return cached.reading.clone();
+    };
+    if memory.boards.is_empty() {
+        return cached.reading.clone();
+    }
+    let (classes, confidence, changed) = memory.adapt(
+        &cached.probabilities,
+        &cached.features,
+        recognizer.classes(),
+        rule,
+    );
+    let classified = classes
+        .iter()
+        .zip(confidence)
+        .map(|(&c, p)| (recognizer.symbol(c), p))
+        .collect();
+    let mut reading = decode(recognizer, classified, cached.mark, cached.reading.clone());
+    reading.adapted = changed;
+    reading
 }
 
 /// The whole pipeline on a decoded image with one board (a diagram or a screenshot).
@@ -316,6 +411,148 @@ pub async fn recognize_board_image_file(
 ) -> Result<BoardReading, Error> {
     let bytes = tokio::fs::read(&path).await?;
     read_bytes(app, bytes).await
+}
+
+/// A book's memory file, next to its notes (`books/<id>.json` in the app data folder).
+fn memory_path(app: &AppHandle, book_id: &str) -> Result<PathBuf, Error> {
+    let valid = !book_id.is_empty()
+        && book_id.len() <= 64
+        && book_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !valid {
+        return Err(Error::InvalidRequest(format!("book id: {book_id}")));
+    }
+    Ok(app
+        .path()
+        .app_data_dir()?
+        .join("books")
+        .join(format!("{book_id}.memory.bin")))
+}
+
+fn book_memory(
+    app: &AppHandle,
+    recognizer: &Recognizer,
+    book_id: &str,
+) -> Result<Arc<BookMemory>, Error> {
+    let path = memory_path(app, book_id)?;
+    let mut memories = MEMORIES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(memory) = memories.get(book_id) {
+        return Ok(memory.clone());
+    }
+    let memory = Arc::new(BookMemory::load(&path, &recognizer.version));
+    memories.insert(book_id.to_string(), memory.clone());
+    Ok(memory)
+}
+
+/// 64 FEN letters ('.' empty) from a8 to h1, from the board field of a FEN.
+fn expand_placement(placement: &str) -> Option<Vec<char>> {
+    let mut out = Vec::with_capacity(64);
+    for rank in placement.split(' ').next()?.split('/') {
+        for c in rank.chars() {
+            match c.to_digit(10) {
+                Some(n) if (1..=8).contains(&n) => out.extend(std::iter::repeat_n('.', n as usize)),
+                _ => out.push(c),
+            }
+        }
+    }
+    (out.len() == 64).then_some(out)
+}
+
+/// The reading `reading_id` adapted to what was learned in that book; `None` when the reading
+/// is no longer kept (the caller keeps the one it has).
+#[tauri::command]
+#[specta::specta]
+pub async fn adapt_board_reading(
+    app: AppHandle,
+    reading_id: u32,
+    book_id: String,
+) -> Result<Option<BoardReading>, Error> {
+    tokio::task::spawn_blocking(move || {
+        let recognizer = recognizer(&app)?;
+        let Some(cached) = cached_reading(reading_id) else {
+            return Ok(None);
+        };
+        let memory = book_memory(&app, &recognizer, &book_id)?;
+        Ok(Some(adapt_reading(&recognizer, &cached, &memory)))
+    })
+    .await
+    .map_err(|e| Error::InvalidRequest(format!("diagram reader: {e}")))?
+}
+
+/// Learns from a corrected diagram of a book: the squares of reading `reading_id` with the
+/// position the user saved (`placement`, from White's side; `image_flipped` when the picture
+/// shows the board from Black's side). `key` identifies the diagram, so saving it again
+/// replaces what was learned from it. Returns the boards in the memory, or `None` when the
+/// reading is no longer kept and nothing was learned.
+#[tauri::command]
+#[specta::specta]
+pub async fn learn_board_reading(
+    app: AppHandle,
+    reading_id: u32,
+    book_id: String,
+    key: String,
+    placement: String,
+    image_flipped: bool,
+) -> Result<Option<u32>, Error> {
+    tokio::task::spawn_blocking(move || {
+        let recognizer = recognizer(&app)?;
+        let Some(rule) = recognizer.adaptation.clone() else {
+            return Ok(None);
+        };
+        let Some(cached) = cached_reading(reading_id) else {
+            return Ok(None);
+        };
+        let mut squares = expand_placement(&placement)
+            .ok_or_else(|| Error::InvalidRequest(format!("placement: {placement}")))?;
+        if image_flipped {
+            squares.reverse();
+        }
+        let classes = squares
+            .iter()
+            .map(|&s| recognizer.class_of(s))
+            .collect::<Option<Vec<usize>>>()
+            .ok_or_else(|| Error::InvalidRequest(format!("placement: {placement}")))?;
+        let path = memory_path(&app, &book_id)?;
+        let mut memory = (*book_memory(&app, &recognizer, &book_id)?).clone();
+        memory.learn(&key, &cached.features, &classes, rule.empty_per_board);
+        memory.save(&path)?;
+        let boards = memory.boards.len() as u32;
+        MEMORIES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(book_id, Arc::new(memory));
+        Ok(Some(boards))
+    })
+    .await
+    .map_err(|e| Error::InvalidRequest(format!("diagram reader: {e}")))?
+}
+
+/// Corrected boards remembered for a book (with the current model).
+#[tauri::command]
+#[specta::specta]
+pub async fn book_memory_size(app: AppHandle, book_id: String) -> Result<u32, Error> {
+    tokio::task::spawn_blocking(move || {
+        let recognizer = recognizer(&app)?;
+        Ok(book_memory(&app, &recognizer, &book_id)?.boards.len() as u32)
+    })
+    .await
+    .map_err(|e| Error::InvalidRequest(format!("diagram reader: {e}")))?
+}
+
+/// Forgets everything learned in a book (its corrections themselves are kept).
+#[tauri::command]
+#[specta::specta]
+pub async fn forget_book_memory(app: AppHandle, book_id: String) -> Result<(), Error> {
+    let path = memory_path(&app, &book_id)?;
+    MEMORIES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&book_id);
+    match tokio::fs::remove_file(&path).await {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]

@@ -18,6 +18,7 @@ import { useDebouncedCallback, useElementSize } from "@mantine/hooks";
 import {
   IconArrowLeft,
   IconBookOff,
+  IconBrain,
   IconChess,
   IconChevronDown,
   IconChevronUp,
@@ -42,6 +43,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { type BoardReading, commands } from "@/bindings";
+import ConfirmModal from "@/components/common/ConfirmModal";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { BOOK_DIAGRAM_BAR_ID } from "@/components/tabs/BookStudyColumn";
 import { tabsAtom } from "@/state/atoms";
@@ -137,6 +139,11 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<BookNotes | null>(null);
+  // Boards corrected in this book that the reader has learned from (per-book adaptation).
+  const [learned, setLearned] = useState(0);
+  const learnedRef = useRef(0);
+  learnedRef.current = learned;
+  const [forgetOpen, setForgetOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
@@ -164,6 +171,9 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
       })
       .catch((e) => !cancelled && setError(String(e?.message ?? e)));
     void loadBookNotes(book.id).then((n) => !cancelled && setNotes(n));
+    void commands
+      .bookMemorySize(book.id)
+      .then((r) => !cancelled && r.status === "ok" && setLearned(r.data));
     return () => {
       cancelled = true;
       void task.destroy();
@@ -429,9 +439,20 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
     return out;
   }, [scanned, notes]);
 
+  /** A reading adjusted with what was learned in this book (as it is when nothing was). */
+  const adaptReading = useCallback(
+    async (reading: BoardReading | null): Promise<BoardReading | null> => {
+      if (!reading?.id || learnedRef.current === 0) return reading;
+      const adapted = await commands.adaptBoardReading(reading.id, book.id);
+      return adapted.status === "ok" && adapted.data ? adapted.data : reading;
+    },
+    [book.id],
+  );
+
   const finish = useCallback(
     async (page: PdfPage, box: PdfBox, reading: BoardReading | null, started: number) => {
       const correction = notes ? findCorrection(notes, page.pageNumber, box) : null;
+      if (!correction) reading = await adaptReading(reading);
       const context = moveContext(await textRuns(page), box);
       setResult(
         apply({
@@ -447,7 +468,7 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
         }),
       );
     },
-    [notes, apply],
+    [notes, apply, adaptReading],
   );
 
   const run = useCallback(
@@ -549,7 +570,30 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
     setResult(apply({ ...result, flipped: !result.flipped }));
   };
 
+  /**
+   * Learns from the position on the board for the diagram just read: the user checked it, so its
+   * squares teach the reader how this book draws its pieces.
+   */
+  const learn = async (r: Result) => {
+    const reading = r.reading;
+    if (!reading?.id || !reading.placement) return;
+    const placement = store.getState().root.fen.split(" ")[0];
+    // The picture shows the board from Black's side when exactly one of the reader's guess and
+    // the user's flip says so.
+    const imageFlipped = reading.flipped !== r.flipped;
+    const key = `${r.page}:${r.box.map((v) => Math.round(v)).join(",")}`;
+    const res = await commands.learnBoardReading(reading.id, book.id, key, placement, imageFlipped);
+    if (res.status === "ok" && res.data !== null) setLearned(res.data);
+  };
+
+  const forget = async () => {
+    setForgetOpen(false);
+    const res = await commands.forgetBookMemory(book.id);
+    if (res.status === "ok") setLearned(0);
+  };
+
   const usePosition = () => {
+    if (result?.needsReview) void learn(result);
     setDoubts(null);
     setEditRequest((previous) => ({ store, count: (previous?.count ?? 0) + 1, open: false }));
     if (result) setResult({ ...result, needsReview: false });
@@ -576,6 +620,7 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
     setNotes(
       await saveCorrection(book.id, { page: result.page, box: result.box, fen, readPlacement }),
     );
+    await learn(result);
     setResult({
       ...result,
       correction: { page: result.page, box: result.box, fen, readPlacement, savedAt: "" },
@@ -603,6 +648,10 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
                   text: t("Board.ImageReader.Review", { count: result.reading.doubtful.length }),
                 }
               : { color: "red", text: t("Board.ImageReader.NoBoard") },
+        learnedNote:
+          !result.correction && result.reading && result.reading.adapted > 0
+            ? t("Books.Bar.Learned", { count: result.reading.adapted })
+            : null,
         turnNote: result.correction
           ? null
           : result.turnSource === "manual"
@@ -756,8 +805,23 @@ function BookReader({ book, tabId }: { book: BookRef; tabId: string }) {
             <Menu.Item leftSection={<IconBookOff size="1rem" />} onClick={closeBook}>
               {t("Books.Close")}
             </Menu.Item>
+            <Menu.Item
+              leftSection={<IconBrain size="1rem" />}
+              disabled={learned === 0}
+              onClick={() => setForgetOpen(true)}
+            >
+              {t("Books.Forget", { count: learned })}
+            </Menu.Item>
           </Menu.Dropdown>
         </Menu>
+        <ConfirmModal
+          title={t("Books.Forget.Title")}
+          description={t("Books.Forget.Message", { count: learned })}
+          opened={forgetOpen}
+          onClose={() => setForgetOpen(false)}
+          onConfirm={() => void forget()}
+          confirmLabel={t("Books.Forget.Confirm")}
+        />
       </Group>
 
       <Box ref={viewRef} pos="relative" style={{ flex: 1, minHeight: 0 }}>

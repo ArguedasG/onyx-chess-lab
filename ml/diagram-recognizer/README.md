@@ -36,6 +36,9 @@ py -3.11 -m venv .venv
 | `tools/extract_diagrams.mjs`       | Extrae los diagramas de los libros del autor (evaluación privada)           |
 | `tools/eval_books.py`              | Evaluación privada en los libros, con galerías                              |
 | `tools/eval_turns.mjs`             | Evaluación privada del turno leído del texto (Libros, paso 4)               |
+| `tools/label_books.py`             | Etiquetado local de los diagramas privados (página en 127.0.0.1)            |
+| `tools/eval_labels.py`             | Mide los informes de `eval_books.py` contra esas etiquetas                  |
+| `tools/sim_adapt.py`               | Simula la adaptación por libro sobre las etiquetas (y fija su regla)        |
 | `tools/make_parity_fixtures.py`    | Fixtures de paridad para las pruebas de Rust (`src-tauri/fixtures/diagram`) |
 | `tools/export_probe.py`            | Paso 1: red sin entrenar para medir runtimes                                |
 | `runtime-bench/`                   | Paso 1: banco en Rust de `rten` y `tract` (no entra en la app)              |
@@ -44,26 +47,26 @@ py -3.11 -m venv .venv
 | `runs/`, `data/`                   | Salidas locales (ignoradas por git)                                         |
 | `private-eval/`                    | Recortes de los libros del autor: **nunca** se suben ni entrenan nada       |
 
-## Reproducir el modelo 1.1.0
+## Reproducir el modelo 1.2.0
 
 Las fuentes (FreeSerif, DejaVu Sans y Noto Sans Symbols 2) se descargan de sus sitios oficiales a
-`data/fonts-download/`. La generación tarda ~8 min y el entrenamiento ~39 min en CPU, en tandas.
+`data/fonts-download/`. La generación tarda ~9 min y el entrenamiento ~43 min en CPU, en tandas.
 
 ```bash
 node ml/diagram-recognizer/tools/render_pieces.mjs
 .venv/Scripts/python tools/render_glyph_pieces.py
-.venv/Scripts/python tools/generate.py --db "<Lichess Puzzles.db3>" --out data/v7
-.venv/Scripts/python tools/train.py --name v7 --data data/v7 --epochs 3 --minutes 12
-.venv/Scripts/python tools/evaluate.py --run runs/v7 --data data/v7
-.venv/Scripts/python tools/export.py --run runs/v7 --data data/v7 --version 1.1.0 --threshold 0.95
+.venv/Scripts/python tools/generate.py --db "<Lichess Puzzles.db3>" --out data/v8
+.venv/Scripts/python tools/train.py --name v8 --data data/v8 --epochs 3 --minutes 12
+.venv/Scripts/python tools/evaluate.py --run runs/v8 --data data/v8
+.venv/Scripts/python tools/export.py --run runs/v8 --data data/v8 --version 1.2.0 --threshold 0.95
 ```
 
-`export.py` escribe en `runs/v7/export/`; `models/1.1.0/` reúne esos archivos con
-`runs/v7/config.json` (`training-config.json`), `metrics.jsonl` (`training-metrics.jsonl`),
+`export.py` escribe en `runs/v8/export/`; `models/1.2.0/` reúne esos archivos con
+`runs/v8/config.json` (`training-config.json`), `metrics.jsonl` (`training-metrics.jsonl`),
 `eval.json` (`eval-synthetic.json`) y el `dataset.json` del dataset. Después,
 `tools/make_parity_fixtures.py --db <…>` actualiza los fixtures de Rust. El modelo 1.0.0 (dataset
-v5, 9 000 tableros de entrenamiento con `--train 9000` y los juegos de entonces) queda en
-`models/1.0.0/`.
+v5, 9 000 tableros de entrenamiento con `--train 9000` y los juegos de entonces) y el 1.1.0
+(dataset v7, el generador de `0100f889`) quedan en `models/1.0.0/` y `models/1.1.0/`.
 
 `render_pieces.mjs` se lanza desde la raíz del repositorio; lo demás, desde esta carpeta.
 `train.py` se repite hasta que diga «training finished».

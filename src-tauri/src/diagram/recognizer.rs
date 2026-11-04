@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use rten::Model;
+use rten::{Model, NodeId};
 use rten_tensor::prelude::*;
 use rten_tensor::NdTensor;
 use serde::Deserialize;
@@ -15,6 +15,20 @@ struct Manifest {
     version: String,
     output: ManifestOutput,
     calibration: Calibration,
+    /// Per-book adaptation constants, tied to this model's feature space (from 1.2.0).
+    adaptation: Option<Adaptation>,
+}
+
+/// How the squares of the user's corrections in a book adjust its readings
+/// (`ml/diagram-recognizer/tools/sim_adapt.py`, `adapt_board`).
+#[derive(Deserialize, Clone, Debug)]
+pub struct Adaptation {
+    pub k: usize,
+    pub min_similarity: f32,
+    pub span: f32,
+    pub sharpness: f32,
+    pub empty_per_board: usize,
+    pub changed_confidence_cap: f32,
 }
 
 #[derive(Deserialize)]
@@ -30,6 +44,11 @@ struct Calibration {
 
 pub struct Recognizer {
     model: Model,
+    input: NodeId,
+    logits_output: NodeId,
+    /// The 128 pooled features (models from 1.2.0); without them there is no adaptation.
+    features_output: Option<NodeId>,
+    pub adaptation: Option<Adaptation>,
     /// FEN letter per class ('.' for empty), in model output order.
     symbols: Vec<char>,
     temperature: f32,
@@ -60,7 +79,19 @@ impl Recognizer {
         }
         let model = Model::load_file(onnx)
             .map_err(|e| Error::InvalidRequest(format!("diagram model: {e}")))?;
+        let node = |name: &str| {
+            model
+                .find_node(name)
+                .ok_or_else(|| Error::InvalidRequest(format!("diagram model: no node {name}")))
+        };
+        let input = node("squares")?;
+        let logits_output = node("logits")?;
+        let features_output = model.find_node("features");
         Ok(Recognizer {
+            input,
+            logits_output,
+            features_output,
+            adaptation: manifest.adaptation.filter(|_| features_output.is_some()),
             model,
             symbols,
             temperature: manifest.calibration.temperature,
@@ -69,8 +100,14 @@ impl Recognizer {
         })
     }
 
-    /// Raw logits [64 × 13] for 64 squares of 48 × 48 bytes.
+    /// Raw logits [n × 13] for n squares of 48 × 48 bytes.
+    #[cfg(test)]
     pub fn logits(&self, squares: &[u8]) -> Result<Vec<f32>, Error> {
+        Ok(self.run(squares)?.0)
+    }
+
+    /// Logits [n × 13] and, when the model has them, features [n × 128].
+    pub fn run(&self, squares: &[u8]) -> Result<(Vec<f32>, Option<Vec<f32>>), Error> {
         let n = squares.len() / (SQUARE * SQUARE);
         let input = NdTensor::from_data(
             [n, 1, SQUARE, SQUARE],
@@ -79,33 +116,76 @@ impl Recognizer {
                 .map(|&v| v as f32 / 255.0)
                 .collect::<Vec<_>>(),
         );
-        let output = self
+        let mut outputs = vec![self.logits_output];
+        outputs.extend(self.features_output);
+        let mut values = self
             .model
-            .run_one(input.view().into(), None)
-            .map_err(|e| Error::InvalidRequest(format!("diagram model: {e}")))?;
-        let output: NdTensor<f32, 2> = output
-            .try_into()
-            .map_err(|_| Error::InvalidRequest("diagram model: unexpected output".into()))?;
-        Ok(output.to_vec())
+            .run(vec![(self.input, input.view().into())], &outputs, None)
+            .map_err(|e| Error::InvalidRequest(format!("diagram model: {e}")))?
+            .into_iter();
+        let mut next = || -> Result<Vec<f32>, Error> {
+            let value: NdTensor<f32, 2> = values
+                .next()
+                .ok_or_else(|| Error::InvalidRequest("diagram model: missing output".into()))?
+                .try_into()
+                .map_err(|_| Error::InvalidRequest("diagram model: unexpected output".into()))?;
+            Ok(value.to_vec())
+        };
+        let logits = next()?;
+        let features = match self.features_output {
+            Some(_) => Some(next()?),
+            None => None,
+        };
+        Ok((logits, features))
     }
 
-    /// Most likely symbol and its calibrated confidence for each square.
-    pub fn classify(&self, logits: &[f32]) -> Vec<(char, f32)> {
+    /// Calibrated probabilities [n × 13] (softmax of logits / T).
+    pub fn probabilities(&self, logits: &[f32]) -> Vec<f32> {
         logits
             .chunks_exact(self.symbols.len())
-            .map(|row| {
+            .flat_map(|row| {
                 let scaled: Vec<f32> = row.iter().map(|v| v / self.temperature).collect();
                 let max = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 let exp: Vec<f32> = scaled.iter().map(|v| (v - max).exp()).collect();
                 let total: f32 = exp.iter().sum();
-                let (best, p) =
-                    exp.iter().enumerate().fold(
-                        (0, 0.0f32),
-                        |acc, (i, &e)| if e > acc.1 { (i, e) } else { acc },
-                    );
-                (self.symbols[best], p / total)
+                exp.into_iter().map(move |e| e / total)
             })
             .collect()
+    }
+
+    /// Most likely symbol and its probability, from probabilities [n × 13].
+    pub fn decide(&self, probabilities: &[f32]) -> Vec<(char, f32)> {
+        probabilities
+            .chunks_exact(self.symbols.len())
+            .map(|row| {
+                let (best, p) =
+                    row.iter().enumerate().fold(
+                        (0, 0.0f32),
+                        |acc, (i, &p)| {
+                            if p > acc.1 {
+                                (i, p)
+                            } else {
+                                acc
+                            }
+                        },
+                    );
+                (self.symbols[best], p)
+            })
+            .collect()
+    }
+
+    /// FEN letter ('.' for empty) of a class index.
+    pub fn symbol(&self, class: usize) -> char {
+        self.symbols[class]
+    }
+
+    /// Class index of a FEN letter ('.' for empty).
+    pub fn class_of(&self, symbol: char) -> Option<usize> {
+        self.symbols.iter().position(|&s| s == symbol)
+    }
+
+    pub fn classes(&self) -> usize {
+        self.symbols.len()
     }
 }
 

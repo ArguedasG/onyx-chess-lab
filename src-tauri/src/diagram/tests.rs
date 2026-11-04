@@ -17,7 +17,7 @@ fn fixtures() -> PathBuf {
 }
 
 fn model_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ml/diagram-recognizer/models/1.1.0")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ml/diagram-recognizer/models/1.2.0")
 }
 
 fn load(name: &str) -> image::DynamicImage {
@@ -34,8 +34,8 @@ fn sha256(bytes: &[u8]) -> String {
 fn recognizer() -> Recognizer {
     let dir = model_dir();
     Recognizer::load(
-        &dir.join("diagram-squares-1.1.0.onnx"),
-        &dir.join("diagram-squares-1.1.0.json"),
+        &dir.join("diagram-squares-1.2.0.onnx"),
+        &dir.join("diagram-squares-1.2.0.json"),
     )
     .expect("model")
 }
@@ -178,7 +178,7 @@ fn private_books() {
     };
     let dir = PathBuf::from(dir);
     let report: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("report-v7/results.json")).unwrap())
+        serde_json::from_slice(&std::fs::read(dir.join("report-v8/results.json")).unwrap())
             .unwrap();
     let recognizer = recognizer();
     let (mut same, mut total, mut times) = (0, 0, Vec::new());
@@ -285,4 +285,156 @@ fn private_pages() {
         "{n} pages, {:.0} ms per page",
         started.elapsed().as_secs_f64() * 1000.0 / n as f64
     );
+}
+
+fn read_f32(path: PathBuf) -> Vec<f32> {
+    std::fs::read(path)
+        .unwrap()
+        .chunks_exact(4)
+        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect()
+}
+
+#[test]
+fn features_match_the_manifest() {
+    let dir = model_dir();
+    let input = std::fs::read(dir.join("parity.input.u8")).unwrap();
+    let expected = read_f32(dir.join("parity.features.f32"));
+    let (_, features) = recognizer().run(&input).unwrap();
+    let features = features.expect("model with features");
+    assert_eq!(features.len(), expected.len());
+    let diff = features
+        .iter()
+        .zip(&expected)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    assert!(diff <= 1e-4, "max feature diff {diff}");
+}
+
+/// Learning a board with other labels makes the same board read that way, every changed square
+/// stays doubtful, and the memory survives a round trip to bytes.
+#[test]
+fn book_memory_corrects_but_never_accepts() {
+    use super::memory::{normalize, BookMemory};
+
+    let recognizer = recognizer();
+    let rule = recognizer.adaptation.clone().expect("adaptation constants");
+    let input = std::fs::read(model_dir().join("parity.input.u8")).unwrap();
+    let (logits, features) = recognizer.run(&input).unwrap();
+    let mut features = features.unwrap();
+    normalize(&mut features);
+    let probabilities = recognizer.probabilities(&logits);
+    let read: Vec<usize> = recognizer
+        .decide(&probabilities)
+        .iter()
+        .map(|(s, _)| recognizer.class_of(*s).unwrap())
+        .collect();
+
+    // A "correction" that swaps the colour of every piece.
+    let swap = |c: usize| match c {
+        0 => 0,
+        1..=6 => c + 6,
+        _ => c - 6,
+    };
+    let truth: Vec<usize> = read.iter().map(|&c| swap(c)).collect();
+    let mut memory = BookMemory::new(&recognizer.version);
+    let (same, _, changed) = memory.adapt(&probabilities, &features, recognizer.classes(), &rule);
+    assert_eq!(
+        (same, changed),
+        (read.clone(), 0),
+        "empty memory changes nothing"
+    );
+
+    memory.learn("p1:box", &features, &truth, rule.empty_per_board);
+    memory.learn("p1:box", &features, &truth, rule.empty_per_board);
+    assert_eq!(memory.boards.len(), 1, "same key replaces");
+
+    let (classes, confidence, changed) =
+        memory.adapt(&probabilities, &features, recognizer.classes(), &rule);
+    assert_eq!(classes, truth);
+    let pieces = truth.iter().filter(|&&c| c != 0).count() as u32;
+    assert_eq!(changed, pieces);
+    for i in 0..64 {
+        if classes[i] != read[i] {
+            assert!(confidence[i] < recognizer.review_threshold);
+        }
+    }
+
+    let bytes = memory.to_bytes();
+    assert_eq!(BookMemory::from_bytes(&bytes), Some(memory.clone()));
+    assert_eq!(BookMemory::from_bytes(&bytes[..bytes.len() - 1]), None);
+}
+
+/// Per-book adaptation on the author's labels, as `tools/sim_adapt.py` simulates it: each book's
+/// labeled diagrams in page order, learning from every board left to review. Must match the
+/// Python totals (138 exact of 143, 92 accepted, 0 accepted but wrong with model 1.2.0).
+/// `ONYX_DIAGRAM_EVAL=<ml/diagram-recognizer/private-eval> cargo test --release -- --ignored private_adaptation --nocapture`
+#[test]
+#[ignore = "needs the author's private evaluation set and labels"]
+fn private_adaptation() {
+    use super::memory::BookMemory;
+    use super::recognizer::rule_problems;
+
+    let Ok(dir) = std::env::var("ONYX_DIAGRAM_EVAL") else {
+        return;
+    };
+    let dir = PathBuf::from(dir);
+    let read_json = |name: &str| -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(dir.join(name)).unwrap()).unwrap()
+    };
+    let report = read_json("report-v8/results.json");
+    let labels = read_json("labels.json");
+    let recognizer = recognizer();
+    let rule = recognizer.adaptation.clone().unwrap();
+    let (mut boards, mut exact, mut accepted, mut silent, mut to_fix) = (0, 0, 0, 0, 0);
+    for entries in report["boards"].as_object().unwrap().values() {
+        let mut items: Vec<(i64, String, String)> = entries
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|e| {
+                let file = e["file"].as_str()?.to_string();
+                let label = &labels["labels"][&file];
+                let status = label["status"].as_str()?;
+                ((status == "ok" || status == "fixed") && e.get("grid").is_some()).then(|| {
+                    let placement = label["placement"].as_str().unwrap().to_string();
+                    (e["page"].as_i64().unwrap_or(0), file, placement)
+                })
+            })
+            .collect();
+        items.sort();
+        let mut memory = BookMemory::new(&recognizer.version);
+        for (_, file, placement) in items {
+            let image = image::open(dir.join("books").join(&file)).unwrap();
+            let reading = read_board(&recognizer, &image).unwrap();
+            if reading.status == super::ReadingStatus::NoBoard {
+                continue;
+            }
+            let cached = super::cached_reading(reading.id).unwrap();
+            let (classes, confidence, _) = memory.adapt(
+                &cached.probabilities,
+                &cached.features,
+                recognizer.classes(),
+                &rule,
+            );
+            let truth: Vec<usize> = placement
+                .chars()
+                .map(|c| recognizer.class_of(c).unwrap())
+                .collect();
+            let symbols: Vec<char> = classes.iter().map(|&c| recognizer.symbol(c)).collect();
+            let is_exact = classes == truth;
+            let is_accepted = rule_problems(&symbols).is_empty()
+                && confidence.iter().all(|&p| p >= recognizer.review_threshold);
+            boards += 1;
+            exact += is_exact as u32;
+            accepted += is_accepted as u32;
+            silent += (is_accepted && !is_exact) as u32;
+            if !is_accepted {
+                to_fix += classes.iter().zip(&truth).filter(|(a, b)| a != b).count();
+                memory.learn(&file, &cached.features, &truth, rule.empty_per_board);
+            }
+        }
+    }
+    println!("{boards} boards: {exact} exact, {accepted} accepted, {silent} accepted but wrong, {to_fix} squares to fix");
+    assert_eq!(silent, 0);
 }
