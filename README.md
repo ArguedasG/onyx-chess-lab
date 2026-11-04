@@ -31,6 +31,9 @@ previews**.
   copies into tactics, opening repertoires or endgame training.
 - Current-position actions that distinguish exact repertoire routes from transpositions and create
   reviewed training copies for tactics or endgames.
+- Books: read your own chess PDFs next to the board, open any diagram as a position and play the
+  games printed in the text, with Onyx's own diagram recognizer running locally. Screenshots can be
+  read into the position editor too.
 - Human-like Maia-based bots with local history and measurements.
 - Reproducible model-game generation, batches, experiments and analysis.
 - UCI engine support, including guided installation of the managed Maia 3 package on Windows x64.

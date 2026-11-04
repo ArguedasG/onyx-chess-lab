@@ -78,8 +78,8 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.23.0** (9.1 Bots, 9.2 Torneos, 9.3 Estructuras de peones y gemelo,
-  y mejoras de repertorios y motores). Detalle: `docs/release-notes-0.23.0.es.md`.
+- Última versión publicada: **0.24.0** (9.4 Libros y posiciones desde imagen, gemelos guardados y
+  editables, pantalla de inicio nueva). Detalle: `docs/release-notes-0.24.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -94,8 +94,10 @@ prueban y comunican problemas.
   Preparación contra rivales** (validada por el autor) y **8.7 Entrenamiento desde errores** están
   implementadas; **8.8 Táctica**, **8.9 Finales** y **8.10 Aperturas** también, y se publicaron en
   0.22.0. La **Fase 9** completa (9.1 Bots, 9.2 Torneos y 9.3 Interpretación estratégica) se
-  publicó en 0.23.0. Antes de la **Fase 10**, la última, queda **9.4 Libros y posiciones desde
-  imagen** (añadida el 2026-11-01 desde `docs/market-study-2.es.md`). La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
+  publicó en 0.23.0, y **9.4 Libros y posiciones desde imagen** (añadida el 2026-11-01 desde
+  `docs/market-study-2.es.md`) en 0.24.0, con su paso 6 opcional (vídeo) aplazado a la versión
+  siguiente. Tras una semana de pruebas del autor en busca de errores queda la **Fase 10**, la
+  última. La reestructuración de la interfaz inspirada en ChessBase para Mac (0.19.0)
   sigue como criterio de diseño de las pantallas nuevas.
 
 La existencia de usuarios reales aumenta la prioridad de compatibilidad de datos, recuperación,
@@ -154,23 +156,23 @@ Ideas del estudio: I-01, I-26 (mínima), I-37 e I-42.
 
 ## 4. Estado de las fases
 
-| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                                                                                                |
-| ------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                                                                                         |
-| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                                                                                                     |
-| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                                                                                               |
-| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                                                                                                     |
-| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                                                                                                     |
-| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10.                                                                       |
-| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                                                                                             |
-| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                                                                                      |
-| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                                                                                           |
-| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                                                                                           |
-| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                                                |
-| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                                              |
-| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                                        |
-| 9 — Expansión avanzada                      | En curso                                 | 9.1 (bots), 9.2 (torneos) y 9.3 (estructuras y el gemelo) implementadas, pendientes de validación manual; 9.4 (Libros) pendiente. Ver: `docs/strategic-interpretation-phase-9-3.es.md`. |
-| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                                              |
+| Fase                                        | Estado vigente                           | Resultado o continuación                                                                                                                                                  |
+| ------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Base de bots humanos                    | Cerrada y validada                       | Bots humanos, mediciones e historial operativo.                                                                                                                           |
+| 1 — Motores e infraestructura experimental  | Cerrada y validada                       | Auditoría UCI, presets y manifiestos reproducibles.                                                                                                                       |
+| 2 — Model Game Generator                    | Cerrada y validada                       | Generación individual, lotes y experimentos persistentes.                                                                                                                 |
+| 3 — Experiment Analysis                     | Cerrada para su alcance                  | Análisis dual, análisis de partidas y benchmark W/D/L exploratorio.                                                                                                       |
+| 4 — Beta de bots y torneos                  | Cerrada                                  | Sus ampliaciones avanzadas se concentran en Fase 9.                                                                                                                       |
+| 5 — Identidad y distribución inicial        | Cerrada como lanzamiento público inicial | Marca, repositorio, release Windows y actualizador propios; endurecimiento residual pasa a mantenimiento/Fase 10.                                                         |
+| 6 — Táctica, Aperturas y Finales            | Cerrada y validada manualmente           | Tres experiencias especializadas con persistencia, práctica y estadísticas.                                                                                               |
+| 6.A — Consolidación de Aperturas            | En curso                                 | Rediseño publicado en 0.17.0; importación editable y modo Aprender en desarrollo. Ver sección 7.A.                                                                        |
+| 7.0 — Base escalable de consultas           | Cerrada y validada manualmente           | Snapshots, paginación, PGN bajo demanda, cancelación, caché y benchmark real.                                                                                             |
+| 7.1 — Opening Reports                       | Cerrada y validada manualmente           | Informe local por posición, teoría, transposiciones, jugadores y exportación.                                                                                             |
+| 7.2 — Player Analysis                       | Cerrada y validada manualmente           | Perfil local, motor, evidencia y posiciones entrenables.                                                                                                                  |
+| 7.3 — Inteligencia de aperturas y jugadores | Cerrada                                  | 7.3.1–7.3.4 terminadas; las regresiones remotas y de scroll se corrigieron y verificaron antes de avanzar.                                                                |
+| 8 — Serious Preparation Tools               | En curso                                 | 8.0–8.10 implementadas; 8.8–8.10 pendientes de validación manual. Ver sección 7.                                                                                          |
+| 9 — Expansión avanzada                      | Publicada (0.23.0 y 0.24.0)              | 9.1 (bots), 9.2 (torneos), 9.3 (estructuras y el gemelo) y 9.4 (Libros, con el vídeo aplazado) publicadas; validación manual en curso. Ver: `docs/books-phase-9-4.es.md`. |
+| 10 — Consolidación pública y MLOps          | Pendiente (la última)                    | Producto, multiplataforma, datos, automatización y evidencia reproducible.                                                                                                |
 
 ### Documentación de fases cerradas
 
@@ -766,8 +768,8 @@ capacidades propias, como el tramo nuevo y las transposiciones.
 
 ## 8. Fase 9 — Expansión avanzada de fases anteriores
 
-**Estado: 9.1–9.3 implementadas y publicadas en 0.23.0, pendientes de validación manual; 9.4
-pendiente.**
+**Estado: 9.1–9.3 publicadas en 0.23.0 y 9.4 en 0.24.0, pendientes de validación manual; el paso
+6 opcional de 9.4 (vídeo) queda para la versión siguiente.**
 
 ### 9.1. Bots humanos y calibración
 
@@ -844,9 +846,9 @@ de rival y se añaden a mano a los torneos (nunca por autorrelleno). Detalle en
 
 ### 9.4. Libros y posiciones desde imagen
 
-**Estado: En curso desde el 2026-11-02; pasos 0 a 4 hechos, rediseño de Libros y modelos 1.1.0
-y 1.2.0 (2026-11-03)** (detalle en
-`docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
+**Estado: Cerrada el 2026-11-04 y publicada en 0.24.0: pasos 0 a 5, rediseño de Libros, modelos
+1.1.0 y 1.2.0 y adaptación por libro; el paso 6 opcional (vídeo) se aplaza a la versión siguiente**
+(detalle y criterios de salida en `docs/books-phase-9-4.es.md`). Ideas: I-55, I-56, I-57 y, opcional, la primera
 entrega de I-59, del segundo estudio de mercado (`docs/market-study-2.es.md`, §2, §5 y §6). Es una
 funcionalidad nueva, no una ampliación; va antes de la Fase 10 por decisión del autor y **se cierra
 completa dentro de 9.4**, modelo incluido. La Fase 10 no depende de ella ni la reabre.
@@ -1041,6 +1043,29 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-04 — Release 0.24.0
+
+- Publica 9.4 completa salvo el vídeo: posición desde imagen, Libros (biblioteca, lector junto al
+  tablero, doble clic en diagramas con el modelo diagram-squares 1.2.0 y adaptación por libro) y
+  «Abrir esta partida» desde la notación. El paso 6 (vídeo local) pasa a la versión siguiente.
+- También: gemelos guardados, editables y por ritmo, tablero interactivo en «Repertorio probable»,
+  fuente «Rival» en el tablero, pantalla de inicio nueva y mejoras de navegación tras la crítica de
+  un usuario.
+- CI: los JSON generados del modelo quedan fuera de `oxfmt`.
+- Pendiente tras la release: una semana de pruebas del autor en busca de errores y la medida de la
+  latencia del doble clic en la app.
+- Detalle: `docs/release-notes-0.24.0.es.md`.
+
+### 2026-11-04 — 9.4, paso 5: «Abrir esta partida»
+
+- Doble clic en una jugada del texto de un libro: la línea hasta ella (y lo que sigue) pasa al
+  tablero, desde el diagrama de encima, el tablero o la posición inicial, la primera desde la que
+  es legal. Lectura guiada por la legalidad (letras en varios idiomas, figurines y figurines
+  destrozados por OCR), variantes entre paréntesis, partidas que cruzan páginas; la primera jugada
+  imposible se marca en rojo en la página y el tablero se queda en la anterior.
+- En los libros del autor: 62/122 jugadas abiertas desde sus diagramas; los digitales limpios casi
+  todas (Illescas 12/12), los escaneos limitados por el OCR.
 
 ### 2026-11-03 — 9.4: etiquetas del autor y modelo 1.2.0
 

@@ -1,5 +1,88 @@
 [
   {
+    "version": "0.24.0",
+    "notes": {
+      "en": {
+        "summary": "The Books release: read your chess PDFs next to the board, turn any diagram or screenshot into a position and play the games printed in the text. Also saved and editable player twins, a new start screen and easier navigation.",
+        "sections": [
+          {
+            "title": "Books",
+            "items": [
+              "New Books section: a library of your own PDFs (Onyx keeps their paths, never copies) with covers, search, “Continue reading” and drag and drop.",
+              "The book and a study column side by side: a large board, notation and tools, zoom with Ctrl + wheel, text selection and a Diagrams mode that marks every diagram on the visible pages.",
+              "Double-click a diagram and the board takes its position, with the side to move and the move number read from the text. Works with digital PDFs and scans; doubtful squares are flagged for you to fix, never presented as certain.",
+              "The reader learns from your corrections in each book: after the first fixed diagrams, books with unusual piece sets are read much better. It can forget what it learned from the reader's menu.",
+              "Double-click a move in the text to play the line up to it on the board (English, Spanish and German letters, figurines, variations in parentheses, games that cross pages). A move it cannot read is marked in red on the page and the board stays on the previous one, so you keep playing as you like.",
+              "Your corrections are saved for each book."
+            ]
+          },
+          {
+            "title": "Position from an image",
+            "items": [
+              "“From image” in the position editor: open, paste or drag a screenshot (Chess.com, Lichess, a video or a PDF) and get its position, with doubtful squares in red until you correct them.",
+              "The recognizer is Onyx's own: a small model trained only on synthetic boards drawn with free piece sets, running on your computer. Your books and images never leave it."
+            ]
+          },
+          {
+            "title": "Player twins and preparation",
+            "items": [
+              "Twins are saved, edited, updated and self-tuned, with a profile for each time control, and can be added to a tournament by hand.",
+              "Interactive board in “Likely repertoire”: move any piece, arrows with the most-played moves and a warning, with a way back, when you leave the player's games.",
+              "New “Rival” source in the board's database panel: a line opened from Preparation shows the player's moves in each position, and a click plays the move."
+            ]
+          },
+          {
+            "title": "Start screen and navigation",
+            "items": [
+              "New start screen: the analysis board as the main action, Play, Continue and every section with its purpose, with a compact view, and a “When the app opens: Home / Analysis board” setting.",
+              "A Home entry in the sidebar, variation buttons (only when the game has variations), shortcut tooltips on the move buttons and first-use tips you can dismiss and show again.",
+              "The “+” button shows an unused tab of the same kind instead of opening a duplicate, and never reuses a tab with work in it."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "La versión de Libros: lee tus PDF de ajedrez junto al tablero, convierte cualquier diagrama o captura en una posición y juega las partidas impresas en el texto. Además, gemelos guardados y editables, una pantalla de inicio nueva y una navegación más sencilla.",
+        "sections": [
+          {
+            "title": "Libros",
+            "items": [
+              "Nueva sección Libros: una biblioteca de tus propios PDF (Onyx guarda sus rutas, nunca copias) con portadas, búsqueda, «Continuar leyendo» y arrastrar y soltar.",
+              "El libro y una columna de estudio lado a lado: tablero grande, notación y herramientas, zoom con Ctrl + rueda, selección de texto y un modo Diagramas que marca todos los diagramas de las páginas visibles.",
+              "Doble clic en un diagrama y el tablero toma su posición, con el turno y el número de jugada leídos del texto. Funciona con PDF digitales y escaneados; las casillas dudosas se marcan para que las corrijas, nunca se presentan como seguras.",
+              "El lector aprende de tus correcciones en cada libro: tras los primeros diagramas corregidos, los libros con juegos de piezas poco habituales se leen mucho mejor. Puede olvidar lo aprendido desde el menú del lector.",
+              "Doble clic en una jugada del texto para jugar la línea hasta ella en el tablero (letras en inglés, español y alemán, figurines, variantes entre paréntesis, partidas que cruzan páginas). Una jugada que no consigue leer se marca en rojo en la página y el tablero se queda en la anterior, así que sigues jugando como quieras.",
+              "Tus correcciones se guardan por libro."
+            ]
+          },
+          {
+            "title": "Posición desde imagen",
+            "items": [
+              "«Desde imagen» en el editor de posición: abre, pega o arrastra una captura (Chess.com, Lichess, un vídeo o un PDF) y obtén su posición, con las casillas dudosas en rojo hasta que las corrijas.",
+              "El reconocedor es propio de Onyx: un modelo pequeño entrenado solo con tableros sintéticos dibujados con juegos de piezas libres, que funciona en tu ordenador. Tus libros e imágenes nunca salen de él."
+            ]
+          },
+          {
+            "title": "Gemelos y preparación",
+            "items": [
+              "Los gemelos se guardan, se editan, se actualizan y se autoajustan, con un perfil por ritmo, y se pueden añadir a mano a un torneo.",
+              "Tablero interactivo en «Repertorio probable»: mueve cualquier pieza, flechas con las jugadas más jugadas y un aviso, con vuelta atrás, al salir de las partidas del jugador.",
+              "Nueva fuente «Rival» en el panel de base de datos del tablero: una línea abierta desde Preparación muestra las jugadas del jugador en cada posición, y un clic juega la jugada."
+            ]
+          },
+          {
+            "title": "Pantalla de inicio y navegación",
+            "items": [
+              "Pantalla de inicio nueva: el tablero de análisis como acción principal, Jugar, Continuar y todas las secciones con su propósito, con vista compacta, y el ajuste «Al abrir la aplicación: Inicio / Tablero de análisis».",
+              "Entrada Inicio en la barra lateral, botones de variante (solo si la partida tiene variantes), el atajo de cada botón de movimiento en su tooltip y consejos de primer uso que se descartan y se pueden volver a mostrar.",
+              "El botón «+» muestra una pestaña sin usar del mismo tipo en lugar de abrir otra igual, y nunca reutiliza una pestaña con trabajo."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.23.0",
     "notes": {
       "en": {

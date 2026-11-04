@@ -27,11 +27,25 @@ function markdown(notes) {
 
 const lines = markdown(entry.notes.en);
 // After the rule, only the release page shows it; the app stops reading there.
+lines.push("---", "");
+if (entry.notes.es) lines.push("## Español", "", ...markdown(entry.notes.es));
+const file = (suffix) => `\`Onyx.Chess.Lab_${version}_${suffix}\``;
 lines.push(
-  "---",
-  "Signed Onyx Chess Lab update. Windows x64 is the validated platform; Linux and macOS builds are untested previews.",
+  "## Downloads / Descargas",
+  "",
+  "| Platform / Plataforma | File / Archivo | Status / Estado |",
+  "|---|---|---|",
+  `| Windows x64 | ${file("x64-setup.exe")} | Validated · in-app updates / Validada · actualizaciones desde la app |`,
+  `| macOS Apple Silicon | ${file("aarch64.dmg")} | Untested preview / Vista previa sin probar |`,
+  `| macOS Intel | ${file("x64.dmg")} | Untested preview / Vista previa sin probar |`,
+  `| Linux x64 | ${file("amd64.AppImage")} / \`.deb\` | Untested preview / Vista previa sin probar |`,
+  "",
+  "Signed Onyx Chess Lab update: Windows users receive it through the built-in updater. On macOS and Linux, download and install new versions manually; the macOS build is not signed by Apple, see the [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) for how to open it. Your repertoires, studies, books, training progress, databases, analyses and settings are preserved.",
+  "",
+  "Actualización firmada de Onyx Chess Lab: en Windows llega por el actualizador integrado. En macOS y Linux, descarga e instala las versiones nuevas a mano; la versión de macOS no está firmada por Apple, consulta el [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) para abrirla. Tus repertorios, estudios, libros, progreso de entrenamiento, bases, análisis y ajustes se conservan.",
 );
 if (entry.notes.es) {
+  // The app reads the Spanish notes from here (RELEASE_NOTES_ES_MARKER), not from the visible copy.
   // "--" cannot appear inside an HTML comment.
   const spanish = markdown(entry.notes.es).join("\n").trim().replaceAll("--", "—");
   lines.push("", "<!-- onyx-notes:es", spanish, "-->");

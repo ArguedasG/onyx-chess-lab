@@ -1,24 +1,24 @@
 # Fase 9.4 — Libros y posiciones desde imagen
 
-Inicio: 2026-11-02. Ideas: I-55 (Libros), I-56 (reconocedor propio de diagramas), I-57 (posición
-desde imagen) y, opcional, I-59 entrega 1 (vídeo local), del segundo estudio de mercado
-(`docs/market-study-2.es.md`). Material del autor: 19 libros de prueba en una carpeta local que
+Inicio: 2026-11-02. Cierre: 2026-11-04, publicada en **0.24.0**. Ideas: I-55 (Libros), I-56
+(reconocedor propio de diagramas), I-57 (posición desde imagen) y, opcional, I-59 entrega 1 (vídeo
+local), del segundo estudio de mercado (`docs/market-study-2.es.md`). Material del autor: 19 libros de prueba en una carpeta local que
 **nunca** sale de su PC ni entra en el repositorio.
 
 ## Estado por paso
 
-| Paso | Qué                                                         | Estado                      |
-| ---- | ----------------------------------------------------------- | --------------------------- |
-| 0    | Diagnóstico de la biblioteca                                | Hecho (2026-11-02)          |
-| 1    | Pruebas de `pdf.js` y del runtime ONNX en Rust              | Hecho (2026-11-02)          |
-| 2    | Datos sintéticos, entrenamiento de I-56, manifiesto y cards | Hecho (2026-11-02)          |
-| 3    | I-57: posición desde imagen en el editor                    | Hecho (2026-11-02)          |
-| 4    | I-55: biblioteca, lector y doble clic en diagramas          | Hecho (2026-11-02)          |
-| —    | Rediseño de Libros y modelo 1.1.0                           | Hecho (2026-11-03)          |
-| —    | Etiquetas del autor y modelo 1.2.0                          | Hecho (2026-11-03)          |
-| —    | Adaptación por libro                                        | Hecho (2026-11-03)          |
-| 5    | I-55: «Abrir esta partida» desde la notación                | Siguiente                   |
-| 6    | Opcional: I-59 entrega 1                                    | Pendiente (decide el autor) |
+| Paso | Qué                                                         | Estado                        |
+| ---- | ----------------------------------------------------------- | ----------------------------- |
+| 0    | Diagnóstico de la biblioteca                                | Hecho (2026-11-02)            |
+| 1    | Pruebas de `pdf.js` y del runtime ONNX en Rust              | Hecho (2026-11-02)            |
+| 2    | Datos sintéticos, entrenamiento de I-56, manifiesto y cards | Hecho (2026-11-02)            |
+| 3    | I-57: posición desde imagen en el editor                    | Hecho (2026-11-02)            |
+| 4    | I-55: biblioteca, lector y doble clic en diagramas          | Hecho (2026-11-02)            |
+| —    | Rediseño de Libros y modelo 1.1.0                           | Hecho (2026-11-03)            |
+| —    | Etiquetas del autor y modelo 1.2.0                          | Hecho (2026-11-03)            |
+| —    | Adaptación por libro                                        | Hecho (2026-11-03)            |
+| 5    | I-55: «Abrir esta partida» desde la notación                | Hecho (2026-11-04)            |
+| 6    | Opcional: I-59 entrega 1                                    | Aplazado a la próxima versión |
 
 ## Paso 0 — Diagnóstico de la biblioteca
 
@@ -473,3 +473,78 @@ tablero que queda por revisar):
 
 En un libro con Alpha, el primer diagrama se corrige a mano; desde el segundo, el lector propone
 las piezas bien casi siempre y el usuario solo confirma.
+
+## Paso 5 — «Abrir esta partida» (2026-11-04)
+
+**Doble clic en una jugada del texto** → el tablero va a esa posición, con la línea del libro en
+la notación (la parte de después también, para seguirla con las flechas). La jugada en la que
+está el tablero se marca en amarillo en la página y «Página N» de la franja vuelve a ella. Un clic
+simple o una selección de texto no cambian nada, y un doble clic en una palabra que no es una
+jugada solo la selecciona, como antes.
+
+### Cómo se lee la línea (`src/utils/bookGame.ts`)
+
+- **Texto:** la capa de texto de la página, la anterior y la siguiente (partidas que cruzan
+  páginas), en orden de lectura. Se reparan sin mover caracteres los números partidos por el OCR
+  («1 9 . . .») y los puntos impresos como viñetas o con espacios («24. . . . Te5», «20 •• .Ah6»).
+- **Jugadas:** letras inglesas, españolas (también italianas y francesas) y alemanas; figurines
+  Unicode; capturas con `x`, `:` o sin marca (`ed5`); coronaciones; enroques con `O` o `0`; y
+  figurines destrozados por el OCR o ClearScan (`ttJf3`, `ltlxb3`, `%Vxd6`, `ie4t`): de ellos solo
+  se fía la casilla, y la pieza sale de la legalidad. Si quedan dos candidatas, se desempata por
+  cómo suele quedar cada figurine (`ttJ` caballo, `W` dama…) o por lo ya leído en la línea; si no,
+  la jugada se marca como ambigua en vez de elegir.
+- **Qué jugadas forman la línea:** los números («4.», «4…», «29 ...») dan el medio movimiento; las
+  respuestas sin número lo heredan; la prosa corta la serie. Hacia atrás desde la jugada pulsada,
+  cada medio movimiento es el más cercano impreso antes que no esté dentro de un paréntesis ajeno.
+  Las variantes entre paréntesis sustituyen a la jugada anterior, y las que el libro introduce en
+  la prosa («Other moves are less stubborn: 5.Kd3 Kb1…») se saltan porque su serie empieza antes
+  de lo que la línea necesita.
+- **Desde dónde:** se prueban, en orden, los diagramas encima de la jugada en su página (el más
+  cercano primero; con su corrección guardada o su lectura adaptada al libro, y el turno del
+  texto), el tablero tal como está, los diagramas de la página anterior y la posición inicial.
+  Gana el primero desde el que toda la línea hasta la jugada pulsada es legal.
+- **Si algo falla:** la primera jugada imposible o ambigua se marca en rojo en la página, el
+  tablero se queda en la anterior y la franja lo dice («La línea se detiene en «Txe4»»). Nunca se
+  salta una jugada ni se inventa una; el usuario sigue moviendo en su tablero como quiera.
+
+### Medición en los libros del autor (`tools/eval_lines.mjs`, privado)
+
+Para cada diagrama etiquetado de un libro con capa de texto, las jugadas impresas debajo se abren
+desde la posición del diagrama, como haría un doble clic en cada una:
+
+| Libro (texto)                             | Jugadas que llegan |
+| ----------------------------------------- | -----------------: |
+| Illescas (digital, español)               |              12/12 |
+| Silman (digital, español)                 |                1/1 |
+| De la Villa, _100 Endgames_ (digital)     |                4/7 |
+| Kornev (ClearScan, figurines destrozados) |              16/28 |
+| Hellsten, _Apertura I_ (OCR)              |              13/30 |
+| Hellsten, _Medio juego II_ (OCR)          |               5/18 |
+| Bronstein (OCR, dos columnas de jugadas)  |              10/19 |
+| **Total**                                 |         **62/122** |
+
+En los digitales limpios casi todo llega; los tres fallos de De la Villa son amenazas que el texto
+menciona («threatening 2.Kb1») y que no se pueden jugar en ese orden, y quedan marcadas. En los
+escaneos el límite es el OCR: casillas ilegibles (`fü8`), jugadas que el texto pone en columnas o
+números de página mezclados con la partida. La capa de texto de McDonald es basura (fuente con
+codificación propia) y la de Lakdawala apenas tiene números de jugada legibles: ahí la línea no se
+encuentra y no pasa nada.
+
+## Cierre (2026-11-04)
+
+La fase se publica en **0.24.0** con los pasos 0 a 5. Frente a los criterios de salida:
+
+- **Exactitud publicada** en el conjunto sintético y en el privado (model card de 1.2.0 y las
+  secciones de arriba): cumplido.
+- **Ninguna lectura dudosa presentada como segura**: 0 tableros aceptados y mal leídos contra las
+  etiquetas del autor, con el modelo solo y con la adaptación por libro: cumplido.
+- **Una partida abierta desde la notación reproduce sus jugadas o marca la primera imposible**:
+  cumplido; la lectura es todavía inexacta en los escaneos con OCR y se mejorará con el uso.
+- **Sin regresión para quien no usa Libros**: el bundle principal no cambia; `pdf.js`, el lector y
+  el modelo se cargan solo al abrir un libro o leer una imagen.
+- **Doble clic → tablero en < 300 ms**: el reconocedor tarda 76 ms de mediana por imagen en Rust;
+  la medida completa en la app queda para la semana de pruebas del autor tras la release (la franja
+  muestra los milisegundos de cada lectura).
+
+**Aplazado:** el paso 6 (vídeo local, I-59 entrega 1) pasa a la versión siguiente, por decisión del
+autor.
