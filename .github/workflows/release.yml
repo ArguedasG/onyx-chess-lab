@@ -50,7 +50,8 @@ jobs:
       - name: Sync node version and setup cache
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "lts/*"
+          # Node 26 (lts/* since late October 2026) shadows jsdom's localStorage in the tests.
+          node-version: "24"
           cache: "pnpm"
 
       - name: Verify release version
