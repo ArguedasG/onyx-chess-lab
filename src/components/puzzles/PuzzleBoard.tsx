@@ -8,7 +8,12 @@ import { useAtomValue } from "jotai";
 import { useContext, useState } from "react";
 import { useStore } from "zustand";
 import { Chessground } from "@/chessground/Chessground";
-import { moveHighlightAtom, showCoordinatesAtom } from "@/state/atoms";
+import {
+  eraseDrawablesOnClickAtom,
+  moveHighlightAtom,
+  showCoordinatesAtom,
+  showDestsAtom,
+} from "@/state/atoms";
 import classes from "@/styles/Chessboard.module.css";
 import { positionFromFen } from "@/utils/chessops";
 import type { Completion, Puzzle } from "@/utils/puzzles";
@@ -37,6 +42,11 @@ function PuzzleBoard({
   const position = useStore(store, (s) => s.position);
   const moveHighlight = useAtomValue(moveHighlightAtom);
   const boardShapes = useStore(store, (s) => s.currentNode().shapes);
+  // Drawn arrows live in the tree, so a re-render (the timer, say) does not wipe them (#841).
+  const setShapes = useStore(store, (s) => s.setShapes);
+  const clearShapes = useStore(store, (s) => s.clearShapes);
+  const eraseDrawablesOnClick = useAtomValue(eraseDrawablesOnClickAtom);
+  const showDests = useAtomValue(showDestsAtom);
   const makeMove = useStore(store, (s) => s.makeMove);
   const makeMoves = useStore(store, (s) => s.makeMoves);
   const reset = useForceUpdate();
@@ -121,6 +131,9 @@ function PuzzleBoard({
     <Box w="100%" h="100%" ref={parentRef}>
       <Box
         className={classes.chessboard}
+        onClick={() => {
+          if (eraseDrawablesOnClick) clearShapes();
+        }}
         style={{
           maxWidth: parentHeight,
         }}
@@ -148,6 +161,9 @@ function PuzzleBoard({
             enabled: true,
             visible: true,
             autoShapes: boardShapes,
+            onChange: (shapes) => {
+              setShapes(shapes);
+            },
           }}
           movable={{
             free: false,
@@ -157,7 +173,8 @@ function PuzzleBoard({
               (puzzle.completion === "incomplete" || puzzle.completion === "incorrect")
                 ? turn
                 : undefined,
-            dests: dests,
+            dests,
+            showDests,
             events: {
               after: (orig, dest) => {
                 const from = parseSquare(orig)!;

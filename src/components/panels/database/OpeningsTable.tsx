@@ -6,7 +6,10 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { moveNotationTypeAtom } from "@/state/atoms";
-import { addPieceSymbol } from "@/utils/annotation";
+import { makeUci } from "chessops";
+import { parseSan } from "chessops/san";
+import { displayMove } from "@/utils/chess";
+import { positionFromFen } from "@/utils/chessops";
 import type { Opening } from "@/utils/db";
 import { formatNumber } from "@/utils/format";
 import classes from "./OpeningsTable.module.css";
@@ -16,6 +19,14 @@ function OpeningsTable({ openings, loading }: { openings: Opening[]; loading: bo
   const store = useContext(TreeStateContext)!;
   const makeMove = useStore(store, (s) => s.makeMove);
   const [moveNotationType] = useAtom(moveNotationTypeAtom);
+  const fen = useStore(store, (s) => s.currentNode().fen);
+  // Long algebraic notation needs the move's squares, so it is read from the position.
+  const uciOf = (san: string) => {
+    if (moveNotationType !== "lan") return null;
+    const [pos] = positionFromFen(fen);
+    const move = pos ? parseSan(pos, san) : undefined;
+    return move ? makeUci(move) : null;
+  };
 
   const whiteTotal = openings?.reduce((acc, curr) => acc + curr.white, 0);
   const blackTotal = openings?.reduce((acc, curr) => acc + curr.black, 0);
@@ -62,11 +73,15 @@ function OpeningsTable({ openings, loading }: { openings: Opening[]; loading: bo
             if (move === "*")
               return (
                 <Text fz="sm" fs="italic">
-                  Game end
+                  {t("Board.Database.GameEnd", "Game end")}
                 </Text>
               );
             return (
-              <Text fz="sm">{moveNotationType === "symbols" ? addPieceSymbol(move) : move}</Text>
+              <Text fz="sm">
+                {move === "Total"
+                  ? t("Board.Database.Total", "Total")
+                  : displayMove(move, moveNotationType, uciOf(move))}
+              </Text>
             );
           },
         },

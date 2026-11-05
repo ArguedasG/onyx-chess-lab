@@ -1176,6 +1176,14 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         newHeaders.black_time_control = blackTimeControl;
       }
 
+      if (playerSettings.white.type === "engine") {
+        newHeaders.white_elo = playerSettings.white.engine?.elo ?? undefined;
+      }
+
+      if (playerSettings.black.type === "engine") {
+        newHeaders.black_elo = playerSettings.black.engine?.elo ?? undefined;
+      }
+
       setHeaders({
         ...headers,
         ...newHeaders,

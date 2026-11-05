@@ -56,6 +56,21 @@
   visibility: hidden;
 }
 
+/* Blind view: the real board lies over the frozen picture with a see-through background and
+   invisible pieces; only the piece being dragged shows. */
+.blindOverlay :global(cg-board) {
+  background: transparent !important;
+}
+
+.blindOverlay :global(cg-board piece:not(.dragging)) {
+  visibility: hidden;
+}
+
+.blindOverlay :global(cg-board square.last-move),
+.blindOverlay :global(cg-board square.check) {
+  background: none;
+}
+
 .more {
   border-top: 1px solid var(--mantine-color-default-border);
 }

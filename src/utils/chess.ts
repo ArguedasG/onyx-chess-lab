@@ -1,11 +1,20 @@
 import type { DrawShape } from "@lichess-org/chessground/draw";
-import { type Color, type Move, makeSquare, makeUci, parseUci, type Role } from "chessops";
+import {
+    type Color,
+    type Move,
+    makeSquare,
+    makeUci,
+    parseSquare,
+    parseUci,
+    type Role,
+    type Square,
+} from "chessops";
 import { type Chess, normalizeMove } from "chessops/chess";
 import { INITIAL_FEN, makeFen, parseFen } from "chessops/fen";
 import { isPawns, parseComment } from "chessops/pgn";
 import { makeSan, parseSan } from "chessops/san";
 import { commands, type Outcome, type Score, type Token } from "@/bindings";
-import { ANNOTATION_INFO, isBasicAnnotation, NAG_INFO } from "./annotation";
+import { addPieceSymbol, ANNOTATION_INFO, isBasicAnnotation, NAG_INFO } from "./annotation";
 import { parseSanOrUci, positionFromFen } from "./chessops";
 import { harmonicMean, isPrefix, mean } from "./misc";
 import { formatScore, getAccuracy, getCPLoss, INITIAL_SCORE } from "./score";
@@ -136,6 +145,43 @@ export function getLastMainlinePosition(root: TreeNode): number[] {
     return position;
 }
 
+// The square a move lands on, as shown on the board. chessops records castling as the king moving
+// onto its rook, so castling (with or without a check or mate suffix) is mapped to the king's
+// destination instead. Ported from En Croissant (#953).
+export function getMoveDestination(
+    node: Pick<TreeNode, "san" | "halfMoves" | "move">,
+): Square | undefined {
+    const san = node.san?.replace(/[+#]+$/, "");
+    if (san === "O-O") return parseSquare(node.halfMoves % 2 === 1 ? "g1" : "g8");
+    if (san === "O-O-O") return parseSquare(node.halfMoves % 2 === 1 ? "c1" : "c8");
+    return node.move?.to;
+}
+
+/**
+ * Long algebraic notation (Nf3 → Ng1-f3, exd5 → e4xd5) from a move's UCI and SAN. Castling keeps
+ * its SAN. Ported from En Croissant (#859), working from UCI so engine lines can use it too.
+ */
+export function lanFromUci(uci: string | null | undefined, san: string): string {
+    if (!uci || uci.length < 4 || uci.includes("@") || san.startsWith("O-O")) return san;
+    const piece = san.match(/^[NBRQK]/)?.[0] ?? "";
+    const capture = san.includes("x") ? "x" : "-";
+    const promotion =
+        uci.length > 4 ? `=${uci[4].toUpperCase()}` : (san.match(/=[QRBN]/)?.[0] ?? "");
+    const suffix = san.endsWith("#") ? "#" : san.endsWith("+") ? "+" : "";
+    return `${piece}${uci.slice(0, 2)}${capture}${uci.slice(2, 4)}${promotion}${suffix}`;
+}
+
+/** A move as the chosen notation shows it: letters, figurines or long algebraic. */
+export function displayMove(
+    san: string,
+    notation: "letters" | "symbols" | "lan",
+    uci?: string | null,
+): string {
+    if (notation === "symbols") return addPieceSymbol(san);
+    if (notation === "lan") return lanFromUci(uci, san);
+    return san;
+}
+
 export function getMainLine(root: TreeNode): string[] {
     return getVariationLine(root, getLastMainlinePosition(root), true);
 }
@@ -157,7 +203,9 @@ export function getVariationLine(
         return [];
     }
     for (const pos of position) {
-        node = node.children[pos];
+        const child = node.children[pos];
+        if (!child) break;
+        node = child;
         if (node.move) {
             moves.push(uciNormalize(chess, node.move));
             chess.play(node.move);
@@ -178,6 +226,9 @@ export function headersToPGN(game: GameHeaders): string {
 [Black "${game.black || "?"}"]
 [Result "${game.result}"]
 `;
+    if (game.time) {
+        headers += `[UTCTime "${game.time}"]\n`;
+    }
     if (game.white_elo !== undefined && game.white_elo !== null) {
         headers += `[WhiteElo "${game.white_elo === 0 ? "-" : game.white_elo}"]\n`;
     }
@@ -493,6 +544,7 @@ function getPgnHeaders(tokens: Token[]): GameHeaders {
         BlackElo,
         WhiteElo,
         Date,
+        UTCTime,
         Site,
         Event,
         Result,
@@ -523,6 +575,7 @@ function getPgnHeaders(tokens: Token[]): GameHeaders {
         black_elo: BlackElo === "-" ? 0 : BlackElo ? Number.parseInt(BlackElo) : undefined,
         white_elo: WhiteElo === "-" ? 0 : WhiteElo ? Number.parseInt(WhiteElo) : undefined,
         date: Date ?? "",
+        time: UTCTime,
         site: Site ?? "",
         event: Event ?? "",
         start: JSON.parse(Start ?? "[]"),

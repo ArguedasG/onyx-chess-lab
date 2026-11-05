@@ -684,7 +684,8 @@ struct CompactSortKey {
 }
 
 fn date_key(date: Option<&str>) -> Option<u32> {
-    let mut parts = date?.split('.');
+    // PGN dates use dots; some exports write ISO dashes (En Croissant 499c4478).
+    let mut parts = date?.split(['.', '-']);
     let year = parts.next()?.parse::<u32>().ok()?;
     if !(1..=9999).contains(&year) {
         return None;

@@ -19,6 +19,7 @@ import {
   parseGameLink,
   replaceGameLink,
 } from "@/utils/gameLinks";
+import { isPlainText } from "@/utils/markdown";
 import { createTab } from "@/utils/tabs";
 import { getNodeAtPath } from "@/utils/treeReducer";
 import GameLinkRestoreModal, { type RestoreChoice } from "./GameLinkRestoreModal";
@@ -211,6 +212,16 @@ const urlTransform = (url: string) => (parseGameLink(url) ? url : defaultUrlTran
 
 /** `path` is the move the comment belongs to; with it, broken game links can be restored. */
 function Comment({ comment, path }: { comment: string; path?: number[] }) {
+  // Big repertoires have thousands of comments, most without any formatting: skip the parser
+  // (ported from En Croissant #1054).
+  if (isPlainText(comment)) {
+    return (
+      <Typography pl={0} mx={4} style={{ display: "inline" }}>
+        <span>{comment.trim()}</span>
+      </Typography>
+    );
+  }
+
   const multipleLine = comment.split("\n").filter((v) => v.trim() !== "").length > 1;
 
   return (

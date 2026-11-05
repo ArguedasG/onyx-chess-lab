@@ -24,6 +24,7 @@ const ZONES: PanelZone[] = ["tools", "notation"];
 /** Portal target ids. Only the active board tab is mounted, so they are unique. */
 export const panelZoneId = (zone: PanelZone) => `panel-${zone}`;
 export const panelHeaderId = (zone: PanelZone) => `panel-${zone}-header`;
+export const PANEL_FOOTER_ID = "panel-footer";
 
 /**
  * The right side of a board tab: two zones (tools and notation) that can be folded,
@@ -156,6 +157,8 @@ export default function RightColumn({ layoutKey }: { layoutKey: RightColumnLayou
           aria-orientation="horizontal"
         />
       )}
+      {/* Always visible below both zones, whichever is folded or maximized: move navigation. */}
+      <div id={PANEL_FOOTER_ID} className={classes.footer} style={{ order: 3 }} />
     </div>
   );
 }

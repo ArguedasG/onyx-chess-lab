@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import Comment from "@/components/common/Comment";
+import { useMoveDeletionLocked } from "@/hooks/useMoveDeletionLocked";
 import { currentTabAtom } from "@/state/atoms";
 import type { Annotation } from "@/utils/annotation";
 import { hasMorePriority, stripClock } from "@/utils/chess";
@@ -60,6 +61,7 @@ function CompleteMoveCell({
   movePath,
   halfMoves,
   move,
+  uci,
   fen,
   comment,
   annotations,
@@ -74,6 +76,8 @@ function CompleteMoveCell({
   annotations: Annotation[];
   showComments: boolean;
   move?: string | null;
+  /** The move in UCI, for long algebraic notation. */
+  uci?: string | null;
   fen?: string;
   first?: boolean;
   movePath: number[];
@@ -92,6 +96,7 @@ function CompleteMoveCell({
   );
   const goToMove = useStore(store, (s) => s.goToMove);
   const deleteMove = useStore(store, (s) => s.deleteMove);
+  const deletionLocked = useMoveDeletionLocked();
   const promoteVariation = useStore(store, (s) => s.promoteVariation);
   const promoteToMainline = useStore(store, (s) => s.promoteToMainline);
   const copyVariationPgn = useStore(store, (s) => s.copyVariationPgn);
@@ -108,6 +113,32 @@ function CompleteMoveCell({
   const tabFile = getTabFile(currentTab);
 
   const { t } = useTranslation();
+  const [menuMounted, setMenuMounted] = useState(false);
+
+  const cell = move ? (
+    <MoveCell
+      ref={ref}
+      move={move}
+      uci={uci}
+      annotations={annotations}
+      isStart={isStart}
+      isCurrentVariation={isCurrentVariation}
+      onClick={() => goToMove(movePath)}
+      onContextMenu={(e: React.MouseEvent) => {
+        setMenuMounted(true);
+        setOpen((v) => !v);
+        e.preventDefault();
+      }}
+      fullWidth={tableLayout}
+      rightAccessory={
+        tableLayout && scoreText ? (
+          <Text component="span" size="xs" c="dimmed">
+            {scoreText}
+          </Text>
+        ) : undefined
+      }
+    />
+  ) : null;
 
   return (
     <>
@@ -122,75 +153,61 @@ function CompleteMoveCell({
         }}
       >
         {hasNumber && `${moveNumber.toString()}${isWhite ? "." : "..."}`}
-        {move && (
-          <Menu opened={open} width={200}>
-            <Menu.Target>
-              <MoveCell
-                ref={ref}
-                move={move}
-                annotations={annotations}
-                isStart={isStart}
-                isCurrentVariation={isCurrentVariation}
-                onClick={() => goToMove(movePath)}
-                onContextMenu={(e: React.MouseEvent) => {
-                  setOpen((v) => !v);
-                  e.preventDefault();
-                }}
-                fullWidth={tableLayout}
-                rightAccessory={
-                  tableLayout && scoreText ? (
-                    <Text component="span" size="xs" c="dimmed">
-                      {scoreText}
-                    </Text>
-                  ) : undefined
-                }
-              />
-            </Menu.Target>
+        {cell &&
+          // The menu mounts on the first right-click: long games have thousands of cells
+          // (ported from En Croissant #1055).
+          (menuMounted ? (
+            <Menu opened={open} width={200}>
+              <Menu.Target>{cell}</Menu.Target>
 
-            <Portal>
-              <Menu.Dropdown>
-                {tabFile?.metadata.type === "repertoire" && (
+              <Portal>
+                <Menu.Dropdown>
+                  {tabFile?.metadata.type === "repertoire" && (
+                    <Menu.Item
+                      leftSection={<IconFlag size="0.875rem" />}
+                      onClick={() => setStart(movePath)}
+                    >
+                      {t("Menu.MarkAsStart")}
+                    </Menu.Item>
+                  )}
                   <Menu.Item
-                    leftSection={<IconFlag size="0.875rem" />}
-                    onClick={() => setStart(movePath)}
+                    leftSection={<IconChevronsUp size="0.875rem" />}
+                    onClick={() => promoteToMainline(movePath)}
                   >
-                    {t("Menu.MarkAsStart")}
+                    {t("Menu.PromoteToMainLine")}
                   </Menu.Item>
-                )}
-                <Menu.Item
-                  leftSection={<IconChevronsUp size="0.875rem" />}
-                  onClick={() => promoteToMainline(movePath)}
-                >
-                  {t("Menu.PromoteToMainLine")}
-                </Menu.Item>
 
-                <Menu.Item
-                  leftSection={<IconChevronUp size="0.875rem" />}
-                  onClick={() => promoteVariation(movePath)}
-                >
-                  {t("Menu.PromoteVariation")}
-                </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconChevronUp size="0.875rem" />}
+                    onClick={() => promoteVariation(movePath)}
+                  >
+                    {t("Menu.PromoteVariation")}
+                  </Menu.Item>
 
-                <Menu.Item
-                  leftSection={<IconCopy size="0.875rem" />}
-                  onClick={() => copyVariationPgn(movePath)}
-                >
-                  {t("Menu.CopyVariationPGN")}
-                </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconCopy size="0.875rem" />}
+                    onClick={() => copyVariationPgn(movePath)}
+                  >
+                    {t("Menu.CopyVariationPGN")}
+                  </Menu.Item>
 
-                <Menu.Item
-                  color="red"
-                  leftSection={<IconX size="0.875rem" />}
-                  onClick={() => deleteMove(movePath)}
-                >
-                  {t("Menu.DeleteMove")}
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Portal>
-          </Menu>
-        )}
+                  {!deletionLocked && (
+                    <Menu.Item
+                      color="red"
+                      leftSection={<IconX size="0.875rem" />}
+                      onClick={() => deleteMove(movePath)}
+                    >
+                      {t("Menu.DeleteMove")}
+                    </Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Portal>
+            </Menu>
+          ) : (
+            cell
+          ))}
         {transpositions.length > 0 && (
-          <Tooltip label="Transposition">
+          <Tooltip label={t("Board.Notation.Transposition", "Transposition")}>
             <ActionIcon size="xs" onClick={() => goToMove(transpositions[0])}>
               <IconArrowsJoin size="0.875rem" />
             </ActionIcon>
@@ -205,6 +222,7 @@ function CompleteMoveCell({
 export default memo(CompleteMoveCell, (prev, next) => {
   return (
     prev.move === next.move &&
+    prev.uci === next.uci &&
     prev.fen === next.fen &&
     prev.comment === next.comment &&
     equal(prev.annotations, next.annotations) &&

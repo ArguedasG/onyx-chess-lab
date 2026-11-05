@@ -25,9 +25,11 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
+import SetRushSession from "./tactics/SetRushSession";
 import {
   IconArrowLeft,
   IconAlertTriangle,
+  IconBolt,
   IconBulb,
   IconCheck,
   IconChevronLeft,
@@ -165,6 +167,7 @@ export default function TacticsSessionV2Page() {
   const [visualMode, setVisualMode] = useAtom(tacticsVisualizationAtom);
   const [blindDepth, setBlindDepth] = useAtom(tacticsBlindDepthAtom);
   const [blindView, setBlindView] = useState<BlindView | null>(null);
+  const [rushOpen, setRushOpen] = useState(false);
   const { update: updateReview } = useTacticsReview();
 
   const isWoodpecker = set?.config.mode === "woodpecker";
@@ -881,6 +884,20 @@ export default function TacticsSessionV2Page() {
           </div>
 
           {set.config.validationMode !== "engine" && (
+            <Button
+              variant="light"
+              size="xs"
+              leftSection={<IconBolt size={15} />}
+              onClick={() => {
+                pauseTimers();
+                setRushOpen(true);
+              }}
+            >
+              {trainingT("Tactics.Rush.Open", "Storm, streak or countdown")}
+            </Button>
+          )}
+
+          {set.config.validationMode !== "engine" && (
             <Stack gap={6}>
               <SegmentedControl
                 size="xs"
@@ -1216,6 +1233,15 @@ export default function TacticsSessionV2Page() {
           onReveal={recordSolutionReveal}
         />
       )}
+      <SetRushSession
+        opened={rushOpen}
+        onClose={() => {
+          setRushOpen(false);
+          resumeTimers();
+        }}
+        setId={setId}
+        set={set}
+      />
     </div>
   );
 }

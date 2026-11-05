@@ -3,7 +3,8 @@ import { IconFlag } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import type { ReactNode, RefObject } from "react";
 import { currentShowCommentsAtom, moveNotationTypeAtom } from "@/state/atoms";
-import { ANNOTATION_INFO, type Annotation, addPieceSymbol } from "@/utils/annotation";
+import { ANNOTATION_INFO, type Annotation } from "@/utils/annotation";
+import { displayMove } from "@/utils/chess";
 import classes from "./MoveCell.module.css";
 
 interface MoveCellProps {
@@ -13,6 +14,8 @@ interface MoveCellProps {
   move: string;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** The move in UCI, for long algebraic notation. */
+  uci?: string | null;
   fullWidth?: boolean;
   rightAccessory?: ReactNode;
   ref?: RefObject<HTMLButtonElement>;
@@ -65,7 +68,7 @@ function MoveCell(props: MoveCellProps) {
     >
       <Box component="span" className={classes.moveText}>
         {props.isStart && <IconFlag style={{ marginRight: 5 }} size="0.875rem" />}
-        {moveNotationType === "symbols" ? addPieceSymbol(props.move) : props.move}
+        {displayMove(props.move, moveNotationType, props.uci)}
         {showComments ? props.annotations.join("") : ""}
       </Box>
       {props.rightAccessory && (

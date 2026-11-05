@@ -1,4 +1,4 @@
-import { ActionIcon, Box, Divider, Group } from "@mantine/core";
+import { ActionIcon, Box, Divider, Group, Text } from "@mantine/core";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -8,11 +8,15 @@ import {
   IconArrowBarToUp,
 } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
+import { useMoveDeletionLocked } from "@/hooks/useMoveDeletionLocked";
 import { memo, useContext } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { moveNotationTypeAtom } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
+import { displayMove } from "@/utils/chess";
+import { makeUci } from "chessops";
 import type { TreeNode } from "@/utils/treeReducer";
 import FirstTimeHint from "./FirstTimeHint";
 import ShortcutTooltip, { ShortcutKeys } from "./ShortcutTooltip";
@@ -33,11 +37,14 @@ function MoveControls({
   readOnly,
   hints = false,
   compact = false,
+  showCurrent = false,
 }: {
   readOnly?: boolean;
   hints?: boolean;
   /** A thin strip (under the board beside a book) instead of the full-size buttons. */
   compact?: boolean;
+  /** Shows the current move between the buttons (the fixed bar under the panels). */
+  showCurrent?: boolean;
 }) {
   const { t } = useTranslation();
   const store = useContext(TreeStateContext)!;
@@ -45,6 +52,14 @@ function MoveControls({
   const previous = useStore(store, (s) => s.goToPrevious);
   const start = useStore(store, (s) => s.goToStart);
   const end = useStore(store, (s) => s.goToEnd);
+  const notation = useAtomValue(moveNotationTypeAtom);
+  const current = useStore(store, (s) => {
+    const node = s.currentNode();
+    if (!node.san) return null;
+    const ply = node.halfMoves;
+    const number = `${Math.ceil(ply / 2)}${ply % 2 === 1 ? "." : "…"}`;
+    return `${number} ${displayMove(node.san, notation, node.move ? makeUci(node.move) : null)}`;
+  });
   const deleteMove = useStore(store, (s) => s.deleteMove);
   const startBranch = useStore(store, (s) => s.goToBranchStart);
   const endBranch = useStore(store, (s) => s.goToBranchEnd);
@@ -59,7 +74,8 @@ function MoveControls({
   useHotkeys(keyMap.NEXT_MOVE.keys, next);
   useHotkeys(keyMap.GO_TO_START.keys, start);
   useHotkeys(keyMap.GO_TO_END.keys, end);
-  useHotkeys(keyMap.DELETE_MOVE.keys, readOnly ? () => {} : () => deleteMove());
+  const deletionLocked = useMoveDeletionLocked();
+  useHotkeys(keyMap.DELETE_MOVE.keys, readOnly || deletionLocked ? () => {} : () => deleteMove());
   useHotkeys(keyMap.GO_TO_BRANCH_START.keys, startBranch);
   useHotkeys(keyMap.GO_TO_BRANCH_END.keys, endBranch);
   useHotkeys(keyMap.NEXT_BRANCH.keys, nextBranch);
@@ -96,6 +112,17 @@ function MoveControls({
             <IconChevronLeft size={compact ? 18 : undefined} />
           </ActionIcon>
         </ShortcutTooltip>
+        {showCurrent && (
+          <Text
+            size="sm"
+            fw={600}
+            ta="center"
+            truncate
+            style={{ alignSelf: "center", fontVariantNumeric: "tabular-nums" }}
+          >
+            {current ?? t("Board.Controls.Initial", "Start")}
+          </Text>
+        )}
         <ShortcutTooltip label={t("Board.Controls.Next", "Next move")} keys={keyMap.NEXT_MOVE.keys}>
           <ActionIcon
             variant="default"

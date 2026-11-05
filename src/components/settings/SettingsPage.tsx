@@ -38,6 +38,7 @@ import {
   eraseDrawablesOnClickAtom,
   forcedEnPassantAtom,
   materialDisplayAtom,
+  pieceAnimationAtom,
   moveHighlightAtom,
   moveInputAtom,
   moveMethodAtom,
@@ -170,6 +171,7 @@ export default function Page() {
   const [moveNotationType, setMoveNotationType] = useAtom(moveNotationTypeAtom);
   const [showCoordinates, setShowCoordinates] = useAtom(showCoordinatesAtom);
   const [materialDisplay, setMaterialDisplay] = useAtom(materialDisplayAtom);
+  const [pieceAnimation, setPieceAnimation] = useAtom(pieceAnimationAtom);
   const [practiceAutoDifficulty, setPracticeAutoDifficulty] = useAtom(practiceAutoDifficultyAtom);
 
   const settings: SettingItem[] = useMemo(
@@ -240,10 +242,11 @@ export default function Page() {
             data={[
               { label: t("Settings.MoveNotation.Letters"), value: "letters" },
               { label: t("Settings.MoveNotation.Symbols"), value: "symbols" },
+              { label: t("Settings.MoveNotation.Lan", "Long algebraic (e2-e4)"), value: "lan" },
             ]}
             allowDeselect={false}
             value={moveNotationType}
-            onChange={(val) => setMoveNotationType(val as "letters" | "symbols")}
+            onChange={(val) => setMoveNotationType(val as "letters" | "symbols" | "lan")}
           />
         ),
       },
@@ -368,10 +371,31 @@ export default function Page() {
             data={[
               { label: t("Settings.MaterialDisplay.Diff"), value: "diff" },
               { label: t("Settings.MaterialDisplay.All"), value: "all" },
+              { label: t("Settings.MaterialDisplay.None"), value: "none" },
             ]}
             allowDeselect={false}
             value={materialDisplay}
-            onChange={(val) => setMaterialDisplay(val as "diff" | "all")}
+            onChange={(val) => setMaterialDisplay(val as "diff" | "all" | "none")}
+          />
+        ),
+      },
+      {
+        id: "piece-animation",
+        category: "board",
+        title: t("Settings.PieceAnimation"),
+        description: t("Settings.PieceAnimation.Desc"),
+        keywords: ["animation", "speed", "pieces", "move", "fast", "slow"],
+        render: () => (
+          <Select
+            data={[
+              { label: t("Settings.PieceAnimation.None"), value: "none" },
+              { label: t("Settings.PieceAnimation.Fast"), value: "fast" },
+              { label: t("Settings.PieceAnimation.Normal"), value: "normal" },
+              { label: t("Settings.PieceAnimation.Slow"), value: "slow" },
+            ]}
+            allowDeselect={false}
+            value={pieceAnimation}
+            onChange={(val) => setPieceAnimation(val as "none" | "fast" | "normal" | "slow")}
           />
         ),
       },
@@ -687,6 +711,8 @@ export default function Page() {
       isNative,
       showCoordinates,
       materialDisplay,
+      pieceAnimation,
+      setPieceAnimation,
       filesDirectory,
       databasesDirectory,
       enginesDirectory,
@@ -976,8 +1002,12 @@ export default function Page() {
                     <Table.Tbody>
                       {Object.entries(keyMap).map(([action, keybind]) => {
                         return (
-                          <Table.Tr key={keybind.name}>
-                            <Table.Td>{keybind.name}</Table.Td>
+                          <Table.Tr key={action}>
+                            <Table.Td>
+                              {t(`Settings.Keybinds.Actions.${action}`, {
+                                defaultValue: keybind.name,
+                              })}
+                            </Table.Td>
                             <Table.Td>
                               <KeybindInput action={action} keybind={keybind} />
                             </Table.Td>

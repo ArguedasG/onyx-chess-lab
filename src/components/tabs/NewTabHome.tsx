@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import {
   type Icon,
+  IconAlertCircle,
   IconArrowRight,
   IconBook,
   IconBook2,
@@ -46,6 +47,7 @@ import { commands } from "@/bindings";
 import { Chessground } from "@/chessground/Chessground";
 import { FileIcon } from "@/components/files/FileIcon";
 import FirstSteps from "@/components/home/FirstSteps";
+import { useSetupStatus } from "@/hooks/useSetupStatus";
 import { getStats } from "@/components/files/opening";
 import { StartScreenControl } from "@/components/settings/StartScreenControl";
 import {
@@ -129,6 +131,7 @@ function Tile({
   title,
   description,
   badge,
+  requires,
   onClick,
   className = classes.tile,
   children,
@@ -138,6 +141,8 @@ function Tile({
   title: string;
   description: string;
   badge?: string | null;
+  /** What the section still needs on this installation ("Needs: Maia 3"), if anything. */
+  requires?: string | null;
   onClick: () => void;
   className?: string;
   children?: ReactNode;
@@ -169,6 +174,18 @@ function Tile({
           <Text size="sm" c="dimmed" mt={2}>
             {description}
           </Text>
+          {requires && (
+            <Group gap={4} mt={6} wrap="nowrap">
+              <IconAlertCircle
+                size={14}
+                color="var(--mantine-color-orange-6)"
+                style={{ flexShrink: 0 }}
+              />
+              <Text size="xs" c="orange.7" fw={500}>
+                {requires}
+              </Text>
+            </Group>
+          )}
         </div>
         {children}
       </Stack>
@@ -296,6 +313,17 @@ export default function NewTabHome({ id }: { id: string }) {
   const repertoires = Object.keys(areas.openings.repertoires).length;
   const endgameSets = Object.keys(areas.endgames.sets).length;
 
+  // Only what is still missing is shown, so a finished setup leaves the cards clean.
+  const setup = useSetupStatus();
+  const needs = (...items: Array<string | false>) => {
+    const missing = items.filter(Boolean) as string[];
+    return missing.length > 0
+      ? t("Home.Launch.Needs", "Needs: {{items}}", { items: missing.join(", ") })
+      : null;
+  };
+  const needStockfish = !setup.hasReferenceEngine && t("Home.Launch.Need.Stockfish", "Stockfish");
+  const needMaia = setup.maiaInstallable && !setup.hasMaia && t("Home.Launch.Need.Maia", "Maia 3");
+
   const training = [
     {
       id: "tactics",
@@ -312,6 +340,10 @@ export default function NewTabHome({ id }: { id: string }) {
         t("Home.Launch.Sets", "{{count}} sets"),
       ),
       to: "/training/tactics" as const,
+      requires: needs(
+        setup.hasPuzzles === false &&
+          t("Home.Launch.Need.Puzzles", "a puzzle database (for Lichess puzzles)"),
+      ),
     },
     {
       id: "openings",
@@ -344,6 +376,7 @@ export default function NewTabHome({ id }: { id: string }) {
         t("Home.Launch.Sets", "{{count}} sets"),
       ),
       to: "/training/endgames" as const,
+      requires: needs(needStockfish),
     },
   ];
 
@@ -359,6 +392,11 @@ export default function NewTabHome({ id }: { id: string }) {
       cardCount,
       t("Home.Launch.OneCard", "1 card"),
       t("Home.Launch.Cards", "{{count}} cards"),
+    ),
+    requires: needs(
+      !setup.hasReferenceDb &&
+        !setup.hasAccount &&
+        t("Home.Launch.Need.Games", "a games database or an online account"),
     ),
     steps: [
       [
@@ -393,6 +431,7 @@ export default function NewTabHome({ id }: { id: string }) {
         "Play a whole tournament against bots and twins, with standings and rating.",
       ),
       onClick: go("/tournaments"),
+      requires: needs(needMaia, needStockfish),
     },
     {
       id: "studies",
@@ -437,6 +476,7 @@ export default function NewTabHome({ id }: { id: string }) {
         "Engine games from any position, to see how it is played.",
       ),
       onClick: () => becomeTab("generator", t("ModelGame.Title", "Model Game Generator")),
+      requires: needs(needStockfish),
     },
   ];
 
@@ -528,6 +568,7 @@ export default function NewTabHome({ id }: { id: string }) {
                 "Against bots that play like people, an engine or a friend, with a clock.",
               )}
               onClick={() => becomeTab("play", t("Home.NewGame"))}
+              requires={needs(needMaia, needStockfish)}
             >
               <Box mt="auto">
                 <Button

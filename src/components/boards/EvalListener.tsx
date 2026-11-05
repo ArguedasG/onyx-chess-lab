@@ -55,11 +55,14 @@ function EvalListener({ persistScore = true }: { persistScore?: boolean }) {
   }
 
   const isGameOver = pos?.isEnd() ?? false;
+  // In check the side to move cannot pass, so there is no threat to show (En Croissant #975).
+  const isCheck = pos?.isCheck() ?? false;
+  const effectiveThreat = (threat as boolean) && !isCheck;
   const finalFen = useMemo(() => (pos ? makeFen(pos.toSetup()) : null), [pos]);
 
   const { searchingFen, searchingMoves } = useMemo(
     () =>
-      match(threat as boolean)
+      match(effectiveThreat)
         .with(true, () => ({
           searchingFen: swapMove(finalFen || INITIAL_FEN),
           searchingMoves: [],
@@ -69,7 +72,7 @@ function EvalListener({ persistScore = true }: { persistScore?: boolean }) {
           searchingMoves: moves,
         }))
         .exhaustive(),
-    [fen, moves, threat, finalFen],
+    [fen, moves, effectiveThreat, finalFen],
   );
 
   const firstEngineWithLines = useAtomValue(
@@ -92,7 +95,7 @@ function EvalListener({ persistScore = true }: { persistScore?: boolean }) {
         searchingMoves={searchingMoves}
         fen={fen}
         moves={moves}
-        threat={threat}
+        threat={effectiveThreat}
         persistScore={persistScore}
       />
     ));

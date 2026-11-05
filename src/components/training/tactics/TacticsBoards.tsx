@@ -1,11 +1,12 @@
 import { useTranslation as useTrainingTranslation } from "react-i18next";
-import { Badge, Box, Group, Paper, Select, Stack, Text } from "@mantine/core";
+import { Box, Group, Paper, Stack, Text } from "@mantine/core";
 import { IconEyeOff } from "@tabler/icons-react";
-import { makeSquare, parseUci } from "chessops";
-import { makeSan } from "chessops/san";
+import { makeSquare, parseSquare, parseUci } from "chessops";
+import { chessgroundDests } from "chessops/compat";
 import { useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { BestMoves, ScoreValue } from "@/bindings";
 import { Chessground } from "@/chessground/Chessground";
 import Board from "@/components/boards/Board";
@@ -19,7 +20,7 @@ import { enginesAtom } from "@/state/atoms";
 import { positionFromFen } from "@/utils/chessops";
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
-import { canonicalUci, playUci } from "@/utils/repertoireGenerator/positions";
+import { playUci } from "@/utils/repertoireGenerator/positions";
 import { formatMoveList } from "@/utils/repertoireGaps";
 import type { TacticsLoadedExercise } from "@/utils/tacticsTraining";
 import type { TacticsSet } from "@/utils/trainingAreas";
@@ -131,32 +132,150 @@ function givesMate(node: { fen: string; move?: unknown }, uci: string) {
   return Boolean(after && positionFromFen(after.fen)[0]?.isCheckmate());
 }
 
-function legalSans(fen: string): Array<{ value: string; label: string }> {
-  const [position] = positionFromFen(fen);
-  if (!position) return [];
-  const options: Array<{ value: string; label: string }> = [];
-  for (const [from, targets] of position.allDests()) {
-    for (const to of targets) {
-      const uci = canonicalUci(fen, `${makeSquare(from)}${makeSquare(to)}`);
-      if (!uci) continue;
-      const move = parseUci(uci);
-      if (!move) continue;
-      const san = makeSan(position, move);
-      if (san.includes("=")) {
-        for (const role of ["q", "r", "b", "n"]) {
-          const promotion = parseUci(`${uci.slice(0, 4)}${role}`);
-          if (promotion)
-            options.push({
-              value: `${uci.slice(0, 4)}${role}`,
-              label: makeSan(position, promotion),
-            });
-        }
-      } else {
-        options.push({ value: uci, label: san });
+/**
+ * Blind view (I-38): the board stays frozen on an earlier position while the student plays the
+ * whole line on the real one, which lies on top with its pieces invisible. A piece is picked up
+ * where it really is (its legal squares show), only the dragged piece is visible, and every move
+ * since the picture is written below; the opponent's last move is also drawn as an arrow.
+ */
+function BlindBoard({
+  frozenFen,
+  hiddenSans,
+  orientation,
+  movable,
+  boardRef,
+  onMove,
+  feedback,
+}: {
+  frozenFen: string;
+  hiddenSans: string[];
+  orientation: "white" | "black";
+  movable: boolean;
+  boardRef: React.RefObject<HTMLDivElement | null>;
+  onMove: (uci: string) => void;
+  feedback: MoveFeedbackState | null;
+}) {
+  const { t: trainingT } = useTrainingTranslation();
+  const store = useContext(TreeStateContext)!;
+  const rootFen = useStore(store, (state) => state.root.fen);
+  const currentFen = useStore(store, (state) => state.currentNode().fen);
+  const shapes = useStore(store, (state) => state.currentNode().shapes);
+  const lastMove = useStore(store, (state) => state.currentNode().move);
+  const playedSans = useStore(
+    store,
+    useShallow((state) => {
+      const sans: string[] = [];
+      let node = state.root;
+      for (const index of state.position) {
+        node = node.children[index];
+        if (!node?.san) break;
+        sans.push(node.san);
       }
-    }
-  }
-  return options.sort((a, b) => a.label.localeCompare(b.label));
+      return sans;
+    }),
+  );
+  const [position] = positionFromFen(currentFen);
+  const turn = position?.turn ?? "white";
+  const dests = position ? chessgroundDests(position) : new Map();
+  // The picture is the exercise's own starting position for puzzles (the hidden move is then the
+  // first one played); for exercises from games it is some moves earlier.
+  const moveList =
+    frozenFen === rootFen
+      ? formatMoveList(rootFen, playedSans)
+      : [formatMoveList(frozenFen, hiddenSans), formatMoveList(rootFen, playedSans)]
+          .filter(Boolean)
+          .join("  ");
+  // Whose move was last: when the student is to move, it was the opponent's.
+  const opponentArrow =
+    lastMove && "from" in lastMove && turn === orientation
+      ? [{ orig: makeSquare(lastMove.from), dest: makeSquare(lastMove.to), brush: "red" as const }]
+      : [];
+
+  return (
+    <Stack gap="sm" w="100%" h="100%" align="center">
+      {/* The square fits the space left by the move panel, by width or by height, so it never
+          spills over the panel below. */}
+      <Box
+        style={{
+          flex: 1,
+          // A size container has no height of its own; this keeps a usable board if the
+          // column ever loses its fixed height.
+          minHeight: 240,
+          width: "100%",
+          containerType: "size",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <Box
+          ref={boardRef}
+          pos="relative"
+          style={{ aspectRatio: 1, width: "min(100cqw, 100cqh)", flexShrink: 0 }}
+        >
+          <Box pos="absolute" inset={0}>
+            <Chessground
+              fen={frozenFen}
+              orientation={orientation}
+              coordinates
+              viewOnly
+              drawable={{
+                enabled: false,
+                visible: true,
+                autoShapes: [...shapes, ...opponentArrow],
+              }}
+            />
+          </Box>
+          <Box pos="absolute" inset={0} className={classes.blindOverlay}>
+            <Chessground
+              fen={currentFen}
+              orientation={orientation}
+              coordinates={false}
+              turnColor={turn}
+              animation={{ enabled: false }}
+              highlight={{ lastMove: false, check: false }}
+              drawable={{ enabled: false, visible: false }}
+              movable={{
+                free: false,
+                color: movable ? turn : undefined,
+                dests,
+                showDests: true,
+                events: {
+                  after: (orig, dest) => {
+                    const piece = position?.board.get(parseSquare(orig)!);
+                    const promotes = piece?.role === "pawn" && (dest[1] === "8" || dest[1] === "1");
+                    onMove(`${orig}${dest}${promotes ? "q" : ""}`);
+                  },
+                },
+              }}
+            />
+          </Box>
+          <MoveFeedback board={boardRef.current} feedback={feedback} orientation={orientation} />
+        </Box>
+      </Box>
+      {/* Wide and short: the board keeps the height. */}
+      <Paper withBorder px="sm" py={6} w="100%" maw={960} style={{ flexShrink: 0 }}>
+        <Group gap="xs" wrap="nowrap" align="flex-start">
+          <IconEyeOff size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+          <Stack gap={2} style={{ minWidth: 0 }}>
+            <Group gap="sm" wrap="wrap">
+              <Text size="sm" fw={600}>
+                {trainingT("Tactics.Visual.BlindTitle", "Played since this position")}
+              </Text>
+              <Text size="sm" ff="monospace">
+                {moveList || "—"}
+              </Text>
+            </Group>
+            <Text size="xs" c="dimmed">
+              {trainingT(
+                "Tactics.Visual.BlindHelp",
+                "The pieces stay where the picture shows them. Pick each piece up from where it really is now: its squares light up. The opponent's last move is the red arrow.",
+              )}
+            </Text>
+          </Stack>
+        </Group>
+      </Paper>
+    </Stack>
+  );
 }
 
 export function GuidedTacticsBoard({
@@ -226,12 +345,10 @@ function GuidedTacticsBoardInner({
   onCorrect: (lastMove: string) => void;
   onIncorrect: (move: string) => void;
 }) {
-  const { t: trainingT } = useTrainingTranslation();
   const store = useContext(TreeStateContext)!;
   const makeMove = useStore(store, (state) => state.makeMove);
   const setShapes = useStore(store, (state) => state.setShapes);
   const currentFen = useStore(store, (state) => state.currentNode().fen);
-  const rootFen = useStore(store, (state) => state.root.fen);
   // A remounted board starts without hints even if the parent counter is already non-zero.
   const handledHint = useRef(hintRequest);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -243,7 +360,7 @@ function GuidedTacticsBoardInner({
   const [feedback, setFeedback] = useState<MoveFeedbackState | null>(null);
   const orientation = useStore(store, (state) => state.headers.orientation) ?? "white";
   const blind = visualization.kind === "blind";
-  const [blindDone, setBlindDone] = useState(!blind);
+  const blindBoardRef = useRef<HTMLDivElement>(null);
   const showFeedback = (uci: string, correct: boolean, persistent = false) =>
     setFeedback({ square: feedbackSquare(uci), correct, persistent, key: Date.now() });
 
@@ -277,8 +394,9 @@ function GuidedTacticsBoardInner({
     }
   }, [disabled, makeMove, onCorrect, variationSeed]);
 
-  // Blind: the opponent's first move is one of the hidden moves, not played on the board.
-  useInitialOpponentMove(blind ? "student" : startingActor, playOpponent);
+  // Blind plays on the real position too, only out of sight: the opponent's first move is made
+  // as usual and announced over the frozen picture.
+  useInitialOpponentMove(startingActor, playOpponent);
 
   // Progressive hint as in the puzzle trainer: mark the piece, then show the move, then clear.
   useEffect(() => {
@@ -332,63 +450,28 @@ function GuidedTacticsBoardInner({
     void playOpponent();
   }
 
-  // The real position the blind answer is asked in: after the opponent's first move, if any.
-  const blindRealFen = useMemo(() => {
-    if (!blind) return null;
-    if (startingActor !== "opponent") return rootFen;
-    const first = lines[0]?.[0];
-    return first ? (playUci(rootFen, first)?.fen ?? null) : null;
-  }, [blind, lines, rootFen, startingActor]);
-  const blindOptions = useMemo(() => (blindRealFen ? legalSans(blindRealFen) : []), [blindRealFen]);
-
-  function answerBlind(uci: string | null) {
-    if (!uci || completed.current || disabled) return;
-    onUserMove();
-    if (startingActor === "opponent") {
-      const first = candidates.current[0]?.[0];
-      const firstMove = first ? parseUci(first) : null;
-      if (!first || !firstMove) return;
-      candidates.current = candidates.current.filter((line) => line[0] === first);
-      makeMove({ payload: firstMove, mainline: true, changeHeaders: false });
-      ply.current = 1;
-    }
-    setBlindDone(true);
+  /** A move dropped on the invisible real board of the blind view. */
+  function playBlindMove(uci: string) {
+    if (completed.current || disabled || autoMoving) return;
     const move = parseUci(uci);
     const matching = candidates.current.filter((line) => line[ply.current] === uci);
+    // Only correct moves enter the tree: a wrong one ends the exercise where it was.
     if (move && matching.length > 0)
       makeMove({ payload: move, mainline: true, changeHeaders: false });
     handleMove(uci);
   }
 
-  if (blind && !blindDone && visualization.kind === "blind") {
+  if (blind && visualization.kind === "blind") {
     return (
-      <Stack gap="sm" w="100%" h="100%" align="center">
-        <Box style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: "min(100%, 70vh)" }}>
-          <Chessground fen={visualization.fen} orientation={orientation} coordinates viewOnly />
-        </Box>
-        <Paper withBorder p="sm" w="100%" maw={640}>
-          <Stack gap="xs">
-            <Group gap="xs">
-              <IconEyeOff size={16} />
-              <Text size="sm" fw={600}>
-                {trainingT("Tactics.Visual.BlindTitle", "Played since this position")}
-              </Text>
-              <Badge variant="light" tt="none">
-                {formatMoveList(visualization.fen, visualization.hiddenSans)}
-              </Badge>
-            </Group>
-            <Select
-              searchable
-              placeholder={trainingT("Tactics.Visual.BlindPlaceholder", "Type your move, e.g. Nf3")}
-              data={blindOptions}
-              disabled={disabled}
-              onChange={answerBlind}
-              nothingFoundMessage={trainingT("Tactics.Visual.NoMove", "No legal move")}
-              aria-label={trainingT("Tactics.Visual.YourMove", "Your move")}
-            />
-          </Stack>
-        </Paper>
-      </Stack>
+      <BlindBoard
+        frozenFen={visualization.fen}
+        hiddenSans={visualization.hiddenSans}
+        orientation={orientation}
+        movable={!disabled && !autoMoving && !completed.current}
+        boardRef={blindBoardRef}
+        onMove={playBlindMove}
+        feedback={feedback}
+      />
     );
   }
 

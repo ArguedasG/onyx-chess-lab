@@ -57,8 +57,7 @@ import {
   tabEngineSettingsFamily,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
-import { addPieceSymbol } from "@/utils/annotation";
-import { getVariationLine } from "@/utils/chess";
+import { displayMove, getVariationLine } from "@/utils/chess";
 import {
   chessopsError,
   getPiecesCount,
@@ -352,7 +351,9 @@ const EngineSection = memo(function EngineSection({
   const isGameOver = pos?.isEnd() ?? false;
   const finalFen = useMemo(() => (pos ? makeFen(pos.toSetup()) : null), [pos]);
 
-  const searchKey = threat
+  // In check there is no threat to show (the side to move cannot pass; En Croissant #975).
+  const effectiveThreat = threat && !pos?.isCheck();
+  const searchKey = effectiveThreat
     ? `${swapMove(finalFen || INITIAL_FEN)}:`
     : `${rootFen}:${moves.join(",")}`;
   const variations = useDeferredValue(useMemo(() => ev.get(searchKey), [ev, searchKey]));
@@ -504,7 +505,7 @@ const EngineSection = memo(function EngineSection({
                   line={line}
                   maia={maia}
                   halfMoves={halfMoves}
-                  threat={threat}
+                  threat={effectiveThreat}
                   primary={row === 0}
                 />
               ))}
@@ -564,7 +565,7 @@ function EngineLine({
                 disabled={threat}
                 onClick={() => makeMoves({ payload: line.sanMoves.slice(0, index + 1) })}
               >
-                {notation === "symbols" ? addPieceSymbol(san) : san}
+                {displayMove(san, notation, line.uciMoves[index])}
               </button>
             </span>
           );

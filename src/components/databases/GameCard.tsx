@@ -80,7 +80,13 @@ function GameCard({
             </Tooltip>
           </Group>
           <Divider />
-          <GamePreview pgn={game.moves} headers={game} showOpening />
+          <GamePreview
+            key={`preview-${game.id}`}
+            pgn={game.moves}
+            headers={game}
+            showOpening
+            startAtEnd
+          />
         </Stack>
       </ScrollArea>
     </Paper>

@@ -464,6 +464,16 @@ pub async fn get_best_moves(
 
     let key = (tab.clone(), id.clone());
 
+    // An impossible position (the threat view of a side in check, say) would leave the engine
+    // searching forever: stop the running search instead (ported from En Croissant #975).
+    if let Err(error) = parse_fen_and_apply_moves(&options.fen, &options.moves) {
+        warn!("Invalid position for engine: {:?}", error);
+        if let Some(process) = state.engine_processes.get(&key) {
+            process.lock().await.stop().await?;
+        }
+        return Ok(None);
+    }
+
     if state.engine_processes.contains_key(&key) {
         {
             let process = state.engine_processes.get_mut(&key).unwrap();

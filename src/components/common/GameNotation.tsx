@@ -1,3 +1,4 @@
+import { makeUci } from "chessops";
 import {
   ActionIcon,
   Box,
@@ -294,6 +295,7 @@ const RenderVariationTree = memo(
                 comment={variation.comment}
                 halfMoves={variation.halfMoves}
                 move={variation.san}
+                uci={variation.move ? makeUci(variation.move) : null}
                 fen={variation.fen}
                 movePath={newPath}
                 showComments={showComments}
@@ -315,6 +317,7 @@ const RenderVariationTree = memo(
             comment={variations[0].comment}
             halfMoves={variations[0].halfMoves}
             move={variations[0].san}
+            uci={variations[0].move ? makeUci(variations[0].move) : null}
             fen={variations[0].fen}
             movePath={mainLinePath}
             showComments={showComments}
@@ -554,6 +557,7 @@ const TableNotation = memo(function TableNotation({
                             comment={variation.comment}
                             halfMoves={variation.halfMoves}
                             move={variation.san}
+                            uci={variation.move ? makeUci(variation.move) : null}
                             fen={variation.fen}
                             movePath={variationPath}
                             showComments={showComments}
@@ -618,6 +622,7 @@ function RowSegment({
             comment={white.comment}
             halfMoves={white.halfMoves}
             move={white.san}
+            uci={white.move ? makeUci(white.move) : null}
             fen={white.fen}
             movePath={whitePath}
             showComments={showComments}
@@ -638,6 +643,7 @@ function RowSegment({
             comment={black.comment}
             halfMoves={black.halfMoves}
             move={black.san}
+            uci={black.move ? makeUci(black.move) : null}
             fen={black.fen}
             movePath={blackPath}
             showComments={showComments}

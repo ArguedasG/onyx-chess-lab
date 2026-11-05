@@ -582,6 +582,7 @@ function EngineSettings({
                 ...engine,
                 id: crypto.randomUUID(),
                 name: `${engine.name} (Copy)`,
+                settings: engine.settings?.map((setting) => ({ ...setting })),
               };
               setEngines(async (prev) => {
                 const copy = [...(await prev)];
@@ -603,7 +604,7 @@ function EngineSettings({
           opened={deleteModal}
           onClose={toggleDeleteModal}
           onConfirm={() => {
-            setEngines(async (prev) => (await prev).filter((e) => e.name !== engine.name));
+            setEngines(async (prev) => (await prev).filter((e) => e.id !== engine.id));
             setSelected(null);
             toggleDeleteModal();
           }}
@@ -611,14 +612,18 @@ function EngineSettings({
         />
       </Stack>
       <JSONModal
-        key={engine.name}
+        key={engine.id}
         opened={jsonModal}
         toggleOpened={toggleJSONModal}
         engine={engine}
         setEngine={(v) =>
           setEngines(async (prev) => {
             const copy = [...(await prev)];
-            copy[selected] = v;
+            // A pasted JSON can carry another engine's id (En Croissant #847).
+            const hasDuplicateId = copy.some(
+              (other, index) => index !== selected && other.id === v.id,
+            );
+            copy[selected] = hasDuplicateId ? { ...v, id: crypto.randomUUID() } : v;
             return copy;
           })
         }

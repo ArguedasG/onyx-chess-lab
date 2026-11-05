@@ -876,7 +876,8 @@ pub struct NoveltyReference {
 /// "YYYY.MM.DD" with unknown month or day as "00", so dates compare as strings.
 /// None when the year is unknown or the text is not a PGN date.
 fn comparable_date(date: &str) -> Option<String> {
-    let mut parts = date.trim().split('.');
+    // PGN dates use dots; some exports write ISO dashes (En Croissant 499c4478).
+    let mut parts = date.trim().split(['.', '-']);
     let year = parts.next()?;
     if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) {
         return None;

@@ -185,20 +185,19 @@ function ReportModal({
               ]}
               value={form.values.goMode.t}
               onChange={(v) => {
-                const current = form.values.goMode;
-                const value =
-                  current.t === "DepthTime"
-                    ? current.c.time
-                    : current.t === "PlayersTime"
-                      ? 500
-                      : current.c;
-                form.setFieldValue(
-                  "goMode",
+                if (v === form.values.goMode.t) return;
+                // Each mode starts from its own default: keeping the number would turn 250 ms
+                // into depth 250 (fixed upstream in En Croissant #939).
+                const next: ReportGoMode =
                   v === "DepthTime"
                     ? // Measured in docs/engine-analysis-phase-8-2.es.md: as reliable as 500 ms, faster.
                       { t: "DepthTime", c: { depth: 16, time: 500 } }
-                    : ({ t: v as "Depth" | "Time" | "Nodes", c: value } as ReportGoMode),
-                );
+                    : v === "Depth"
+                      ? { t: "Depth", c: 20 }
+                      : v === "Nodes"
+                        ? { t: "Nodes", c: 1_000_000 }
+                        : { t: "Time", c: 500 };
+                form.setFieldValue("goMode", next);
               }}
             />
             {form.values.goMode.t === "DepthTime" ? (

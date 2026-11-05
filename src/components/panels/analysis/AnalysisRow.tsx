@@ -201,6 +201,7 @@ function BoardPopover({
         {(index === 0 || is_white) && `${move_number.toString()}${is_white ? "." : "..."}`}
         <MoveCell
           move={san}
+          uci={lastMove.length === 2 ? lastMove.join("") : null}
           isCurrentVariation={false}
           annotations={[]}
           onContextMenu={() => undefined}

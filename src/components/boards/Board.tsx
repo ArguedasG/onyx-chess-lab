@@ -60,7 +60,7 @@ import {
   MAIN_VARIATION_BRUSH,
   SECONDARY_VARIATION_BRUSH,
 } from "@/utils/boardShapes";
-import { getVariationLine } from "@/utils/chess";
+import { getMoveDestination, getVariationLine } from "@/utils/chess";
 import { chessopsError, forceEnPassant, positionFromFen } from "@/utils/chessops";
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
@@ -618,8 +618,8 @@ function Board({
   }
 
   const hasClock =
-    !!whiteTime ||
-    !!blackTime ||
+    whiteTime !== undefined ||
+    blackTime !== undefined ||
     !!headers.time_control ||
     !!headers.white_time_control ||
     !!headers.black_time_control;
@@ -679,10 +679,7 @@ function Board({
 
   useHotkeys(keyMap.TOGGLE_EVAL_BAR.keys, () => setEvalOpen((e) => !e));
 
-  const square = match(currentNode)
-    .with({ san: "O-O" }, ({ halfMoves }) => parseSquare(halfMoves % 2 === 1 ? "g1" : "g8"))
-    .with({ san: "O-O-O" }, ({ halfMoves }) => parseSquare(halfMoves % 2 === 1 ? "c1" : "c8"))
-    .otherwise((node) => node.move?.to);
+  const square = getMoveDestination(currentNode);
 
   const lastMove =
     currentNode.move && square !== undefined

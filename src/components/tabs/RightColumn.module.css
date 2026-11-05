@@ -105,3 +105,14 @@
 .collapsed .chevron {
   transform: rotate(-90deg);
 }
+
+/* The fixed move-navigation bar under both zones; hidden on screens that put nothing in it. */
+.footer {
+  flex: 0 0 auto;
+  padding: 6px 2px 0;
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.footer:empty {
+  display: none;
+}

@@ -40,6 +40,7 @@ export default defineConfig({
             "Annotate.*",
             "GoMode.*",
             "Errors.*",
+            "Settings.Keybinds.Actions.*",
         ],
         sort: true,
     },

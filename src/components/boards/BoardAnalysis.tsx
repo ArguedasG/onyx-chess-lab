@@ -70,7 +70,7 @@ import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
 import PiecesGrid from "./PiecesGrid";
 import { BOOK_RAIL_ID } from "../tabs/BookStudyColumn";
-import { PanelHeader, PanelTitle } from "../tabs/RightColumn";
+import { PANEL_FOOTER_ID, PanelHeader, PanelTitle } from "../tabs/RightColumn";
 import ChaptersPanel, { hasChapters } from "../panels/chapters/ChaptersPanel";
 import EngineStrip from "./EngineStrip";
 import EvalListener from "./EvalListener";
@@ -699,10 +699,15 @@ function BoardAnalysis() {
               }
             />
             {showAnnotationBar && !practicing && <AnnotationToolbar />}
-            {!bookLayout && <MoveControls hints />}
           </Stack>
         )}
       </Portal>
+      {/* Navigation lives under both panels, so folding the notation never hides it. */}
+      {!bookLayout && (
+        <Portal target={`#${PANEL_FOOTER_ID}`}>
+          <MoveControls hints compact showCurrent />
+        </Portal>
+      )}
     </>
   );
 }

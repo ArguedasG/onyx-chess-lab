@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-11-01.
+> Última actualización: 2026-11-04.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,8 +78,9 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.24.0** (9.4 Libros y posiciones desde imagen, gemelos guardados y
-  editables, pantalla de inicio nueva). Detalle: `docs/release-notes-0.24.0.es.md`.
+- Última versión publicada: **0.25.0** (primer uso tras una instalación limpia, táctica a ciegas
+  completa y formatos rápidos en sets, arreglos portados de En Croissant). Detalle:
+  `docs/release-notes-0.25.0.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -1043,6 +1044,34 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-04 — Release 0.25.0
+
+- Publica el mantenimiento tras la prueba de instalación limpia del autor, los arreglos y funciones
+  portados de En Croissant, la táctica a ciegas completa y los formatos rápidos en sets.
+- Pendiente: prueba del autor desde cero en otra computadora (desinstalando Onyx y borrando sus
+  datos) y la prueba de Lichess.
+- Detalle: `docs/release-notes-0.25.0.es.md`.
+
+### 2026-11-04 — Arreglos de En Croissant, a ciegas completo y formatos rápidos
+
+- **Portado de En Croissant** (67 commits del 2026-10-12 al 2026-11-04, por parches sueltos):
+  enroque con jaque en la casilla de destino, relojes a cero, fecha del registro de repaso, flechas
+  y destinos en el tablero de puzzles, duplicar motor, ids de motor repetidos, hilos no potencia de
+  dos, fechas ISO, relojes sin tiempo, ritmos diario/correspondencia, Chess.com sin desviación,
+  error de la tablebase, pantalla de error, selección al borrar variantes, nombres al pasar de
+  página, amenaza estando en jaque, modo del informe, bases ya instaladas, Elo del motor en el PGN,
+  hora UTC, partida al final en la vista de base, puntos de destino suavizados. Funciones: velocidad
+  de animación, ocultar material, notación larga (LAN), tema blue4, editor Markdown de comentarios,
+  atajos de teclado traducidos y dos mejoras de rendimiento de la notación.
+- **Borrar jugadas durante una partida** queda bloqueado (desincronizaba el tablero del juego).
+- **Barra de navegación fija** al pie de la columna derecha, con la jugada actual.
+- **Táctica a ciegas completa**: el tablero queda congelado y se juega toda la línea sobre la
+  posición real invisible. **Formatos rápidos** (Tormenta, Racha, Contrarreloj) sobre cualquier set,
+  como sesión aparte que no toca progreso ni ciclos.
+- **Inicio**: cada sección indica lo que le falta («Necesita: Maia 3, Stockfish»).
+- Ideas a evaluar de lo que no se portó: `docs/upstream-ideas-en-croissant.es.md`. La licencia de
+  ChessQ es PolyForm Noncommercial: la regla de 9.4 que lo prohibía partía de un supuesto.
 
 ### 2026-11-04 — Correcciones tras una instalación limpia en Windows
 

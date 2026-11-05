@@ -191,8 +191,12 @@ function AddDatabase({
                   databaseId={i}
                   key={i}
                   setDatabases={setDatabases}
+                  // A database's own title can differ from the catalog's (Lumbra's Gigabase is
+                  // "LumbrasGigaBase" inside), so the file it is saved as also counts (#1002).
                   initInstalled={databases.some(
-                    (e) => e.type === "success" && e.title === db.title,
+                    (e) =>
+                      e.type === "success" &&
+                      (e.title === db.title || e.filename === `${db.title}.db3`),
                   )}
                 />
               ))}
