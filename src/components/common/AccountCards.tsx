@@ -6,6 +6,7 @@ import type { DatabaseInfo } from "@/bindings";
 import { sessionsAtom } from "@/state/atoms";
 import { getChessComAccount, getStats } from "@/utils/chess.com/api";
 import { getLichessAccount } from "@/utils/lichess/api";
+import { startLichessLogin } from "@/utils/lichess/login";
 import { deletePersistedLichessToken } from "@/utils/secureLichessTokens";
 import type { Session } from "@/utils/session";
 import { AccountCard } from "../home/AccountCard";
@@ -134,16 +135,21 @@ function PlayerSession({
             size="sm"
             variant="subtle"
             color="red"
-            onClick={() =>
-              setSessions((sessions) =>
-                sessions.filter(
+            onClick={() => {
+              // Removing the whole player also forgets the Lichess sign-ins kept in the system's
+              // credential store, as removing each account does.
+              for (const session of sessions) {
+                if (session.lichess) void deletePersistedLichessToken(session.lichess.username);
+              }
+              setSessions((all) =>
+                all.filter(
                   (s) =>
                     s.player !== name &&
                     s.lichess?.username !== name &&
                     s.chessCom?.username !== name,
                 ),
-              )
-            }
+              );
+            }}
           >
             <IconX />
           </ActionIcon>
@@ -207,6 +213,7 @@ function LichessOrChessCom({
       <AccountCard
         key={account.id}
         token={lichessSession.accessToken}
+        onLogin={() => void startLichessLogin(lichessSession.username, session.player ?? "")}
         type="lichess"
         database={databases.find((db) => db.filename === `${account.username}_lichess.db3`) ?? null}
         title={account.username}

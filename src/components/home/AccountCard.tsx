@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Badge,
+  Button,
   Card,
   Group,
   Progress,
@@ -15,6 +16,7 @@ import {
   IconArrowUpRight,
   IconCircleCheckFilled,
   IconDownload,
+  IconLogin,
   type IconProps,
   IconRefresh,
   IconTrash,
@@ -28,6 +30,7 @@ import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/ato
 import { getDatabases } from "@/utils/db";
 import { capitalize } from "@/utils/format";
 import { syncAccountGames } from "@/utils/players/accountSync";
+import { useLichessLoginPending } from "@/utils/lichess/login";
 import LichessLogo from "./LichessLogo";
 
 interface AccountCardProps {
@@ -45,6 +48,8 @@ interface AccountCardProps {
   reload: () => void;
   setDatabases: (databases: DatabaseInfo[]) => void;
   token?: string;
+  /** Lichess accounts added without signing in: sign in now (needed for the explorer). */
+  onLogin?: () => void;
 }
 
 export function AccountCard({
@@ -58,8 +63,12 @@ export function AccountCard({
   reload,
   setDatabases,
   token,
+  onLogin,
 }: AccountCardProps) {
   const { t } = useTranslation();
+  const loginPending = useLichessLoginPending();
+  const waitingForBrowser =
+    type === "lichess" && loginPending?.toLowerCase() === title.toLowerCase();
   const items = stats.map((stat) => {
     let color = "gray.5";
     let DiffIcon: React.FC<IconProps> = IconArrowRight;
@@ -140,6 +149,27 @@ export function AccountCard({
             )}
           </Group>
           <Group gap={4}>
+            {type === "lichess" && !token && onLogin && (
+              <Tooltip
+                multiline
+                w={260}
+                label={t(
+                  "Home.Accounts.LoginHint",
+                  "Lichess only opens its opening explorer (Lichess and Masters) to signed-in users. Opens Lichess in your browser; if it does not answer, press it again.",
+                )}
+              >
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  leftSection={<IconLogin size={14} />}
+                  onClick={onLogin}
+                >
+                  {waitingForBrowser
+                    ? t("Home.Accounts.LoginAgain", "Open Lichess again")
+                    : t("Home.Accounts.Login", "Sign in")}
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip label={t("Home.Accounts.UpdateStats")}>
               <ActionIcon variant="subtle" color="gray" onClick={() => reload()}>
                 <IconRefresh size="1rem" />

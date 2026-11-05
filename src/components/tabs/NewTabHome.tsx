@@ -17,6 +17,7 @@ import {
   type Icon,
   IconAlertCircle,
   IconArrowRight,
+  IconBulb,
   IconBook,
   IconBook2,
   IconChess,
@@ -132,6 +133,7 @@ function Tile({
   description,
   badge,
   requires,
+  suggests,
   onClick,
   className = classes.tile,
   children,
@@ -143,6 +145,8 @@ function Tile({
   badge?: string | null;
   /** What the section still needs on this installation ("Needs: Maia 3"), if anything. */
   requires?: string | null;
+  /** Not needed, but makes the section easier ("Recommended: a puzzle database"). */
+  suggests?: string | null;
   onClick: () => void;
   className?: string;
   children?: ReactNode;
@@ -174,6 +178,14 @@ function Tile({
           <Text size="sm" c="dimmed" mt={2}>
             {description}
           </Text>
+          {!requires && suggests && (
+            <Group gap={4} mt={6} wrap="nowrap">
+              <IconBulb size={14} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
+              <Text size="xs" c="dimmed">
+                {suggests}
+              </Text>
+            </Group>
+          )}
           {requires && (
             <Group gap={4} mt={6} wrap="nowrap">
               <IconAlertCircle
@@ -340,10 +352,14 @@ export default function NewTabHome({ id }: { id: string }) {
         t("Home.Launch.Sets", "{{count}} sets"),
       ),
       to: "/training/tactics" as const,
-      requires: needs(
-        setup.hasPuzzles === false &&
-          t("Home.Launch.Need.Puzzles", "a puzzle database (for Lichess puzzles)"),
-      ),
+      // Own PGN sets work without it: a puzzle database is only a recommendation.
+      suggests:
+        setup.hasPuzzles === false
+          ? t(
+              "Home.Launch.Suggest.Puzzles",
+              "Recommended: a puzzle database, for Lichess puzzles and sets built from filters",
+            )
+          : null,
     },
     {
       id: "openings",

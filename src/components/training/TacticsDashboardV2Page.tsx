@@ -701,10 +701,11 @@ export default function TacticsDashboardV2Page() {
                 <Text size="sm">
                   {trainingT(
                     "Tactics.PuzzleDb.Empty",
-                    "You have no puzzle database yet. Download one (Lichess's has millions of puzzles with rating and themes) to train with it and to build sets from your filters.",
+                    "Your own PGN sets work without it, but a puzzle database makes training easier: Lichess's has millions of puzzles with rating and themes, to train with them and to build sets from your filters.",
                   )}
                 </Text>
                 <Button
+                  variant="light"
                   leftSection={<IconDownload size={16} />}
                   onClick={() => setAddPuzzleDbOpen(true)}
                 >

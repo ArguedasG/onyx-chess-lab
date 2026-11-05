@@ -65,10 +65,14 @@ pub async fn authenticate(
 
     {
         let mut pending = state.auth.pending.lock().await;
-        if pending.is_some() {
-            return Err(Error::OAuth(
-                "A Lichess authentication attempt is already active".to_string(),
-            ));
+        // A new attempt replaces an unfinished one (the browser tab was closed, Lichess asked to
+        // sign in first and lost the request...). Refusing it left the user with nothing happening
+        // for up to five minutes.
+        if let Some(mut previous) = pending.take() {
+            info!("Replacing an unfinished Lichess OAuth attempt");
+            if let Some(shutdown) = previous.shutdown.take() {
+                let _ = shutdown.send(());
+            }
         }
         *pending = Some(PendingAuth {
             csrf_token,

@@ -48,7 +48,8 @@ function Step({
   title: string;
   description: string;
   done: boolean;
-  optional?: boolean;
+  /** Steps that are not required: optional, or recommended because they make things easier. */
+  optional?: "optional" | "recommended";
   action: string;
   onAction: () => void;
 }) {
@@ -61,7 +62,11 @@ function Step({
             {done ? <IconCheck size={18} /> : <StepIcon size={18} />}
           </ThemeIcon>
           <Text size="xs" c="dimmed" fw={600}>
-            {optional ? t("FirstSteps.Optional") : t("FirstSteps.StepN", { n: index })}
+            {optional === "optional"
+              ? t("FirstSteps.Optional")
+              : optional === "recommended"
+                ? t("FirstSteps.Recommended", "Recommended")
+                : t("FirstSteps.StepN", { n: index })}
           </Text>
         </Group>
         <div>
@@ -108,9 +113,11 @@ export default function FirstSteps() {
       .catch(() => setPuzzleDbs([]));
   }, []);
 
-  const required = [enginesReady, Boolean(referenceDb), (puzzleDbs?.length ?? 0) > 0];
+  // Puzzles help (Lichess puzzles, sets from filters) but tactics works with PGN sets without them.
+  const required = [enginesReady, Boolean(referenceDb)];
+  const puzzlesDone = (puzzleDbs?.length ?? 0) > 0;
   const accountDone = sessions.length > 0;
-  const doneCount = required.filter(Boolean).length + (accountDone ? 1 : 0);
+  const doneCount = required.filter(Boolean).length + (puzzlesDone ? 1 : 0) + (accountDone ? 1 : 0);
 
   // Waits for the puzzle check so a finished setup never flashes on screen.
   if (hidden || puzzleDbs === null || required.every(Boolean)) return null;
@@ -172,14 +179,15 @@ export default function FirstSteps() {
           icon={IconPuzzle}
           title={t("FirstSteps.Puzzles.Title")}
           description={t("FirstSteps.Puzzles.Desc")}
-          done={(puzzleDbs?.length ?? 0) > 0}
+          done={puzzlesDone}
+          optional="recommended"
           action={t("FirstSteps.Puzzles.Action")}
           onAction={() => setPuzzlesOpen(true)}
         />
         <Step
           index={4}
           icon={IconUserCircle}
-          optional
+          optional="optional"
           title={t("FirstSteps.Account.Title")}
           description={t("FirstSteps.Account.Desc")}
           done={accountDone}

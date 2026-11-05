@@ -1,10 +1,12 @@
 import {
+  Alert,
   Autocomplete,
   Button,
   Checkbox,
   Group,
   InputWrapper,
   Stack,
+  Text,
   TextInput,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
@@ -13,11 +15,15 @@ import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { DatabaseInfo } from "@/bindings";
-import { commands } from "@/bindings";
 import { sessionsAtom } from "@/state/atoms";
 import { getChessComAccount } from "@/utils/chess.com/api";
 import { getDatabases } from "@/utils/db";
 import { getLichessAccount } from "@/utils/lichess/api";
+import {
+  cancelLichessLogin,
+  startLichessLogin,
+  useLichessLoginPending,
+} from "@/utils/lichess/login";
 import type { ChessComSession, LichessSession } from "@/utils/session";
 import AccountCards from "../common/AccountCards";
 import GenericCard from "../common/GenericCard";
@@ -81,14 +87,15 @@ function Accounts() {
 
   async function addLichess(player: string, username: string, withLogin: boolean) {
     if (withLogin) {
-      sessionStorage.setItem("lichess_player_alias", player);
-      return await commands.authenticate(username);
+      await startLichessLogin(username, player);
+      return;
     }
     return await addLichessNoLogin(player, username);
   }
 
   return (
     <>
+      <LichessLoginWaiting />
       <AccountCards
         databases={databases}
         setDatabases={setDatabases}
@@ -117,6 +124,40 @@ function Accounts() {
 }
 
 export default Accounts;
+
+/** While Lichess is open in the browser: what to do there, and a way to try again. */
+export function LichessLoginWaiting() {
+  const { t } = useTranslation();
+  const pending = useLichessLoginPending();
+  const sessions = useAtomValue(sessionsAtom);
+  if (!pending) return null;
+  const alias =
+    sessions.find((s) => s.lichess?.username.toLowerCase() === pending.toLowerCase())?.player ?? "";
+  return (
+    <Alert
+      color="blue"
+      variant="light"
+      title={t("Accounts.Lichess.Waiting", "Waiting for Lichess…")}
+    >
+      <Stack gap="xs">
+        <Text size="sm">
+          {t(
+            "Accounts.Lichess.Waiting.Desc",
+            "Authorize Onyx in the Lichess page that opened in your browser (sign in there first if it asks). If you closed it or nothing changes, open it again.",
+          )}
+        </Text>
+        <Group gap="xs">
+          <Button size="xs" onClick={() => void startLichessLogin(pending, alias)}>
+            {t("Home.Accounts.LoginAgain", "Open Lichess again")}
+          </Button>
+          <Button size="xs" variant="subtle" color="gray" onClick={cancelLichessLogin}>
+            {t("Common.Cancel")}
+          </Button>
+        </Group>
+      </Stack>
+    </Alert>
+  );
+}
 
 function AccountModal({
   open,
@@ -203,7 +244,10 @@ function AccountModal({
           {website === "lichess" && (
             <Checkbox
               label={t("Home.Accounts.LoginWithBrowser")}
-              description={t("Home.Accounts.LoginWithBrowser.Desc")}
+              description={t(
+                "Home.Accounts.LoginWithBrowser.Explain",
+                "Optional. Without it you can still download the account's games, analyse them and use them as a database. Lichess only opens its opening explorer (Lichess and Masters, in the board's database panel) to signed-in users: tick it if you want the explorer. You can also sign in later from the account card.",
+              )}
               checked={withLogin}
               onChange={(e) => setWithLogin(e.currentTarget.checked)}
             />

@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-11-04.
+> Última actualización: 2026-11-05.
 
 ## 1. Cómo utilizar este documento
 
@@ -78,9 +78,9 @@ prueban y comunican problemas.
 
 - Primera versión compartida públicamente: **0.15.3**, aproximadamente una semana antes del
   2026-09-15.
-- Última versión publicada: **0.25.0** (primer uso tras una instalación limpia, táctica a ciegas
-  completa y formatos rápidos en sets, arreglos portados de En Croissant). Detalle:
-  `docs/release-notes-0.25.0.es.md`.
+- Última versión publicada: **0.25.1** (arreglos de inicio de sesión de Lichess y base de puzzles
+  como recomendación, tras la prueba desde cero de 0.25.0). Detalle:
+  `docs/release-notes-0.25.1.es.md`.
 - Canal disponible y validado: **Windows x64 mediante GitHub Releases**.
 - Linux x64 (AppImage y .deb) y macOS (Apple Silicon e Intel) se publican desde 0.18.0 como **vista
   previa sin probar**, con advertencia y pasos de apertura en el README. macOS no está firmado ni
@@ -1044,6 +1044,23 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-05 — Release 0.25.1
+
+- Publica los arreglos de la prueba desde cero de 0.25.0 (abajo). Detalle:
+  `docs/release-notes-0.25.1.es.md`.
+
+### 2026-11-05 — Prueba desde cero de 0.25.0: Lichess y puzzles
+
+- **Lichess**: un intento de inicio de sesión con el navegador sin terminar bloqueaba los siguientes
+  durante cinco minutos sin ningún aviso (parecía que borrar y volver a añadir la cuenta no servía).
+  Ahora un intento nuevo reemplaza al anterior, los errores se muestran, un aviso explica qué hacer
+  en el navegador con «Abrir Lichess de nuevo», cada cuenta añadida sin sesión tiene «Iniciar
+  sesión» y el panel de base de datos ofrece iniciar sesión con esa cuenta. El formulario explica
+  que iniciar sesión es opcional y solo hace falta para el explorador de Lichess y Maestros.
+  Eliminar un jugador entero también borra sus credenciales guardadas.
+- **Puzzles**: la base de puzzles pasa de requisito a recomendación (los sets propios en PGN
+  funcionan sin ella) en el inicio, los primeros pasos y Táctica.
 
 ### 2026-11-04 — Release 0.25.0
 

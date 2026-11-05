@@ -62,6 +62,7 @@ import WhatsNewModal from "@/components/WhatsNewModal";
 import ErrorComponent from "@/components/ErrorComponent";
 import LanguageChoiceModal from "@/components/LanguageChoiceModal";
 import { EngineSetupModal } from "@/components/engines/RecommendedEngines";
+import { finishLichessLogin } from "@/utils/lichess/login";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
 import { getLichessAccount } from "@/utils/lichess/api";
@@ -193,6 +194,7 @@ function useLichessOAuthSessionListener() {
           const account = await getLichessAccount({ token });
           if (!account) {
             warn("Lichess OAuth completed, but the account could not be loaded");
+            finishLichessLogin(null);
             return;
           }
 
@@ -210,7 +212,9 @@ function useLichessOAuthSessionListener() {
             },
           ]);
           void persistLichessToken(account.username, token);
+          finishLichessLogin(account.username);
         } catch (error) {
+          finishLichessLogin(null);
           warn(`Could not finish Lichess OAuth authentication: ${error}`);
         }
       })();
