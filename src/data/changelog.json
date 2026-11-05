@@ -1,5 +1,52 @@
 [
   {
+    "version": "0.25.1",
+    "notes": {
+      "en": {
+        "summary": "Fixes from a clean install: signing in to Lichess always works and explains when it is needed, and the puzzle database is a recommendation, not a requirement.",
+        "sections": [
+          {
+            "title": "Lichess",
+            "items": [
+              "An unfinished browser sign-in no longer blocks the next ones for five minutes without a word: trying again always opens Lichess, also after removing and adding the account again.",
+              "While Lichess is open in the browser, Accounts says what to do there, with “Open Lichess again” and “Cancel”, and a message confirms the sign-in.",
+              "Accounts added without signing in have a “Sign in” button, and the board's database panel offers to sign in with that account right there.",
+              "The add-account form explains that signing in is optional: the account's games work without it, and only the Lichess and Masters explorers need it.",
+              "Removing a whole player also forgets its saved Lichess sign-ins."
+            ]
+          },
+          {
+            "title": "Puzzles",
+            "items": [
+              "The puzzle database is shown as recommended, not required, on the start screen, in the first steps and in Tactics: your own PGN sets work without it. The download stays one click away."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Arreglos tras una instalación desde cero: iniciar sesión en Lichess siempre funciona y explica cuándo hace falta, y la base de puzzles pasa a ser una recomendación, no un requisito.",
+        "sections": [
+          {
+            "title": "Lichess",
+            "items": [
+              "Un inicio de sesión con el navegador sin terminar ya no bloquea los siguientes durante cinco minutos sin avisar: volver a intentarlo siempre abre Lichess, también después de eliminar la cuenta y añadirla otra vez.",
+              "Mientras Lichess está abierto en el navegador, Cuentas explica qué hacer allí, con «Abrir Lichess de nuevo» y «Cancelar», y un aviso confirma el inicio de sesión.",
+              "Las cuentas añadidas sin iniciar sesión tienen un botón «Iniciar sesión», y el panel de base de datos del tablero ofrece iniciar sesión con esa cuenta ahí mismo.",
+              "El formulario de añadir cuenta explica que iniciar sesión es opcional: las partidas de la cuenta funcionan sin ello, y solo lo necesitan los exploradores de Lichess y Maestros.",
+              "Eliminar un jugador entero también borra sus inicios de sesión de Lichess guardados."
+            ]
+          },
+          {
+            "title": "Puzzles",
+            "items": [
+              "La base de puzzles aparece como recomendada, no como requisito, en el inicio, en los primeros pasos y en Táctica: tus propios sets en PGN funcionan sin ella. La descarga sigue a un clic."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.25.0",
     "notes": {
       "en": {
