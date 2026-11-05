@@ -3,7 +3,6 @@ import {
   Button,
   Center,
   Group,
-  Image,
   Loader,
   Paper,
   ScrollArea,
@@ -13,27 +12,22 @@ import {
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { useForm } from "@mantine/form";
-import { IconDatabase, IconTrophy } from "@tabler/icons-react";
-import { join, resolve } from "@tauri-apps/api/path";
+import { notifications } from "@mantine/notifications";
+import { IconCloud, IconCpu, IconDatabase, IconTrophy } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands } from "@/bindings";
 import { enginesAtom } from "@/state/atoms";
-import { getEnginesDir } from "@/utils/directories";
-import {
-  type LocalEngine,
-  type RemoteEngine,
-  requiredEngineSettings,
-  useDefaultEngines,
-} from "@/utils/engines";
+import { useRecommendedEnginesReady } from "@/hooks/useRecommendedEngines";
+import { type CatalogEngine, downloadCatalogEngine } from "@/utils/engineSetup";
+import { type LocalEngine, type RemoteEngine, useDefaultEngines } from "@/utils/engines";
 import { usePlatform } from "@/utils/files";
 import { formatBytes } from "@/utils/format";
-import { unwrap } from "@/utils/unwrap";
 import CatalogErrorAlert from "../common/CatalogErrorAlert";
 import ProgressButton from "../common/ProgressButton";
 import EngineForm from "./EngineForm";
 import ManagedMaiaCard from "./ManagedMaiaCard";
+import { RecommendedEngines } from "./RecommendedEngines";
 
 function AddEngine({
   opened,
@@ -48,6 +42,7 @@ function AddEngine({
   const engines = (allEngines ?? []).filter((e): e is LocalEngine => e.type === "local");
 
   const { os } = usePlatform();
+  const recommendedReady = useRecommendedEnginesReady();
 
   const { defaultEngines, error, isLoading, retry } = useDefaultEngines(os, opened);
 
@@ -88,6 +83,17 @@ function AddEngine({
           <Tabs.Tab value="local">{t("Common.Local")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="download" pt="xs">
+          {!recommendedReady && (
+            <Paper withBorder radius="md" p="md" mb="md">
+              <Text fw={600} mb={4}>
+                {t("EngineSetup.Title")}
+              </Text>
+              <Text size="sm" c="dimmed" mb="sm">
+                {t("EngineSetup.Intro")}
+              </Text>
+              <RecommendedEngines />
+            </Paper>
+          )}
           {isLoading && (
             <Center>
               <Loader />
@@ -151,9 +157,12 @@ function CloudCard({ engine }: { engine: RemoteEngine }) {
     <Paper withBorder radius="md" p={0} key={engine.name}>
       <Group wrap="nowrap" gap={0} grow>
         <Box p="sm" flex={1}>
-          <Text tt="uppercase" c="dimmed" fw={700} size="xs">
-            ENGINE
-          </Text>
+          <Group gap={6} wrap="nowrap">
+            <IconCloud size={14} color="var(--mantine-color-dimmed)" />
+            <Text tt="uppercase" c="dimmed" fw={700} size="xs">
+              {t("Engines.Add.EngineLabel")}
+            </Text>
+          </Group>
           <Text fw="bold" size="sm">
             {engine.name}
           </Text>
@@ -190,9 +199,6 @@ function CloudCard({ engine }: { engine: RemoteEngine }) {
   );
 }
 
-/** A catalog entry; `extractTo` is the folder its archive is unpacked into, if not the root. */
-type CatalogEngine = LocalEngine & { extractTo?: string };
-
 function EngineCard({
   engine,
   engineId,
@@ -208,42 +214,10 @@ function EngineCard({
   const [, setEngines] = useAtom(enginesAtom);
   const needsNvidia = /cuda/i.test(engine.downloadLink ?? "");
   const downloadEngine = useCallback(
-    async (id: number, url: string) => {
+    async (id: number) => {
       setInProgress(true);
-      const enginesDir = await getEnginesDir();
-      let path = await resolve(enginesDir, `${url.slice(url.lastIndexOf("/") + 1)}`);
-      if (url.endsWith(".zip") || url.endsWith(".tar")) {
-        // Some archives (Lc0's official ones) have their files at the root, not in a folder.
-        path = engine.extractTo ? await resolve(enginesDir, engine.extractTo) : enginesDir;
-      }
-      await commands.downloadFile(`engine_${id}`, url, path, null, null, null);
-      let enginesDirPath = enginesDir;
-      if (enginesDirPath.endsWith("/") || enginesDirPath.endsWith("\\")) {
-        enginesDirPath = enginesDirPath.slice(0, -1);
-      }
-      const enginePath = await join(enginesDirPath, ...engine.path.split("/"));
-      await commands.setFileAsExecutable(enginePath);
-      const args = engine.args ?? [];
-      const config = unwrap(await commands.getEngineConfig(enginePath, args));
-      const { extractTo: _extractTo, ...installed } = engine;
-      setEngines(async (prev) => [
-        ...(await prev),
-        {
-          ...installed,
-          id: crypto.randomUUID(),
-          type: "local",
-          path: enginePath,
-          args,
-          loaded: true,
-          settings: config.options
-            .filter((o) => requiredEngineSettings.includes(o.value.name))
-            .map((o) => ({
-              name: o.value.name,
-              // @ts-expect-error
-              value: o.value.default,
-            })),
-        },
-      ]);
+      const installed = await downloadCatalogEngine(engine, `engine_${id}`);
+      setEngines(async (prev) => [...(await prev), installed]);
     },
     [engine, setEngines],
   );
@@ -251,15 +225,13 @@ function EngineCard({
   return (
     <Paper withBorder radius="md" p={0} key={engine.name}>
       <Group wrap="nowrap" gap={0} grow>
-        {engine.image && (
-          <Box w="1.75rem" px="xs">
-            <Image src={engine.image} alt={engine.name} fit="contain" />
-          </Box>
-        )}
         <Box p="sm" flex={1}>
-          <Text tt="uppercase" c="dimmed" fw={700} size="xs">
-            ENGINE
-          </Text>
+          <Group gap={6} wrap="nowrap">
+            <IconCpu size={14} color="var(--mantine-color-dimmed)" />
+            <Text tt="uppercase" c="dimmed" fw={700} size="xs">
+              {t("Engines.Add.EngineLabel")}
+            </Text>
+          </Group>
           <Text fw="bold" size="sm" mb={needsNvidia ? 0 : "xs"}>
             {engine.name} {engine.version}
           </Text>
@@ -287,7 +259,14 @@ function EngineCard({
             }}
             onClick={() => {
               if (!engine.downloadLink) return;
-              downloadEngine(engineId, engine.downloadLink);
+              downloadEngine(engineId).catch((error: unknown) => {
+                setInProgress(false);
+                notifications.show({
+                  color: "red",
+                  title: t("EngineSetup.DownloadFailed", { name: engine.name }),
+                  message: String(error),
+                });
+              });
             }}
             inProgress={inProgress}
             setInProgress={setInProgress}

@@ -67,11 +67,25 @@
 
 .chips {
   display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 2px 4px;
+  padding: 2px 6px 2px 4px;
+  border: 1px solid var(--mantine-color-default-border);
   border-radius: var(--mantine-radius-sm);
   min-width: 0;
   overflow: hidden;
+}
+
+/* The gear says the chips open the engine settings. */
+.chipsIcon {
+  flex-shrink: 0;
+  color: var(--mantine-color-dimmed);
+  transition: transform 160ms ease;
+}
+
+.chips:hover .chipsIcon {
+  color: var(--mantine-color-text);
+  transform: rotate(45deg);
 }
 
 .inlineLine {

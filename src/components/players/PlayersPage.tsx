@@ -2,6 +2,7 @@ import {
   Avatar,
   Badge,
   Box,
+  Button,
   Center,
   Group,
   Loader,
@@ -15,7 +16,13 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconDatabase, IconSearch, IconUserCircle, IconUsersGroup } from "@tabler/icons-react";
+import {
+  IconCloudDownload,
+  IconDatabase,
+  IconSearch,
+  IconUserCircle,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import cx from "clsx";
 import { useAtom } from "jotai";
@@ -32,6 +39,7 @@ import {
 import { getDatabases, query_players } from "@/utils/db";
 import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
 import { initials } from "./common";
+import LoadOnlinePlayerModal from "./LoadOnlinePlayerModal";
 import { KIND_COLORS, useKindLabels } from "./PlayerCardModals";
 import PlayerCardView from "./PlayerCardView";
 import classes from "./PlayersPage.module.css";
@@ -88,6 +96,7 @@ export default function PlayersPage() {
   const [selection, setSelection] = useAtom(playerCardSelectionAtom);
   const [returnTarget, setReturnTarget] = useAtom(playerAnalysisReturnTargetAtom);
   const [query, setQuery] = useState("");
+  const [onlineOpen, setOnlineOpen] = useState(false);
   const [debouncedQuery] = useDebouncedValue(query.trim(), 300);
   const { data: results, isLoading: searching } = useSWR(
     debouncedQuery.length >= 2 ? ["players-search", debouncedQuery] : null,
@@ -159,6 +168,11 @@ export default function PlayersPage() {
 
   return (
     <Group h="100%" gap={0} wrap="nowrap" align="stretch" style={{ overflow: "hidden" }}>
+      <LoadOnlinePlayerModal
+        opened={onlineOpen}
+        onClose={() => setOnlineOpen(false)}
+        onLoaded={(source) => setSelection({ origin: "search", source })}
+      />
       <Box className={classes.sidebar}>
         <Stack gap="sm" p="md" pb="xs">
           <Group gap="xs">
@@ -181,6 +195,14 @@ export default function PlayersPage() {
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
+          <Button
+            variant="light"
+            size="xs"
+            leftSection={<IconCloudDownload size={15} />}
+            onClick={() => setOnlineOpen(true)}
+          >
+            {t("Players.Online.Open", "Load from Lichess or Chess.com")}
+          </Button>
         </Stack>
         <ScrollArea style={{ flex: 1 }} offsetScrollbars px="md">
           <Stack gap="md" pb="md">

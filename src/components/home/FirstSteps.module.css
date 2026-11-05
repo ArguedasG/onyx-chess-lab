@@ -1,0 +1,22 @@
+.panel {
+  border-radius: var(--mantine-radius-lg);
+  border: 1px solid var(--mantine-primary-color-light-hover);
+  background:
+    linear-gradient(160deg, var(--mantine-primary-color-light) 0%, transparent 45%),
+    var(--mantine-color-body);
+  padding: var(--mantine-spacing-lg);
+}
+
+.step {
+  height: 100%;
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  padding: var(--mantine-spacing-md);
+  transition: border-color 120ms ease;
+}
+
+.step[data-done] {
+  border-color: var(--mantine-color-teal-light-hover);
+  background: var(--mantine-color-teal-light);
+}

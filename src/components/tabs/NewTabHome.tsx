@@ -45,6 +45,7 @@ import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
 import { Chessground } from "@/chessground/Chessground";
 import { FileIcon } from "@/components/files/FileIcon";
+import FirstSteps from "@/components/home/FirstSteps";
 import { getStats } from "@/components/files/opening";
 import { StartScreenControl } from "@/components/settings/StartScreenControl";
 import {
@@ -465,6 +466,8 @@ export default function NewTabHome({ id }: { id: string }) {
             <StartScreenControl size="xs" />
           </Group>
         </Group>
+
+        <FirstSteps />
 
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, md: 8 }}>

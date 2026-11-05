@@ -5,7 +5,6 @@ import {
   ScrollArea,
   Select,
   Stack,
-  Switch,
   Table,
   Tabs,
   Text,
@@ -61,10 +60,8 @@ import {
   storedDocumentDirAtom,
   storedEnginesDirAtom,
   storedPuzzlesDirAtom,
-  telemetryEnabledAtom,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
-import { disableTelemetry, enableTelemetry } from "@/utils/telemetry";
 import FileInput from "../common/FileInput";
 import AnalysisCacheSetting from "./AnalysisCacheSetting";
 import BoardSelect from "./BoardSelect";
@@ -130,28 +127,16 @@ function SettingRow({
   );
 }
 
-function TelemetrySwitch() {
+/**
+ * The telemetry inherited from En Croissant sent its events to En Croissant's own analytics
+ * project, so it is off for good; Onyx will only add an opt-in telemetry of its own (Phase 10).
+ */
+function TelemetryNotice() {
   const { t } = useTranslation();
-  const [enabled, setEnabled] = useAtom(telemetryEnabledAtom);
   return (
-    <Switch
-      onLabel={t("Common.On")}
-      offLabel={t("Common.Off")}
-      size="lg"
-      checked={enabled}
-      onChange={(event) => {
-        const newValue = event.currentTarget.checked;
-        setEnabled(newValue);
-        if (newValue) {
-          void enableTelemetry();
-        } else {
-          disableTelemetry();
-        }
-      }}
-      styles={{
-        track: { cursor: "pointer" },
-      }}
-    />
+    <Text size="sm" c="dimmed" maw={360}>
+      {t("Settings.Privacy.NoTelemetry")}
+    </Text>
   );
 }
 
@@ -691,7 +676,7 @@ export default function Page() {
         title: t("Settings.Privacy.Telemetry"),
         description: t("Settings.Privacy.Telemetry.Desc"),
         keywords: ["telemetry", "privacy", "analytics", "tracking"],
-        render: () => <TelemetrySwitch />,
+        render: () => <TelemetryNotice />,
       },
     ],
     [

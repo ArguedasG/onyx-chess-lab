@@ -30,6 +30,7 @@ import {
   IconChevronRight,
   IconCheck,
   IconDatabase,
+  IconDownload,
   IconEye,
   IconPlayerPlay,
   IconPuzzle,
@@ -59,6 +60,7 @@ import {
   recordTacticsReview,
   type TacticsReviewItem,
 } from "@/utils/tacticsReview";
+import AddPuzzle from "../puzzles/AddPuzzle";
 import PuzzleSetBuilder from "./tactics/PuzzleSetBuilder";
 import TacticsProgressCards from "./tactics/TacticsProgressCards";
 import TacticsReviewSession from "./tactics/TacticsReviewSession";
@@ -163,6 +165,7 @@ export default function TacticsDashboardV2Page() {
   const { state: tacticsReview, update: updateTacticsReview } = useTacticsReview();
   const [reviewSessionItems, setReviewSessionItems] = useState<TacticsReviewItem[] | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [addPuzzleDbOpen, setAddPuzzleDbOpen] = useState(false);
   const myLevel =
     tacticsReview && tacticsReview.rating.deviation < PROVISIONAL_DEVIATION
       ? ratingBandFor(tacticsReview.rating)
@@ -660,28 +663,55 @@ export default function TacticsDashboardV2Page() {
               </Group>
               <Badge color="orange">{puzzleDbs.length}</Badge>
             </Group>
-            {puzzleDbs.length > 0 && (
-              <Text size="xs" c="dimmed">
-                {puzzleDbs.map((db) => db.title.replace(/\.db3$/i, "")).join(" · ")}
-              </Text>
+            {puzzleDbs.length > 0 ? (
+              <>
+                <Text size="xs" c="dimmed">
+                  {puzzleDbs.map((db) => db.title.replace(/\.db3$/i, "")).join(" · ")}
+                </Text>
+                <Group grow>
+                  <Button
+                    variant="light"
+                    leftSection={<IconPlayerPlay size={16} />}
+                    onClick={openLichessTrainer}
+                  >
+                    {trainingT(
+                      "Training.Copy.Opendatabasetrainer.54b0961e",
+                      "Open database trainer",
+                    )}
+                  </Button>
+                  <Button
+                    variant="default"
+                    leftSection={<IconWand size={16} />}
+                    onClick={() => setBuilderOpen(true)}
+                  >
+                    {trainingT("Tactics.Builder.Open", "Build a set")}
+                  </Button>
+                </Group>
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  color="gray"
+                  onClick={() => setAddPuzzleDbOpen(true)}
+                >
+                  {trainingT("Tactics.PuzzleDb.More", "Download more puzzle databases")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Text size="sm">
+                  {trainingT(
+                    "Tactics.PuzzleDb.Empty",
+                    "You have no puzzle database yet. Download one (Lichess's has millions of puzzles with rating and themes) to train with it and to build sets from your filters.",
+                  )}
+                </Text>
+                <Button
+                  leftSection={<IconDownload size={16} />}
+                  onClick={() => setAddPuzzleDbOpen(true)}
+                >
+                  {trainingT("Tactics.PuzzleDb.Download", "Download a puzzle database")}
+                </Button>
+              </>
             )}
-            <Group grow>
-              <Button
-                variant="light"
-                leftSection={<IconPlayerPlay size={16} />}
-                onClick={openLichessTrainer}
-              >
-                {trainingT("Training.Copy.Opendatabasetrainer.54b0961e", "Open database trainer")}
-              </Button>
-              <Button
-                variant="default"
-                leftSection={<IconWand size={16} />}
-                disabled={puzzleDbs.length === 0}
-                onClick={() => setBuilderOpen(true)}
-              >
-                {trainingT("Tactics.Builder.Open", "Build a set")}
-              </Button>
-            </Group>
           </Stack>
         </Card>
 
@@ -809,6 +839,12 @@ export default function TacticsDashboardV2Page() {
         />
       )}
 
+      <AddPuzzle
+        puzzleDbs={puzzleDbs}
+        opened={addPuzzleDbOpen}
+        setOpened={setAddPuzzleDbOpen}
+        setPuzzleDbs={setPuzzleDbs}
+      />
       <PuzzleSetBuilder
         opened={builderOpen}
         databases={puzzleDbs}

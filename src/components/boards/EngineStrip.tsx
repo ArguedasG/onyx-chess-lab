@@ -406,7 +406,11 @@ const EngineSection = memo(function EngineSection({
             <Popover width={320} position="top-start" shadow="md" withinPortal>
               <Popover.Target>
                 <Tooltip label={t("EngineStrip.Settings", "Engine settings")}>
-                  <UnstyledButton className={classes.chips}>
+                  <UnstyledButton
+                    className={classes.chips}
+                    aria-label={t("EngineStrip.Settings", "Engine settings")}
+                  >
+                    <IconSettings size={14} className={classes.chipsIcon} />
                     <Badge size="xs" variant="light" color="gray" tt="none">
                       {t("EngineStrip.Lines", "{{count}} lines", { count: lines })}
                     </Badge>
@@ -603,7 +607,7 @@ function EngineMenu({ children }: { children: ReactNode }) {
         {(engines ?? []).length > 0 && <Menu.Divider />}
         <Menu.Item
           leftSection={<IconSettings size={16} />}
-          onClick={() => navigate({ to: "/engines" })}
+          onClick={() => navigate({ to: "/engines", search: { add: true } })}
         >
           {t("EngineStrip.ManageEngines", "Add or remove engines…")}
         </Menu.Item>

@@ -1,9 +1,9 @@
 import { Alert, Button, Group, Text } from "@mantine/core";
 import { IconBrain } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useOpenEngineSetup } from "@/hooks/useRecommendedEngines";
 import { enginesAtom } from "@/state/atoms";
 import type { LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
@@ -21,7 +21,7 @@ export function useInstalledMaia(): LocalEngine | null {
 
 /**
  * The same notice everywhere a feature needs Maia 3 and it is not installed, with a direct way to
- * the managed installation in Engines.
+ * the installation (Maia 3 together with Stockfish, which gives the bots their style).
  */
 export default function MaiaRequiredAlert({
   children,
@@ -32,7 +32,7 @@ export default function MaiaRequiredAlert({
   color?: string;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const openEngineSetup = useOpenEngineSetup();
   return (
     <Alert color={color} icon={<IconBrain size={16} />} py={8}>
       <Group justify="space-between" wrap="nowrap" gap="sm">
@@ -48,7 +48,7 @@ export default function MaiaRequiredAlert({
           variant="light"
           color={color}
           style={{ flexShrink: 0 }}
-          onClick={() => void navigate({ to: "/engines" })}
+          onClick={() => openEngineSetup("maia")}
         >
           {t("Maia.Install", "Install Maia 3")}
         </Button>

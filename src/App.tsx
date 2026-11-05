@@ -33,7 +33,6 @@ import {
   storedEnginesDirAtom,
   storedPuzzlesDirAtom,
   tabsAtom,
-  telemetryEnabledAtom,
 } from "./state/atoms";
 
 import "@/styles/chessgroundBaseOverride.css";
@@ -53,7 +52,6 @@ import "@/styles/global.css";
 import { commands } from "./bindings";
 import { openFile } from "./utils/files";
 import { migrateAndHydrateLichessTokens, persistLichessToken } from "./utils/secureLichessTokens";
-import { enableTelemetry } from "./utils/telemetry";
 
 const colorSchemeManager = localStorageColorSchemeManager({
   key: "mantine-color-scheme",
@@ -63,6 +61,7 @@ import AppUpdater from "@/components/AppUpdater";
 import WhatsNewModal from "@/components/WhatsNewModal";
 import ErrorComponent from "@/components/ErrorComponent";
 import LanguageChoiceModal from "@/components/LanguageChoiceModal";
+import { EngineSetupModal } from "@/components/engines/RecommendedEngines";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
 import { getLichessAccount } from "@/utils/lichess/api";
@@ -151,11 +150,6 @@ function useAppStartup() {
         store.set(sessionsAtom, await migrateAndHydrateLichessTokens(sessions));
       } catch (error) {
         warn(`Could not migrate Lichess credentials to secure storage: ${error}`);
-      }
-      const telemetryEnabled = store.get(telemetryEnabledAtom);
-
-      if (telemetryEnabled) {
-        await enableTelemetry();
       }
       try {
         const matches = await getMatches();
@@ -335,6 +329,7 @@ export default function App() {
           <LanguageChoiceModal />
           <AppUpdater />
           <WhatsNewModal />
+          <EngineSetupModal />
           <RouterProvider router={router} />
         </ContextMenuProvider>
       </MantineProvider>

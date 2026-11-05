@@ -3,9 +3,9 @@ import { info } from "@tauri-apps/plugin-log";
 import type { DatabaseInfo } from "@/bindings";
 import { commands, events } from "@/bindings";
 import type { DatabaseConversionState } from "@/state/atoms";
-import { downloadChessCom } from "@/utils/chess.com/api";
-import { query_games } from "@/utils/db";
-import { downloadLichess } from "@/utils/lichess/api";
+import { downloadChessCom, getChessComAccount } from "@/utils/chess.com/api";
+import { getDatabases, query_games } from "@/utils/db";
+import { downloadLichess, getLichessAccount } from "@/utils/lichess/api";
 import { unwrap } from "@/utils/unwrap";
 
 export type AccountSyncTarget = {
@@ -93,4 +93,46 @@ export async function syncAccountGames(
             sourceFileName: null,
         }));
     }
+}
+
+/**
+ * Downloads (or brings up to date) the games of any Lichess or Chess.com user into its own local
+ * database, `<user>_<site>.db3`. Returns `null` when the site has no such account.
+ */
+export async function downloadOnlineAccount(
+    type: "lichess" | "chesscom",
+    user: string,
+    databaseDir: string,
+    setConversionState: (
+        update: (previous: DatabaseConversionState) => DatabaseConversionState,
+    ) => void,
+    options: { token?: string; onProgress?: (progress: number) => void } = {},
+): Promise<{ path: string; title: string } | null> {
+    const filename = `${user}_${type}.db3`;
+    const database =
+        (await getDatabases()).find((candidate) => candidate.filename === filename) ?? null;
+    let total = 0;
+    if (type === "lichess") {
+        const account = await getLichessAccount({ username: user });
+        if (!account) return null;
+        total = (account as { count?: { all?: number } }).count?.all ?? 0;
+    } else if (!(await getChessComAccount(user))) {
+        return null;
+    }
+    await syncAccountGames(
+        {
+            type,
+            title: user,
+            database,
+            total,
+            token: type === "lichess" ? options.token : undefined,
+        },
+        databaseDir,
+        setConversionState,
+        options.onProgress,
+    );
+    return {
+        path: await resolve(databaseDir, filename),
+        title: `${user} ${type === "lichess" ? "Lichess" : "Chess.com"}`,
+    };
 }

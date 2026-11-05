@@ -91,6 +91,80 @@ impl BotChoice {
         }
     }
 
+    /// One log line explaining the move, to check by hand that the style, the filter and Stockfish
+    /// are in play (`Bot move e2e4 · 1500 aggressive 0.6/simplifies -0.4 · ...`).
+    pub fn log_summary(&self, config: &BotPlayConfig) -> String {
+        let probability = self
+            .maia_probability
+            .map(|p| format!("{:.0}%", p * 100.0))
+            .unwrap_or_else(|| "?".to_string());
+        let source = if self.maia_probability.is_none() {
+            "Maia without policy (no style)".to_string()
+        } else if self.maia_top {
+            format!("Maia's first choice ({probability})")
+        } else {
+            format!("not Maia's first choice ({probability})")
+        };
+        let verifier = if self.verified.is_empty() {
+            "no Stockfish: style and filter off".to_string()
+        } else {
+            format!(
+                "Stockfish checked {} candidates{}",
+                self.verified.len(),
+                if self.filtered {
+                    ", strength filter on"
+                } else {
+                    ""
+                }
+            )
+        };
+        let traits = self
+            .traits
+            .map(|traits| {
+                let mut tags = Vec::new();
+                if traits.check {
+                    tags.push("check");
+                }
+                if traits.trade {
+                    tags.push("trade");
+                } else if traits.capture {
+                    tags.push("capture");
+                }
+                if traits.recapture {
+                    tags.push("recapture");
+                }
+                format!(
+                    "move aggression {:+.2}, simplification {:+.2}{}",
+                    traits.aggression,
+                    traits.simplification,
+                    if tags.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", tags.join(", "))
+                    }
+                )
+            })
+            .unwrap_or_default();
+        let score = self
+            .score()
+            .map(|score| match score {
+                ScoreValue::Cp(cp) => format!(" · eval {:+.2}", cp as f32 / 100.0),
+                ScoreValue::Mate(moves) => format!(" · mate {moves}"),
+            })
+            .unwrap_or_default();
+        format!(
+            "Bot move {} · Elo {} · style aggression {:+.1}, simplification {:+.1} · {} · {} · {}{}",
+            self.uci,
+            config.elo,
+            config.aggression,
+            config.simplification,
+            source,
+            verifier,
+            traits,
+            score
+        )
+    }
+
     /// The verified score of the chosen move, from the side to move.
     pub fn score(&self) -> Option<ScoreValue> {
         self.verified
@@ -602,6 +676,54 @@ mod tests {
             .unwrap()
             .into_position(CastlingMode::Standard)
             .unwrap()
+    }
+
+    fn play_config() -> BotPlayConfig {
+        BotPlayConfig {
+            aggression: 0.6,
+            simplification: -0.4,
+            elo: 1500,
+            temperature: 1.0,
+            top_p: 1.0,
+            verifier_path: None,
+            verifier_args: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn log_summary_says_whether_stockfish_style_and_filter_were_used() {
+        let styled = BotChoice {
+            uci: "e4d5".to_string(),
+            maia_probability: Some(0.18),
+            maia_top: false,
+            traits: Some(MoveTraits {
+                capture: true,
+                trade: true,
+                ..MoveTraits::default()
+            }),
+            verified: vec![VerifiedCandidate {
+                uci: "e4d5".to_string(),
+                score: ScoreValue::Cp(35),
+                depth: 12,
+            }],
+            filtered: true,
+        };
+        let line = styled.log_summary(&play_config());
+        assert!(line.starts_with("Bot move e4d5 · Elo 1500"));
+        assert!(line.contains("not Maia's first choice (18%)"));
+        assert!(line.contains("Stockfish checked 1 candidates, strength filter on"));
+        assert!(line.contains("[trade]"));
+        assert!(line.contains("eval +0.35"));
+
+        let plain = BotChoice {
+            verified: Vec::new(),
+            filtered: false,
+            maia_top: true,
+            ..styled
+        };
+        let line = plain.log_summary(&play_config());
+        assert!(line.contains("Maia's first choice (18%)"));
+        assert!(line.contains("no Stockfish: style and filter off"));
     }
 
     fn traits(fen: &str, uci: &str) -> MoveTraits {

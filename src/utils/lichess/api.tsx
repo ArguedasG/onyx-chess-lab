@@ -1,5 +1,6 @@
 import type { Color } from "@lichess-org/chessground/types";
 import { notifications } from "@mantine/notifications";
+import i18n from "i18next";
 import { IconX } from "@tabler/icons-react";
 import { resolve } from "@tauri-apps/api/path";
 import { fetch } from "@tauri-apps/plugin-http";
@@ -235,8 +236,12 @@ export async function getLichessAccount({
   if (!response.ok) {
     error(`Failed to fetch Lichess account: ${response.status} ${response.url}`);
     notifications.show({
-      title: "Failed to fetch Lichess account",
-      message: `Could not find account "${username}" on lichess.org`,
+      title: i18n.t("Accounts.Lichess.AccountFailed", "Could not load the Lichess account"),
+      message: i18n.t(
+        "Accounts.Lichess.AccountNotFound",
+        'No account "{{player}}" was found on lichess.org.',
+        { player: username },
+      ),
       color: "red",
       icon: <IconX />,
     });

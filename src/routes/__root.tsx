@@ -279,8 +279,8 @@ function RootLayout() {
             label: t("Menu.Help.ClearSavedData"),
             id: "clear_saved_data",
             action: () => {
-              ask("Are you sure you want to clear all saved data?", {
-                title: "Clear data",
+              ask(t("Menu.Help.ClearSavedData.Confirm"), {
+                title: t("Menu.Help.ClearSavedData"),
               }).then(async (res) => {
                 if (res) {
                   // Training data lives in a file now; move it aside so a reset stays recoverable.
@@ -296,10 +296,11 @@ function RootLayout() {
             label: t("Menu.Help.OpenLogs"),
             id: "logs",
             action: async () => {
-              const path = await resolve(await appLogDir(), "en-croissant.log");
+              // Release builds write here (see the log plugin in src-tauri/src/main.rs).
+              const path = await resolve(await appLogDir(), "onyx-chess-lab.log");
               notifications.show({
-                title: "Logs",
-                message: `Opened logs in ${path}`,
+                title: t("Menu.Help.OpenLogs"),
+                message: t("Menu.Help.OpenLogs.Desc", { path }),
               });
               await openPath(path);
             },

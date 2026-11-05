@@ -2206,6 +2206,7 @@ async fn request_engine_move(
             }
 
             drop(ctrl);
+            info!("Bot move from {}", book_move.log_message());
             if let Some(engine) = engine_arc {
                 engine
                     .lock()
@@ -2348,6 +2349,9 @@ async fn request_engine_move(
                     &mut StdRng::from_entropy(),
                 )
                 .await?;
+                let summary = choice.log_summary(&config);
+                info!("{summary}");
+                engine.log_gui_message(&summary);
                 let score = choice.score();
                 let critical = choice.is_critical();
                 (choice.uci, score, critical)

@@ -19,11 +19,15 @@ import { notifications } from "@mantine/notifications";
 import { basename, resolve } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom, useSetAtom } from "jotai";
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { KeyedMutator } from "swr";
 import { commands, type DatabaseInfo } from "@/bindings";
-import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
+import {
+  databaseConversionStateAtom,
+  referenceDbAtom,
+  storedDatabasesDirAtom,
+} from "@/state/atoms";
 import { getDatabases, type SuccessDatabaseInfo, useDefaultDatabases } from "@/utils/db";
 import { capitalize, formatBytes, formatNumber } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
@@ -36,6 +40,24 @@ interface AddDatabaseFormValues {
   description: string;
   files: string[];
   filename: string;
+}
+
+/**
+ * Refreshes the list after adding a database. The first database becomes the reference one, so
+ * the board's Database panel works right away instead of asking the user to pick it.
+ */
+function useRefreshAndAdoptReference(setDatabases: KeyedMutator<DatabaseInfo[]>) {
+  const [reference, setReference] = useAtom(referenceDbAtom);
+  return useCallback(
+    async (filename: string) => {
+      const databases = await getDatabases();
+      await setDatabases(databases);
+      if (reference) return;
+      const added = databases.find((db) => db.type === "success" && db.filename === filename);
+      if (added) setReference(added.file);
+    },
+    [reference, setDatabases, setReference],
+  );
 }
 
 function AddDatabase({
@@ -58,6 +80,7 @@ function AddDatabase({
   const setConversionState = useSetAtom(databaseConversionStateAtom);
 
   const { defaultDatabases, error, isLoading, retry } = useDefaultDatabases(opened);
+  const refreshAndAdopt = useRefreshAndAdoptReference(setDatabases);
 
   async function convertDB(paths: string[], title: string, description?: string) {
     if (paths.length === 0) return;
@@ -87,7 +110,7 @@ function AddDatabase({
     });
     try {
       unwrap(await commands.convertPgn(paths, dbPath, null, title, description ?? null));
-      await setDatabases(await getDatabases());
+      await refreshAndAdopt(`${title}.db3`);
       notifications.update({
         id: notificationId,
         loading: false,
@@ -257,12 +280,13 @@ function DatabaseCard({
   const [databaseDir] = useAtom(storedDatabasesDirAtom);
 
   const [inProgress, setInProgress] = useState<boolean>(false);
+  const refreshAndAdopt = useRefreshAndAdoptReference(setDatabases);
 
   async function downloadDatabase(id: number, url: string, name: string) {
     setInProgress(true);
     const path = await resolve(databaseDir, `${name}.db3`);
     await commands.downloadFile(`db_${id}`, url, path, null, null, null);
-    await setDatabases(await getDatabases());
+    await refreshAndAdopt(`${name}.db3`);
   }
 
   return (
@@ -270,7 +294,7 @@ function DatabaseCard({
       <Group wrap="nowrap" gap={0} grow>
         <Box p="md" flex={1}>
           <Text tt="uppercase" c="dimmed" fw={700} size="xs">
-            DATABASE
+            {t("Databases.Add.DatabaseLabel")}
           </Text>
           <Text fw="bold" mb="xs">
             {database.title}

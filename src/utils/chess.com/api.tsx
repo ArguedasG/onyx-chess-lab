@@ -1,4 +1,5 @@
 import { notifications } from "@mantine/notifications";
+import i18n from "i18next";
 import { IconX } from "@tabler/icons-react";
 import { resolve } from "@tauri-apps/api/path";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -69,8 +70,12 @@ export async function getChessComAccount(player: string): Promise<ChessComStats 
   if (!response.ok) {
     error(`Failed to fetch Chess.com account: ${response.status} ${response.url}`);
     notifications.show({
-      title: "Failed to fetch Chess.com account",
-      message: `Could not find account "${player}" on chess.com`,
+      title: i18n.t("Accounts.ChessCom.AccountFailed", "Could not load the Chess.com account"),
+      message: i18n.t(
+        "Accounts.ChessCom.AccountNotFound",
+        'No account "{{player}}" was found on chess.com.',
+        { player },
+      ),
       color: "red",
       icon: <IconX />,
     });
@@ -83,8 +88,12 @@ export async function getChessComAccount(player: string): Promise<ChessComStats 
       `Invalid response for Chess.com account: ${response.status} ${response.url}\n${stats.error}`,
     );
     notifications.show({
-      title: "Failed to fetch Chess.com account",
-      message: `Invalid response for "${player}" on chess.com`,
+      title: i18n.t("Accounts.ChessCom.AccountFailed", "Could not load the Chess.com account"),
+      message: i18n.t(
+        "Accounts.Remote.InvalidResponse",
+        'Chess.com sent an unexpected answer for "{{name}}".',
+        { name: player },
+      ),
       color: "red",
       icon: <IconX />,
     });
@@ -125,8 +134,12 @@ export async function downloadChessCom(player: string, timestamp: number | null)
     if (!games.success) {
       error(`Failed to fetch Chess.com games: ${response.status} ${response.url}`);
       notifications.show({
-        title: "Failed to fetch Chess.com games",
-        message: `Could not find games for "${player}" on chess.com for ${archive}`,
+        title: i18n.t("Accounts.ChessCom.GamesFailed", "Could not load the Chess.com games"),
+        message: i18n.t(
+          "Accounts.ChessCom.GamesNotFound",
+          'No games of "{{player}}" were found on chess.com for {{archive}}.',
+          { player, archive },
+        ),
         color: "red",
         icon: <IconX />,
       });
@@ -165,8 +178,11 @@ export async function getChesscomGame(gameURL: string) {
     if (gameURL.match(eventRegex)) {
       error(`Event URLs are not supported: ${gameURL}`);
       notifications.show({
-        title: "Event URLs not supported",
-        message: "Event URLs cannot be imported directly. Please import the PGN instead.",
+        title: i18n.t("Import.ChessCom.EventUnsupported", "Event links are not supported"),
+        message: i18n.t(
+          "Import.ChessCom.EventUnsupported.Desc",
+          "Event links cannot be imported directly. Download the PGN from chess.com and import it.",
+        ),
         color: "red",
         icon: <IconX />,
       });
@@ -174,9 +190,11 @@ export async function getChesscomGame(gameURL: string) {
     }
     error(`Unsupported Chess.com URL format: ${gameURL}`);
     notifications.show({
-      title: "Unsupported URL format",
-      message:
-        "The URL format is not recognized. Please use a direct game link like https://www.chess.com/game/live/12345",
+      title: i18n.t("Import.ChessCom.UnsupportedUrl", "Link not recognised"),
+      message: i18n.t(
+        "Import.ChessCom.UnsupportedUrl.Desc",
+        "Use the direct link of a game, such as https://www.chess.com/game/live/12345",
+      ),
       color: "red",
       icon: <IconX />,
     });
@@ -194,8 +212,12 @@ export async function getChesscomGame(gameURL: string) {
   if (!response.ok) {
     error(`Failed to fetch Chess.com game: ${response.status} ${response.url}`);
     notifications.show({
-      title: "Failed to fetch Chess.com game",
-      message: `Could not find game "${gameURL}" on chess.com`,
+      title: i18n.t("Import.ChessCom.GameFailed", "Could not load the Chess.com game"),
+      message: i18n.t(
+        "Import.ChessCom.GameNotFound",
+        "The game {{url}} was not found on chess.com.",
+        { url: gameURL },
+      ),
       color: "red",
       icon: <IconX />,
     });
@@ -209,8 +231,12 @@ export async function getChesscomGame(gameURL: string) {
       `Invalid response for Chess.com game: ${response.status} ${response.url}\n${gameData.error}`,
     );
     notifications.show({
-      title: "Failed to fetch Chess.com game",
-      message: `Invalid response for "${gameURL}" on chess.com`,
+      title: i18n.t("Import.ChessCom.GameFailed", "Could not load the Chess.com game"),
+      message: i18n.t(
+        "Accounts.Remote.InvalidResponse",
+        'Chess.com sent an unexpected answer for "{{name}}".',
+        { name: gameURL },
+      ),
       color: "red",
       icon: <IconX />,
     });

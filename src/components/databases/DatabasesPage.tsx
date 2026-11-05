@@ -24,7 +24,7 @@ import {
 import { useDebouncedValue, useToggle } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { IconArrowRight, IconDatabase, IconPlus, IconSearch } from "@tabler/icons-react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { basename } from "@tauri-apps/api/path";
 import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
@@ -54,7 +54,8 @@ export default function DatabasesPage() {
 
   const { data: databases, isLoading, mutate } = useSWR("databases", () => getDatabases());
 
-  const [open, setOpen] = useState(false);
+  const { add } = useSearch({ strict: false }) as { add?: boolean };
+  const [open, setOpen] = useState(Boolean(add));
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [referenceDatabase, setReferenceDatabase] = useAtom(referenceDbAtom);
@@ -292,9 +293,14 @@ export default function DatabasesPage() {
                     {hasSearch ? t("Common.NoResults") : t("Databases.Empty.NoInstalled")}
                   </Text>
                   {!hasSearch && (
-                    <Text c="dimmed" size="sm" ta="center">
-                      {t("Databases.Empty.AddHint")}
-                    </Text>
+                    <>
+                      <Text c="dimmed" size="sm" ta="center" maw={380}>
+                        {t("Databases.Empty.Explain")}
+                      </Text>
+                      <Button leftSection={<IconPlus size={16} />} onClick={() => setOpen(true)}>
+                        {t("Databases.Empty.Action")}
+                      </Button>
+                    </>
                   )}
                 </Stack>
               </Center>

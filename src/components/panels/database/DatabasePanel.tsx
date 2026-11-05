@@ -15,7 +15,6 @@ import {
 } from "@mantine/core";
 import { IconChevronDown, IconFilter, IconRefresh, IconSwitchVertical } from "@tabler/icons-react";
 import { useDebouncedValue } from "@mantine/hooks";
-import { Link } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { memo, useContext, useEffect, useRef, useState } from "react";
@@ -56,7 +55,7 @@ import {
 import type { LichessGamesOptions, MasterGamesOptions } from "@/utils/lichess/explorer";
 import DatabaseLoader from "./DatabaseLoader";
 import GamesTable from "./GamesTable";
-import NoDatabaseWarning from "./NoDatabaseWarning";
+import NoDatabaseWarning, { LichessLoginRequired } from "./NoDatabaseWarning";
 import OpeningsTable from "./OpeningsTable";
 import OpeningReportPanel from "./OpeningReportPanel";
 import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
@@ -255,7 +254,10 @@ function DatabasePanel() {
     error,
     mutate,
   } = useSWR(
-    !missingExplorerToken && !rivalActive ? [dbType, tabId] : null,
+    // Without a reference database there is nothing to query: the panel explains what to do.
+    !missingExplorerToken && !rivalActive && !(source === "local" && !referenceDatabase)
+      ? [dbType, tabId]
+      : null,
     async ([source, owner]: [DBType, string | undefined]) => {
       activeQuery.current?.controller.abort();
       const controller = new AbortController();
@@ -327,7 +329,7 @@ function DatabasePanel() {
               await commands.clearGames();
               setReferenceDatabase(value);
             }}
-            placeholder={t("Board.Database.SelectReference")}
+            placeholder={t("Board.Database.ChooseReference")}
             size="xs"
             w={180}
             allowDeselect={false}
@@ -450,6 +452,7 @@ function DatabasePanel() {
   const blocked = blockingMessage({
     type: source,
     referenceDatabase,
+    hasDatabases: dbSelectData.length > 0,
     missingExplorerToken,
     error: transientError ? undefined : error,
     t,
@@ -641,26 +644,23 @@ function PanelSection({
 function blockingMessage({
   type,
   referenceDatabase,
+  hasDatabases,
   missingExplorerToken,
   error,
   t,
 }: {
   type: string;
   referenceDatabase: string | null;
+  hasDatabases: boolean;
   missingExplorerToken: boolean;
   error: unknown;
   t: (key: string) => string;
 }) {
-  if (error) return <Alert color="red">{t("Board.Database.QueryFailed")}</Alert>;
-  if (type === "local" && !referenceDatabase) return <NoDatabaseWarning />;
-  if (missingExplorerToken && type !== "local") {
-    return (
-      <Alert color="yellow">
-        {t("Board.Database.ExplorerAuthRequired1")} <Link to="/accounts">Users</Link>{" "}
-        {t("Board.Database.ExplorerAuthRequired2")}
-      </Alert>
-    );
+  if (type === "local" && !referenceDatabase) {
+    return <NoDatabaseWarning hasDatabases={hasDatabases} />;
   }
+  if (missingExplorerToken && type !== "local") return <LichessLoginRequired />;
+  if (error) return <Alert color="red">{t("Board.Database.QueryFailed")}</Alert>;
   return null;
 }
 

@@ -30,7 +30,7 @@ import useSWR from "swr";
 import { commands } from "@/bindings";
 import { databaseConversionStateAtom, sessionsAtom, storedDatabasesDirAtom } from "@/state/atoms";
 import { sourceKey } from "@/state/playerCards";
-import { getDatabases, query_players } from "@/utils/db";
+import { query_players } from "@/utils/db";
 import {
   BROADCAST_DATABASE_TITLE,
   type BroadcastTour,
@@ -38,9 +38,8 @@ import {
   importBroadcasts,
   searchBroadcasts,
 } from "@/utils/lichess/broadcasts";
-import { getLichessAccount } from "@/utils/lichess/api";
 import type { PlayerAnalysisSource } from "@/utils/playerAnalysis";
-import { syncAccountGames } from "@/utils/players/accountSync";
+import { downloadOnlineAccount } from "@/utils/players/accountSync";
 import { unwrap } from "@/utils/unwrap";
 
 type Kind = "lichess" | "chesscom" | "pgn" | "broadcasts";
@@ -118,31 +117,11 @@ export default function RivalGamesModal({
     const user = username.trim();
     if (!user) return;
     await run(t("Players.RivalGames.Downloading", "Downloading the games…"), async () => {
-      const filename = `${user}_${type}.db3`;
-      const database = (await getDatabases()).find((candidate) => candidate.filename === filename);
-      let total = 0;
-      if (type === "lichess") {
-        const account = await getLichessAccount({ username: user });
-        if (!account) return null;
-        total = (account as { count?: { all?: number } }).count?.all ?? 0;
-      }
-      await syncAccountGames(
-        {
-          type,
-          title: user,
-          database: database ?? null,
-          total,
-          token: type === "lichess" ? token : undefined,
-        },
-        databaseDir,
-        setConversionState,
-        (value) => setProgress(value),
-      );
-      return {
-        path: await resolve(databaseDir, filename),
-        title: `${user} ${type === "lichess" ? "Lichess" : "Chess.com"}`,
-        query: user,
-      };
+      const result = await downloadOnlineAccount(type, user, databaseDir, setConversionState, {
+        token,
+        onProgress: (value) => setProgress(value),
+      });
+      return result && { ...result, query: user };
     });
   }
 

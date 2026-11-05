@@ -1,6 +1,7 @@
-import { Badge, Group, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
+import { Badge, Button, Group, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useOpenEngineSetup } from "@/hooks/useRecommendedEngines";
 import {
   isProvisional,
   type PlayerRating,
@@ -88,6 +89,7 @@ export default function RatedGameSelector({
   const { t } = useTranslation();
   const rhythmLabel = useRhythmLabel();
   const blockerText = useRatedBlockerText();
+  const openEngineSetup = useOpenEngineSetup();
   const canRate = blocker === null;
   const isRated = rated && canRate;
 
@@ -117,7 +119,22 @@ export default function RatedGameSelector({
           { value: "rated", label: t("HumanBots.Rated.Rated", "Rated"), disabled: !canRate },
         ]}
       />
-      {!canRate && blocker !== "notAgainstBot" && (
+      {!canRate && blocker === "noVerifier" && (
+        <Group justify="space-between" wrap="nowrap" gap="xs">
+          <Text size="xs" c="dimmed">
+            {blockerText[blocker]}
+          </Text>
+          <Button
+            size="compact-xs"
+            variant="light"
+            style={{ flexShrink: 0 }}
+            onClick={() => openEngineSetup("stockfish")}
+          >
+            {t("EngineSetup.InstallStockfish")}
+          </Button>
+        </Group>
+      )}
+      {!canRate && blocker !== "notAgainstBot" && blocker !== "noVerifier" && (
         <Text size="xs" c="dimmed">
           {blockerText[blocker]}
         </Text>

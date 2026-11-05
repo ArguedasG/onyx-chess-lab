@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Box,
   Button,
   Center,
   Checkbox,
@@ -57,15 +58,17 @@ import LocalImage from "../common/LocalImage";
 import OpenFolderButton from "../common/OpenFolderButton";
 import LinesSlider from "../panels/analysis/LinesSlider";
 import AddEngine from "./AddEngine";
+import { RecommendedEngines } from "./RecommendedEngines";
+import { displayableEngineImage } from "@/utils/engineSetup";
 
 export default function EnginesPage() {
   const { t } = useTranslation();
 
   const [engines, setEngines] = useAtom(enginesAtom);
   const enginesList = useMemo(() => engines ?? [], [engines]);
-  const [opened, setOpened] = useState(false);
+  const { selected, add } = Route.useSearch();
+  const [opened, setOpened] = useState(Boolean(add));
   const [search, setSearch] = useState("");
-  const { selected } = Route.useSearch();
   const navigate = useNavigate();
   const setSelected = (v: number | null) => {
     navigate({ to: "/engines", search: { selected: v ?? undefined } });
@@ -133,7 +136,7 @@ export default function EnginesPage() {
                             value: item.elo ? item.elo.toString() : "??",
                           },
                         ]
-                      : [{ label: "Type", value: "Cloud" }];
+                      : [{ label: t("Engines.Type"), value: t("Engines.Cloud") }];
                   if (item.type === "local" && item.version) {
                     stats.push({
                       label: t("Common.Version"),
@@ -164,9 +167,17 @@ export default function EnginesPage() {
                     {hasSearch ? t("Common.NoResults") : t("Engines.Empty.NoInstalled")}
                   </Text>
                   {!hasSearch && !hasEngines && (
-                    <Text c="dimmed" size="sm" ta="center">
-                      {t("Engines.Empty.AddHint")}
-                    </Text>
+                    <>
+                      <Text c="dimmed" size="sm" ta="center">
+                        {t("Engines.Empty.AddHint")}
+                      </Text>
+                      <Box w="100%" maw={460} px="md">
+                        <RecommendedEngines />
+                      </Box>
+                      <Button variant="subtle" size="xs" onClick={() => setOpened(true)}>
+                        {t("EngineSetup.OtherEngines")}
+                      </Button>
+                    </>
                   )}
                 </Stack>
               </Center>
@@ -398,10 +409,10 @@ function EngineSettings({
             </Group>
           </Stack>
           <Center>
-            {engine.image ? (
+            {displayableEngineImage(engine.image) ? (
               <Paper withBorder style={{ cursor: "pointer" }} onClick={changeImage}>
                 <LocalImage
-                  src={engine.image}
+                  src={displayableEngineImage(engine.image)!}
                   alt={engine.name}
                   mah="10rem"
                   maw="100%"
@@ -662,6 +673,7 @@ function JSONModal({
 }
 
 function EngineName({ engine }: { engine: Engine }) {
+  const { t } = useTranslation();
   const { data: fileExists, isLoading } = useSWRImmutable(
     ["file-exists", engine.type === "local" ? engine.path : null],
     async ([, path]) => {
@@ -676,8 +688,14 @@ function EngineName({ engine }: { engine: Engine }) {
 
   return (
     <Group wrap="nowrap">
-      {engine.image ? (
-        <LocalImage src={engine.image} alt={engine.name} h="2.5rem" fit="contain" flex={0} />
+      {displayableEngineImage(engine.image) ? (
+        <LocalImage
+          src={displayableEngineImage(engine.image)!}
+          alt={engine.name}
+          h="2.5rem"
+          fit="contain"
+          flex={0}
+        />
       ) : engine.type !== "local" ? (
         <IconCloud size="2.5rem" />
       ) : (
@@ -685,7 +703,7 @@ function EngineName({ engine }: { engine: Engine }) {
       )}
       <Stack gap={0}>
         <Text fw="bold" lineClamp={1} c={hasError ? "red" : undefined}>
-          {engine.name} {hasError ? "(file missing)" : ""}
+          {engine.name} {hasError ? t("Engines.FileMissing") : ""}
         </Text>
         <Text size="xs" c="dimmed" style={{ wordWrap: "break-word" }} lineClamp={1}>
           {engine.type === "local" ? engine.path.split(/\/|\\/).slice(-1)[0] : engine.url}

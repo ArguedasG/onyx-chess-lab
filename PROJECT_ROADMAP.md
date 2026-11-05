@@ -1044,6 +1044,36 @@ en la documentación de la fase.
 
 ## 12. Registro operativo breve
 
+### 2026-11-04 — Correcciones tras una instalación limpia en Windows
+
+Prueba del autor desde cero en otra computadora. Mantenimiento, sin reabrir fases:
+
+- **Primeros pasos** en el inicio: motores, base de referencia, puzzles y cuenta (opcional); se
+  oculta al completar los tres obligatorios o a mano.
+- **Motores recomendados**: Stockfish y Maia 3 en un solo botón, desde un diálogo que abre
+  cualquier aviso («Instalar Maia 3», el bloqueo de partidas puntuables sin Stockfish) sin cambiar
+  de página. Maia instalada muestra «Instalado»; «Reparar» pasa a acción secundaria con
+  explicación. Los logos remotos del catálogo (bloqueados por la CSP) se sustituyen por iconos.
+- **Database sin base**: ya no lanza la consulta ni muestra «The position query…», sino un aviso
+  con botón; la primera base añadida queda como referencia. Aviso equivalente para el explorador
+  de Lichess sin sesión.
+- **Táctica sin base de puzzles**: explicación y descarga directa.
+- **Idioma**: el primer arranque elige con dos botones (sin opción preseleccionada que aceptar por
+  error).
+- **Telemetría desactivada**: la heredada enviaba a la clave de PostHog de En Croissant; queda un
+  aviso en Privacidad y fuera de la CSP. Una telemetría propia y opcional sigue en Fase 10.
+- **Log por jugada del bot** (`onyx-chess-lab.log`): probabilidad de Maia, si Stockfish verificó,
+  filtro de fuerza, rasgos de la jugada y evaluación; también las jugadas de repertorio. «Ayuda →
+  Abrir logs» apuntaba a `en-croissant.log` y ahora abre el archivo real.
+- Errores de Chess.com y Lichess y diálogos de Ayuda traducidos.
+- **Jugadores**: «Cargar desde Lichess o Chess.com» arriba a la izquierda descarga las partidas de
+  cualquier usuario y abre su ficha, lista para guardarla (misma descarga que «Añadir partidas» de
+  un rival).
+- Tuerca en las tarjetas de ajustes del motor y botón «Nuevo puzzle» con texto.
+- Revisión de En Croissant (67 commits del 2026-10-12 al 2026-11-04): Onyx no comparte historia
+  desde abril, así que se trae por commits seleccionados; lista y criterio en la conversación del
+  autor, pendiente de decidir qué se porta.
+
 ### 2026-11-04 — Release 0.24.0
 
 - Publica 9.4 completa salvo el vídeo: posición desde imagen, Libros (biblioteca, lector junto al

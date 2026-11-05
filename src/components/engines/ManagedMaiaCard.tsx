@@ -1,4 +1,15 @@
-import { Anchor, Badge, Box, Button, Group, Paper, Skeleton, Stack, Text } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Box,
+  Button,
+  Group,
+  Paper,
+  Skeleton,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconBrain, IconDatabase, IconShieldCheck, IconTrophy } from "@tabler/icons-react";
@@ -221,11 +232,11 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
 
           <ProgressButton
             id={MANAGED_MAIA_PROGRESS_ID}
-            initInstalled={ready}
-            redoable
+            initInstalled={ready && !inProgress}
+            redoable={!ready}
             disabled={loading || cancelRequested}
             labels={{
-              completed: t("Engines.ManagedMaia.Repair"),
+              completed: t("Common.Installed"),
               action: needsRegistration
                 ? t("Common.Add")
                 : status?.needsRepair
@@ -244,15 +255,30 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
             setInProgress={setInProgress}
           />
           {(status?.installed || status?.needsRepair) && (
-            <Button
-              variant="subtle"
-              color="red"
-              size="xs"
-              disabled={inProgress || cancelRequested}
-              onClick={() => setConfirmUninstall(true)}
-            >
-              {t("Engines.ManagedMaia.Uninstall")}
-            </Button>
+            <Group gap="xs" grow>
+              {ready && (
+                <Tooltip multiline w={260} label={t("Engines.ManagedMaia.RepairHint")}>
+                  <Button
+                    variant="subtle"
+                    color="gray"
+                    size="xs"
+                    disabled={inProgress || cancelRequested}
+                    onClick={() => void install()}
+                  >
+                    {t("Engines.ManagedMaia.Repair")}
+                  </Button>
+                </Tooltip>
+              )}
+              <Button
+                variant="subtle"
+                color="red"
+                size="xs"
+                disabled={inProgress || cancelRequested}
+                onClick={() => setConfirmUninstall(true)}
+              >
+                {t("Engines.ManagedMaia.Uninstall")}
+              </Button>
+            </Group>
           )}
         </Stack>
       </Paper>

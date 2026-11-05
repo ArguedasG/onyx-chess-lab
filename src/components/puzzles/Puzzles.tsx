@@ -689,21 +689,21 @@ function Puzzles({ id }: { id: string }) {
                       : t("Fen.WhiteToMove")}
                 </Text>
                 <Group gap="xs">
-                  <Tooltip label={t("Puzzle.NewPuzzle")}>
-                    <ActionIcon
-                      disabled={!selectedDb || rushActive}
-                      onClick={() => generatePuzzle(selectedDb!, true)}
-                    >
-                      <IconPlus />
-                    </ActionIcon>
-                  </Tooltip>
+                  <Button
+                    size="xs"
+                    leftSection={<IconPlus size={16} />}
+                    disabled={!selectedDb || rushActive}
+                    onClick={() => generatePuzzle(selectedDb!, true)}
+                  >
+                    {t("Puzzle.NewPuzzle")}
+                  </Button>
                   <Tooltip label={t("Puzzle.AnalyzePosition")}>
                     <ActionIcon
                       disabled={!selectedDb || !puzzle}
                       onClick={() =>
                         createTab({
                           tab: {
-                            name: "Puzzle Analysis",
+                            name: t("Puzzle.AnalysisTab", "Puzzle analysis"),
                             type: "analysis",
                           },
                           setTabs,
