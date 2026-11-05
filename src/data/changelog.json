@@ -1,5 +1,94 @@
 [
   {
+    "version": "0.25.0",
+    "notes": {
+      "en": {
+        "summary": "A smoother first run and sharper training: first steps on the start screen, both engines in one click, a full blindfold board for tactics, Storm, Streak and Countdown on any set, and more than twenty fixes, many of them brought over from En Croissant.",
+        "sections": [
+          {
+            "title": "First run",
+            "items": [
+              "First steps on the start screen: engines, a games database, puzzles and an optional account, each one click away. It goes away once the setup is done.",
+              "Recommended engines: Stockfish and Maia 3 install together from any notice, without leaving the page. An installed Maia now shows “Installed”, with repair as a secondary option.",
+              "The board's Database panel without a database explains what to do and opens the download, and the first database you add becomes the reference. The Lichess explorer explains how to sign in.",
+              "Tactics without a puzzle database offers to download one, and every section of the start screen says what it still needs.",
+              "The language is chosen with one click on first launch, and the engine catalog shows icons instead of broken logos."
+            ]
+          },
+          {
+            "title": "Training",
+            "items": [
+              "Blindfold tactics: the board stays frozen on the starting picture while you play the whole line on the real position, picking each piece up where it really is. The opponent's moves are written down and drawn as an arrow.",
+              "Storm, Streak and Countdown on any set, with the normal, no-pieces or blind view. They are separate sessions: the set's progress and its Woodpecker cycles stay as they are.",
+              "The new puzzle button says “New puzzle”."
+            ]
+          },
+          {
+            "title": "Board, players and settings",
+            "items": [
+              "Move navigation is fixed under the side panels, with the current move, so folding the notation never hides it.",
+              "Players: load anyone's Lichess or Chess.com profile right from the Players section.",
+              "A gear on the engine settings chips, long algebraic notation (Ng1-f3), piece animation speed, an option to hide the material, the blue4 board, a Markdown source editor for comments and translated keyboard shortcuts."
+            ]
+          },
+          {
+            "title": "Fixes",
+            "items": [
+              "Castling with check highlighted the wrong square; clocks at 0:00 disappeared; the review log showed the due date; puzzle arrows vanished and the destination-dots setting was ignored.",
+              "Duplicated engines shared their settings and engines could get the same id; switching the game report's limit mode kept the old number (250 ms became depth 250); the threat view in check kept the engine searching.",
+              "ISO dates in PGN, clocks without time, daily and correspondence time controls, Chess.com accounts without rating deviation, tablebase errors, the error screen, the selection after deleting variations and game names past the first page.",
+              "Deleting a move during a game no longer puts the board out of step with it.",
+              "Help → Open logs opens the right file, and every bot move is written to the log (Maia's probability, the Stockfish check and the style).",
+              "The telemetry inherited from En Croissant, which reported to that project, is removed; Chess.com and Lichess errors are translated."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Un primer uso más sencillo y un entrenamiento más completo: primeros pasos en la pantalla de inicio, los dos motores en un clic, un tablero a ciegas completo en táctica, Tormenta, Racha y Contrarreloj en cualquier set, y más de veinte arreglos, muchos traídos de En Croissant.",
+        "sections": [
+          {
+            "title": "Primer uso",
+            "items": [
+              "Primeros pasos en la pantalla de inicio: motores, una base de partidas, puzzles y, si quieres, una cuenta, cada uno a un clic. Desaparece al terminar la configuración.",
+              "Motores recomendados: Stockfish y Maia 3 se instalan juntos desde cualquier aviso, sin cambiar de página. Maia instalada muestra «Instalado», con la reparación como opción secundaria.",
+              "El panel de base de datos del tablero sin ninguna base explica qué hacer y abre la descarga, y la primera base que añades queda como referencia. El explorador de Lichess explica cómo iniciar sesión.",
+              "Táctica sin base de puzzles ofrece descargar una, y cada sección del inicio dice lo que todavía le falta.",
+              "El idioma se elige con un clic en el primer arranque, y el catálogo de motores muestra iconos en vez de logos rotos."
+            ]
+          },
+          {
+            "title": "Entrenamiento",
+            "items": [
+              "Táctica a ciegas: el tablero queda congelado en la imagen inicial mientras juegas toda la línea sobre la posición real, tomando cada pieza desde donde está de verdad. Las jugadas del rival se escriben y se dibujan como flecha.",
+              "Tormenta, Racha y Contrarreloj en cualquier set, con vista normal, sin piezas o a ciegas. Son sesiones aparte: el progreso del set y sus ciclos Woodpecker no cambian.",
+              "El botón de nuevo puzzle dice «Nuevo puzzle»."
+            ]
+          },
+          {
+            "title": "Tablero, jugadores y ajustes",
+            "items": [
+              "La navegación de jugadas queda fija bajo los paneles laterales, con la jugada actual, y ya no se oculta al plegar la notación.",
+              "Jugadores: carga el perfil de cualquier usuario de Lichess o Chess.com desde la propia sección.",
+              "Una tuerca en las tarjetas de ajustes del motor, notación algebraica larga (Ng1-f3), velocidad de animación de las piezas, opción de ocultar el material, el tablero blue4, editor del código Markdown de los comentarios y atajos de teclado traducidos."
+            ]
+          },
+          {
+            "title": "Arreglos",
+            "items": [
+              "El enroque con jaque marcaba mal la casilla; los relojes a 0:00 desaparecían; el registro de repaso mostraba la fecha pendiente; las flechas de los puzzles se borraban y se ignoraba el ajuste de puntos de destino.",
+              "Los motores duplicados compartían ajustes y dos motores podían tener el mismo id; al cambiar el modo del informe de partida se conservaba el número (250 ms pasaba a profundidad 250); la amenaza estando en jaque dejaba el motor buscando.",
+              "Fechas ISO en PGN, relojes sin tiempo, ritmos diario y por correspondencia, cuentas de Chess.com sin desviación de rating, errores de la tablebase, la pantalla de error, la selección al borrar variantes y los nombres de partidas después de la primera página.",
+              "Borrar una jugada durante una partida ya no desincroniza el tablero del juego.",
+              "Ayuda → Abrir logs abre el archivo correcto, y cada jugada de un bot queda en el registro (probabilidad de Maia, verificación de Stockfish y estilo).",
+              "Se quita la telemetría heredada de En Croissant, que informaba a ese proyecto; los errores de Chess.com y Lichess están traducidos."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.24.0",
     "notes": {
       "en": {

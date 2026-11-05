@@ -26,7 +26,8 @@ previews**.
 - Paginated game exploration designed for large local databases.
 - Opening reports with statistics, theory, move orders, transpositions and HTML/PGN export.
 - Player Analysis with filters, evidence, engine metrics and trainable critical positions.
-- Dedicated training experiences for tactics, opening repertoires and endgames.
+- Dedicated training experiences for tactics, opening repertoires and endgames, including a
+  blindfold tactics board and Storm, Streak and Countdown on any puzzle set.
 - Local studies with editable PGN chapters, recovery history, complete PGN export and reviewed
   copies into tactics, opening repertoires or endgame training.
 - Current-position actions that distinguish exact repertoire routes from transpositions and create
@@ -36,7 +37,8 @@ previews**.
   read into the position editor too.
 - Human-like Maia-based bots with local history and measurements.
 - Reproducible model-game generation, batches, experiments and analysis.
-- UCI engine support, including guided installation of the managed Maia 3 package on Windows x64.
+- UCI engine support, including guided installation of the managed Maia 3 package on Windows x64
+  and a first-steps guide that installs Stockfish and Maia 3 together.
 - Signed Onyx update channel for Windows x64.
 - Local-first storage: personal games, profiles and experiments remain on the user's computer by
   default.
