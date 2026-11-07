@@ -3,12 +3,14 @@ import i18n from "i18next";
 import {
   ActionIcon,
   Alert,
+  Autocomplete,
   Badge,
   Button,
   Card,
   Code,
   Container,
   Group,
+  Menu,
   NumberInput,
   Progress,
   ScrollArea,
@@ -24,23 +26,32 @@ import {
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import {
+  IconArrowDown,
   IconArrowLeft,
+  IconArrowUp,
   IconChartBar,
   IconChevronLeft,
   IconChevronRight,
   IconCheck,
   IconDatabase,
+  IconDots,
   IconDownload,
   IconEye,
+  IconFolder,
+  IconFolderOpen,
+  IconFolderPlus,
+  IconPencil,
   IconPlayerPlay,
   IconPuzzle,
   IconSettings,
   IconTrash,
+  IconUnlink,
   IconUpload,
   IconWand,
 } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useAtom } from "jotai";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { atom, useAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PuzzleDatabaseInfo } from "@/bindings";
@@ -64,12 +75,24 @@ import AddPuzzle from "../puzzles/AddPuzzle";
 import PuzzleSetBuilder from "./tactics/PuzzleSetBuilder";
 import TacticsProgressCards from "./tactics/TacticsProgressCards";
 import TacticsReviewSession from "./tactics/TacticsReviewSession";
+import TacticsCourseImport, { type TacticsCourseScan } from "./tactics/TacticsCourseImport";
+import CourseMixSession from "./tactics/CourseMixSession";
+import CourseSetsPicker, { type CoursePickerMode } from "./tactics/CourseSetsPicker";
 import {
+  addSetsToTacticsCourse,
   addTacticsFileSet,
+  deleteTacticsCourse,
   deleteTacticsSet,
   getTacticsCompletedIndexes,
+  getTacticsCourseProgress,
   getTacticsFirstIncompleteIndex,
   getTacticsSetProgress,
+  groupTacticsSetsByCourse,
+  moveTacticsSetInCourse,
+  nextTacticsCourseSet,
+  renameTacticsCourse,
+  setTacticsSetCourse,
+  ungroupTacticsCourse,
   updateTacticsSetConfig,
   updateTacticsSetMetadata,
   type TacticsSet,
@@ -77,6 +100,8 @@ import {
 import {
   inspectTacticsPgn,
   loadTacticsExercise,
+  scanTacticsCourseFolder,
+  type TacticsCourseFile,
   type TacticsLoadedExercise,
   type TacticsPgnInspection,
 } from "@/utils/tacticsTraining";
@@ -90,6 +115,9 @@ const defaultConfig: TacticsSet["config"] = {
   variationPolicy: "opponentResponses",
   validationMode: "auto",
 };
+
+/** The course open on the dashboard; kept while visiting a set's session and coming back. */
+const openCourseAtom = atom<string | null>(null);
 
 function filename(path: string, trainingT: typeof i18n.t = i18n.t) {
   return (
@@ -166,6 +194,19 @@ export default function TacticsDashboardV2Page() {
   const [reviewSessionItems, setReviewSessionItems] = useState<TacticsReviewItem[] | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [addPuzzleDbOpen, setAddPuzzleDbOpen] = useState(false);
+  const [openCourse, setOpenCourse] = useAtom(openCourseAtom);
+  const [courseScan, setCourseScan] = useState<TacticsCourseScan | null>(null);
+  const [courseBusy, setCourseBusy] = useState(false);
+  const [courseAction, setCourseAction] = useState<{
+    kind: "rename" | "ungroup" | "delete";
+    name: string;
+  } | null>(null);
+  const [courseRename, setCourseRename] = useState("");
+  const [draftCourse, setDraftCourse] = useState("");
+  const [mixCourseName, setMixCourseName] = useState<string | null>(null);
+  const [pickerMode, setPickerMode] = useState<CoursePickerMode | null>(null);
+  const [movingSetId, setMovingSetId] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState("");
   const myLevel =
     tacticsReview && tacticsReview.rating.deviation < PROVISIONAL_DEVIATION
       ? ratingBandFor(tacticsReview.rating)
@@ -179,6 +220,24 @@ export default function TacticsDashboardV2Page() {
       }),
     [areas.tactics.sets],
   );
+  const { courses, loose: looseSets } = useMemo(() => groupTacticsSetsByCourse(sets), [sets]);
+  const activeCourse = openCourse
+    ? courses.find((course) => course.name === openCourse)
+    : undefined;
+  const courseNames = courses.map((course) => course.name);
+  // A course emptied (its last set removed or moved) closes its view.
+  useEffect(() => {
+    // Not while the stored sets are still loading (the list is empty then).
+    if (openCourse && !activeCourse && sets.length > 0) setOpenCourse(null);
+  }, [activeCourse, openCourse, setOpenCourse, sets.length]);
+  const mixCourse = mixCourseName
+    ? (courses.find((course) => course.name === mixCourseName) ?? null)
+    : null;
+  const nextCourseSet = activeCourse ? nextTacticsCourseSet(areas.tactics, activeCourse) : null;
+  const movingSet = movingSetId ? areas.tactics.sets[movingSetId] : undefined;
+  const activeCourseProgress = activeCourse
+    ? getTacticsCourseProgress(areas.tactics, activeCourse)
+    : null;
   const reviewSet = reviewSetId ? areas.tactics.sets[reviewSetId] : undefined;
   const statisticsSet = statisticsSetId ? areas.tactics.sets[statisticsSetId] : undefined;
   const reviewTotal = reviewSet
@@ -347,6 +406,7 @@ export default function TacticsDashboardV2Page() {
     setDraftDescription(set.description);
     setDraftRatingMin(set.recommendedRating.min ?? "");
     setDraftRatingMax(set.recommendedRating.max ?? "");
+    setDraftCourse(set.course?.name ?? "");
     setDraftConfig(set.config);
   }
 
@@ -356,13 +416,14 @@ export default function TacticsDashboardV2Page() {
     if (!recommendedRating) return;
     setAreas((previous) => {
       const configured = updateTacticsSetConfig(previous.tactics, editingSetId, draftConfig);
+      const described = updateTacticsSetMetadata(configured, editingSetId, {
+        name: draftName,
+        description: draftDescription,
+        recommendedRating,
+      });
       return {
         ...previous,
-        tactics: updateTacticsSetMetadata(configured, editingSetId, {
-          name: draftName,
-          description: draftDescription,
-          recommendedRating,
-        }),
+        tactics: setTacticsSetCourse(described, editingSetId, draftCourse),
       };
     });
     setEditingSetId(null);
@@ -383,6 +444,130 @@ export default function TacticsDashboardV2Page() {
         "Set “{{v0}}” removed. Its PGN file was not deleted.",
         { v0: set.name },
       ),
+    });
+  }
+
+  async function selectCourseFolder() {
+    const selected = await openDialog({ directory: true, multiple: false });
+    if (typeof selected !== "string") return;
+    setCourseBusy(true);
+    setFeedback(null);
+    try {
+      const scan = await scanTacticsCourseFolder(selected);
+      setDraftConfig(defaultConfig);
+      setCourseScan({ directory: selected, ...scan });
+    } catch (error) {
+      setFeedback({
+        text:
+          error instanceof Error
+            ? error.message
+            : trainingT("Tactics.Course.ReadError", "Could not read the folder."),
+        color: "red",
+      });
+    } finally {
+      setCourseBusy(false);
+    }
+  }
+
+  function importCourse(courseName: string, files: TacticsCourseFile[]) {
+    setAreas((previous) => {
+      const orders = Object.values(previous.tactics.sets)
+        .filter((set) => set.course?.name === courseName)
+        .map((set) => set.course?.order ?? 0);
+      const start = orders.length > 0 ? Math.max(...orders) + 1 : 0;
+      const tactics = files.reduce(
+        (state, file, index) =>
+          addTacticsFileSet(state, {
+            name: file.title,
+            description: "",
+            path: file.path,
+            filename: file.filename,
+            recordCount: file.recordCount,
+            config: draftConfig,
+            course: { name: courseName, order: start + index },
+          }),
+        previous.tactics,
+      );
+      return { ...previous, tactics };
+    });
+    setCourseScan(null);
+    setDraftConfig(defaultConfig);
+    setOpenCourse(courseName);
+    setFeedback({
+      text: trainingT(
+        "Tactics.Course.Imported",
+        "Folder “{{name}}” imported with {{themes}} sets.",
+        { name: courseName, themes: files.length },
+      ),
+    });
+  }
+
+  function applyCourseAction() {
+    if (!courseAction) return;
+    const { kind, name } = courseAction;
+    if (kind === "rename") {
+      const next = courseRename.trim();
+      if (!next) return;
+      setAreas((previous) => ({
+        ...previous,
+        tactics: renameTacticsCourse(previous.tactics, name, next),
+      }));
+      if (openCourse === name) setOpenCourse(next);
+    } else {
+      setAreas((previous) => ({
+        ...previous,
+        tactics:
+          kind === "delete"
+            ? deleteTacticsCourse(previous.tactics, name)
+            : ungroupTacticsCourse(previous.tactics, name),
+      }));
+      if (openCourse === name) setOpenCourse(null);
+      setFeedback({
+        text:
+          kind === "delete"
+            ? trainingT(
+                "Tactics.Course.Deleted",
+                "Folder “{{name}}” removed. Its PGN files were not deleted.",
+                { name },
+              )
+            : trainingT(
+                "Tactics.Course.Ungrouped",
+                "Folder “{{name}}” removed: its sets are now in Available sets.",
+                { name },
+              ),
+      });
+    }
+    setCourseAction(null);
+  }
+
+  function addSetsToCourse(courseName: string, setIds: string[]) {
+    setAreas((previous) => ({
+      ...previous,
+      tactics: addSetsToTacticsCourse(previous.tactics, setIds, courseName),
+    }));
+    setPickerMode(null);
+    setOpenCourse(courseName);
+  }
+
+  function moveSetToCourse(setId: string, courseName: string) {
+    setAreas((previous) => ({
+      ...previous,
+      tactics: setTacticsSetCourse(previous.tactics, setId, courseName),
+    }));
+  }
+
+  function moveSetInCourse(setId: string, direction: -1 | 1) {
+    setAreas((previous) => ({
+      ...previous,
+      tactics: moveTacticsSetInCourse(previous.tactics, setId, direction),
+    }));
+  }
+
+  function practiceSet(setId: string) {
+    void navigate({
+      to: "/training/tactics/practice/$setId",
+      params: { setId },
+      search: { problem: undefined },
     });
   }
 
@@ -411,6 +596,209 @@ export default function TacticsDashboardV2Page() {
         (attempt) => attempt.setId === reviewSetId && attempt.exerciseId === reviewExercise.id,
       )
     : [];
+
+  const renderSetCard = (set: TacticsSet, place?: number, list?: TacticsSet[]) => {
+    const inCourseView = Boolean(activeCourse && set.course);
+    const progress = getTacticsSetProgress(areas.tactics, set.id);
+    const resume = Math.min(
+      set.config.mode === "woodpecker"
+        ? set.progress.activeCycle
+          ? getTacticsFirstIncompleteIndex(areas.tactics, set.id, set.progress.activeCycle.number)
+          : 0
+        : set.progress.nextExerciseIndex,
+      Math.max(0, progress.total - 1),
+    );
+    const lastCycle = set.progress.cycles.at(-1);
+    const recent = recentSetStats(areas.tactics, set.id);
+    return (
+      <Card key={set.id} withBorder>
+        <Stack h="100%" justify="space-between">
+          <div>
+            <Group justify="space-between" align="flex-start" wrap="nowrap">
+              {/* A long name wraps; the badge and the menu always keep their full width. */}
+              <Title order={4} style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                {inCourseView && place !== undefined ? `${place + 1}. ${set.name}` : set.name}
+              </Title>
+              <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                <Badge color="orange">
+                  {progress.completed}/{progress.total}
+                </Badge>
+                <Menu position="bottom-end" withinPortal>
+                  <Menu.Target>
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      aria-label={trainingT(
+                        "Tactics.Course.SetOptions",
+                        "Folder options for this set",
+                      )}
+                    >
+                      <IconDots size={16} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    {inCourseView && place !== undefined && list && (
+                      <>
+                        <Menu.Item
+                          leftSection={<IconArrowUp size={14} />}
+                          disabled={place === 0}
+                          onClick={() => moveSetInCourse(set.id, -1)}
+                        >
+                          {trainingT("Tactics.Course.MoveUp", "Move up")}
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconArrowDown size={14} />}
+                          disabled={place === list.length - 1}
+                          onClick={() => moveSetInCourse(set.id, 1)}
+                        >
+                          {trainingT("Tactics.Course.MoveDown", "Move down")}
+                        </Menu.Item>
+                        <Menu.Divider />
+                      </>
+                    )}
+                    <Menu.Item
+                      leftSection={<IconFolderPlus size={14} />}
+                      onClick={() => {
+                        setMoveTarget("");
+                        setMovingSetId(set.id);
+                      }}
+                    >
+                      {set.course
+                        ? trainingT("Tactics.Course.MoveTo", "Move to another folder…")
+                        : trainingT("Tactics.Course.AddTo", "Add to a folder…")}
+                    </Menu.Item>
+                    {set.course && (
+                      <Menu.Item
+                        leftSection={<IconUnlink size={14} />}
+                        onClick={() => moveSetToCourse(set.id, "")}
+                      >
+                        {trainingT("Tactics.Course.RemoveFrom", "Remove from the folder")}
+                      </Menu.Item>
+                    )}
+                  </Menu.Dropdown>
+                </Menu>
+              </Group>
+            </Group>
+            <Text size="sm" c="dimmed" mt="xs" mih={42}>
+              {set.description ||
+                trainingT(
+                  "Training.Copy.Tacticalpositioncollection.cc3246c4",
+                  "Tactical position collection.",
+                )}
+            </Text>
+            <Progress value={progress.percent} color="orange" mt="md" />
+            <Group justify="space-between" mt={4}>
+              <Text size="xs" c="dimmed">
+                {" "}
+                {trainingT("Training.Copy.Progress.1d4a9eeb", "Progress")} {progress.percent}%
+              </Text>
+              <Text size="xs" c="dimmed">
+                {" "}
+                {trainingT("Training.Copy.Next.57d01069", "Next:")} {resume + 1}
+              </Text>
+            </Group>
+            <Group gap="xs" mt="sm">
+              <Badge size="sm" variant="outline">
+                {set.config.mode === "woodpecker"
+                  ? "Woodpecker"
+                  : trainingT("Training.Copy.Guided.57bd258f", "Guided")}
+              </Badge>
+              <Badge size="sm" color="blue" variant="light">
+                {ratingLabel(set, trainingT)}
+              </Badge>
+              {set.origin === "bundled" && (
+                <Badge size="sm" color="teal">
+                  {" "}
+                  {trainingT("Training.Copy.Included.384f88d5", "Included")}{" "}
+                </Badge>
+              )}
+            </Group>
+            <Text size="xs" c="dimmed" mt="sm">
+              {progress.incorrect} {trainingT("Training.Copy.mistakes.5c65c76e", "mistakes ·")}{" "}
+              {set.progress.cycles.length} {trainingT("Training.Copy.cycles.5d205153", "cycles")}{" "}
+              {lastCycle
+                ? trainingT("Training.Copy.lastv0mistakes.35e6e46a", " · last: {{v0}} mistakes", {
+                    v0: lastCycle.failures,
+                  })
+                : ""}
+            </Text>
+            {recent.accuracy !== null && (
+              <Text size="xs" c="dimmed">
+                {trainingT(
+                  "Tactics.Shelf.Recent",
+                  "Recent accuracy {{accuracy}} % · {{time}} on average",
+                  {
+                    accuracy: Math.round(recent.accuracy * 100),
+                    time:
+                      recent.averageMs !== null ? `${Math.round(recent.averageMs / 1000)} s` : "–",
+                  },
+                )}
+              </Text>
+            )}
+          </div>
+          <Stack gap="xs" mt="md">
+            <Button
+              color="orange"
+              leftSection={<IconPlayerPlay size={16} />}
+              onClick={() => practiceSet(set.id)}
+            >
+              {set.config.mode === "woodpecker" && !set.progress.activeCycle
+                ? set.progress.cycles.length > 0
+                  ? trainingT("Training.Copy.Startcyclev0.4952ee6f", "Start cycle {{v0}}", {
+                      v0: set.progress.cycles.length + 1,
+                    })
+                  : trainingT("Training.Copy.Startcycle1.1f37b857", "Start cycle 1")
+                : progress.attempted > 0
+                  ? trainingT(
+                      "Training.Copy.Continueatpuzzlev0.e476dc9b",
+                      "Continue at puzzle {{v0}}",
+                      { v0: resume + 1 },
+                    )
+                  : trainingT("Training.Copy.Startset.88c407a1", "Start set")}
+            </Button>
+            <Button
+              variant="light"
+              leftSection={<IconChartBar size={16} />}
+              onClick={() => setStatisticsSetId(set.id)}
+            >
+              {trainingT("Training.Tactics.Stats.Button", "Statistics")}
+            </Button>
+            <Group grow>
+              <Button
+                variant="default"
+                leftSection={<IconEye size={16} />}
+                onClick={() => review(set.id)}
+              >
+                {" "}
+                {trainingT("Training.Copy.Review.52fadddb", "Review")}{" "}
+              </Button>
+              <Button
+                variant="default"
+                leftSection={<IconSettings size={16} />}
+                onClick={() => editSet(set)}
+              >
+                {" "}
+                {trainingT("Training.Copy.Configure.d685ddb9", "Configure")}{" "}
+              </Button>
+              {set.origin === "user" && (
+                <ActionIcon
+                  size={36}
+                  color="red"
+                  variant="subtle"
+                  aria-label={trainingT("Training.Copy.Deletev0.8fd0a297", "Delete {{v0}}", {
+                    v0: set.name,
+                  })}
+                  onClick={() => setDeletingSetId(set.id)}
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              )}
+            </Group>
+          </Stack>
+        </Stack>
+      </Card>
+    );
+  };
 
   return (
     <Container size="xl" py="md">
@@ -450,194 +838,228 @@ export default function TacticsDashboardV2Page() {
           onAutoAddChange={(autoAdd) => updateTacticsReview((state) => ({ ...state, autoAdd }))}
         />
 
-        <div>
-          <Title order={3}>
-            {trainingT("Training.Copy.Availablesets.d6d3e738", "Available sets")}
-          </Title>
-          <Text size="sm" c="dimmed">
-            {" "}
-            {trainingT(
-              "Training.Copy.Eachsetkeepsitsprogress.6ec42902",
-              "Each set keeps its progress, recommended level, and previous cycles.",
-            )}{" "}
-          </Text>
-        </div>
-
-        {sets.length === 0 ? (
-          <Card withBorder>
-            <Stack align="center" py="xl">
-              <IconPuzzle size={42} color="var(--mantine-color-dimmed)" />
-              <Text c="dimmed">
-                {trainingT("Training.Copy.Nosetsavailableyet.3041bd51", "No sets available yet.")}
-              </Text>
-            </Stack>
-          </Card>
+        {activeCourse ? (
+          <>
+            <Group justify="space-between" align="flex-start">
+              <Group align="flex-start" wrap="nowrap">
+                <ActionIcon
+                  variant="subtle"
+                  size="lg"
+                  aria-label={trainingT("Tactics.Course.Back", "All folders and sets")}
+                  onClick={() => setOpenCourse(null)}
+                >
+                  <IconArrowLeft size={20} />
+                </ActionIcon>
+                <div>
+                  <Title order={3}>{activeCourse.name}</Title>
+                  <Text size="sm" c="dimmed">
+                    {trainingT(
+                      "Tactics.Course.Progress",
+                      "{{themes}} sets · {{completed}} of {{total}} puzzles completed",
+                      {
+                        themes: activeCourse.sets.length,
+                        completed: activeCourseProgress?.completed.toLocaleString(),
+                        total: activeCourseProgress?.total.toLocaleString(),
+                      },
+                    )}
+                  </Text>
+                </div>
+              </Group>
+              <Group gap="xs">
+                <Button
+                  variant="default"
+                  leftSection={<IconFolderPlus size={16} />}
+                  onClick={() => setPickerMode({ kind: "add", courseName: activeCourse.name })}
+                >
+                  {trainingT("Tactics.Course.AddSets", "Add sets")}
+                </Button>
+                <CourseMenu
+                  onAction={(kind) => {
+                    setCourseRename(activeCourse.name);
+                    setCourseAction({ kind, name: activeCourse.name });
+                  }}
+                />
+              </Group>
+            </Group>
+            <Progress value={activeCourseProgress?.percent ?? 0} color="orange" />
+            <Group>
+              <Button
+                color="orange"
+                leftSection={<IconPlayerPlay size={16} />}
+                disabled={!nextCourseSet}
+                onClick={() => nextCourseSet && practiceSet(nextCourseSet.id)}
+              >
+                {nextCourseSet
+                  ? trainingT("Tactics.Course.Continue", "Continue: {{theme}}", {
+                      theme: nextCourseSet.name,
+                    })
+                  : trainingT("Tactics.Course.Done", "All sets completed")}
+              </Button>
+              <Button
+                variant="light"
+                color="orange"
+                leftSection={<IconFolder size={16} />}
+                onClick={() => setMixCourseName(activeCourse.name)}
+              >
+                {trainingT("Tactics.Course.TrainAll", "Train the whole folder")}
+              </Button>
+            </Group>
+            <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
+              {activeCourse.sets.map(renderSetCard)}
+            </SimpleGrid>
+          </>
         ) : (
-          <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
-            {sets.map((set) => {
-              const progress = getTacticsSetProgress(areas.tactics, set.id);
-              const resume = Math.min(
-                set.config.mode === "woodpecker"
-                  ? set.progress.activeCycle
-                    ? getTacticsFirstIncompleteIndex(
-                        areas.tactics,
-                        set.id,
-                        set.progress.activeCycle.number,
-                      )
-                    : 0
-                  : set.progress.nextExerciseIndex,
-                Math.max(0, progress.total - 1),
-              );
-              const lastCycle = set.progress.cycles.at(-1);
-              const recent = recentSetStats(areas.tactics, set.id);
-              return (
-                <Card key={set.id} withBorder>
-                  <Stack h="100%" justify="space-between">
-                    <div>
-                      <Group justify="space-between" align="flex-start" wrap="nowrap">
-                        <Title order={4}>{set.name}</Title>
-                        <Badge color="orange">
-                          {progress.completed}/{progress.total}
-                        </Badge>
-                      </Group>
-                      <Text size="sm" c="dimmed" mt="xs" mih={42}>
-                        {set.description ||
-                          trainingT(
-                            "Training.Copy.Tacticalpositioncollection.cc3246c4",
-                            "Tactical position collection.",
-                          )}
+          <>
+            <>
+              <Group justify="space-between" align="flex-end">
+                <div>
+                  <Title order={3}>{trainingT("Tactics.Course.Title", "Folders")}</Title>
+                  <Text size="sm" c="dimmed">
+                    {trainingT(
+                      "Tactics.Course.Subtitle",
+                      "Group your sets the way you study: a book split by themes, a course, or your own selection of puzzles.",
+                    )}
+                  </Text>
+                </div>
+                <Button
+                  variant="default"
+                  leftSection={<IconFolderPlus size={16} />}
+                  onClick={() => setPickerMode({ kind: "new" })}
+                >
+                  {trainingT("Tactics.Course.New", "New folder")}
+                </Button>
+              </Group>
+              {courses.length === 0 ? (
+                // What folders are for, until there is one.
+                <Card withBorder style={{ borderStyle: "dashed" }}>
+                  <Group align="flex-start" wrap="nowrap">
+                    <IconFolder
+                      size={34}
+                      color="var(--mantine-color-orange-6)"
+                      style={{ flexShrink: 0 }}
+                    />
+                    <Stack gap="xs">
+                      <Text fw={600}>
+                        {trainingT("Tactics.Course.EmptyTitle", "Organize your sets in folders")}
                       </Text>
-                      <Progress value={progress.percent} color="orange" mt="md" />
-                      <Group justify="space-between" mt={4}>
-                        <Text size="xs" c="dimmed">
-                          {" "}
-                          {trainingT("Training.Copy.Progress.1d4a9eeb", "Progress")}{" "}
-                          {progress.percent}%
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {" "}
-                          {trainingT("Training.Copy.Next.57d01069", "Next:")} {resume + 1}
-                        </Text>
-                      </Group>
-                      <Group gap="xs" mt="sm">
-                        <Badge size="sm" variant="outline">
-                          {set.config.mode === "woodpecker"
-                            ? "Woodpecker"
-                            : trainingT("Training.Copy.Guided.57bd258f", "Guided")}
-                        </Badge>
-                        <Badge size="sm" color="blue" variant="light">
-                          {ratingLabel(set, trainingT)}
-                        </Badge>
-                        {set.origin === "bundled" && (
-                          <Badge size="sm" color="teal">
-                            {" "}
-                            {trainingT("Training.Copy.Included.384f88d5", "Included")}{" "}
-                          </Badge>
+                      <Text size="sm" c="dimmed">
+                        {trainingT(
+                          "Tactics.Course.EmptyText",
+                          "Put related sets together and train them as one: a book split into one PGN per theme, a course, or your own collection, such as several Lichess sets built by theme and level. Each set keeps its own progress, and you can train the whole folder at once.",
                         )}
-                      </Group>
-                      <Text size="xs" c="dimmed" mt="sm">
-                        {progress.incorrect}{" "}
-                        {trainingT("Training.Copy.mistakes.5c65c76e", "mistakes ·")}{" "}
-                        {set.progress.cycles.length}{" "}
-                        {trainingT("Training.Copy.cycles.5d205153", "cycles")}{" "}
-                        {lastCycle
-                          ? trainingT(
-                              "Training.Copy.lastv0mistakes.35e6e46a",
-                              " · last: {{v0}} mistakes",
-                              { v0: lastCycle.failures },
-                            )
-                          : ""}
                       </Text>
-                      {recent.accuracy !== null && (
-                        <Text size="xs" c="dimmed">
-                          {trainingT(
-                            "Tactics.Shelf.Recent",
-                            "Recent accuracy {{accuracy}} % · {{time}} on average",
-                            {
-                              accuracy: Math.round(recent.accuracy * 100),
-                              time:
-                                recent.averageMs !== null
-                                  ? `${Math.round(recent.averageMs / 1000)} s`
-                                  : "–",
-                            },
-                          )}
-                        </Text>
-                      )}
-                    </div>
-                    <Stack gap="xs" mt="md">
-                      <Button
-                        color="orange"
-                        leftSection={<IconPlayerPlay size={16} />}
-                        onClick={() =>
-                          navigate({
-                            to: "/training/tactics/practice/$setId",
-                            params: { setId: set.id },
-                            search: { problem: undefined },
-                          })
-                        }
-                      >
-                        {set.config.mode === "woodpecker" && !set.progress.activeCycle
-                          ? set.progress.cycles.length > 0
-                            ? trainingT(
-                                "Training.Copy.Startcyclev0.4952ee6f",
-                                "Start cycle {{v0}}",
-                                { v0: set.progress.cycles.length + 1 },
-                              )
-                            : trainingT("Training.Copy.Startcycle1.1f37b857", "Start cycle 1")
-                          : progress.attempted > 0
-                            ? trainingT(
-                                "Training.Copy.Continueatpuzzlev0.e476dc9b",
-                                "Continue at puzzle {{v0}}",
-                                { v0: resume + 1 },
-                              )
-                            : trainingT("Training.Copy.Startset.88c407a1", "Start set")}
-                      </Button>
-                      <Button
-                        variant="light"
-                        leftSection={<IconChartBar size={16} />}
-                        onClick={() => setStatisticsSetId(set.id)}
-                      >
-                        {trainingT("Training.Tactics.Stats.Button", "Statistics")}
-                      </Button>
-                      <Group grow>
+                      <Group gap="xs" mt={4}>
                         <Button
-                          variant="default"
-                          leftSection={<IconEye size={16} />}
-                          onClick={() => review(set.id)}
+                          size="xs"
+                          variant="light"
+                          color="orange"
+                          leftSection={<IconFolderPlus size={14} />}
+                          disabled={sets.length === 0}
+                          onClick={() => setPickerMode({ kind: "new" })}
                         >
-                          {" "}
-                          {trainingT("Training.Copy.Review.52fadddb", "Review")}{" "}
+                          {trainingT("Tactics.Course.New", "New folder")}
                         </Button>
                         <Button
+                          size="xs"
                           variant="default"
-                          leftSection={<IconSettings size={16} />}
-                          onClick={() => editSet(set)}
+                          loading={courseBusy}
+                          leftSection={<IconFolderOpen size={14} />}
+                          onClick={selectCourseFolder}
                         >
-                          {" "}
-                          {trainingT("Training.Copy.Configure.d685ddb9", "Configure")}{" "}
+                          {trainingT("Tactics.Course.ImportTitle", "Import a folder of PGNs")}
                         </Button>
-                        {set.origin === "user" && (
-                          <ActionIcon
-                            size={36}
-                            color="red"
-                            variant="subtle"
-                            aria-label={trainingT(
-                              "Training.Copy.Deletev0.8fd0a297",
-                              "Delete {{v0}}",
-                              { v0: set.name },
-                            )}
-                            onClick={() => setDeletingSetId(set.id)}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        )}
                       </Group>
                     </Stack>
+                  </Group>
+                </Card>
+              ) : (
+                <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
+                  {courses.map((course) => {
+                    const progress = getTacticsCourseProgress(areas.tactics, course);
+                    return (
+                      <Card key={course.name} withBorder>
+                        <Stack h="100%" justify="space-between">
+                          <div>
+                            <Group justify="space-between" align="flex-start" wrap="nowrap">
+                              <IconFolder size={26} color="var(--mantine-color-orange-6)" />
+                              <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                                <Badge color="orange">
+                                  {progress.completed}/{progress.total}
+                                </Badge>
+                                <CourseMenu
+                                  onAction={(kind) => {
+                                    setCourseRename(course.name);
+                                    setCourseAction({ kind, name: course.name });
+                                  }}
+                                />
+                              </Group>
+                            </Group>
+                            <Title order={4} mt="sm" style={{ overflowWrap: "anywhere" }}>
+                              {course.name}
+                            </Title>
+                            <Text size="sm" c="dimmed" mt={4} lineClamp={2}>
+                              {course.sets.map((set) => set.name).join(" · ")}
+                            </Text>
+                            <Progress value={progress.percent} color="orange" mt="md" />
+                            <Text size="xs" c="dimmed" mt={4}>
+                              {trainingT(
+                                "Tactics.Course.CardProgress",
+                                "{{themes}} sets · {{percent}}% completed",
+                                { themes: course.sets.length, percent: progress.percent },
+                              )}
+                            </Text>
+                          </div>
+                          <Button
+                            color="orange"
+                            mt="md"
+                            leftSection={<IconFolderOpen size={16} />}
+                            onClick={() => setOpenCourse(course.name)}
+                          >
+                            {trainingT("Tactics.Course.Open", "Open folder")}
+                          </Button>
+                        </Stack>
+                      </Card>
+                    );
+                  })}
+                </SimpleGrid>
+              )}
+            </>
+
+            <Group justify="space-between" align="flex-end">
+              <div>
+                <Title order={3}>
+                  {trainingT("Training.Copy.Availablesets.d6d3e738", "Available sets")}
+                </Title>
+                <Text size="sm" c="dimmed">
+                  {" "}
+                  {trainingT(
+                    "Training.Copy.Eachsetkeepsitsprogress.6ec42902",
+                    "Each set keeps its progress, recommended level, and previous cycles.",
+                  )}{" "}
+                </Text>
+              </div>
+            </Group>
+
+            {looseSets.length === 0 ? (
+              courses.length === 0 && (
+                <Card withBorder>
+                  <Stack align="center" py="xl">
+                    <IconPuzzle size={42} color="var(--mantine-color-dimmed)" />
+                    <Text c="dimmed">
+                      {trainingT(
+                        "Training.Copy.Nosetsavailableyet.3041bd51",
+                        "No sets available yet.",
+                      )}
+                    </Text>
                   </Stack>
                 </Card>
-              );
-            })}
-          </SimpleGrid>
+              )
+            ) : (
+              <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
+                {looseSets.map(renderSetCard)}
+              </SimpleGrid>
+            )}
+          </>
         )}
 
         <Card withBorder>
@@ -774,6 +1196,34 @@ export default function TacticsDashboardV2Page() {
             </Button>
           </Stack>
         </Card>
+
+        <Card withBorder>
+          <Stack>
+            <Group>
+              <IconFolder size={26} color="var(--mantine-color-orange-6)" />
+              <div>
+                <Text fw={600}>
+                  {trainingT("Tactics.Course.ImportTitle", "Import a folder of PGNs")}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {trainingT(
+                    "Tactics.Course.ImportHint",
+                    "For a book or course split into one PGN per theme: each PGN becomes a set inside the folder, with its own progress.",
+                  )}
+                </Text>
+              </div>
+            </Group>
+            <Button
+              variant="light"
+              color="orange"
+              loading={courseBusy}
+              leftSection={<IconFolderOpen size={16} />}
+              onClick={selectCourseFolder}
+            >
+              {trainingT("Tactics.Course.SelectFolder", "Select folder")}
+            </Button>
+          </Stack>
+        </Card>
       </Stack>
 
       <Modal
@@ -824,6 +1274,121 @@ export default function TacticsDashboardV2Page() {
               <Button color="orange" onClick={confirmImport}>
                 {" "}
                 {trainingT("Training.Copy.Importset.ea3b85ed", "Import set")}{" "}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+
+      <CourseMixSession course={mixCourse} onClose={() => setMixCourseName(null)} />
+
+      <CourseSetsPicker
+        mode={pickerMode}
+        sets={sets}
+        existingCourses={courseNames}
+        onClose={() => setPickerMode(null)}
+        onConfirm={addSetsToCourse}
+      />
+
+      <Modal
+        opened={movingSet !== undefined}
+        onClose={() => setMovingSetId(null)}
+        title={
+          movingSet?.course
+            ? trainingT("Tactics.Course.MoveTo", "Move to another folder…")
+            : trainingT("Tactics.Course.AddTo", "Add to a folder…")
+        }
+      >
+        {movingSet && (
+          <Stack>
+            <Text size="sm">{movingSet.name}</Text>
+            <Autocomplete
+              label={trainingT("Tactics.Course.Field", "Folder")}
+              description={trainingT(
+                "Tactics.Course.MoveHint",
+                "Choose a folder or type a new name to create one.",
+              )}
+              data={courseNames.filter((name) => name !== movingSet.course?.name)}
+              value={moveTarget}
+              onChange={setMoveTarget}
+              data-autofocus
+            />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setMovingSetId(null)}>
+                {trainingT("Training.Copy.Cancel.bb9dbb40", "Cancel")}
+              </Button>
+              <Button
+                color="orange"
+                disabled={!moveTarget.trim() || moveTarget.trim() === movingSet.course?.name}
+                onClick={() => {
+                  moveSetToCourse(movingSet.id, moveTarget);
+                  setMovingSetId(null);
+                }}
+              >
+                {trainingT("Tactics.Course.MoveConfirm", "Move")}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+
+      <TacticsCourseImport
+        scan={courseScan}
+        existingCourses={courseNames}
+        configFields={<TacticsConfigFields config={draftConfig} onChange={setDraftConfig} />}
+        onClose={() => setCourseScan(null)}
+        onImport={importCourse}
+      />
+
+      <Modal
+        opened={courseAction !== null}
+        onClose={() => setCourseAction(null)}
+        title={
+          courseAction?.kind === "rename"
+            ? trainingT("Tactics.Course.Rename", "Rename folder")
+            : courseAction?.kind === "delete"
+              ? trainingT("Tactics.Course.Delete", "Delete folder and its sets")
+              : trainingT("Tactics.Course.Ungroup", "Remove folder, keep sets")
+        }
+      >
+        {courseAction && (
+          <Stack>
+            {courseAction.kind === "rename" ? (
+              <TextInput
+                label={trainingT("Tactics.Course.Name", "Folder name")}
+                value={courseRename}
+                onChange={(event) => setCourseRename(event.currentTarget.value)}
+                data-autofocus
+              />
+            ) : (
+              <Text size="sm">
+                {courseAction.kind === "delete"
+                  ? trainingT(
+                      "Tactics.Course.DeleteConfirm",
+                      "Remove “{{name}}” and all its sets, with their progress? Its PGN files stay on disk.",
+                      { name: courseAction.name },
+                    )
+                  : trainingT(
+                      "Tactics.Course.UngroupConfirm",
+                      "Remove the folder “{{name}}”? Its sets keep their progress and move to Available sets.",
+                      { name: courseAction.name },
+                    )}
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setCourseAction(null)}>
+                {trainingT("Training.Copy.Cancel.bb9dbb40", "Cancel")}
+              </Button>
+              <Button
+                color={courseAction.kind === "delete" ? "red" : "orange"}
+                disabled={courseAction.kind === "rename" && !courseRename.trim()}
+                onClick={applyCourseAction}
+              >
+                {courseAction.kind === "rename"
+                  ? trainingT("Training.Copy.Save.13e51a21", "Save")
+                  : courseAction.kind === "delete"
+                    ? trainingT("Tactics.Course.Delete", "Delete folder and its sets")
+                    : trainingT("Tactics.Course.Ungroup", "Remove folder, keep sets")}
               </Button>
             </Group>
           </Stack>
@@ -894,6 +1459,18 @@ export default function TacticsDashboardV2Page() {
               value={draftDescription}
               onChange={(event) => setDraftDescription(event.currentTarget.value)}
             />
+            <Autocomplete
+              label={trainingT("Tactics.Course.Field", "Folder")}
+              placeholder={trainingT("Tactics.Course.FieldPlaceholder", "None (loose set)")}
+              description={trainingT(
+                "Tactics.Course.FieldHint",
+                "Type a new name to create a folder, or leave it empty.",
+              )}
+              data={courseNames}
+              value={draftCourse}
+              onChange={setDraftCourse}
+            />
+            <div />
             <NumberInput
               label={trainingT("Training.Copy.MinimumELO.8f4b3e52", "Minimum ELO")}
               placeholder={trainingT("Training.Copy.Optional.a6e63474", "Optional")}
@@ -1171,6 +1748,38 @@ export default function TacticsDashboardV2Page() {
         </Stack>
       </Modal>
     </Container>
+  );
+}
+
+function CourseMenu({ onAction }: { onAction: (kind: "rename" | "ungroup" | "delete") => void }) {
+  const { t: trainingT } = useTrainingTranslation();
+  return (
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          aria-label={trainingT("Tactics.Course.Options", "Folder options")}
+        >
+          <IconDots size={16} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => onAction("rename")}>
+          {trainingT("Tactics.Course.Rename", "Rename folder")}
+        </Menu.Item>
+        <Menu.Item leftSection={<IconUnlink size={14} />} onClick={() => onAction("ungroup")}>
+          {trainingT("Tactics.Course.Ungroup", "Remove folder, keep sets")}
+        </Menu.Item>
+        <Menu.Item
+          color="red"
+          leftSection={<IconTrash size={14} />}
+          onClick={() => onAction("delete")}
+        >
+          {trainingT("Tactics.Course.Delete", "Delete folder and its sets")}
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
   );
 }
 

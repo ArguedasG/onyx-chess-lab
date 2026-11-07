@@ -1,7 +1,10 @@
+import { join } from "@tauri-apps/api/path";
+import { readDir } from "@tauri-apps/plugin-fs";
 import i18n from "i18next";
 import { commands } from "@/bindings";
 import { parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
+import { canonicalUci, playUci } from "@/utils/repertoireGenerator/positions";
 import type {
     TacticsExercise,
     TacticsSet,
@@ -45,6 +48,31 @@ function filename(path: string): string {
 
 function treeHasVariations(node: TreeNode): boolean {
     return node.children.length > 1 || node.children.some(treeHasVariations);
+}
+
+/**
+ * Solution lines that continue with `uci` after `ply` moves from `rootFen` (every line given shares
+ * those first moves). Castling is compared in one form: solutions store it as king-takes-rook
+ * ("e1a1", via `uciNormalize`) while the board sends the king's two-square step ("e1c1").
+ */
+export function solutionLinesWith(
+    rootFen: string,
+    lines: string[][],
+    ply: number,
+    uci: string,
+): string[][] {
+    let fen: string | null = rootFen;
+    for (const move of lines[0]?.slice(0, ply) ?? []) {
+        fen = playUci(fen, move)?.fen ?? null;
+        if (!fen) break;
+    }
+    const played = fen ? (canonicalUci(fen, uci) ?? uci) : uci;
+    return lines.filter((line) => {
+        const move = line[ply];
+        if (move === undefined) return false;
+        if (move === uci) return true;
+        return fen !== null && (canonicalUci(fen, move) ?? move) === played;
+    });
 }
 
 function isStudentTurn(ply: number, startingActor: TacticsStartingActor): boolean {
@@ -107,6 +135,77 @@ export async function parseTacticsPgnRecord(
         hasVariations: treeHasVariations(tree.root),
         sourcePgn: raw,
     };
+}
+
+export type TacticsCourseFile = {
+    path: string;
+    filename: string;
+    /** Theme name: the file name without its extension or leading number ("01. Pin" → "Pin"). */
+    title: string;
+    recordCount: number;
+    /** Suggested for import: has exercises and, when the folder numbers its themes, is numbered. */
+    suggested: boolean;
+    error?: string;
+};
+
+const NUMBERED_FILE = /^\s*\d+\s*[.)_-]?\s*/;
+
+/** Theme name for a course file: no extension and no leading "01. ". */
+export function courseThemeTitle(filename: string): string {
+    const base = filename.replace(/\.[^.]+$/, "");
+    return base.replace(NUMBERED_FILE, "").trim() || base;
+}
+
+/**
+ * Orders a course folder's PGN files and suggests which to import. When some files are numbered
+ * ("01. Double Attack.pgn") and others are not ("Whole book.pgn"), only the numbered ones are
+ * suggested: the others are usually the complete book or another course.
+ */
+export function planTacticsCourseFiles(
+    files: { path: string; filename: string; recordCount: number; error?: string }[],
+): TacticsCourseFile[] {
+    const sorted = [...files].sort((a, b) =>
+        a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" }),
+    );
+    const numbered = sorted.filter((file) => NUMBERED_FILE.test(file.filename)).length;
+    const onlyNumbered = numbered > 0 && numbered < sorted.length;
+    return sorted.map((file) => ({
+        ...file,
+        title: courseThemeTitle(file.filename),
+        suggested:
+            file.recordCount > 0 &&
+            !file.error &&
+            (!onlyNumbered || NUMBERED_FILE.test(file.filename)),
+    }));
+}
+
+/** Reads a folder's PGN files (not its subfolders) to import them as a course. */
+export async function scanTacticsCourseFolder(
+    directory: string,
+): Promise<{ name: string; files: TacticsCourseFile[] }> {
+    const entries = await readDir(directory);
+    const pgns = entries.filter((entry) => entry.isFile && /\.pgn$/i.test(entry.name));
+    const files = await Promise.all(
+        pgns.map(async (entry) => {
+            const path = await join(directory, entry.name);
+            try {
+                return {
+                    path,
+                    filename: entry.name,
+                    recordCount: unwrap(await commands.countPgnGames(path)),
+                };
+            } catch (error) {
+                return {
+                    path,
+                    filename: entry.name,
+                    recordCount: 0,
+                    error: error instanceof Error ? error.message : String(error),
+                };
+            }
+        }),
+    );
+    const name = directory.split(/[\\/]/).filter(Boolean).pop() ?? directory;
+    return { name, files: planTacticsCourseFiles(files) };
 }
 
 export async function inspectTacticsPgn(

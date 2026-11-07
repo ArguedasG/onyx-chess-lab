@@ -117,6 +117,16 @@ const tacticsSetSchema = z.object({
         max: z.number().int().nonnegative().nullable(),
     }),
     progress: tacticsSetProgressSchema,
+    /**
+     * Course the set belongs to, e.g. a book split into one PGN per theme; `order` places the
+     * theme inside it. Missing means a loose set.
+     */
+    course: z
+        .object({
+            name: z.string(),
+            order: z.number().int().nonnegative(),
+        })
+        .optional(),
     config: z.object({
         acceptanceThresholdCp: z.number().nonnegative(),
         mode: z.enum(["guided", "woodpecker"]),
@@ -1077,6 +1087,7 @@ export function addTacticsFileSet(
         recordCount: number;
         config: TacticsSet["config"];
         recommendedRating?: TacticsSet["recommendedRating"];
+        course?: TacticsSet["course"];
     },
 ): TacticsState {
     const setId = areaId("tactics-set");
@@ -1104,11 +1115,232 @@ export function addTacticsFileSet(
                     activeCycle: null,
                     cycles: [],
                 },
+                ...(input.course ? { course: input.course } : {}),
                 config: input.config,
                 createdAt,
                 updatedAt: createdAt,
             },
         },
+    };
+}
+
+export type TacticsCourse = {
+    name: string;
+    /** Its sets (themes), in course order. */
+    sets: TacticsSet[];
+};
+
+/** Courses by name (sets in theme order) and the sets that belong to none, as given. */
+export function groupTacticsSetsByCourse(sets: TacticsSet[]): {
+    courses: TacticsCourse[];
+    loose: TacticsSet[];
+} {
+    const byName = new Map<string, TacticsSet[]>();
+    const loose: TacticsSet[] = [];
+    for (const set of sets) {
+        const name = set.course?.name.trim();
+        if (!name) {
+            loose.push(set);
+            continue;
+        }
+        byName.set(name, [...(byName.get(name) ?? []), set]);
+    }
+    const courses = [...byName.entries()]
+        .map(([name, courseSets]) => ({
+            name,
+            sets: [...courseSets].sort(
+                (a, b) =>
+                    (a.course?.order ?? 0) - (b.course?.order ?? 0) ||
+                    a.name.localeCompare(b.name, undefined, { numeric: true }),
+            ),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return { courses, loose };
+}
+
+/**
+ * Moves a set into a course (at its end) or, with an empty name, out of any course. Staying in
+ * the same course keeps its place.
+ */
+export function setTacticsSetCourse(
+    state: TacticsState,
+    setId: string,
+    courseName: string,
+): TacticsState {
+    const set = state.sets[setId];
+    if (!set) return state;
+    const name = courseName.trim();
+    if ((set.course?.name ?? "") === name) return state;
+    const { course: _previous, ...rest } = set;
+    if (!name) {
+        return {
+            ...state,
+            sets: { ...state.sets, [setId]: { ...rest, updatedAt: timestamp() } },
+        };
+    }
+    const orders = Object.values(state.sets)
+        .filter((other) => other.course?.name === name)
+        .map((other) => other.course?.order ?? 0);
+    const order = orders.length > 0 ? Math.max(...orders) + 1 : 0;
+    return {
+        ...state,
+        sets: {
+            ...state.sets,
+            [setId]: { ...rest, course: { name, order }, updatedAt: timestamp() },
+        },
+    };
+}
+
+/** Adds sets to a course, at its end and in the order given; sets already in it keep their place. */
+export function addSetsToTacticsCourse(
+    state: TacticsState,
+    setIds: string[],
+    courseName: string,
+): TacticsState {
+    return setIds.reduce((next, setId) => setTacticsSetCourse(next, setId, courseName), state);
+}
+
+/** Moves a set one place up (-1) or down (1) inside its course. */
+export function moveTacticsSetInCourse(
+    state: TacticsState,
+    setId: string,
+    direction: -1 | 1,
+): TacticsState {
+    const name = state.sets[setId]?.course?.name;
+    if (!name) return state;
+    const course = groupTacticsSetsByCourse(Object.values(state.sets)).courses.find(
+        (group) => group.name === name,
+    );
+    if (!course) return state;
+    const ids = course.sets.map((set) => set.id);
+    const from = ids.indexOf(setId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= ids.length) return state;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    const updatedAt = timestamp();
+    const sets = { ...state.sets };
+    ids.forEach((id, order) => {
+        const set = sets[id];
+        if (set.course?.order !== order) sets[id] = { ...set, course: { name, order }, updatedAt };
+    });
+    return { ...state, sets };
+}
+
+/** The first theme of a course with exercises still to solve, or null when all are done. */
+export function nextTacticsCourseSet(state: TacticsState, course: TacticsCourse) {
+    return (
+        course.sets.find((set) => {
+            const progress = getTacticsSetProgress(state, set.id);
+            return progress.completed < progress.total;
+        }) ?? null
+    );
+}
+
+export type TacticsCourseQueueItem = { setId: string; index: number };
+
+/**
+ * Exercises for a session over a whole course. `pending` leaves out the ones already solved,
+ * `mistakes` keeps those ever failed; `size` 0 means all. Sets checked only by the engine are
+ * left out (`skippedSetIds`): a mixed session needs prepared solutions.
+ */
+export function buildTacticsCourseQueue(
+    state: TacticsState,
+    course: TacticsCourse,
+    options: {
+        source: "all" | "pending" | "mistakes";
+        order: "shuffle" | "course";
+        size: number;
+    },
+    random: () => number = Math.random,
+): { queue: TacticsCourseQueueItem[]; skippedSetIds: string[] } {
+    const queue: TacticsCourseQueueItem[] = [];
+    const skippedSetIds: string[] = [];
+    for (const set of course.sets) {
+        if (set.config.validationMode === "engine") {
+            skippedSetIds.push(set.id);
+            continue;
+        }
+        const total = getTacticsSetSize(set);
+        const completed = new Set(getTacticsCompletedIndexes(state, set.id));
+        const failed = new Set(
+            state.attempts
+                .filter((attempt) => attempt.setId === set.id && attempt.outcome === "incorrect")
+                .map((attempt) => getTacticsExerciseIndex(set, attempt.exerciseId)),
+        );
+        for (let index = 0; index < total; index++) {
+            if (options.source === "pending" && completed.has(index)) continue;
+            if (options.source === "mistakes" && !failed.has(index)) continue;
+            queue.push({ setId: set.id, index });
+        }
+    }
+    if (options.order === "shuffle") {
+        for (let i = queue.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [queue[i], queue[j]] = [queue[j], queue[i]];
+        }
+    }
+    return {
+        queue: options.size > 0 ? queue.slice(0, options.size) : queue,
+        skippedSetIds,
+    };
+}
+
+/** Renames a course; merging into an existing course keeps both groups' order, the old after. */
+export function renameTacticsCourse(state: TacticsState, from: string, to: string): TacticsState {
+    const name = to.trim();
+    if (!name || name === from) return state;
+    const existing = Object.values(state.sets)
+        .filter((set) => set.course?.name === name)
+        .map((set) => set.course?.order ?? 0);
+    const offset = existing.length > 0 ? Math.max(...existing) + 1 : 0;
+    const updatedAt = timestamp();
+    const sets = { ...state.sets };
+    for (const set of Object.values(state.sets)) {
+        if (set.course?.name !== from) continue;
+        sets[set.id] = {
+            ...set,
+            course: { name, order: set.course.order + offset },
+            updatedAt,
+        };
+    }
+    return { ...state, sets };
+}
+
+/** Ungroups a course: its sets stay, with their progress, as loose sets. */
+export function ungroupTacticsCourse(state: TacticsState, name: string): TacticsState {
+    const updatedAt = timestamp();
+    const sets = { ...state.sets };
+    for (const set of Object.values(state.sets)) {
+        if (set.course?.name !== name) continue;
+        const { course: _course, ...rest } = set;
+        sets[set.id] = { ...rest, updatedAt };
+    }
+    return { ...state, sets };
+}
+
+/** Deletes a course and its user sets (their PGN files stay on disk). */
+export function deleteTacticsCourse(state: TacticsState, name: string): TacticsState {
+    return Object.values(state.sets)
+        .filter((set) => set.course?.name === name && set.origin === "user")
+        .reduce((next, set) => deleteTacticsSet(next, set.id), state);
+}
+
+/** Progress of a whole course: puzzles completed over all its sets. */
+export function getTacticsCourseProgress(state: TacticsState, course: TacticsCourse) {
+    let total = 0;
+    let completed = 0;
+    let attempted = 0;
+    for (const set of course.sets) {
+        const progress = getTacticsSetProgress(state, set.id);
+        total += progress.total;
+        completed += progress.completed;
+        attempted += progress.attempted;
+    }
+    return {
+        total,
+        completed,
+        attempted,
+        percent: total > 0 ? Math.round((completed / total) * 100) : 0,
     };
 }
 

@@ -20,9 +20,9 @@ import { enginesAtom } from "@/state/atoms";
 import { positionFromFen } from "@/utils/chessops";
 import { getBestMovesOnce, type LocalEngine } from "@/utils/engines";
 import { isMaiaEngine } from "@/utils/humanBots";
-import { playUci } from "@/utils/repertoireGenerator/positions";
+import { canonicalUci, playUci } from "@/utils/repertoireGenerator/positions";
 import { formatMoveList } from "@/utils/repertoireGaps";
-import type { TacticsLoadedExercise } from "@/utils/tacticsTraining";
+import { solutionLinesWith, type TacticsLoadedExercise } from "@/utils/tacticsTraining";
 import type { TacticsSet } from "@/utils/trainingAreas";
 import { defaultTree } from "@/utils/treeReducer";
 import classes from "../TacticsSession.module.css";
@@ -422,10 +422,13 @@ function GuidedTacticsBoardInner({
     }
   }, [hintRequest, setShapes, store]);
 
+  const linesWith = (uci: string) =>
+    solutionLinesWith(store.getState().root.fen, candidates.current, ply.current, uci);
+
   function handleMove(uci: string) {
     if (completed.current || disabled || autoMoving) return;
     onUserMove();
-    const matching = candidates.current.filter((line) => line[ply.current] === uci);
+    const matching = linesWith(uci);
     if (matching.length === 0) {
       completed.current = true;
       // Like Lichess, any mate is a correct answer, even if the record has another one.
@@ -454,7 +457,7 @@ function GuidedTacticsBoardInner({
   function playBlindMove(uci: string) {
     if (completed.current || disabled || autoMoving) return;
     const move = parseUci(uci);
-    const matching = candidates.current.filter((line) => line[ply.current] === uci);
+    const matching = linesWith(uci);
     // Only correct moves enter the tree: a wrong one ends the exercise where it was.
     if (move && matching.length > 0)
       makeMove({ payload: move, mainline: true, changeHeaders: false });
@@ -553,7 +556,9 @@ export function EngineTacticsBoard({
         { t: "Depth", c: 18 },
         { fen: exercise.fen, moves: [], extraOptions: [{ name: "MultiPV", value: "8" }] },
       );
-      const candidate = bestMoves.find((line) => line.uciMoves[0] === playedMove);
+      // Engines write castling as "e1g1"; the board may send "e1h1" (king dropped on the rook).
+      const played = canonicalUci(exercise.fen, playedMove) ?? playedMove;
+      const candidate = bestMoves.find((line) => line.uciMoves[0] === played);
       const side = exercise.fen.split(" ")[1] === "b" ? "black" : "white";
       const correct = Boolean(
         candidate &&

@@ -16,6 +16,7 @@ import {
 } from "@/state/atoms";
 import classes from "@/styles/Chessboard.module.css";
 import { positionFromFen } from "@/utils/chessops";
+import { canonicalUci } from "@/utils/repertoireGenerator/positions";
 import type { Completion, Puzzle } from "@/utils/puzzles";
 import { getNodeAtPath, treeIteratorMainLine } from "@/utils/treeReducer";
 import PromotionModal from "../boards/PromotionModal";
@@ -91,8 +92,15 @@ function PuzzleBoard({
     const newPos = pos.clone();
     const uci = makeUci(move);
     newPos.play(move);
+    // Castling may come as the king's step ("e1c1") or dropped on the rook ("e1a1").
+    const expected = puzzle.moves[currentMove];
+    const sameMove =
+      expected === uci ||
+      (expected !== undefined &&
+        (canonicalUci(currentNode.fen, expected) ?? expected) ===
+          (canonicalUci(currentNode.fen, uci) ?? uci));
 
-    if (puzzle.moves[currentMove] === uci || newPos.isCheckmate()) {
+    if (sameMove || newPos.isCheckmate()) {
       if (currentMove === puzzle.moves.length - 1) {
         if (puzzle.completion !== "incorrect") {
           await changeCompletion("correct");
