@@ -1,5 +1,54 @@
 [
   {
+    "version": "0.26.0",
+    "notes": {
+      "en": {
+        "summary": "Folders for your tactics sets: import a book split into one PGN per theme as a single folder, or group your own sets, and train a whole folder at once. Castling is now accepted in tactics sets.",
+        "sections": [
+          {
+            "title": "Tactics folders",
+            "items": [
+              "“Import a folder of PGNs” turns a book or course split into one PGN per theme into a folder: each PGN becomes a set, in file order (01, 02… 10). Files without a number, usually the whole book or another course, start unchecked.",
+              "“New folder” groups any sets you already have, for example several Lichess sets built by theme and level. Sets can be added, moved to another folder, taken out and reordered from the ⋯ menu of each card.",
+              "Each folder shows its total progress. “Continue” opens the first set with exercises left, and “Train the whole folder” mixes exercises from all its sets: not solved yet, failed before or all, in sessions of 10 to 100. Every answer counts in its own set's progress.",
+              "Folders can be renamed, removed while keeping their sets, or deleted with their sets; PGN files always stay on disk. Your existing sets and progress are unchanged."
+            ]
+          },
+          {
+            "title": "Fixes",
+            "items": [
+              "Tactics sets marked castling as wrong when the king was moved two squares (O-O-O and O-O). Moving the king two squares and dropping it on the rook are both accepted now, in guided, blind and fast-format sessions and with engine validation.",
+              "In the Lichess puzzle trainer, dropping the king on the rook to castle is accepted too.",
+              "Long set names no longer cut off the exercise counter and the options button of their card."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Carpetas para tus sets de táctica: importa un libro dividido en un PGN por tema como una sola carpeta, o agrupa tus propios sets, y entrena toda una carpeta a la vez. El enroque ya se acepta en los sets de táctica.",
+        "sections": [
+          {
+            "title": "Carpetas de táctica",
+            "items": [
+              "«Importar una carpeta de PGN» convierte un libro o curso dividido en un PGN por tema en una carpeta: cada PGN pasa a ser un set, en el orden de los archivos (01, 02… 10). Los archivos sin número, que suelen ser el libro completo u otro curso, empiezan sin marcar.",
+              "«Nueva carpeta» agrupa sets que ya tienes, por ejemplo varios sets de Lichess creados por tema y nivel. Los sets se pueden añadir, mover a otra carpeta, sacar y reordenar desde el menú ⋯ de cada tarjeta.",
+              "Cada carpeta muestra su progreso total. «Continuar» abre el primer set con ejercicios pendientes y «Entrenar toda la carpeta» mezcla ejercicios de todos sus sets: sin resolver, fallados antes o todos, en sesiones de 10 a 100. Cada respuesta cuenta en el progreso de su propio set.",
+              "Las carpetas se pueden renombrar, quitar conservando sus sets o eliminar junto con ellos; los archivos PGN siempre se quedan en el disco. Tus sets y su progreso no cambian."
+            ]
+          },
+          {
+            "title": "Arreglos",
+            "items": [
+              "Los sets de táctica marcaban el enroque como incorrecto al mover el rey dos casillas (O-O-O y O-O). Ahora se acepta tanto mover el rey dos casillas como soltarlo sobre la torre, en las sesiones guiadas, a ciegas y de formatos rápidos y con validación por motor.",
+              "En el entrenador de puzzles de Lichess también se acepta enrocar soltando el rey sobre la torre.",
+              "Los nombres de set largos ya no cortan el contador de ejercicios ni el botón de opciones de su tarjeta."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.25.1",
     "notes": {
       "en": {
