@@ -1,5 +1,38 @@
 [
   {
+    "version": "0.27.1",
+    "notes": {
+      "en": {
+        "summary": "Repertoires imported from courses no longer grow with every save until they fail with “Invalid string length”, and the affected ones repair themselves.",
+        "sections": [
+          {
+            "title": "Fixes",
+            "items": [
+              "When a move had more than one move-quality glyph (for example “!” and “?!”, common when a course repeats the same move in several lines), Onyx wrote them glued with commas (“Nf3!,?!!,?!”). Reading that back multiplied the glyphs, and each save squared them: a 400 KB course reached 100 MB after three saves, until adding a section, importing or reorganizing failed with “Invalid string length”. Each glyph is written once now, and a saved repertoire stays the same size.",
+              "Repertoires already affected repair themselves: repeated glyphs are read as one, and the next save writes the file clean. If a repertoire can no longer be opened, import the course again into a new repertoire.",
+              "Like the annotation editor, a move keeps at most one move-quality glyph and one evaluation. When lines from different sources are merged, the move keeps the glyph it already had.",
+              "The evaluation chart shows a move's annotations without commas."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Los repertorios importados de cursos ya no crecen con cada guardado hasta fallar con «Invalid string length», y los afectados se reparan solos.",
+        "sections": [
+          {
+            "title": "Arreglos",
+            "items": [
+              "Cuando una jugada tenía más de un glifo de calidad (por ejemplo «!» y «?!», algo habitual cuando un curso repite la misma jugada en varias líneas), Onyx los escribía pegados con comas («Nf3!,?!!,?!»). Al leerlos de nuevo los glifos se multiplicaban, y cada guardado los elevaba al cuadrado: un curso de 400 KB llegaba a 100 MB en tres guardados, hasta que añadir una sección, importar o reorganizar fallaba con «Invalid string length». Ahora cada glifo se escribe una sola vez y el repertorio guardado mantiene su tamaño.",
+              "Los repertorios ya afectados se reparan solos: los glifos repetidos se leen como uno y el siguiente guardado deja el archivo limpio. Si un repertorio ya no se puede abrir, importa el curso de nuevo en un repertorio nuevo.",
+              "Igual que en el editor de anotaciones, una jugada conserva como máximo un glifo de calidad y una valoración. Al fusionar líneas de fuentes distintas, la jugada mantiene el glifo que ya tenía.",
+              "El gráfico de evaluación muestra las anotaciones de una jugada sin comas."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.27.0",
     "notes": {
       "en": {
