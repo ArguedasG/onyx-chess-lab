@@ -1,5 +1,36 @@
 [
   {
+    "version": "0.26.1",
+    "notes": {
+      "en": {
+        "summary": "Stockfish installs again on macOS and Linux, and a failed engine installation now says why and how to install it by hand.",
+        "sections": [
+          {
+            "title": "Fixes",
+            "items": [
+              "Since 0.20.0, installing Stockfish from “Recommended engines” always failed on macOS and Linux with only “Failed”: Stockfish publishes those builds as .tar.gz archives, which Onyx downloaded but did not unpack. They are unpacked now, with the same safety checks as .zip and .tar. Windows was not affected.",
+              "When an engine installation fails, the reason stays written under it, and for Stockfish the dialog shows how to install it by hand, with an “Add it by hand” button that opens Add Engine directly.",
+              "Download errors are no longer lost, the README explains how to add engines by hand, and the note about Maia 3 no longer points to a guide that did not exist."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Stockfish vuelve a instalarse en macOS y Linux, y una instalación de motor fallida ahora dice por qué y cómo instalarlo a mano.",
+        "sections": [
+          {
+            "title": "Arreglos",
+            "items": [
+              "Desde 0.20.0, instalar Stockfish desde «Motores recomendados» fallaba siempre en macOS y Linux y solo mostraba «Falló»: Stockfish publica esas versiones como archivos .tar.gz, que Onyx descargaba pero no descomprimía. Ahora se descomprimen, con las mismas comprobaciones de seguridad que los .zip y .tar. Windows no estaba afectado.",
+              "Cuando falla la instalación de un motor, el motivo queda escrito debajo, y para Stockfish el diálogo explica cómo instalarlo a mano, con un botón «Añadirlo a mano» que abre directamente «Agregar motor».",
+              "Los errores de descarga ya no se pierden, el README explica cómo añadir motores a mano y el aviso sobre Maia 3 ya no remite a una guía que no existía."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.26.0",
     "notes": {
       "en": {
