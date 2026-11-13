@@ -4467,7 +4467,7 @@
     "EngineSetup.KeepUsing": "You can keep using Onyx while it installs; this dialog can be closed.",
     "EngineSetup.Space": "Needs about 1.5 GB of free space and an internet connection.",
     "EngineSetup.AllReady": "Both engines are installed.",
-    "EngineSetup.MaiaManual": "Maia 3, the engine behind the human-like bots, has a guided installation only on Windows for now.",
+    "EngineSetup.MaiaManual": "Maia 3, the engine behind the human-like bots, has a guided installation on Windows x64, macOS and Linux x64. On this system it has to be added by hand as a local engine; the README explains how.",
     "EngineSetup.StockfishMissing": "Stockfish is not in the engine catalog for this computer.",
     "EngineSetup.StockfishFailed": "Could not install Stockfish",
     "EngineSetup.OtherEngines": "Other engines…",

@@ -37,8 +37,8 @@ previews**.
   read into the position editor too.
 - Human-like Maia-based bots with local history and measurements.
 - Reproducible model-game generation, batches, experiments and analysis.
-- UCI engine support, including guided installation of the managed Maia 3 package on Windows x64
-  and a first-steps guide that installs Stockfish and Maia 3 together.
+- UCI engine support, including guided installation of the managed Maia 3 package on Windows x64,
+  macOS and Linux x64, and a first-steps guide that installs Stockfish and Maia 3 together.
 - Signed Onyx update channel for Windows x64.
 - Local-first storage: personal games, profiles and experiments remain on the user's computer by
   default.
@@ -62,8 +62,8 @@ All builds are published through
 > The Linux and macOS builds are generated automatically but have **not been tested yet**. They may
 > fail to start or have features that do not work. Please report any problem through
 > [GitHub Issues](https://github.com/ArguedasG/onyx-chess-lab/issues), mentioning your system and
-> version. The guided installation of the managed Maia 3 engine and in-app updates are currently
-> available only on Windows x64; on other systems, engines can still be added manually and new
+> version. The guided installation of Maia 3 is new on macOS and Linux and has only been validated
+> on Windows so far. In-app updates are available only on Windows x64; on other systems, new
 > versions must be downloaded from the releases page.
 
 ### Opening the app on macOS
@@ -109,8 +109,32 @@ fails, for example without internet access or behind a firewall, install it by h
 3. On macOS, if the system says the developer cannot be verified, open **System Settings → Privacy &
    Security** and click **Open Anyway**, or run `xattr -cr` on the unzipped folder.
 
-Any other UCI engine is added the same way. Maia 3, the engine behind the human-like bots, has a
-guided installation on Windows x64 only for now.
+Any other UCI engine is added the same way.
+
+Maia 3, the engine behind the human-like bots, is installed by Onyx itself on Windows x64, macOS
+and Linux x64 (**Engines → Recommended engines**). It downloads a private Python, PyTorch and the
+Maia3-5M model into the app's data folder; no system Python is needed. Requirements outside
+Windows:
+
+- **Apple Silicon Macs:** macOS 14 (Sonoma) or newer, which PyTorch requires.
+- **Intel Macs:** PyTorch 2.2.2, the last release built for Intel Macs, is used together with a
+  small compatibility module that Onyx adds for the one PyTorch feature Maia 3 needs from newer
+  versions (`RMSNorm`).
+- **Linux x64:** glibc 2.28 or newer (Ubuntu 20.04, Debian 10, Fedora 29 or later). Onyx installs
+  the CPU-only build of PyTorch, so no CUDA libraries are downloaded.
+
+On other systems, or if the guided installation fails, Maia 3 can be installed by hand with Python
+3.10 or newer (on Linux, install the CPU-only PyTorch first to avoid several GB of CUDA libraries):
+
+```bash
+python3 -m venv ~/maia3
+~/maia3/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+~/maia3/bin/pip install "maia3 @ https://github.com/CSSLab/maia3/archive/1e13597c42d4858b7cfd7cfdae01e297263364b2.zip"
+~/maia3/bin/maia3-cache --model maia3-5m
+```
+
+Then add `~/maia3/bin/maia3-5m` as a local engine with the arguments
+`--use-uci-history --seed {{randomSeed}} --temperature 1.0 --multipv 1 --device cpu --no-use-amp`.
 
 Because the application is still in an early public stage, keeping backups of important PGN files
 and application data is recommended. Bugs and reproducible problems can be reported through

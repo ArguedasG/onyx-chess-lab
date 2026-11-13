@@ -23,6 +23,7 @@ import { type CatalogEngine, downloadCatalogEngine } from "@/utils/engineSetup";
 import { type LocalEngine, type RemoteEngine, useDefaultEngines } from "@/utils/engines";
 import { usePlatform } from "@/utils/files";
 import { formatBytes } from "@/utils/format";
+import { supportsManagedMaia } from "@/utils/managedMaia";
 import CatalogErrorAlert from "../common/CatalogErrorAlert";
 import ProgressButton from "../common/ProgressButton";
 import EngineForm from "./EngineForm";
@@ -101,7 +102,7 @@ function AddEngine({
           )}
           <ScrollArea.Autosize mah={720} offsetScrollbars>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-              {os === "windows" && <ManagedMaiaCard opened={opened} />}
+              {supportsManagedMaia(os) && <ManagedMaiaCard opened={opened} />}
               {defaultEngines?.map((engine, i) => (
                 <EngineCard
                   engine={engine}

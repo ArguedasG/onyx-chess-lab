@@ -3,6 +3,14 @@ import { type LocalEngine, requiredEngineSettings } from "./engines";
 
 export const MANAGED_MAIA_PROGRESS_ID = "managed_maia3";
 
+/**
+ * Whether Onyx installs Maia 3 by itself on this system: Windows x64, macOS (Apple Silicon needs
+ * macOS 14 or newer) and Linux x64. Other architectures get a clear error from the installer.
+ */
+export function supportsManagedMaia(os: string | undefined): boolean {
+    return os === "windows" || os === "macos" || os === "linux";
+}
+
 export function managedMaiaToLocalEngine(
     installation: ManagedMaiaInstallation,
     options: UciOptionConfig[],

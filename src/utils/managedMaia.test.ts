@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedMaiaInstallation, UciOptionConfig } from "@/bindings";
-import { isManagedMaia, managedMaiaToLocalEngine } from "./managedMaia";
+import { isManagedMaia, managedMaiaToLocalEngine, supportsManagedMaia } from "./managedMaia";
 
 const installation: ManagedMaiaInstallation = {
     name: "Maia 3 5M",
@@ -55,5 +55,19 @@ describe("managed Maia registration", () => {
                 args: [],
             }),
         ).toBe(false);
+    });
+});
+
+describe("managed Maia availability", () => {
+    it("offers the guided installation on Windows, macOS and Linux", () => {
+        expect(supportsManagedMaia("windows")).toBe(true);
+        expect(supportsManagedMaia("macos")).toBe(true);
+        expect(supportsManagedMaia("linux")).toBe(true);
+    });
+
+    it("does not offer it on other systems or before the platform is known", () => {
+        expect(supportsManagedMaia("android")).toBe(false);
+        expect(supportsManagedMaia("ios")).toBe(false);
+        expect(supportsManagedMaia(undefined)).toBe(false);
     });
 });

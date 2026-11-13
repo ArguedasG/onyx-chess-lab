@@ -339,6 +339,12 @@ export default function DatabasesPage() {
                     </Text>
 
                     <Text>{t("Databases.LoadError.Description")}</Text>
+                    {/* A broken download would otherwise stay listed and count as installed. */}
+                    <Group>
+                      <Button onClick={() => toggleDeleteModal()} color="red">
+                        {t("Common.Delete")}
+                      </Button>
+                    </Group>
                   </>
                 ) : (
                   <>

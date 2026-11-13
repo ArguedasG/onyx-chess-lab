@@ -1,3 +1,5 @@
+// First, before any code that may need it.
+import "./polyfills";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import i18n from "i18next";

@@ -27,6 +27,45 @@ const MAX_ARCHIVE_BYTES: u64 = 2 * 1024 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 1_000_000;
 const MAX_REDIRECTS: usize = 10;
 
+/// The 16 bytes every SQLite database file starts with.
+const SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+
+/// Why `path` is not a SQLite database, or `None` when it starts with the SQLite header, is empty
+/// (SQLite treats that as a new database) or does not exist yet.
+pub(crate) fn sqlite_file_problem(path: &Path) -> std::io::Result<Option<String>> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let size = file.metadata()?.len();
+    if size == 0 {
+        return Ok(None);
+    }
+    let mut head = Vec::with_capacity(512);
+    std::io::Read::read_to_end(&mut std::io::Read::take(&mut file, 512), &mut head)?;
+    if head.starts_with(SQLITE_HEADER) {
+        return Ok(None);
+    }
+    let text = String::from_utf8_lossy(&head)
+        .trim_start()
+        .to_ascii_lowercase();
+    let content = if text.starts_with('<') {
+        "a web page (HTML) instead of a database; a proxy, firewall or content filter may have \
+         replaced the download"
+            .to_string()
+    } else {
+        let hex = head
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("data that does not start with the SQLite header (first bytes: {hex})")
+    };
+    Ok(Some(format!("the file holds {content} ({size} bytes)")))
+}
+
 fn validate_download(url: &str, path: &Path, authenticated: bool) -> Result<Url, Error> {
     let parsed = Url::parse(url).map_err(|error| Error::Download(error.to_string()))?;
     let loopback_http = parsed.scheme() == "http"
@@ -183,6 +222,18 @@ pub async fn download_file(
     } else if is_tar_gz {
         untar_gz_file(destination, temporary_path.as_ref())?;
     } else {
+        // A database that is not one would only fail later, when it is opened, with SQLite's
+        // terse "file is not a database"; the temporary file is discarded on return.
+        let is_database = destination
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("db3"));
+        if is_database {
+            if let Some(problem) = sqlite_file_problem(temporary_path.as_ref())? {
+                return Err(Error::Download(format!(
+                    "The downloaded database is not valid: {problem}. Nothing was saved."
+                )));
+            }
+        }
         match std::fs::remove_file(destination) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -255,7 +306,7 @@ fn untar_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
     unpack_tar(path, File::open(archive_path)?)
 }
 
-fn untar_gz_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
+pub(crate) fn untar_gz_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
     unpack_tar(
         path,
         flate2::read::GzDecoder::new(File::open(archive_path)?),
@@ -411,5 +462,39 @@ mod tests {
         let source = dir.path().join("download.tar.gz");
         std::fs::write(&source, archive).unwrap();
         assert!(untar_gz_file(dir.path(), &source).is_err());
+    }
+
+    #[test]
+    fn databases_are_recognized_by_their_sqlite_header() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let missing = dir.path().join("missing.db3");
+        assert_eq!(sqlite_file_problem(&missing).unwrap(), None);
+
+        let empty = dir.path().join("empty.db3");
+        std::fs::write(&empty, b"").unwrap();
+        assert_eq!(sqlite_file_problem(&empty).unwrap(), None);
+
+        let real = dir.path().join("real.db3");
+        rusqlite::Connection::open(&real)
+            .unwrap()
+            .execute_batch("CREATE TABLE t (x);")
+            .unwrap();
+        assert_eq!(sqlite_file_problem(&real).unwrap(), None);
+
+        let html = dir.path().join("html.db3");
+        std::fs::write(
+            &html,
+            b"\n  <!DOCTYPE html><html><body>Blocked</body></html>",
+        )
+        .unwrap();
+        let problem = sqlite_file_problem(&html).unwrap().unwrap();
+        assert!(problem.contains("web page (HTML)"), "{problem}");
+
+        let other = dir.path().join("other.db3");
+        std::fs::write(&other, [0x28, 0xb5, 0x2f, 0xfd, 0, 1, 2, 3]).unwrap();
+        let problem = sqlite_file_problem(&other).unwrap().unwrap();
+        assert!(problem.contains("28 b5 2f fd"), "{problem}");
+        assert!(problem.contains("8 bytes"), "{problem}");
     }
 }

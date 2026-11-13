@@ -1,10 +1,13 @@
+// First: pdf.js calls APIs that older macOS webviews lack (see polyfills.ts).
+import "@/polyfills";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-// Vite turns `?url` imports into the URL of the emitted file (a default export the linter cannot see).
+// Vite bundles the worker entry and turns `?worker&url` into the URL of the emitted file (a default
+// export the linter cannot see).
 // oxlint-disable-next-line import/default
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import workerUrl from "./pdf.worker?worker&url";
 
-// The legacy build supports the older WebKit of macOS and Linux webviews.
+// The legacy build supports the older WebKit of macOS and Linux webviews, with the polyfills.
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export type PdfDocument = pdfjs.PDFDocumentProxy;

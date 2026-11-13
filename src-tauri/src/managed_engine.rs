@@ -13,13 +13,16 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
-#[cfg(target_os = "windows")]
 use sysinfo::{DiskExt, SystemExt};
 use tauri::AppHandle;
 use tokio::{io::AsyncWriteExt, process::Command};
 
 use crate::{
-    engine::resolve_launch_args, error::Error, fs::unzip_file, progress::update_progress, AppState,
+    engine::resolve_launch_args,
+    error::Error,
+    fs::{untar_gz_file, unzip_file},
+    progress::update_progress,
+    AppState,
 };
 
 #[cfg(target_os = "windows")]
@@ -34,9 +37,7 @@ const MAIA_MODEL_URL: &str = "https://huggingface.co/UofTCSSLab/Maia3-5M";
 const MAIA_LICENSE: &str = "AGPL-3.0";
 const PYTHON_VERSION: &str = "3.11.16";
 const UV_VERSION: &str = "0.12.10";
-const UV_URL: &str =
-    "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-pc-windows-msvc.zip";
-const UV_SHA256: &str = "f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2";
+const UV_RELEASE_URL: &str = "https://github.com/astral-sh/uv/releases/download/0.12.10";
 const MANIFEST_FILENAME: &str = "onyx-managed-maia3.json";
 const INSTALLING_MARKER: &str = ".onyx-maia3-installing";
 const CLEANUP_MARKER: &str = ".onyx-maia3-cleanup";
@@ -44,7 +45,8 @@ const CLEANUP_PREFIX: &str = ".maia3-cleanup-";
 const FINAL_SIZE_MB: u32 = 660;
 const REQUIRED_FREE_SPACE_MB: u32 = 1500;
 
-const LOCKED_REQUIREMENTS: &str = r#"maia3 @ https://github.com/CSSLab/maia3/archive/1e13597c42d4858b7cfd7cfdae01e297263364b2.zip
+/// Pinned for every system; NumPy and PyTorch are added per system by [`ManagedPlatform`].
+const COMMON_REQUIREMENTS: &str = r#"maia3 @ https://github.com/CSSLab/maia3/archive/1e13597c42d4858b7cfd7cfdae01e297263364b2.zip
 anyio==4.15.1
 certifi==2026.7.22
 chess==1.11.2
@@ -62,16 +64,229 @@ jinja2==3.1.6
 markupsafe==3.0.3
 mpmath==1.3.0
 networkx==3.6.1
-numpy==2.4.6
 packaging==26.3
 python-chess==1.999
 pyyaml==6.0.3
 setuptools==84.0.0
 sympy==1.14.0
-torch==2.14.0
 tqdm==4.70.0
 typing-extensions==4.16.0
 "#;
+
+/// The PyPI builds of PyTorch for Windows and Apple Silicon run on the CPU without extra
+/// libraries. The macOS build needs macOS 14 or newer.
+const TORCH_PYPI: &str = "numpy==2.4.6\ntorch==2.14.0\n";
+/// The Linux build on PyPI pulls in several GB of CUDA libraries; PyTorch's own index has a
+/// CPU-only build of the same version, pinned here by URL and hash.
+const TORCH_LINUX_CPU: &str = "numpy==2.4.6\ntorch @ https://download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl#sha256=673dbf5c9bbadfffab7a386b6dd7a0c219f1408a328b7b4e86d0ae551cdafa42\n";
+/// PyTorch stopped publishing Intel Mac builds after 2.2.2, which was compiled against NumPy 1
+/// and lacks `torch.nn.RMSNorm` (see [`TORCH_COMPAT_MODULE`]).
+const TORCH_MACOS_INTEL: &str = "numpy==1.26.4\ntorch==2.2.2\n";
+/// Apple Silicon's PyTorch build is tagged `macosx_14_0_arm64`.
+const MACOS_ARM_MIN_MAJOR: u32 = 14;
+
+/// Maia 3 imports `torch.nn.RMSNorm`, added in PyTorch 2.4. On Intel Macs, where 2.2.2 is the last
+/// build, this module adds the same computation (`x * rsqrt(mean(x²) + eps) * weight`, with
+/// `eps` defaulting to the dtype's epsilon as in PyTorch) before Maia loads. It is loaded by a
+/// `.pth` file and does nothing when PyTorch already has `RMSNorm`.
+const TORCH_COMPAT_MODULE: &str = r#"# Written by Onyx Chess Lab: torch.nn.RMSNorm for PyTorch < 2.4 (Intel Macs).
+import torch
+import torch.nn as nn
+
+if not hasattr(nn, "RMSNorm"):
+
+    class RMSNorm(nn.Module):
+        def __init__(self, normalized_shape, eps=None, elementwise_affine=True, device=None, dtype=None):
+            super().__init__()
+            if isinstance(normalized_shape, int):
+                normalized_shape = (normalized_shape,)
+            self.normalized_shape = tuple(normalized_shape)
+            self.eps = eps
+            self.elementwise_affine = elementwise_affine
+            if elementwise_affine:
+                self.weight = nn.Parameter(torch.ones(self.normalized_shape, device=device, dtype=dtype))
+            else:
+                self.register_parameter("weight", None)
+
+        def forward(self, x):
+            dims = tuple(range(-len(self.normalized_shape), 0))
+            eps = self.eps if self.eps is not None else torch.finfo(x.dtype).eps
+            out = x * torch.rsqrt(x.pow(2).mean(dim=dims, keepdim=True) + eps)
+            return out * self.weight if self.weight is not None else out
+
+    nn.RMSNorm = RMSNorm
+"#;
+const TORCH_COMPAT_NAME: &str = "onyx_torch_compat";
+
+/// The systems where Onyx installs Maia 3 by itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ManagedPlatform {
+    WindowsX64,
+    MacosArm64,
+    MacosX64,
+    LinuxX64,
+}
+
+impl ManagedPlatform {
+    fn current() -> Option<Self> {
+        Self::from_target(std::env::consts::OS, std::env::consts::ARCH)
+    }
+
+    fn from_target(os: &str, arch: &str) -> Option<Self> {
+        match (os, arch) {
+            ("windows", "x86_64") => Some(Self::WindowsX64),
+            ("macos", "aarch64") => Some(Self::MacosArm64),
+            ("macos", "x86_64") => Some(Self::MacosX64),
+            ("linux", "x86_64") => Some(Self::LinuxX64),
+            _ => None,
+        }
+    }
+
+    fn is_windows(self) -> bool {
+        self == Self::WindowsX64
+    }
+
+    /// The uv release asset and the SHA-256 published next to it.
+    fn uv_asset(self) -> (&'static str, &'static str) {
+        match self {
+            Self::WindowsX64 => (
+                "uv-x86_64-pc-windows-msvc.zip",
+                "f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2",
+            ),
+            Self::MacosArm64 => (
+                "uv-aarch64-apple-darwin.tar.gz",
+                "51c6170e8e3a01cef9f33b94f582b7b81ac65046f55d40afb35f9cff5a68c179",
+            ),
+            Self::MacosX64 => (
+                "uv-x86_64-apple-darwin.tar.gz",
+                "5296d5aa2b9143360405eea866f8ef4d5dc8986b164eb0dc35e8f876a9304d30",
+            ),
+            Self::LinuxX64 => (
+                "uv-x86_64-unknown-linux-gnu.tar.gz",
+                "173d95a0c32d18c896c46ba6fafbf3cf9c14ab74b033f81b76c883ef492a976b",
+            ),
+        }
+    }
+
+    fn uv_url(self) -> String {
+        format!("{UV_RELEASE_URL}/{}", self.uv_asset().0)
+    }
+
+    /// Where the downloaded archive is kept until the installation finishes.
+    fn uv_archive_name(self) -> &'static str {
+        if self.is_windows() {
+            "uv.zip"
+        } else {
+            "uv.tar.gz"
+        }
+    }
+
+    /// The Windows zip has `uv.exe` at its top level; the tarballs keep `uv` inside a folder
+    /// named after the asset.
+    fn uv_in(self, tools_dir: &Path) -> PathBuf {
+        match self.uv_asset().0.strip_suffix(".tar.gz") {
+            Some(folder) => tools_dir.join(folder).join("uv"),
+            None => tools_dir.join("uv.exe"),
+        }
+    }
+
+    fn requirements(self) -> String {
+        let torch = match self {
+            Self::WindowsX64 | Self::MacosArm64 => TORCH_PYPI,
+            Self::LinuxX64 => TORCH_LINUX_CPU,
+            Self::MacosX64 => TORCH_MACOS_INTEL,
+        };
+        format!("{COMMON_REQUIREMENTS}{torch}")
+    }
+
+    fn needs_torch_compat(self) -> bool {
+        self == Self::MacosX64
+    }
+}
+
+/// A program inside the virtual environment: `Scripts\name.exe` on Windows, `bin/name` elsewhere.
+fn venv_executable(venv: &Path, name: &str, windows: bool) -> PathBuf {
+    if windows {
+        venv.join("Scripts").join(format!("{name}.exe"))
+    } else {
+        venv.join("bin").join(name)
+    }
+}
+
+/// The virtual environment's `site-packages` on macOS and Linux (`lib/python3.11/site-packages`).
+fn unix_site_packages(venv: &Path) -> PathBuf {
+    let minor = PYTHON_VERSION
+        .splitn(3, '.')
+        .take(2)
+        .collect::<Vec<_>>()
+        .join(".");
+    venv.join("lib")
+        .join(format!("python{minor}"))
+        .join("site-packages")
+}
+
+/// Writes the `RMSNorm` back-port and the `.pth` line that loads it where the platform needs it.
+async fn install_torch_compat(venv: &Path, platform: ManagedPlatform) -> Result<(), Error> {
+    if !platform.needs_torch_compat() {
+        return Ok(());
+    }
+    let site_packages = unix_site_packages(venv);
+    if !site_packages.is_dir() {
+        return Err(Error::ManagedEngine(format!(
+            "The managed Python environment has no site-packages at {}",
+            site_packages.display()
+        )));
+    }
+    tokio::fs::write(
+        site_packages.join(format!("{TORCH_COMPAT_NAME}.py")),
+        TORCH_COMPAT_MODULE,
+    )
+    .await?;
+    tokio::fs::write(
+        site_packages.join(format!("{TORCH_COMPAT_NAME}.pth")),
+        format!("import {TORCH_COMPAT_NAME}\n"),
+    )
+    .await?;
+    Ok(())
+}
+
+/// The major version from `sw_vers -productVersion` ("14.6.1" -> 14).
+fn macos_major_version(product_version: &str) -> Option<u32> {
+    product_version.trim().split('.').next()?.parse().ok()
+}
+
+/// Refuses early, with a clear reason, where the pinned packages cannot install.
+fn check_system_requirements(platform: ManagedPlatform) -> Result<(), Error> {
+    if platform != ManagedPlatform::MacosArm64 {
+        return Ok(());
+    }
+    let version = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+    match version.as_deref().and_then(macos_major_version) {
+        Some(major) if major < MACOS_ARM_MIN_MAJOR => Err(Error::ManagedEngine(format!(
+            "Maia needs macOS {MACOS_ARM_MIN_MAJOR} (Sonoma) or newer on Apple Silicon; this Mac runs macOS {}",
+            version.unwrap_or_default()
+        ))),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> Result<(), Error> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_mode(permissions.mode() | 0o755);
+    std::fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> Result<(), Error> {
+    Ok(())
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -127,14 +342,15 @@ fn assert_managed_maia_target(path: &Path) -> Result<(), Error> {
 }
 
 fn installation_for(root: &Path) -> ManagedMaiaInstallation {
+    installation_for_system(root, cfg!(windows))
+}
+
+fn installation_for_system(root: &Path, windows: bool) -> ManagedMaiaInstallation {
     let model_cache = root.join("model-cache");
     ManagedMaiaInstallation {
         name: "Maia 3 5M".to_string(),
         version: MAIA_VERSION.to_string(),
-        path: root
-            .join(".venv")
-            .join("Scripts")
-            .join("maia3-5m.exe")
+        path: venv_executable(&root.join(".venv"), "maia3-5m", windows)
             .to_string_lossy()
             .into_owned(),
         args: vec![
@@ -212,22 +428,14 @@ pub async fn install_managed_maia(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<ManagedMaiaInstallation, Error> {
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (id, engines_dir, repair, app, state);
-        return Err(Error::ManagedEngine(
-            "Managed Maia installation is currently available only on Windows x64".to_string(),
-        ));
-    }
+    let platform = ManagedPlatform::current().ok_or_else(|| {
+        Error::ManagedEngine(
+            "Managed Maia installation is available on Windows x64, macOS and Linux x64"
+                .to_string(),
+        )
+    })?;
 
-    #[cfg(target_os = "windows")]
     {
-        if !cfg!(target_arch = "x86_64") {
-            return Err(Error::ManagedEngine(
-                "Managed Maia installation requires Windows x64".to_string(),
-            ));
-        }
-
         if !state.managed_install_cancel_flags.is_empty() {
             return Err(Error::ManagedEngine(
                 "Another managed engine installation is already running".to_string(),
@@ -265,7 +473,8 @@ pub async fn install_managed_maia(
                     .insert(id.clone(), cancel.clone());
                 update_progress(&state.progress_state, &app, id.clone(), 88.0, false)?;
                 info!("Resuming Maia installation from downloaded assets");
-                let result = finalize_managed_maia(&id, &root, &app, &state, &cancel).await;
+                let result =
+                    finalize_managed_maia(&id, &root, platform, &app, &state, &cancel).await;
                 state.managed_install_cancel_flags.remove(&id);
                 return match result {
                     Ok(installation) => {
@@ -279,6 +488,7 @@ pub async fn install_managed_maia(
             quarantine_for_cleanup(&root).await?;
         }
 
+        check_system_requirements(platform)?;
         ensure_free_space(&engines_dir, REQUIRED_FREE_SPACE_MB)?;
         tokio::fs::create_dir_all(&root).await?;
         tokio::fs::write(
@@ -293,7 +503,7 @@ pub async fn install_managed_maia(
             .insert(id.clone(), cancel.clone());
         update_progress(&state.progress_state, &app, id.clone(), 1.0, false)?;
 
-        let result = install_managed_maia_inner(&id, &root, &app, &state, &cancel).await;
+        let result = install_managed_maia_inner(&id, &root, platform, &app, &state, &cancel).await;
         state.managed_install_cancel_flags.remove(&id);
 
         match result {
@@ -306,7 +516,6 @@ pub async fn install_managed_maia(
     }
 }
 
-#[cfg(target_os = "windows")]
 fn ensure_free_space(path: &Path, required_mb: u32) -> Result<(), Error> {
     let existing_path = path
         .ancestors()
@@ -344,30 +553,47 @@ fn ensure_free_space(path: &Path, required_mb: u32) -> Result<(), Error> {
 async fn install_managed_maia_inner(
     id: &str,
     root: &Path,
+    platform: ManagedPlatform,
     app: &AppHandle,
     state: &AppState,
     cancel: &AtomicBool,
 ) -> Result<ManagedMaiaInstallation, Error> {
-    let uv_archive = root.join("uv.zip");
-    download_checked(UV_URL, UV_SHA256, &uv_archive, id, app, state, cancel).await?;
+    let uv_archive = root.join(platform.uv_archive_name());
+    let (_, uv_sha256) = platform.uv_asset();
+    download_checked(
+        &platform.uv_url(),
+        uv_sha256,
+        &uv_archive,
+        id,
+        app,
+        state,
+        cancel,
+    )
+    .await?;
     ensure_not_cancelled(cancel)?;
 
     let tools_dir = root.join("tools");
     tokio::fs::create_dir_all(&tools_dir).await?;
-    unzip_file(&tools_dir, &uv_archive).await?;
-    let uv = tools_dir.join("uv.exe");
-    if !uv.is_file() {
-        return Err(Error::ManagedEngine(
-            "The verified uv archive did not contain uv.exe".to_string(),
-        ));
+    if platform.is_windows() {
+        unzip_file(&tools_dir, &uv_archive).await?;
+    } else {
+        untar_gz_file(&tools_dir, &uv_archive)?;
     }
+    let uv = platform.uv_in(&tools_dir);
+    if !uv.is_file() {
+        return Err(Error::ManagedEngine(format!(
+            "The verified uv archive did not contain {}",
+            uv.display()
+        )));
+    }
+    make_executable(&uv)?;
     update_progress(&state.progress_state, app, id.to_string(), 15.0, false)?;
 
     let python_dir = root.join("python");
     let uv_cache = root.join("cache");
     let venv = root.join(".venv");
     let requirements = root.join("requirements.lock");
-    tokio::fs::write(&requirements, LOCKED_REQUIREMENTS).await?;
+    tokio::fs::write(&requirements, platform.requirements()).await?;
 
     let common_env = vec![
         ("UV_PYTHON_INSTALL_DIR", python_dir.as_os_str()),
@@ -395,7 +621,8 @@ async fn install_managed_maia_inner(
     .await?;
     update_progress(&state.progress_state, app, id.to_string(), 32.0, false)?;
 
-    let python = venv.join("Scripts").join("python.exe");
+    let windows = platform.is_windows();
+    let python = venv_executable(&venv, "python", windows);
     run_command(
         &uv,
         &[
@@ -412,10 +639,11 @@ async fn install_managed_maia_inner(
         "install the pinned Maia dependencies",
     )
     .await?;
+    install_torch_compat(&venv, platform).await?;
     update_progress(&state.progress_state, app, id.to_string(), 72.0, false)?;
 
     let model_cache = root.join("model-cache");
-    let cache_executable = venv.join("Scripts").join("maia3-cache.exe");
+    let cache_executable = venv_executable(&venv, "maia3-cache", windows);
     let hf_env = vec![("HF_HUB_DISABLE_SYMLINKS_WARNING", std::ffi::OsStr::new("1"))];
     run_command(
         &cache_executable,
@@ -434,7 +662,7 @@ async fn install_managed_maia_inner(
     )
     .await?;
     update_progress(&state.progress_state, app, id.to_string(), 88.0, false)?;
-    finalize_managed_maia(id, root, app, state, cancel).await
+    finalize_managed_maia(id, root, platform, app, state, cancel).await
 }
 
 fn installation_assets_exist(root: &Path) -> Result<bool, Error> {
@@ -445,6 +673,7 @@ fn installation_assets_exist(root: &Path) -> Result<bool, Error> {
 async fn finalize_managed_maia(
     id: &str,
     root: &Path,
+    platform: ManagedPlatform,
     app: &AppHandle,
     state: &AppState,
     cancel: &AtomicBool,
@@ -455,6 +684,9 @@ async fn finalize_managed_maia(
     update_progress(&state.progress_state, app, id.to_string(), 92.0, false)?;
 
     let installation = installation_for(root);
+    // A repair may resume from an environment whose back-port or permissions were lost.
+    install_torch_compat(&root.join(".venv"), platform).await?;
+    make_executable(Path::new(&installation.path))?;
     info!("Starting final Maia UCI verification");
     validate_uci(&installation, root, cancel).await?;
     update_progress(&state.progress_state, app, id.to_string(), 97.0, false)?;
@@ -466,6 +698,7 @@ async fn finalize_managed_maia(
     .await?;
     remove_file_if_present(&root.join(INSTALLING_MARKER)).await;
     remove_file_if_present(&root.join("uv.zip")).await;
+    remove_file_if_present(&root.join("uv.tar.gz")).await;
     remove_file_if_present(&root.join("requirements.lock")).await;
 
     for disposable in [root.join("tools"), root.join("cache")] {
@@ -804,7 +1037,12 @@ mod tests {
     fn installation_uses_pinned_offline_model_and_managed_path() {
         let root = PathBuf::from("C:/engines/managed/maia3");
         let installation = installation_for(&root);
-        assert!(installation.path.ends_with(".venv\\Scripts\\maia3-5m.exe"));
+        let expected = if cfg!(windows) {
+            ".venv/Scripts/maia3-5m.exe"
+        } else {
+            ".venv/bin/maia3-5m"
+        };
+        assert!(Path::new(&installation.path).ends_with(expected));
         assert!(installation
             .args
             .iter()
@@ -835,7 +1073,7 @@ mod tests {
     fn interrupted_install_can_reuse_complete_engine_and_model_assets() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("managed").join("maia3");
-        let engine = root.join(".venv").join("Scripts").join("maia3-5m.exe");
+        let engine = venv_executable(&root.join(".venv"), "maia3-5m", cfg!(windows));
         let checkpoint = root
             .join("model-cache")
             .join("snapshot")
@@ -858,5 +1096,211 @@ mod tests {
         quarantine_for_cleanup(&root).await.unwrap();
 
         assert!(!root.exists());
+    }
+
+    const ALL_PLATFORMS: [ManagedPlatform; 4] = [
+        ManagedPlatform::WindowsX64,
+        ManagedPlatform::MacosArm64,
+        ManagedPlatform::MacosX64,
+        ManagedPlatform::LinuxX64,
+    ];
+
+    #[test]
+    fn managed_installation_covers_windows_macos_and_linux_x64_only() {
+        let supported = [
+            ("windows", "x86_64", ManagedPlatform::WindowsX64),
+            ("macos", "aarch64", ManagedPlatform::MacosArm64),
+            ("macos", "x86_64", ManagedPlatform::MacosX64),
+            ("linux", "x86_64", ManagedPlatform::LinuxX64),
+        ];
+        for (os, arch, platform) in supported {
+            assert_eq!(ManagedPlatform::from_target(os, arch), Some(platform));
+        }
+        for (os, arch) in [
+            ("windows", "aarch64"),
+            ("linux", "aarch64"),
+            ("windows", "x86"),
+            ("freebsd", "x86_64"),
+        ] {
+            assert_eq!(ManagedPlatform::from_target(os, arch), None);
+        }
+    }
+
+    #[test]
+    fn each_platform_downloads_its_own_pinned_uv_archive() {
+        let expected = [
+            (
+                ManagedPlatform::WindowsX64,
+                "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-pc-windows-msvc.zip",
+                "uv.zip",
+                "tools/uv.exe",
+            ),
+            (
+                ManagedPlatform::MacosArm64,
+                "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-apple-darwin.tar.gz",
+                "uv.tar.gz",
+                "tools/uv-aarch64-apple-darwin/uv",
+            ),
+            (
+                ManagedPlatform::MacosX64,
+                "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-apple-darwin.tar.gz",
+                "uv.tar.gz",
+                "tools/uv-x86_64-apple-darwin/uv",
+            ),
+            (
+                ManagedPlatform::LinuxX64,
+                "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-unknown-linux-gnu.tar.gz",
+                "uv.tar.gz",
+                "tools/uv-x86_64-unknown-linux-gnu/uv",
+            ),
+        ];
+        for (platform, url, archive, uv) in expected {
+            assert_eq!(platform.uv_url(), url);
+            assert!(url.contains(UV_VERSION));
+            assert_eq!(platform.uv_archive_name(), archive);
+            assert!(platform.uv_in(Path::new("tools")).ends_with(uv));
+            let (_, sha256) = platform.uv_asset();
+            assert_eq!(sha256.len(), 64);
+            assert!(sha256
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        }
+        let mut hashes = ALL_PLATFORMS.map(|platform| platform.uv_asset().1).to_vec();
+        hashes.sort_unstable();
+        hashes.dedup();
+        assert_eq!(hashes.len(), ALL_PLATFORMS.len());
+    }
+
+    #[test]
+    fn engine_and_tools_use_scripts_on_windows_and_bin_elsewhere() {
+        let root = PathBuf::from("engines/managed/maia3");
+        let venv = root.join(".venv");
+
+        let windows = installation_for_system(&root, true);
+        assert!(Path::new(&windows.path).ends_with(".venv/Scripts/maia3-5m.exe"));
+        assert!(venv_executable(&venv, "python", true).ends_with("Scripts/python.exe"));
+        assert!(venv_executable(&venv, "maia3-cache", true).ends_with("Scripts/maia3-cache.exe"));
+
+        let unix = installation_for_system(&root, false);
+        assert!(Path::new(&unix.path).ends_with(".venv/bin/maia3-5m"));
+        assert!(venv_executable(&venv, "python", false).ends_with("bin/python"));
+        assert!(venv_executable(&venv, "maia3-cache", false).ends_with("bin/maia3-cache"));
+        assert!(unix_site_packages(&venv).ends_with(".venv/lib/python3.11/site-packages"));
+
+        // Everything but the executable is shared, so the CPU-only flags hold everywhere.
+        assert_eq!(windows.args, unix.args);
+        for flag in ["--device", "cpu", "--no-use-amp", "--local-files-only"] {
+            assert!(unix.args.iter().any(|arg| arg == flag));
+        }
+    }
+
+    #[test]
+    fn every_platform_pins_one_cpu_only_torch_build() {
+        for platform in ALL_PLATFORMS {
+            let requirements = platform.requirements();
+            let lines = requirements.lines().collect::<Vec<_>>();
+            assert!(lines[0].contains(MAIA_SOURCE_REVISION));
+            assert_eq!(
+                lines
+                    .iter()
+                    .filter(|line| line.starts_with("torch"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                lines
+                    .iter()
+                    .filter(|line| line.starts_with("numpy=="))
+                    .count(),
+                1
+            );
+            assert!(lines[1..]
+                .iter()
+                .all(|line| line.contains("==") || line.starts_with("torch @ https://")));
+            assert!(!requirements.contains("nvidia") && !requirements.contains("cuda"));
+        }
+        assert!(ManagedPlatform::WindowsX64
+            .requirements()
+            .contains("\ntorch==2.14.0\n"));
+        assert!(ManagedPlatform::MacosArm64
+            .requirements()
+            .contains("\ntorch==2.14.0\n"));
+        let linux = ManagedPlatform::LinuxX64.requirements();
+        assert!(linux.contains("download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl#sha256="));
+        let intel = ManagedPlatform::MacosX64.requirements();
+        assert!(intel.contains("\ntorch==2.2.2\n") && intel.contains("\nnumpy==1.26.4\n"));
+    }
+
+    #[test]
+    fn macos_versions_are_read_from_sw_vers() {
+        assert_eq!(macos_major_version("14.6.1\n"), Some(14));
+        assert_eq!(macos_major_version("13.7"), Some(13));
+        assert_eq!(macos_major_version("26.0"), Some(26));
+        assert_eq!(macos_major_version(""), None);
+    }
+
+    #[tokio::test]
+    async fn only_intel_macs_get_the_rmsnorm_back_port() {
+        let temp = tempfile::tempdir().unwrap();
+        let venv = temp.path().join(".venv");
+        let site_packages = unix_site_packages(&venv);
+        std::fs::create_dir_all(&site_packages).unwrap();
+
+        for platform in [
+            ManagedPlatform::WindowsX64,
+            ManagedPlatform::MacosArm64,
+            ManagedPlatform::LinuxX64,
+        ] {
+            install_torch_compat(&venv, platform).await.unwrap();
+            assert_eq!(std::fs::read_dir(&site_packages).unwrap().count(), 0);
+        }
+
+        install_torch_compat(&venv, ManagedPlatform::MacosX64)
+            .await
+            .unwrap();
+        let pth = std::fs::read_to_string(site_packages.join("onyx_torch_compat.pth")).unwrap();
+        assert_eq!(pth, "import onyx_torch_compat\n");
+        let module = std::fs::read_to_string(site_packages.join("onyx_torch_compat.py")).unwrap();
+        assert!(module.contains("if not hasattr(nn, \"RMSNorm\")"));
+        assert!(module.contains("nn.RMSNorm = RMSNorm"));
+    }
+
+    #[test]
+    fn uv_tarballs_unpack_to_the_expected_executable() {
+        let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(
+            Vec::new(),
+            flate2::Compression::default(),
+        ));
+        for name in ["uv", "uvx"] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(4);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append_data(
+                    &mut header,
+                    format!("uv-x86_64-unknown-linux-gnu/{name}"),
+                    &b"#!uv"[..],
+                )
+                .unwrap();
+        }
+        let archive = builder.into_inner().unwrap().finish().unwrap();
+
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("uv.tar.gz");
+        std::fs::write(&source, archive).unwrap();
+        let tools = temp.path().join("tools");
+        std::fs::create_dir_all(&tools).unwrap();
+        untar_gz_file(&tools, &source).unwrap();
+
+        let uv = ManagedPlatform::LinuxX64.uv_in(&tools);
+        assert!(uv.is_file());
+        make_executable(&uv).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&uv).unwrap().permissions().mode();
+            assert_eq!(mode & 0o111, 0o111);
+        }
     }
 }

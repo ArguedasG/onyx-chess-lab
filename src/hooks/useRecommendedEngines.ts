@@ -14,7 +14,7 @@ import {
 import type { LocalEngine } from "@/utils/engines";
 import { usePlatform } from "@/utils/files";
 import { isMaiaEngine } from "@/utils/humanBots";
-import { isManagedMaia, MANAGED_MAIA_PROGRESS_ID } from "@/utils/managedMaia";
+import { isManagedMaia, MANAGED_MAIA_PROGRESS_ID, supportsManagedMaia } from "@/utils/managedMaia";
 
 export type RecommendedEngine = "stockfish" | "maia";
 type Step = "idle" | "installing" | "error";
@@ -47,8 +47,8 @@ export function useRecommendedEngines() {
     );
     const hasStockfish = local.some((e) => /stockfish/i.test(e.name) && !isMaiaEngine(e));
     const hasMaia = local.some((e) => isMaiaEngine(e));
-    // The managed installation is Windows only; elsewhere Maia is set up by hand.
-    const maiaAvailable = os === "windows";
+    // Elsewhere (for example Linux on ARM) Maia is set up by hand.
+    const maiaAvailable = supportsManagedMaia(os);
 
     const setStep = useCallback(
         (engine: RecommendedEngine, step: Step, error: string | null = null) => {
@@ -130,7 +130,7 @@ export function useOpenEngineSetup() {
     return useCallback((focus?: RecommendedEngine) => setOpen(focus ?? true), [setOpen]);
 }
 
-/** Whether Stockfish and (on Windows) Maia 3 are both installed. */
+/** Whether Stockfish and (where Onyx can install it) Maia 3 are both installed. */
 export function useRecommendedEnginesReady() {
     const engines = useAtomValue(enginesAtom);
     const { os } = usePlatform();
@@ -139,5 +139,5 @@ export function useRecommendedEnginesReady() {
     );
     const hasStockfish = local.some((e) => /stockfish/i.test(e.name) && !isMaiaEngine(e));
     const hasMaia = local.some((e) => isMaiaEngine(e));
-    return hasStockfish && (os !== "windows" || hasMaia);
+    return hasStockfish && (!supportsManagedMaia(os) || hasMaia);
 }

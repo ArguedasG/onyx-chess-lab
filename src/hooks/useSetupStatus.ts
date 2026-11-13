@@ -4,6 +4,7 @@ import { referenceDbAtom, sessionsAtom, enginesAtom } from "@/state/atoms";
 import type { LocalEngine } from "@/utils/engines";
 import { usePlatform } from "@/utils/files";
 import { isMaiaEngine } from "@/utils/humanBots";
+import { supportsManagedMaia } from "@/utils/managedMaia";
 import { getPuzzleDatabases } from "@/utils/puzzles";
 
 /**
@@ -23,8 +24,8 @@ export function useSetupStatus() {
         /** Any local engine that is not Maia: what analysis, endgames and bot styles use. */
         hasReferenceEngine: local.some((engine) => !isMaiaEngine(engine)),
         hasMaia: local.some((engine) => isMaiaEngine(engine)),
-        /** Maia is installed from Onyx only on Windows; elsewhere it is not asked for. */
-        maiaInstallable: os === "windows",
+        /** Where Onyx cannot install Maia itself, it is not asked for. */
+        maiaInstallable: supportsManagedMaia(os),
         hasReferenceDb: Boolean(referenceDb),
         hasAccount: sessions.length > 0,
         /** `undefined` while the puzzle databases are being read. */

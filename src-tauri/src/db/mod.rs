@@ -182,6 +182,13 @@ fn get_db_or_create(
     let pool = match state.connection_pool.get(db_path) {
         Some(pool) => pool.clone(),
         None => {
+            // Without this, r2d2 retries for 30 seconds and reports only "timed out waiting for
+            // connection: file is not a database".
+            if let Some(problem) = crate::fs::sqlite_file_problem(Path::new(db_path))? {
+                return Err(Error::InvalidRequest(format!(
+                    "Not a database: {problem}. If it came from a download, delete it and download it again."
+                )));
+            }
             let pool = Pool::builder()
                 .max_size(16)
                 .connection_customizer(Box::new(options))
@@ -2326,6 +2333,28 @@ pub async fn preload_reference_db(
 mod tests {
     use super::*;
     use pgn_reader::BufferedReader;
+
+    #[test]
+    fn a_file_that_is_not_sqlite_fails_at_once_with_the_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Lumbra's Gigabase.db3");
+        std::fs::write(&path, b"<html><body>Access denied</body></html>").unwrap();
+        let state = AppState::default();
+
+        let started = Instant::now();
+        let error = get_db_or_create(&state, path.to_str().unwrap(), ConnectionOptions::default())
+            .err()
+            .expect("an HTML file must not open as a database")
+            .to_string();
+
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "no pool timeout"
+        );
+        assert!(error.contains("Not a database"), "{error}");
+        assert!(error.contains("web page (HTML)"), "{error}");
+        assert!(state.connection_pool.get(path.to_str().unwrap()).is_none());
+    }
 
     #[test]
     fn home_row() {
