@@ -133,7 +133,9 @@ pub async fn download_file(
         .unwrap_or_else(|| url.to_ascii_lowercase());
     let is_zip = url_path.ends_with(".zip");
     let is_tar = url_path.ends_with(".tar");
-    let is_archive = is_zip || is_tar;
+    // Stockfish publishes its macOS and Linux builds as .tar.gz.
+    let is_tar_gz = url_path.ends_with(".tar.gz") || url_path.ends_with(".tgz");
+    let is_archive = is_zip || is_tar || is_tar_gz;
 
     let destination = Path::new(&path);
     let download_dir = if is_archive {
@@ -178,6 +180,8 @@ pub async fn download_file(
         unzip_file(destination, temporary_path.as_ref()).await?;
     } else if is_tar {
         untar_file(destination, temporary_path.as_ref())?;
+    } else if is_tar_gz {
+        untar_gz_file(destination, temporary_path.as_ref())?;
     } else {
         match std::fs::remove_file(destination) {
             Ok(()) => {}
@@ -248,8 +252,20 @@ pub async fn unzip_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
 }
 
 fn untar_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
-    let file = File::open(archive_path)?;
-    let mut archive = tar::Archive::new(file);
+    unpack_tar(path, File::open(archive_path)?)
+}
+
+fn untar_gz_file(path: &Path, archive_path: &Path) -> Result<(), Error> {
+    unpack_tar(
+        path,
+        flate2::read::GzDecoder::new(File::open(archive_path)?),
+    )
+}
+
+/// Unpacks a tar stream into `path` with the download safety limits: no links, no entries
+/// outside the destination, and bounded entry count and size.
+fn unpack_tar(path: &Path, reader: impl std::io::Read) -> Result<(), Error> {
+    let mut archive = tar::Archive::new(reader);
     let mut entries = 0_usize;
     let mut uncompressed_bytes = 0_u64;
 
@@ -343,5 +359,57 @@ mod tests {
         assert!(
             validate_download("https://lichess.org.example.com/file", &destination, true).is_err()
         );
+    }
+
+    fn tar_gz(build: impl FnOnce(&mut tar::Builder<flate2::write::GzEncoder<Vec<u8>>>)) -> Vec<u8> {
+        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+        build(&mut builder);
+        builder.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[test]
+    fn tar_gz_downloads_unpack_like_stockfish_archives() {
+        let archive = tar_gz(|builder| {
+            let body = b"engine";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(body.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            builder
+                .append_data(
+                    &mut header,
+                    "stockfish/stockfish-macos-universal",
+                    &body[..],
+                )
+                .unwrap();
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("download.tar.gz");
+        std::fs::write(&source, archive).unwrap();
+        let destination = dir.path().join("engines");
+        create_dir_all(&destination).unwrap();
+        untar_gz_file(&destination, &source).unwrap();
+        let engine = destination
+            .join("stockfish")
+            .join("stockfish-macos-universal");
+        assert_eq!(std::fs::read(engine).unwrap(), b"engine");
+    }
+
+    #[test]
+    fn tar_gz_downloads_still_reject_links() {
+        let archive = tar_gz(|builder| {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_cksum();
+            builder
+                .append_link(&mut header, "stockfish/link", "/etc/passwd")
+                .unwrap();
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("download.tar.gz");
+        std::fs::write(&source, archive).unwrap();
+        assert!(untar_gz_file(dir.path(), &source).is_err());
     }
 }

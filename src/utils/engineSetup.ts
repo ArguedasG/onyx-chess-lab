@@ -32,17 +32,19 @@ export async function downloadCatalogEngine(
     if (!url) throw new Error(`${engine.name} has no download link`);
     const enginesDir = await getEnginesDir();
     let path = await resolve(enginesDir, `${url.slice(url.lastIndexOf("/") + 1)}`);
-    if (url.endsWith(".zip") || url.endsWith(".tar")) {
+    // Stockfish's macOS and Linux builds are .tar.gz archives.
+    if (/\.(zip|tar|tar\.gz|tgz)$/i.test(url)) {
         // Some archives (Lc0's official ones) have their files at the root, not in a folder.
         path = engine.extractTo ? await resolve(enginesDir, engine.extractTo) : enginesDir;
     }
-    await commands.downloadFile(progressId, url, path, null, null, null);
+    // A failed download must say why, not surface later as a missing engine file.
+    unwrap(await commands.downloadFile(progressId, url, path, null, null, null));
     let enginesDirPath = enginesDir;
     if (enginesDirPath.endsWith("/") || enginesDirPath.endsWith("\\")) {
         enginesDirPath = enginesDirPath.slice(0, -1);
     }
     const enginePath = await join(enginesDirPath, ...engine.path.split("/"));
-    await commands.setFileAsExecutable(enginePath);
+    unwrap(await commands.setFileAsExecutable(enginePath));
     const args = engine.args ?? [];
     const config = unwrap(await commands.getEngineConfig(enginePath, args));
     const { extractTo: _extractTo, image: _image, ...installed } = engine;

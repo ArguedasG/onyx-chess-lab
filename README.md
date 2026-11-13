@@ -96,6 +96,22 @@ In-app updates are not available on macOS yet. To update, download the new `.dmg
 In-app updates are not available on Linux yet; new versions must be downloaded and installed
 manually with either format.
 
+### Installing engines by hand
+
+On first start, Onyx offers to install Stockfish for you (**Engines → Recommended engines**). If that
+fails, for example without internet access or behind a firewall, install it by hand:
+
+1. Download Stockfish for your system from [stockfishchess.org/download](https://stockfishchess.org/download/)
+   and unzip it.
+2. In Onyx, open **Engines**, press **+** (Add New), choose the **Local** tab and select the
+   Stockfish file inside the unzipped `stockfish` folder: `stockfish-windows-x86-64-universal.exe`,
+   `stockfish-macos-universal` or `stockfish-linux-x86-64-universal`.
+3. On macOS, if the system says the developer cannot be verified, open **System Settings → Privacy &
+   Security** and click **Open Anyway**, or run `xattr -cr` on the unzipped folder.
+
+Any other UCI engine is added the same way. Maia 3, the engine behind the human-like bots, has a
+guided installation on Windows x64 only for now.
+
 Because the application is still in an early public stage, keeping backups of important PGN files
 and application data is recommended. Bugs and reproducible problems can be reported through
 [GitHub Issues](https://github.com/ArguedasG/onyx-chess-lab/issues).

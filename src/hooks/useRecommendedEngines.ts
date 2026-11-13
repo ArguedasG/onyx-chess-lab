@@ -25,12 +25,23 @@ const setupStateAtom = atom<Record<RecommendedEngine, Step>>({
     maia: "idle",
 });
 
+/** Why the last installation of each engine failed, shown under it until the next attempt. */
+const setupErrorAtom = atom<Record<RecommendedEngine, string | null>>({
+    stockfish: null,
+    maia: null,
+});
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
 /** Stockfish and Maia 3, the two engines most of Onyx relies on, installed in one step. */
 export function useRecommendedEngines() {
     const { t } = useTranslation();
     const { os } = usePlatform();
     const [engines, setEngines] = useAtom(enginesAtom);
     const [state, setState] = useAtom(setupStateAtom);
+    const [errors, setErrors] = useAtom(setupErrorAtom);
     const local = (engines ?? []).filter(
         (e): e is LocalEngine => e.type === "local" && Boolean(e.path),
     );
@@ -40,9 +51,11 @@ export function useRecommendedEngines() {
     const maiaAvailable = os === "windows";
 
     const setStep = useCallback(
-        (engine: RecommendedEngine, step: Step) =>
-            setState((current) => ({ ...current, [engine]: step })),
-        [setState],
+        (engine: RecommendedEngine, step: Step, error: string | null = null) => {
+            setState((current) => ({ ...current, [engine]: step }));
+            setErrors((current) => ({ ...current, [engine]: error }));
+        },
+        [setErrors, setState],
     );
 
     const installStockfish = useCallback(async () => {
@@ -56,11 +69,11 @@ export function useRecommendedEngines() {
             setStep("stockfish", "idle");
         } catch (error) {
             await commands.clearProgress(RECOMMENDED_STOCKFISH_PROGRESS_ID);
-            setStep("stockfish", "error");
+            setStep("stockfish", "error", errorMessage(error));
             notifications.show({
                 color: "red",
                 title: t("EngineSetup.StockfishFailed"),
-                message: String(error),
+                message: errorMessage(error),
             });
         }
     }, [os, setEngines, setStep, t]);
@@ -76,8 +89,8 @@ export function useRecommendedEngines() {
             setStep("maia", "idle");
         } catch (error) {
             await commands.clearProgress(MANAGED_MAIA_PROGRESS_ID);
-            const message = String(error);
-            setStep("maia", "error");
+            const message = errorMessage(error);
+            setStep("maia", "error", message);
             notifications.show(
                 message.toLowerCase().includes("cancelled")
                     ? { color: "yellow", message: t("Engines.ManagedMaia.Cancelled") }
@@ -98,6 +111,7 @@ export function useRecommendedEngines() {
         hasMaia,
         maiaAvailable,
         state,
+        errors,
         installing: state.stockfish === "installing" || state.maia === "installing",
         installStockfish,
         installMaia,
