@@ -30,6 +30,7 @@ import {
   useTournamentLabels,
 } from "./labels";
 import classes from "./Tournaments.module.css";
+import SectionHelp from "@/components/common/SectionHelp";
 
 export function useCalendarNames() {
   const { t, i18n } = useTranslation();
@@ -97,7 +98,10 @@ export default function TournamentsHome({
   return (
     <Stack gap="xl" maw={980} mx="auto" w="100%">
       <Stack gap={4}>
-        <Title order={2}>{t("Tournaments.Home.Title", "Tournaments")}</Title>
+        <Group justify="space-between" wrap="nowrap">
+          <Title order={2}>{t("Tournaments.Home.Title", "Tournaments")}</Title>
+          <SectionHelp section="tournaments" />
+        </Group>
         <Text c="dimmed">
           {t(
             "Tournaments.Home.Subtitle",

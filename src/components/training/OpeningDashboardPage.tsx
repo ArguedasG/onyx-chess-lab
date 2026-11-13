@@ -1,9 +1,10 @@
 import i18n from "i18next";
 import {
-  ActionIcon,
   Accordion,
+  ActionIcon,
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Checkbox,
@@ -17,8 +18,8 @@ import {
   Switch,
   Text,
   TextInput,
-  Tooltip,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import OpeningSectionDeleteModal from "./OpeningSectionDeleteModal";
@@ -115,6 +116,7 @@ import {
   draftToImportGroups,
   type OpeningImportDraft,
 } from "@/utils/openingImportDraft";
+import SectionHelp from "@/components/common/SectionHelp";
 
 /** Repertoires with more lines start with each section's line list collapsed. */
 const MANAGE_LINES_EXPANDED_MAX = 150;
@@ -832,6 +834,9 @@ export default function OpeningDashboardPage() {
               )}
             </Text>
           </div>
+          <Box ml="auto">
+            <SectionHelp section="openings" />
+          </Box>
         </Group>
 
         {feedback && (

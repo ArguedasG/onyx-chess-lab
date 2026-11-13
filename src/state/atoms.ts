@@ -286,6 +286,9 @@ export const sessionsAtom = atomWithStorage<Session[]>("sessions", [], undefined
 export const nativeBarAtom = atomWithStorage<boolean>("native-bar", false);
 export const reuseEmptyAnalysisTabAtom = atomWithStorage<boolean>("reuse-empty-analysis-tab", true);
 export const sidebarExpandedAtom = atomWithStorage<boolean>("sidebar-expanded", false);
+/** Hidden with a shortcut to give the board more room (on small screens, say). */
+export const showSidebarAtom = atomWithStorage<boolean>("show-sidebar", true);
+export const showTabBarAtom = atomWithStorage<boolean>("show-tabbar", true);
 /** The board tab used last (analysis, game, generator or puzzles), for the sidebar's "Board". */
 export const lastBoardTabAtom = atom<string | null>(null);
 export const importModalOpenAtom = atom(false);

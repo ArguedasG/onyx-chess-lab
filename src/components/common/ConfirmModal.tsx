@@ -9,6 +9,7 @@ function ConfirmModal({
   onClose,
   onConfirm,
   confirmLabel,
+  note,
 }: {
   title: string;
   description: string;
@@ -16,6 +17,8 @@ function ConfirmModal({
   onClose: () => void;
   onConfirm: () => void;
   confirmLabel?: string;
+  /** Replaces the "cannot be undone" line, e.g. when the item only goes to a trash. */
+  note?: string;
 }) {
   const { t } = useTranslation();
 
@@ -27,7 +30,7 @@ function ConfirmModal({
             {title}
           </Text>
           <Text>{description}</Text>
-          <Text>{t("Common.CannotUndo")}</Text>
+          <Text>{note ?? t("Common.CannotUndo")}</Text>
         </div>
 
         <Group justify="right">

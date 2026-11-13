@@ -211,6 +211,13 @@ export async function queryPosition(
                     position: {
                         fen: options.fen,
                         type_: options.type,
+                        ...(options.type === "partial" && options.pattern
+                            ? {
+                                  empty: options.pattern.empty,
+                                  turn: options.pattern.turn,
+                                  exact_material: options.pattern.exactMaterial,
+                              }
+                            : {}),
                     },
                     start_date: options.start_date,
                     end_date: options.end_date,

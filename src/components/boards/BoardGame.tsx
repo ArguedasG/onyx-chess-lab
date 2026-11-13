@@ -689,6 +689,20 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
     return resolveTwin(settings)?.profile.play.elo ?? settings.twin.elo;
   }
 
+  /**
+   * The rating shown for a bot side: a twin's profile already belongs to the rhythm, while a
+   * catalogue bot's Elo is a blitz level converted to the rhythm of the human's clock.
+   */
+  function shownBotElo(
+    settings: OpponentSettings & { type: "humanBot" },
+    opponent: OpponentSettings,
+  ) {
+    if (settings.twin) return botElo(settings);
+    const clock =
+      (opponent.type === "human" ? opponent.timeControl : undefined) ?? settings.timeControl;
+    return botRatingAt(botElo(settings), clock ? rhythmOfClock(clock) : "blitz");
+  }
+
   function toPlayerConfig(
     settings: OpponentSettings,
     opponentSettings: OpponentSettings,
@@ -1144,9 +1158,13 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         white: state.whitePlayer,
         black: state.blackPlayer,
         white_elo:
-          playerSettings.white.type === "humanBot" ? botElo(playerSettings.white) : undefined,
+          playerSettings.white.type === "humanBot"
+            ? shownBotElo(playerSettings.white, playerSettings.black)
+            : undefined,
         black_elo:
-          playerSettings.black.type === "humanBot" ? botElo(playerSettings.black) : undefined,
+          playerSettings.black.type === "humanBot"
+            ? shownBotElo(playerSettings.black, playerSettings.white)
+            : undefined,
         event: inTournament ? headers.event : eventStr,
         site: "Onyx Chess Lab",
         date: dateStr,
@@ -1493,7 +1511,10 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
         const cardName =
           accountPlayerNames(currentSessions)[0] ?? historyMatch.player.name ?? "Player";
         const playerElo = ratingResult?.event?.before ?? null;
-        const botElo = ratedOutcome?.botRating ?? profile.elo;
+        const playerClock = historyMatch.player.timeControl;
+        const botElo =
+          ratedOutcome?.botRating ??
+          botRatingAt(profile.elo, playerClock ? rhythmOfClock(playerClock) : "blitz");
         const finishedTournamentId = finalHeaders.other?.[TOURNAMENT_HEADERS.id];
         const finishedTournamentGameId = finalHeaders.other?.[TOURNAMENT_HEADERS.game];
         const databaseHeaders: GameHeaders = {

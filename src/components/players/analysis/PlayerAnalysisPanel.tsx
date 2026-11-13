@@ -3,7 +3,6 @@ import {
   Button,
   Group,
   Menu,
-  NumberInput,
   Paper,
   Progress,
   ScrollArea,
@@ -13,7 +12,6 @@ import {
   Switch,
   Tabs,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
@@ -25,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import type { AnalysisArtifactDocument, EngineOption, GoMode } from "@/bindings";
 import { commands } from "@/bindings";
 import AnalysisLibraryModal from "@/components/analysis/AnalysisLibraryModal";
+import { ColorFilterInput, DateRangeInput, EloRangeInput } from "@/components/common/GameFilters";
 import { enginesAtom } from "@/state/atoms";
 import {
   playerAnalysisAtom,
@@ -766,63 +765,25 @@ export default function PlayerAnalysisPanel({
       </Group>
 
       <Paper withBorder p="sm">
-        <SimpleGrid cols={{ base: 1, sm: 3, lg: 6 }}>
-          <TextInput
-            type="date"
-            label={t("PlayerAnalysis.StartDate", "From")}
-            value={filters.startDate ?? ""}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                startDate: event.currentTarget.value || null,
-              }))
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+          <DateRangeInput
+            start={filters.startDate}
+            end={filters.endDate}
+            onChange={(startDate, endDate) =>
+              setFilters((previous) => ({ ...previous, startDate, endDate }))
             }
           />
-          <TextInput
-            type="date"
-            label={t("PlayerAnalysis.EndDate", "To")}
-            value={filters.endDate ?? ""}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                endDate: event.currentTarget.value || null,
-              }))
-            }
-          />
-          <Select
+          <ColorFilterInput
             label={t("PlayerAnalysis.Color", "Color")}
             value={filters.color}
-            allowDeselect={false}
-            data={[
-              { value: "any", label: t("PlayerAnalysis.Any", "Any") },
-              { value: "white", label: t("Fen.White", "White") },
-              { value: "black", label: t("Fen.Black", "Black") },
-            ]}
-            onChange={(value) =>
-              setFilters((previous) => ({
-                ...previous,
-                color: (value as PlayerAnalysisFilters["color"]) ?? "any",
-              }))
-            }
+            onChange={(color) => setFilters((previous) => ({ ...previous, color }))}
           />
-          <NumberInput
-            label={t("PlayerAnalysis.MinOpponentElo", "Minimum opponent Elo")}
-            value={filters.opponentEloMin ?? ""}
-            onChange={(value) =>
-              setFilters((previous) => ({
-                ...previous,
-                opponentEloMin: typeof value === "number" ? value : null,
-              }))
-            }
-          />
-          <NumberInput
-            label={t("PlayerAnalysis.MaxOpponentElo", "Maximum opponent Elo")}
-            value={filters.opponentEloMax ?? ""}
-            onChange={(value) =>
-              setFilters((previous) => ({
-                ...previous,
-                opponentEloMax: typeof value === "number" ? value : null,
-              }))
+          <EloRangeInput
+            label={t("GameFilters.OpponentElo", "Opponent Elo")}
+            min={filters.opponentEloMin}
+            max={filters.opponentEloMax}
+            onChange={(opponentEloMin, opponentEloMax) =>
+              setFilters((previous) => ({ ...previous, opponentEloMin, opponentEloMax }))
             }
           />
           <Select

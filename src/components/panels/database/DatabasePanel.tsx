@@ -13,7 +13,14 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
-import { IconChevronDown, IconFilter, IconRefresh, IconSwitchVertical } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconFilter,
+  IconGridPattern,
+  IconRefresh,
+  IconSwitchVertical,
+  IconX,
+} from "@tabler/icons-react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
@@ -57,6 +64,7 @@ import DatabaseLoader from "./DatabaseLoader";
 import GamesTable from "./GamesTable";
 import NoDatabaseWarning, { LichessLoginRequired } from "./NoDatabaseWarning";
 import OpeningsTable from "./OpeningsTable";
+import PatternSearchModal from "./PatternSearchModal";
 import OpeningReportPanel from "./OpeningReportPanel";
 import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
 import ReferenceGamePreview, { type ReferencePreview } from "./ReferenceGamePreview";
@@ -95,6 +103,16 @@ export type LocalOptions = {
   result: "any" | "whitewon" | "draw" | "blackwon";
   /** Leaves out games between two weak players (a preference shared by every tab). */
   weak?: WeakGamesFilter | null;
+  /** A "partial" search drawn in the pattern editor: its extra conditions. */
+  pattern?: PatternOptions | null;
+};
+
+export type PatternOptions = {
+  /** Squares that must be empty ("e4"). */
+  empty: string[];
+  turn: "white" | "black" | null;
+  /** The board holds the drawn pieces and no other (kings always count as there). */
+  exactMaterial: boolean;
 };
 
 /** Which explorer sections are folded (true = folded), and which one goes on top. */
@@ -197,7 +215,8 @@ function DatabasePanel() {
 
   useEffect(() => {
     if (source === "local") {
-      setLocalOptions((q) => ({ ...q, fen: debouncedFen }));
+      // A drawn pattern ("partial") is independent of the board: moving there must not erase it.
+      setLocalOptions((q) => (q.type === "partial" ? q : { ...q, fen: debouncedFen }));
     }
   }, [debouncedFen, setLocalOptions, setMasterOptions, setLichessOptions, source]);
 
@@ -287,6 +306,8 @@ function DatabasePanel() {
   const showReference = !(dbType.type === "local" && dbType.options.type === "partial");
   const [sections, setSections] = useAtom(databaseSectionsAtom);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [patternOpen, setPatternOpen] = useState(false);
+  const patternActive = source === "local" && localOptions.type === "partial";
   const [preview, setPreview] = useState<ReferencePreview | null>(null);
 
   // A preview belongs to the position and source it was picked from.
@@ -356,6 +377,52 @@ function DatabasePanel() {
             {t("Board.Database.Local.PawnStructure", "Pawn structure")}
           </Button>
         )}
+        {source === "local" && (
+          <Button
+            size="compact-xs"
+            variant={patternActive ? "filled" : "default"}
+            leftSection={<IconGridPattern size={13} />}
+            title={t(
+              "PatternSearch.ButtonTip",
+              "Find games where some pieces stood on some squares, whatever the rest of the board.",
+            )}
+            onClick={() => setPatternOpen(true)}
+          >
+            {t("PatternSearch.Button", "Pattern")}
+          </Button>
+        )}
+        {patternActive && (
+          <Tooltip
+            label={t(
+              "PatternSearch.Active.Desc",
+              "The games list shows the drawn pattern, not the board position. Close it to follow the board again.",
+            )}
+            multiline
+            w={260}
+          >
+            <Badge
+              size="sm"
+              variant="light"
+              rightSection={
+                <IconX
+                  size={11}
+                  style={{ cursor: "pointer" }}
+                  aria-label={t("PatternSearch.Close", "Back to the board position")}
+                  onClick={() =>
+                    setLocalOptions((q) => ({
+                      ...q,
+                      type: "exact",
+                      fen: debouncedFen,
+                      pattern: null,
+                    }))
+                  }
+                />
+              }
+            >
+              {t("PatternSearch.Active", "Pattern search")}
+            </Badge>
+          </Tooltip>
+        )}
         <Button
           size="compact-xs"
           variant={filtersOpen ? "light" : "default"}
@@ -419,6 +486,24 @@ function DatabasePanel() {
           ]}
         />
       </Group>
+      <PatternSearchModal
+        opened={patternOpen}
+        onClose={() => setPatternOpen(false)}
+        boardFen={debouncedFen}
+        initial={
+          patternActive
+            ? {
+                fen: localOptions.fen,
+                pattern: localOptions.pattern ?? { empty: [], turn: null, exactMaterial: false },
+              }
+            : null
+        }
+        onSearch={({ fen: patternFen, pattern }) => {
+          setPatternOpen(false);
+          setLocalOptions((q) => ({ ...q, type: "partial", fen: patternFen, pattern }));
+          setTabType("games");
+        }}
+      />
       <DatabaseLoader isLoading={isLoading} tab={tab?.value ?? null} />
       {!!openingData?.snapshot?.skippedGames && (
         <Alert color="yellow">

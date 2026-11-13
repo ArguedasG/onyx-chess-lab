@@ -28,6 +28,8 @@ export async function openFile(
         gameNumber?: number;
         pgn?: string;
         reuseTabId?: string;
+        /** Move to show first, as child indexes from the root. */
+        position?: number[];
     },
 ) {
     const store = getDefaultStore();
@@ -89,6 +91,7 @@ export async function openFile(
             gameNumber,
         },
         reuseTabId: options?.reuseTabId,
+        position: options?.position,
     });
 
     if (fileInfo.metadata.type === "repertoire") {

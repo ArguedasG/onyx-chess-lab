@@ -671,6 +671,7 @@ function FilterBar({
           { value: "all", label: t("Players.Filter.AllTime", "All time") },
           { value: "12m", label: t("Players.Filter.Year", "12 months") },
           { value: "3m", label: t("Players.Filter.Quarter", "3 months") },
+          { value: "1m", label: t("Players.Filter.Month", "1 month") },
         ]}
       />
       <SegmentedControl

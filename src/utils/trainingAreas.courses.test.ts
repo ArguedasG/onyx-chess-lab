@@ -223,6 +223,39 @@ describe("tactics courses", () => {
         expect(new Set(limited.queue.map((item) => item.setId)).size).toBeGreaterThan(0);
     });
 
+    it("keeps only the exercises whose last attempt failed for still-failed sessions", () => {
+        let state = course();
+        const pin = setNamed(state, "Pin");
+        const attempt = (id: string, exerciseId: string, outcome: "correct" | "incorrect") => ({
+            id,
+            setId: pin.id,
+            exerciseId,
+            playedMove: "e2e4",
+            outcome,
+            timeMs: 1000,
+            createdAt: "2026-11-06T00:00:00.000Z",
+        });
+        state = {
+            ...state,
+            attempts: [
+                attempt("a1", "record-1", "incorrect"),
+                attempt("a2", "record-1", "correct"),
+                attempt("a3", "record-2", "correct"),
+                attempt("a4", "record-2", "incorrect"),
+                attempt("a5", "record-5", "incorrect"),
+            ],
+        };
+        const result = buildTacticsCourseQueue(
+            state,
+            { name: pin.name, sets: [state.sets[pin.id]] },
+            { source: "stillFailed", order: "course", size: 0 },
+        );
+        expect(result.queue).toEqual([
+            { setId: pin.id, index: 2 },
+            { setId: pin.id, index: 5 },
+        ]);
+    });
+
     it("leaves engine-checked themes out of the mixed queue", () => {
         let state = course();
         const pin = setNamed(state, "Pin");

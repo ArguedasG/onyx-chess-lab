@@ -28,7 +28,7 @@ import {
   humanBotHistoryAtom,
   tabsAtom,
 } from "@/state/atoms";
-import { EMPTY_BOT_RATINGS, RATED_RHYTHMS } from "@/utils/botRating";
+import { botRatingAt, EMPTY_BOT_RATINGS, RATED_RHYTHMS } from "@/utils/botRating";
 import {
   clearHumanBotHistory,
   EMPTY_HUMAN_BOT_HISTORY,
@@ -186,7 +186,8 @@ export default function HumanBotHistoryPanel() {
                   <Table.Tr key={game.id}>
                     <Table.Td>{new Date(game.recordedAt).toLocaleString()}</Table.Td>
                     <Table.Td>
-                      {game.profileName} ({game.botElo})
+                      {/* Stored as the engine's blitz-level Elo; shown at the game's rhythm. */}
+                      {game.profileName} ({botRatingAt(game.botElo, game.rhythm ?? "blitz")})
                     </Table.Td>
                     <Table.Td>
                       {game.playerColor === "white"

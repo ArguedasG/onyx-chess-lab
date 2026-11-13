@@ -1,23 +1,12 @@
-import {
-  Box,
-  Button,
-  Group,
-  NumberInput,
-  SegmentedControl,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { DateInput } from "@mantine/dates";
+import { Box, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
 import { type Piece, parseSquare } from "chessops";
 import { EMPTY_BOARD_FEN, makeFen, parseFen } from "chessops/fen";
-import dayjs from "dayjs";
 import { useAtom } from "jotai";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chessground } from "@/chessground/Chessground";
 import PiecesGrid from "@/components/boards/PiecesGrid";
+import GameFilters from "@/components/common/GameFilters";
 import { PlayerSearchInput } from "@/components/databases/PlayerSearchInput";
 import { currentLocalOptionsAtom } from "@/state/atoms";
 import WeakGamesFilterInput from "./WeakGamesFilterInput";
@@ -40,123 +29,42 @@ function LocalOptionsPanel({ boardFen }: { boardFen: string }) {
 
   return (
     <Stack>
-      <SimpleGrid cols={2}>
-        <Stack gap={4}>
-          <Text fw="bold" fz="sm">
-            {t("Board.Database.Local.Player")}
-          </Text>
-          {options.path && (
-            <PlayerSearchInput
-              label={t("Common.Search")}
-              value={options.player ?? undefined}
-              file={options.path}
-              setValue={(v) => setOptions((q) => ({ ...q, player: v || null }))}
-            />
-          )}
-        </Stack>
-        <Stack gap={4}>
-          <Text fw="bold" fz="sm">
-            {t("Board.Database.Local.Color")}
-          </Text>
-          <SegmentedControl
-            data={[
-              { value: "white", label: t("Fen.White") },
-              { value: "black", label: t("Fen.Black") },
-              { value: "any", label: t("Board.Database.Local.EitherColor") },
-            ]}
-            value={options.color}
-            onChange={(v) => setOptions({ ...options, color: v as "white" | "black" | "any" })}
+      <Stack gap={4}>
+        <Text fw="bold" fz="sm">
+          {t("Board.Database.Local.Player")}
+        </Text>
+        {options.path && (
+          <PlayerSearchInput
+            label={t("Common.Search")}
+            value={options.player ?? undefined}
+            file={options.path}
+            setValue={(v) => setOptions((q) => ({ ...q, player: v || null }))}
           />
-        </Stack>
+        )}
+      </Stack>
 
-        <NumberInput
-          label={t("Board.Database.Local.MinimumElo")}
-          description={t("Board.Database.Local.EloScope")}
-          min={1}
-          max={4000}
-          allowDecimal={false}
-          placeholder={t("Board.Database.Local.Result.Any")}
-          value={options.elo_min ?? ""}
-          onChange={(value) =>
-            setOptions({ ...options, elo_min: value === "" ? undefined : Number(value) })
-          }
-        />
-        <NumberInput
-          label={t("Board.Database.Local.MaximumElo")}
-          min={1}
-          max={4000}
-          allowDecimal={false}
-          placeholder={t("Board.Database.Local.Result.Any")}
-          value={options.elo_max ?? ""}
-          onChange={(value) =>
-            setOptions({ ...options, elo_max: value === "" ? undefined : Number(value) })
-          }
-        />
-
-        <Stack gap={4}>
-          <Text fw="bold" fz="sm">
-            {t("Common.From")}
-          </Text>
-          <DateInput
-            placeholder={t("Common.StartDate")}
-            valueFormat="YYYY-MM-DD"
-            clearable
-            value={
-              options.start_date ? dayjs(options.start_date, "YYYY.MM.DD").toDate() : undefined
-            }
-            onChange={(value) =>
-              setOptions({
-                ...options,
-                start_date: value ? dayjs(value).format("YYYY.MM.DD") : undefined,
-              })
-            }
-          />
-        </Stack>
-        <Stack gap={4}>
-          <Text fw="bold" fz="sm">
-            {t("Common.To")}
-          </Text>
-          <DateInput
-            placeholder={t("Common.EndDate")}
-            valueFormat="YYYY-MM-DD"
-            clearable
-            value={options.end_date ? dayjs(options.end_date, "YYYY.MM.DD").toDate() : null}
-            onChange={(value) =>
-              setOptions({
-                ...options,
-                end_date: value ? dayjs(value).format("YYYY.MM.DD") : undefined,
-              })
-            }
-          />
-        </Stack>
-
-        <Stack gap={4}>
-          <Text fw="bold" fz="sm">
-            {t("Board.Database.Local.Result")}
-          </Text>
-          <Select
-            data={[
-              { value: "any", label: t("Board.Database.Local.Result.Any") },
-              {
-                value: "whitewon",
-                label: t("Board.Database.Local.Result.WhiteWon"),
-              },
-              { value: "draw", label: t("Board.Analysis.Tablebase.Draw") },
-              {
-                value: "blackwon",
-                label: t("Board.Database.Local.Result.BlackWon"),
-              },
-            ]}
-            value={options.result}
-            onChange={(v) =>
-              setOptions({
-                ...options,
-                result: v as "any" | "whitewon" | "draw" | "blackwon",
-              })
-            }
-          />
-        </Stack>
-      </SimpleGrid>
+      <GameFilters
+        eloDescription={t("Board.Database.Local.EloScope")}
+        value={{
+          color: options.color,
+          eloMin: options.elo_min ?? null,
+          eloMax: options.elo_max ?? null,
+          startDate: options.start_date ?? null,
+          endDate: options.end_date ?? null,
+          result: options.result,
+        }}
+        onChange={(value) =>
+          setOptions((q) => ({
+            ...q,
+            color: value.color,
+            elo_min: value.eloMin ?? undefined,
+            elo_max: value.eloMax ?? undefined,
+            start_date: value.startDate ?? undefined,
+            end_date: value.endDate ?? undefined,
+            result: value.result,
+          }))
+        }
+      />
 
       <WeakGamesFilterInput />
 

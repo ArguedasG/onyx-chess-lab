@@ -30,6 +30,7 @@ import {
   openingReportReopenFamily,
   playRunFamily,
   positionGamesViewFamily,
+  showTabBarAtom,
   startScreenAtom,
   tabFamily,
   tabsAtom,
@@ -87,6 +88,7 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useAtom(tabsAtom);
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
+  const showTabBar = useAtomValue(showTabBarAtom);
 
   // Route navigation opens a training workspace or changes its current area.
   // Read current atoms here so selecting/closing a tab does not reopen it.
@@ -312,7 +314,11 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         keepMounted={false}
         className={classes.tabsContainer}
       >
-        <ScrollArea scrollbarSize={6} className={classes.tabsHeader}>
+        <ScrollArea
+          scrollbarSize={6}
+          className={classes.tabsHeader}
+          display={showTabBar ? undefined : "none"}
+        >
           <DragDropContext
             onDragEnd={({ destination, source }) =>
               destination?.index !== undefined &&

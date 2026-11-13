@@ -170,6 +170,22 @@ describe("player metadata analysis", () => {
         );
     });
 
+    it("compares date filters with PGN dates, in either saved form", () => {
+        const games = [
+            game(1, { white: "Player", black: "A", result: "1-0", date: "2026.01.01" }),
+            game(2, { white: "Player", black: "B", result: "1-0", date: "2026.03.01" }),
+        ];
+        for (const endDate of ["2026-02-15", "2026.02.15"]) {
+            expect(
+                selectPlayerEngineGames(
+                    games,
+                    { ...DEFAULT_PLAYER_ANALYSIS_FILTERS, endDate },
+                    "all",
+                ).map((item) => item.game.id),
+            ).toEqual([1]);
+        }
+    });
+
     it("combines selected time controls before applying the newest-game limit", () => {
         const games = [
             game(1, {

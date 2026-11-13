@@ -48,6 +48,7 @@ import OpenFolderButton from "../common/OpenFolderButton";
 import AddDatabase from "./AddDatabase";
 import DatabaseQualityReport from "./DatabaseQualityReport";
 import { PlayerSearchInput } from "./PlayerSearchInput";
+import SectionHelp from "@/components/common/SectionHelp";
 
 export default function DatabasesPage() {
   const { t } = useTranslation();
@@ -162,6 +163,9 @@ export default function DatabasesPage() {
       <Group align="baseline" pl="lg" py="sm">
         <Title>{t("Databases.Title")}</Title>
         <OpenFolderButton base="Database" folder={databaseDir} />
+        <Box ml="auto" pr="xs">
+          <SectionHelp section="databases" />
+        </Box>
       </Group>
 
       <Group grow flex={1} style={{ overflow: "hidden" }} align="start" px="md" pb="md">

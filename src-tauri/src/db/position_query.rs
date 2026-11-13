@@ -351,6 +351,7 @@ fn scan(
     query: GameQuery,
     revision: String,
     index: &MmapSearchIndex,
+    patterns: Option<&super::pattern_index::PatternIndex>,
     cancelled: &(impl Fn() -> bool + Sync),
     progress: &impl Fn(usize),
 ) -> Result<Snapshot, Error> {
@@ -397,21 +398,33 @@ fn scan(
                 {
                     return Ok(None);
                 }
-                find_position_match_cancellable(entry.moves, &entry.fen, &position, cancelled).map(
-                    |hit| {
-                        hit.map(|(ply, next_move)| {
-                            (
-                                MatchRecord {
-                                    id: entry.id,
-                                    ply,
-                                    index_offset: i as u32,
-                                    next_move,
-                                },
-                                entry.result,
-                            )
-                        })
-                    },
-                )
+                match patterns {
+                    Some(patterns) => super::search::find_position_match_direct(
+                        patterns.moves(i),
+                        &entry.fen,
+                        &position,
+                        cancelled,
+                    ),
+                    None => find_position_match_cancellable(
+                        entry.moves,
+                        &entry.fen,
+                        &position,
+                        cancelled,
+                    ),
+                }
+                .map(|hit| {
+                    hit.map(|(ply, next_move)| {
+                        (
+                            MatchRecord {
+                                id: entry.id,
+                                ply,
+                                index_offset: i as u32,
+                                next_move,
+                            },
+                            entry.result,
+                        )
+                    })
+                })
             })
             .collect();
         if cancelled() {
@@ -571,8 +584,16 @@ pub async fn query_position(
             request.ensure_active("position-cache")?;
             let mut summary = cached.summary.clone(); summary.cache_hit = true; return Ok(summary);
         }
+        // A piece pattern replays nearly every game: it reads the base's pattern index, built the
+        // first time (see pattern_index). Exact and pawn searches rule most games out early.
+        let is_pattern = query.position.as_ref().is_some_and(|position| position.type_ == "partial");
+        let patterns = if is_pattern {
+            pattern_index_for(&file, &index, &revision, &request, &app, &tab_id, sequence).await?
+        } else {
+            None
+        };
         let flag = request.cancellation.clone(); let scan_app = app.clone(); let scan_tab = tab_id.clone();
-        let snapshot = tauri::async_runtime::spawn_blocking(move || scan(file, query, revision, &index, &|| flag.cancelled.load(Ordering::Acquire), &|processed| {
+        let snapshot = tauri::async_runtime::spawn_blocking(move || scan(file, query, revision, &index, patterns.as_deref(), &|| flag.cancelled.load(Ordering::Acquire), &|processed| {
             let _ = scan_app.emit("search_progress", serde_json::json!({"id":scan_tab,"requestId":sequence,"progress":processed as f64 / index.len().max(1) as f64 *100.0,"finished":false,"stage":"scan"}));
         })).await.map_err(|e| invalid(&e.to_string()))??;
         request.ensure_active("position-publication")?;
@@ -589,6 +610,43 @@ pub async fn query_position(
         return Err(invalid("Search preempted"));
     }
     run
+}
+
+/// The base's pattern index, waiting for its build (and reporting it) when it is missing or
+/// stale. A build that fails (a full disk, say) is logged and the search replays the slow way.
+async fn pattern_index_for(
+    file: &Path,
+    index: &MmapSearchIndex,
+    revision: &str,
+    request: &super::search::PositionSearchGuard<'_>,
+    app: &tauri::AppHandle,
+    tab_id: &str,
+    sequence: u64,
+) -> Result<Option<Arc<super::pattern_index::PatternIndex>>, Error> {
+    use super::pattern_index::{ensure_build, get_pattern_index_path, PatternIndex};
+    let path = get_pattern_index_path(file);
+    // Two rounds at most: a build for an older revision of the base, then the current one.
+    for _ in 0..2 {
+        if let Some(patterns) = PatternIndex::open(&path, revision, index.len())? {
+            return Ok(Some(Arc::new(patterns)));
+        }
+        let build = ensure_build(index, file, revision);
+        loop {
+            if let Some(outcome) = build.outcome.lock().unwrap().clone() {
+                if let Err(error) = outcome {
+                    log::warn!("pattern index not built, searching without it: {error}");
+                    return Ok(None);
+                }
+                break;
+            }
+            let _ = app.emit("search_progress", serde_json::json!({"id":tab_id,"requestId":sequence,"progress":0,"finished":false,"stage":"pattern","processed":build.processed.load(Ordering::Relaxed),"total":build.total}));
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_millis(250)) => {}
+                _ = request.cancelled() => return Err(Error::SearchCancelled),
+            }
+        }
+    }
+    Ok(None)
 }
 
 pub(super) fn snapshot_for(token: &str, state: &AppState) -> Result<Arc<Snapshot>, Error> {
@@ -932,6 +990,7 @@ pub(super) fn benchmark_snapshot(
         canonical_query(query).unwrap(),
         fingerprint(path).unwrap(),
         index,
+        None,
         &|| false,
         &|_| {},
     )
@@ -957,10 +1016,101 @@ pub(super) mod tests {
         drop(db);
         (dir, path, AppState::default())
     }
+    #[test]
+    fn pattern_index_gives_the_same_matches_as_replaying_legal_moves() {
+        use shakmaty::{Chess, Position};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("varied.db3");
+        let mut db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch(include_str!("create.sql")).unwrap();
+        let tx = db.transaction().unwrap();
+        // Varied legal games: at each ply, a move picked from the legal list by game and ply.
+        for id in 1..=60i32 {
+            let mut chess = Chess::default();
+            let mut bytes = Vec::new();
+            for ply in 0..50usize {
+                let legal = chess.legal_moves();
+                if legal.is_empty() {
+                    break;
+                }
+                let pick = (id as usize * 7 + ply * 13) % legal.len();
+                bytes.push(pick as u8);
+                chess.play_unchecked(&legal[pick]);
+            }
+            tx.execute("INSERT INTO Games (ID,EventID,SiteID,WhiteID,BlackID,Date,WhiteElo,BlackElo,WhiteMaterial,BlackMaterial,Result,PlyCount,Moves,PawnHome) VALUES (?1,0,0,0,0,NULL,2400,2300,39,39,'1-0',?2,?3,61423)",
+                rusqlite::params![id, bytes.len() as i32, bytes]).unwrap();
+        }
+        tx.commit().unwrap();
+        drop(db);
+        let state = AppState::default();
+        let index = open_index(&path, &state, &|| false, &|_| {}).unwrap();
+        let revision = fingerprint(&path).unwrap();
+        let pattern_path = super::super::pattern_index::get_pattern_index_path(&path);
+        super::super::pattern_index::build(
+            &index,
+            &pattern_path,
+            &revision,
+            &std::sync::atomic::AtomicUsize::new(0),
+        )
+        .unwrap();
+        let patterns =
+            super::super::pattern_index::PatternIndex::open(&pattern_path, &revision, index.len())
+                .unwrap()
+                .expect("a fresh pattern index");
+        assert!(super::super::pattern_index::PatternIndex::open(
+            &pattern_path,
+            "other",
+            index.len()
+        )
+        .unwrap()
+        .is_none());
+        for (fen, empty) in [
+            ("8/8/8/8/8/5N2/8/8 w - - 0 1", vec![]),
+            ("8/8/8/8/4P3/8/8/8 w - - 0 1", vec!["d5".to_string()]),
+            ("8/8/2n5/8/8/8/8/8 w - - 0 1", vec!["e4".to_string()]),
+        ] {
+            let query = canonical_query(GameQuery::new().position(PositionQueryJs {
+                fen: fen.into(),
+                type_: "partial".into(),
+                empty: Some(empty),
+                ..Default::default()
+            }))
+            .unwrap();
+            let run = |patterns| {
+                let snapshot = scan(
+                    path.clone(),
+                    query.clone(),
+                    revision.clone(),
+                    &index,
+                    patterns,
+                    &|| false,
+                    &|_| {},
+                )
+                .unwrap();
+                let records = snapshot.records(0, snapshot.summary.total).unwrap();
+                let mut moves: Vec<_> = snapshot
+                    .summary
+                    .openings
+                    .iter()
+                    .map(|stats| (stats.move_.clone(), stats.white))
+                    .collect();
+                moves.sort();
+                (
+                    records.iter().map(|r| (r.id, r.ply)).collect::<Vec<_>>(),
+                    moves,
+                )
+            };
+            let slow = run(None);
+            assert!(!slow.0.is_empty(), "the fixture should match {fen}");
+            assert_eq!(run(Some(&patterns)), slow, "{fen}");
+        }
+    }
+
     fn query() -> GameQuery {
         GameQuery::new().position(PositionQueryJs {
             fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1".into(),
             type_: "exact".into(),
+            ..Default::default()
         })
     }
     pub(in crate::db) fn snapshot(path: &Path, state: &AppState, query: GameQuery) -> Snapshot {
@@ -970,6 +1120,7 @@ pub(super) mod tests {
             canonical_query(query).unwrap(),
             fingerprint(path).unwrap(),
             &index,
+            None,
             &|| false,
             &|_| {},
         )
@@ -1153,6 +1304,7 @@ pub(super) mod tests {
                 query(),
                 fingerprint(&path).unwrap(),
                 &index,
+                None,
                 &|| true,
                 &|_| {}
             ),
@@ -1257,12 +1409,14 @@ pub(super) mod tests {
         let query = GameQuery::new().position(PositionQueryJs {
             fen: "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3".into(),
             type_: "exact".into(),
+            ..Default::default()
         });
         let result = scan(
             path.clone(),
             canonical_query(query).unwrap(),
             fingerprint(&path).unwrap(),
             &index,
+            None,
             &|| false,
             &|_| {},
         )
@@ -1386,6 +1540,7 @@ pub(super) mod tests {
                 result.query.clone(),
                 fingerprint(&path).unwrap(),
                 &index,
+                None,
                 &|| cancelled.load(Ordering::Acquire),
                 &|_| {}
             )

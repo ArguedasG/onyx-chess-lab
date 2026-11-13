@@ -96,6 +96,7 @@ export function useOpeningPractice() {
         variant: OpeningVariant,
         mode: "analysis" | SessionMode | "build",
         selectedLineIds?: string[],
+        position?: number[],
     ): Promise<boolean> {
         let lineIds: string[] = [];
         if (mode === "practice" || mode === "learn" || mode === "review") {
@@ -122,7 +123,7 @@ export function useOpeningPractice() {
                 },
                 setTabs,
                 setActiveTab,
-                { gameNumber: variant.trainingRecordIndex },
+                { gameNumber: variant.trainingRecordIndex, position },
             );
 
             if (mode !== "analysis") setPracticeUnit("line");
@@ -233,6 +234,12 @@ export function useOpeningPractice() {
             openVariant(repertoire, variant, "review"),
         analyzeVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
             openVariant(repertoire, variant, "analysis"),
+        /** Opens a section for analysis at a move of it (a move search hit, say). */
+        analyzeVariantAt: (
+            repertoire: OpeningRepertoire,
+            variant: OpeningVariant,
+            position: number[],
+        ) => openVariant(repertoire, variant, "analysis", undefined, position),
         buildVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
             openVariant(repertoire, variant, "build"),
     };

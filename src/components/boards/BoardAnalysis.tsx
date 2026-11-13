@@ -46,6 +46,7 @@ import {
 } from "@/state/atoms";
 import { diagramEditRequestAtom } from "@/state/diagramReading";
 import { keyMapAtom } from "@/state/keybinds";
+import { useRightColumnLayout } from "@/state/rightColumnLayout";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { defaultPGN, getVariationLine, parsePGN } from "@/utils/chess";
 import { buildModelGameSourcePgn } from "@/utils/modelGame";
@@ -88,6 +89,10 @@ function BoardAnalysis() {
   // Beside a book the column scrolls: the board's tools sit in a rail at its side and the move
   // buttons under it, instead of inside the notation (phase 9.4).
   const bookLayout = Boolean(currentTab?.book);
+  // A folded tools zone must not keep querying the database on every move; the book column
+  // never folds it.
+  const [columnLayout] = useRightColumnLayout(isRepertoire ? "repertoire" : "analysis");
+  const toolsFolded = !bookLayout && columnLayout.collapsed === "tools";
   const hasPersistentOrigin = currentTab?.gameOrigin.kind !== "none";
   const autoSave = useAtomValue(autoSaveAtom);
   const { documentDir } = useLoaderData({ from: "/" });
@@ -591,7 +596,7 @@ function BoardAnalysis() {
               <InfoPanel addGame={addGame} />
             </Tabs.Panel>
             <Tabs.Panel value="database" flex={1} style={{ overflowY: "hidden" }}>
-              <DatabasePanel />
+              {!toolsFolded && <DatabasePanel />}
             </Tabs.Panel>
             <Tabs.Panel value="analysis" flex={1} style={{ overflowY: "hidden" }}>
               <AnalysisPanel />

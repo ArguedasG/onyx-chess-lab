@@ -22,6 +22,7 @@ import {
   IconTrash,
   IconX,
   IconZoomCheck,
+  IconBookmarkPlus,
 } from "@tabler/icons-react";
 import { isNormal, makeSquare, makeUci, parseUci } from "chessops";
 import { parseFen } from "chessops/fen";
@@ -80,6 +81,7 @@ import PuzzleBoard from "./PuzzleBoard";
 import PuzzleCandidates from "./PuzzleCandidates";
 import PuzzleFilters from "./PuzzleFilters";
 import PuzzleModePanel from "./PuzzleModePanel";
+import SavePuzzleToSetModal from "./SavePuzzleToSetModal";
 
 const isRated = (mode: PuzzleMode) => mode === "free" || mode === "countdown";
 
@@ -103,6 +105,7 @@ function Puzzles({ id }: { id: string }) {
   const [puzzleDbs, setPuzzleDbs] = useState<PuzzleDatabaseInfo[]>([]);
   const [selectedDb, setSelectedDb] = useAtom(selectedPuzzleDbAtom);
   const [settingsOpened, setSettingsOpened] = useState(false);
+  const [saveToSetOpened, setSaveToSetOpened] = useState(false);
 
   useEffect(() => {
     getPuzzleDatabases().then((databases) => {
@@ -697,6 +700,15 @@ function Puzzles({ id }: { id: string }) {
                   >
                     {t("Puzzle.NewPuzzle")}
                   </Button>
+                  {/* Finished puzzles only: saving one never gives away an unsolved solution. */}
+                  <Tooltip label={t("Puzzle.SaveToSet.Title", "Save puzzle in a set")}>
+                    <ActionIcon
+                      disabled={!puzzle || isPuzzleIncomplete || rushActive}
+                      onClick={() => setSaveToSetOpened(true)}
+                    >
+                      <IconBookmarkPlus />
+                    </ActionIcon>
+                  </Tooltip>
                   <Tooltip label={t("Puzzle.AnalyzePosition")}>
                     <ActionIcon
                       disabled={!selectedDb || !puzzle}
@@ -861,6 +873,11 @@ function Puzzles({ id }: { id: string }) {
           </ScrollArea>
         </Paper>
       </Portal>
+      <SavePuzzleToSetModal
+        puzzle={puzzle ?? null}
+        opened={saveToSetOpened}
+        onClose={() => setSaveToSetOpened(false)}
+      />
       <PanelHeader zone="notation">
         <PanelTitle>{t("Panels.Notation", "Notation")}</PanelTitle>
       </PanelHeader>

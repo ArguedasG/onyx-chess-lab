@@ -1240,14 +1240,15 @@ export type TacticsCourseQueueItem = { setId: string; index: number };
 
 /**
  * Exercises for a session over a whole course. `pending` leaves out the ones already solved,
- * `mistakes` keeps those ever failed; `size` 0 means all. Sets checked only by the engine are
+ * `mistakes` keeps those ever failed and `stillFailed` those whose last attempt failed (solving
+ * one takes it out); `size` 0 means all. Sets checked only by the engine are
  * left out (`skippedSetIds`): a mixed session needs prepared solutions.
  */
 export function buildTacticsCourseQueue(
     state: TacticsState,
     course: TacticsCourse,
     options: {
-        source: "all" | "pending" | "mistakes";
+        source: "all" | "pending" | "mistakes" | "stillFailed";
         order: "shuffle" | "course";
         size: number;
     },
@@ -1262,14 +1263,20 @@ export function buildTacticsCourseQueue(
         }
         const total = getTacticsSetSize(set);
         const completed = new Set(getTacticsCompletedIndexes(state, set.id));
-        const failed = new Set(
-            state.attempts
-                .filter((attempt) => attempt.setId === set.id && attempt.outcome === "incorrect")
-                .map((attempt) => getTacticsExerciseIndex(set, attempt.exerciseId)),
-        );
+        const failed = new Set<number>();
+        // Attempts are stored in the order they were made, so the last one per exercise wins.
+        const lastOutcome = new Map<number, TacticsAttempt["outcome"]>();
+        for (const attempt of state.attempts) {
+            if (attempt.setId !== set.id) continue;
+            const index = getTacticsExerciseIndex(set, attempt.exerciseId);
+            if (attempt.outcome === "incorrect") failed.add(index);
+            if (attempt.outcome !== "unsupported") lastOutcome.set(index, attempt.outcome);
+        }
         for (let index = 0; index < total; index++) {
             if (options.source === "pending" && completed.has(index)) continue;
             if (options.source === "mistakes" && !failed.has(index)) continue;
+            if (options.source === "stillFailed" && lastOutcome.get(index) !== "incorrect")
+                continue;
             queue.push({ setId: set.id, index });
         }
     }

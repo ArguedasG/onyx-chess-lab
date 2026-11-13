@@ -62,6 +62,7 @@ import { EndgameOutcomeQuiz, type OutcomeQuizState } from "./endgames/EndgameOut
 import { EndgameThemeBrowser, type EndgameEntry } from "./endgames/EndgameThemeBrowser";
 import { EndgameUserSets, type ObjectiveProgress } from "./endgames/EndgameUserSets";
 import { filenameWithoutExtension } from "./endgames/endgameThemes";
+import SectionHelp from "@/components/common/SectionHelp";
 
 const BUNDLED_ENDGAMES_VERSION = 2;
 const bundledEndgameFiles = ["FinalesParte1.pgn", "FinalesParte2.pgn", "FinalesParte3.pgn"];
@@ -494,35 +495,41 @@ export default function EndgameTrainingV2Page() {
               </Text>
             </div>
           </Group>
-          <Select
-            w={260}
-            label={trainingT("Training.Copy.Practiceopponent.95f64dc7", "Practice opponent")}
-            value={opponentMode}
-            allowDeselect={false}
-            error={
-              selectedEngine
-                ? undefined
-                : trainingT(
-                    "Training.Copy.Theselectedengineisnot.0223c2c7",
-                    "The selected engine is not installed or active.",
-                  )
-            }
-            data={[
-              {
-                value: "best",
-                label: trainingT("Endgames.Opponent.Best", "Best defense · tablebase + Stockfish"),
-              },
-              {
-                value: "maia",
-                label: maiaEngine
-                  ? trainingT("Endgames.Opponent.Maia", "Practical · Maia {{elo}}", {
-                      elo: MAIA_ELO_MAX,
-                    })
-                  : trainingT("Training.Copy.Maianotinstalled.1dd2fb71", "Maia not installed"),
-              },
-            ]}
-            onChange={(value) => value && setOpponentMode(value as OpponentMode)}
-          />
+          <Group align="flex-start" gap="xs" wrap="nowrap">
+            <Select
+              w={260}
+              label={trainingT("Training.Copy.Practiceopponent.95f64dc7", "Practice opponent")}
+              value={opponentMode}
+              allowDeselect={false}
+              error={
+                selectedEngine
+                  ? undefined
+                  : trainingT(
+                      "Training.Copy.Theselectedengineisnot.0223c2c7",
+                      "The selected engine is not installed or active.",
+                    )
+              }
+              data={[
+                {
+                  value: "best",
+                  label: trainingT(
+                    "Endgames.Opponent.Best",
+                    "Best defense · tablebase + Stockfish",
+                  ),
+                },
+                {
+                  value: "maia",
+                  label: maiaEngine
+                    ? trainingT("Endgames.Opponent.Maia", "Practical · Maia {{elo}}", {
+                        elo: MAIA_ELO_MAX,
+                      })
+                    : trainingT("Training.Copy.Maianotinstalled.1dd2fb71", "Maia not installed"),
+                },
+              ]}
+              onChange={(value) => value && setOpponentMode(value as OpponentMode)}
+            />
+            <SectionHelp section="endgames" />
+          </Group>
         </Group>
 
         {opponentMode === "maia" && !maiaEngine && (

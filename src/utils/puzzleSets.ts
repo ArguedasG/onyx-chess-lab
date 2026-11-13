@@ -1,5 +1,13 @@
+import { makeFen } from "chessops/fen";
+import { parseUci } from "chessops/util";
 import type { PuzzleWithThemes } from "@/bindings";
-import { addTacticsSet, type TacticsSet, type TacticsState } from "@/utils/trainingAreas";
+import { positionFromFen } from "@/utils/chessops";
+import {
+    addTacticsExerciseToSet,
+    addTacticsSet,
+    type TacticsSet,
+    type TacticsState,
+} from "@/utils/trainingAreas";
 
 /**
  * Sets built from the Lichess puzzle database (I-20). Each puzzle becomes an embedded exercise:
@@ -79,6 +87,93 @@ export function addPuzzleSet(
             },
         },
     };
+}
+
+/** A puzzle of the trainer, as the puzzle page holds it. */
+export type SavablePuzzle = {
+    id: number | string;
+    fen: string;
+    /** UCI moves; the first is the opponent's. */
+    moves: string[];
+    rating: number;
+    themes?: string[];
+};
+
+/** Tag of an exercise copied from a Lichess puzzle: it keeps a set from saving it twice. */
+export function lichessPuzzleTag(id: number | string): string {
+    return `lichess:${id}`;
+}
+
+/** Sets a puzzle can be saved into: the user's own, not the ones read from a PGN file. */
+export function puzzleTargetSets(state: TacticsState): TacticsSet[] {
+    return Object.values(state.sets).filter(
+        (set) => set.origin === "user" && set.source?.kind !== "pgnFile",
+    );
+}
+
+export function setHasPuzzle(state: TacticsState, setId: string, id: number | string): boolean {
+    const tag = lichessPuzzleTag(id);
+    // Sets built from the puzzle database before the tag existed name their exercises this way.
+    const titlePrefix = `Lichess ${id} ·`;
+    return (state.sets[setId]?.exerciseIds ?? []).some((exerciseId) => {
+        const exercise = state.exercises[exerciseId];
+        return Boolean(exercise?.tags.includes(tag) || exercise?.title.startsWith(titlePrefix));
+    });
+}
+
+/**
+ * The exercise of a puzzle for a set. Puzzle sets let the opponent play first, as Lichess does; a
+ * set whose exercises start with the student's move gets the position after that first move.
+ */
+function puzzleRecord(puzzle: SavablePuzzle, opponentFirst: boolean) {
+    const title = `Lichess ${puzzle.id} · ${puzzle.rating}`;
+    if (opponentFirst) {
+        return { fen: puzzle.fen, moves: puzzle.moves, title, hasExplicitFen: true };
+    }
+    const [position, error] = positionFromFen(puzzle.fen);
+    const first = parseUci(puzzle.moves[0] ?? "");
+    if (error || !first || !position.isLegal(first)) {
+        throw new Error(`Invalid puzzle ${puzzle.id}`);
+    }
+    position.play(first);
+    return {
+        fen: makeFen(position.toSetup()),
+        moves: puzzle.moves.slice(1),
+        title,
+        hasExplicitFen: true,
+    };
+}
+
+/**
+ * Saves a finished puzzle of the trainer into one of the user's sets, or into a new set when
+ * `target` has a name. Saving a puzzle the set already has changes nothing (`added` is false).
+ */
+export function savePuzzleToSet(
+    state: TacticsState,
+    target: { setId: string } | { name: string; description: string },
+    puzzle: SavablePuzzle,
+): { state: TacticsState; setId: string; added: boolean } {
+    const tags = [lichessPuzzleTag(puzzle.id), ...(puzzle.themes ?? [])];
+    if ("setId" in target) {
+        const set = state.sets[target.setId];
+        if (!set || setHasPuzzle(state, target.setId, puzzle.id)) {
+            return { state, setId: target.setId, added: false };
+        }
+        const record = puzzleRecord(puzzle, set.config.startingActor === "opponent");
+        const next = addTacticsExerciseToSet(state, target.setId, record, tags);
+        return { state: next, setId: target.setId, added: next !== state };
+    }
+    const created = addTacticsSet(state, target.name, target.description, [], {
+        config: {
+            mode: "guided",
+            startingActor: "opponent",
+            variationPolicy: "mainline",
+            validationMode: "prepared",
+        },
+    });
+    const setId = Object.keys(created.sets).find((id) => !state.sets[id]) ?? "";
+    const next = addTacticsExerciseToSet(created, setId, puzzleRecord(puzzle, true), tags);
+    return { state: next, setId, added: true };
 }
 
 /** Recent accuracy and average solving time of a set, for its card (ChessRamp's shelf). */

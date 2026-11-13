@@ -2,6 +2,7 @@ mod encoding;
 mod models;
 mod opening_report;
 mod ops;
+mod pattern_index;
 mod pawn_structures;
 mod player_games;
 mod player_search;
@@ -232,6 +233,8 @@ fn clear_search_cache_for_db(state: &AppState, db_path: &Path) {
 fn invalidate_search_index(state: &AppState, db_path: &Path) -> Result<(), Error> {
     clear_search_cache_for_db(state, db_path);
 
+    // The pattern index is derived from the position index: it goes with it.
+    pattern_index::remove(db_path)?;
     let index_path = get_index_path(db_path);
     match remove_file(index_path) {
         Ok(()) => Ok(()),

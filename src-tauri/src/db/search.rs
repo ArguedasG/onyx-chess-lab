@@ -4,7 +4,8 @@ use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use shakmaty::{
-    fen::Fen, san::SanPlus, Bitboard, ByColor, CastlingMode, Chess, FromSetup, Position, Setup,
+    fen::Fen, san::SanPlus, Bitboard, Board, ByColor, CastlingMode, Chess, Color, FromSetup,
+    Position, Role, Setup, Square,
 };
 use specta::Type;
 use std::{
@@ -245,11 +246,35 @@ pub struct ExactData {
     position: Chess,
 }
 
+/// A pattern: the drawn pieces must stand on their squares, whatever else is on the board. The
+/// pattern search adds squares that must be empty, the side to move and "exactly these pieces".
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct PartialData {
-    // piece_counts: Vec<(Piece, u8)>,
     piece_positions: Setup,
     material: MaterialCount,
+    empty: Bitboard,
+    turn: Option<Color>,
+    /// Pieces of each color and role when the material must be exactly the drawn one.
+    exact_counts: Option<[u8; 10]>,
+}
+
+/// Pawns, knights, bishops, rooks and queens of each color, white's first. Kings are left out:
+/// every position has one of each, drawn or not.
+fn piece_counts(board: &Board) -> [u8; 10] {
+    const ROLES: [Role; 5] = [
+        Role::Pawn,
+        Role::Knight,
+        Role::Bishop,
+        Role::Rook,
+        Role::Queen,
+    ];
+    let mut counts = [0u8; 10];
+    for (c, color) in [Color::White, Color::Black].into_iter().enumerate() {
+        for (r, role) in ROLES.into_iter().enumerate() {
+            counts[c * 5 + r] = (board.by_color(color) & board.by_role(role)).count() as u8;
+        }
+    }
+    counts
 }
 
 /// Exact pawn placement for both colors; every other piece is ignored.
@@ -283,12 +308,43 @@ impl PositionQuery {
     }
 
     pub fn partial_from_fen(fen: &str) -> Result<PositionQuery, Error> {
+        Self::pattern_from_fen(fen, &[], None, false)
+    }
+
+    /// A partial position with the pattern search's extra conditions.
+    pub fn pattern_from_fen(
+        fen: &str,
+        empty: &[String],
+        turn: Option<&str>,
+        exact_material: bool,
+    ) -> Result<PositionQuery, Error> {
         let fen = Fen::from_ascii(fen.as_bytes())?;
         let setup = fen.into_setup();
         let material = get_material_count(&setup.board);
+        let invalid = |message: &str| -> Error {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, message.to_string()).into()
+        };
+        let mut empty_squares = Bitboard::EMPTY;
+        for name in empty {
+            let square: Square = name.parse().map_err(|_| invalid("Invalid empty square"))?;
+            empty_squares.add(square);
+        }
+        if !(empty_squares & setup.board.occupied()).is_empty() {
+            return Err(invalid("A square cannot hold a piece and be empty"));
+        }
+        let turn = match turn {
+            None => None,
+            Some("white") => Some(Color::White),
+            Some("black") => Some(Color::Black),
+            Some(_) => return Err(invalid("Invalid side to move")),
+        };
+        let exact_counts = exact_material.then(|| piece_counts(&setup.board));
         Ok(PositionQuery::Partial(PartialData {
             piece_positions: setup,
             material,
+            empty: empty_squares,
+            turn,
+            exact_counts,
         }))
     }
 
@@ -303,16 +359,33 @@ impl PositionQuery {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Type, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, Deserialize, Type, PartialEq, Eq, Hash)]
 pub struct PositionQueryJs {
     pub fen: String,
     pub type_: String,
+    /// Partial only: squares that must be empty ("e4").
+    #[specta(optional)]
+    #[serde(default)]
+    pub empty: Option<Vec<String>>,
+    /// Partial only: the side to move, "white" or "black".
+    #[specta(optional)]
+    #[serde(default)]
+    pub turn: Option<String>,
+    /// Partial only: the board holds the drawn pieces and no other.
+    #[specta(optional)]
+    #[serde(default)]
+    pub exact_material: Option<bool>,
 }
 
 pub(super) fn convert_position_query(query: PositionQueryJs) -> Result<PositionQuery, Error> {
     match query.type_.as_str() {
         "exact" => PositionQuery::exact_from_fen(&query.fen),
-        "partial" => PositionQuery::partial_from_fen(&query.fen),
+        "partial" => PositionQuery::pattern_from_fen(
+            &query.fen,
+            query.empty.as_deref().unwrap_or_default(),
+            query.turn.as_deref(),
+            query.exact_material.unwrap_or(false),
+        ),
         "pawns" => PositionQuery::pawns_from_fen(&query.fen),
         _ => Err(
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid position query").into(),
@@ -336,6 +409,11 @@ impl PositionQuery {
                     && is_contained(tested_board.rooks(), query_board.rooks())
                     && is_contained(tested_board.queens(), query_board.queens())
                     && is_contained(tested_board.kings(), query_board.kings())
+                    && (tested_board.occupied() & data.empty).is_empty()
+                    && data.turn.is_none_or(|turn| position.turn() == turn)
+                    && data
+                        .exact_counts
+                        .is_none_or(|counts| piece_counts(tested_board) == counts)
             }
             PositionQuery::Pawns(ref data) => {
                 let board = position.board();
@@ -417,6 +495,46 @@ pub(super) fn find_position_match_cancellable(
     query: &PositionQuery,
     cancelled: &impl Fn() -> bool,
 ) -> Result<Option<(u32, String)>, Error> {
+    find_match_with(
+        iter_mainline_move_bytes(move_blob),
+        decode_move,
+        fen,
+        query,
+        cancelled,
+    )
+}
+
+/// The same search over a game of the pattern index, whose moves are played without generating
+/// the legal ones (see `pattern_index`).
+pub(super) fn find_position_match_direct(
+    codes: &[u8],
+    fen: &Option<&str>,
+    query: &PositionQuery,
+    cancelled: &impl Fn() -> bool,
+) -> Result<Option<(u32, String)>, Error> {
+    find_match_with(
+        codes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]])),
+        super::pattern_index::decode,
+        fen,
+        query,
+        cancelled,
+    )
+}
+
+fn invalid_move() -> Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid encoded move").into()
+}
+
+/// First mainline occurrence of `query`, replaying `moves` with `decode`.
+fn find_match_with<T: Copy>(
+    moves: impl Iterator<Item = T>,
+    decode: impl Fn(T, &Chess) -> Option<shakmaty::Move>,
+    fen: &Option<&str>,
+    query: &PositionQuery,
+    cancelled: &impl Fn() -> bool,
+) -> Result<Option<(u32, String)>, Error> {
     let mut chess = if let Some(fen) = fen {
         let fen = Fen::from_ascii(fen.as_bytes())?;
         let setup = fen.into_setup();
@@ -425,40 +543,27 @@ pub(super) fn find_position_match_cancellable(
     } else {
         Chess::default()
     };
+    let mut mainline = moves.peekable();
+    // The move played from the matching position, or "*" at the end of the game.
+    let next_san = |chess: Chess, next: Option<T>| -> Result<String, Error> {
+        let Some(next) = next else {
+            return Ok("*".to_string());
+        };
+        let next_move = decode(next, &chess).ok_or_else(invalid_move)?;
+        Ok(SanPlus::from_move(chess, &next_move).to_string())
+    };
 
     if query.matches(&chess) {
-        let mut mainline = iter_mainline_move_bytes(move_blob).peekable();
-        if mainline.peek().is_none() {
-            return Ok(Some((0, "*".to_string())));
-        }
-        let Some(next_byte) = mainline.peek().copied() else {
-            return Ok(Some((0, "*".to_string())));
-        };
-        let Some(next_move) = decode_move(next_byte, &chess) else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid encoded move",
-            )
-            .into());
-        };
-        let san = SanPlus::from_move(chess, &next_move);
-        return Ok(Some((0, san.to_string())));
+        let next = mainline.peek().copied();
+        return Ok(Some((0, next_san(chess, next)?)));
     }
 
-    let mut mainline = iter_mainline_move_bytes(move_blob).peekable();
-
     let mut ply = 0;
-    while let Some(byte) = mainline.next() {
+    while let Some(item) = mainline.next() {
         if ply % 64 == 0 && cancelled() {
             return Err(Error::SearchCancelled);
         }
-        let Some(m) = decode_move(byte, &chess) else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid encoded move",
-            )
-            .into());
-        };
+        let m = decode(item, &chess).ok_or_else(invalid_move)?;
         chess.play_unchecked(&m);
         ply += 1;
 
@@ -472,21 +577,8 @@ pub(super) fn find_position_match_cancellable(
             }
         }
         if query.matches(&chess) {
-            if mainline.peek().is_none() {
-                return Ok(Some((ply, "*".to_string())));
-            }
-            let Some(next_byte) = mainline.peek().copied() else {
-                return Ok(Some((ply, "*".to_string())));
-            };
-            let Some(next_move) = decode_move(next_byte, &chess) else {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Invalid encoded move",
-                )
-                .into());
-            };
-            let san = SanPlus::from_move(chess, &next_move);
-            return Ok(Some((ply, san.to_string())));
+            let next = mainline.peek().copied();
+            return Ok(Some((ply, next_san(chess, next)?)));
         }
     }
     Ok(None)
@@ -1372,6 +1464,155 @@ mod tests {
         let fen = Fen::from_ascii(fen2.as_bytes()).unwrap();
         let chess = Chess::from_setup(fen.into_setup(), shakmaty::CastlingMode::Chess960).unwrap();
         assert!(query.matches(&chess));
+    }
+
+    fn pattern_matches(query: &PositionQuery, fen: &str) -> bool {
+        let fen = Fen::from_ascii(fen.as_bytes()).unwrap();
+        let chess = Chess::from_setup(fen.into_setup(), shakmaty::CastlingMode::Chess960).unwrap();
+        query.matches(&chess)
+    }
+
+    #[test]
+    fn pattern_requires_empty_squares() {
+        // A white bishop on g7 with h6 empty.
+        let query = PositionQuery::pattern_from_fen(
+            "8/6B1/8/8/8/8/8/8 w - - 0 1",
+            &["h6".into()],
+            None,
+            false,
+        )
+        .unwrap();
+        assert!(pattern_matches(&query, "6k1/6B1/8/8/8/8/8/6K1 w - - 0 1"));
+        assert!(!pattern_matches(&query, "6k1/6B1/7p/8/8/8/8/6K1 w - - 0 1"));
+    }
+
+    #[test]
+    fn pattern_checks_the_side_to_move() {
+        let query = PositionQuery::pattern_from_fen(
+            "8/8/8/8/8/8/8/6N1 w - - 0 1",
+            &[],
+            Some("black"),
+            false,
+        )
+        .unwrap();
+        assert!(!pattern_matches(&query, "3k4/8/8/8/8/8/4K3/6N1 w - - 0 1"));
+        assert!(pattern_matches(&query, "3k4/8/8/8/8/8/4K3/6N1 b - - 0 1"));
+    }
+
+    #[test]
+    fn pattern_with_exact_material_rejects_extra_pieces() {
+        // Rook and pawn on the seventh against rook: kings anywhere.
+        let query = PositionQuery::pattern_from_fen("8/P7/8/8/8/8/8/8 w - - 0 1", &[], None, false)
+            .unwrap();
+        assert!(pattern_matches(&query, "k7/P7/8/8/8/8/6r1/1R4K1 w - - 0 1"));
+        // Kings need not be drawn for "only these pieces".
+        let exact =
+            PositionQuery::pattern_from_fen("8/P7/8/8/8/8/6r1/1R6 w - - 0 1", &[], None, true)
+                .unwrap();
+        assert!(pattern_matches(&exact, "k7/P7/8/8/8/8/6r1/1R4K1 w - - 0 1"));
+        assert!(!pattern_matches(
+            &exact,
+            "k7/P7/8/8/8/5n2/6r1/1R4K1 w - - 0 1"
+        ));
+    }
+
+    #[test]
+    fn pattern_rejects_a_square_both_full_and_empty() {
+        assert!(PositionQuery::pattern_from_fen(
+            "8/6B1/8/8/8/8/8/8 w - - 0 1",
+            &["g7".into()],
+            None,
+            false
+        )
+        .is_err());
+        assert!(PositionQuery::pattern_from_fen(
+            "8/8/8/8/8/8/8/8 w - - 0 1",
+            &["z9".into()],
+            None,
+            false
+        )
+        .is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CHESS_LAB_BENCH_DB pointing to a real indexed database"]
+    fn benchmark_real_pattern_scan() {
+        let database = PathBuf::from(
+            std::env::var("CHESS_LAB_BENCH_DB")
+                .expect("set CHESS_LAB_BENCH_DB to an indexed .db3 file"),
+        );
+        let index = MmapSearchIndex::open(get_index_path(&database)).unwrap();
+        // White bishop on g7 against a castled black king (g8), h6 empty: the full replay worst case.
+        let query = PositionQuery::pattern_from_fen(
+            "6k1/6B1/8/8/8/8/8/8 w - - 0 1",
+            &["h6".into()],
+            None,
+            false,
+        )
+        .unwrap();
+        let matches = AtomicUsize::new(0);
+        let started = Instant::now();
+        index.par_iter().for_each(|entry| {
+            if get_move_after_match(entry.moves, &entry.fen, &query)
+                .unwrap_or(None)
+                .is_some()
+            {
+                matches.fetch_add(1, Ordering::Relaxed);
+            }
+        });
+        eprintln!(
+            "pattern: scanned {} games in {:?}; matches={}",
+            index.len(),
+            started.elapsed(),
+            matches.load(Ordering::Relaxed)
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CHESS_LAB_BENCH_DB and CHESS_LAB_BENCH_OUT (where to write the pattern index)"]
+    fn benchmark_real_pattern_index() {
+        let database = PathBuf::from(std::env::var("CHESS_LAB_BENCH_DB").unwrap());
+        let out = PathBuf::from(std::env::var("CHESS_LAB_BENCH_OUT").unwrap());
+        let index = MmapSearchIndex::open(get_index_path(&database)).unwrap();
+        let started = Instant::now();
+        super::super::pattern_index::build(
+            &index,
+            &out,
+            "bench",
+            &std::sync::atomic::AtomicUsize::new(0),
+        )
+        .unwrap();
+        let built = started.elapsed();
+        let size = std::fs::metadata(&out).unwrap().len();
+        let patterns = super::super::pattern_index::PatternIndex::open(&out, "bench", index.len())
+            .unwrap()
+            .unwrap();
+        let query = PositionQuery::pattern_from_fen(
+            "6k1/6B1/8/8/8/8/8/8 w - - 0 1",
+            &["h6".into()],
+            None,
+            false,
+        )
+        .unwrap();
+        for round in 0..2 {
+            let matches = AtomicUsize::new(0);
+            let started = Instant::now();
+            (0..index.len()).into_par_iter().for_each(|i| {
+                let entry = index.get_entry_ref(i).unwrap();
+                if find_position_match_direct(patterns.moves(i), &entry.fen, &query, &|| false)
+                    .unwrap_or(None)
+                    .is_some()
+                {
+                    matches.fetch_add(1, Ordering::Relaxed);
+                }
+            });
+            eprintln!(
+                "pattern index: built in {built:?}, {} MB; scan {round}: {:?}; matches={}",
+                size / 1_000_000,
+                started.elapsed(),
+                matches.load(Ordering::Relaxed)
+            );
+        }
     }
 
     #[test]

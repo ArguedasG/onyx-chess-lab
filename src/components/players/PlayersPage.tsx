@@ -44,6 +44,7 @@ import { KIND_COLORS, useKindLabels } from "./PlayerCardModals";
 import PlayerCardView from "./PlayerCardView";
 import classes from "./PlayersPage.module.css";
 import { type ResolvedPlayerCard, usePlayerCards } from "./usePlayerCards";
+import SectionHelp from "@/components/common/SectionHelp";
 
 const SEARCH_RESULTS_PER_DATABASE = 6;
 
@@ -187,6 +188,9 @@ export default function PlayersPage() {
                 {t("Players.Subtitle", "Cards for you, rivals and students")}
               </Text>
             </div>
+            <Box ml="auto">
+              <SectionHelp section="players" />
+            </Box>
           </Group>
           <TextInput
             leftSection={<IconSearch size={16} />}

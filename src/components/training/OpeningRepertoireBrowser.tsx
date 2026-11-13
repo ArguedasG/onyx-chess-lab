@@ -29,6 +29,7 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconRadar,
+  IconSearch,
   IconRepeat,
   IconSchool,
   IconSettings,
@@ -57,6 +58,8 @@ import { isOpeningLineDue, nextOpeningReviewDate } from "@/utils/openingReview";
 import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
 import OpeningExportModal from "./OpeningExportModal";
 import RepertoireGapsModal from "./RepertoireGapsModal";
+import RepertoireMoveSearchModal from "./RepertoireMoveSearchModal";
+import SectionHelp from "@/components/common/SectionHelp";
 
 /** Paused lines can be hidden in the section view to shorten long lists; remembered. */
 const hidePausedOpeningLinesAtom = atomWithStorage<boolean>("opening-hide-paused-lines", false);
@@ -327,6 +330,7 @@ export function OpeningLibraryPage() {
             >
               {t("OpeningBrowser.NewRepertoireOrImport", "New repertoire or import")}
             </Button>
+            <SectionHelp section="openings" />
           </Group>
         </Group>
 
@@ -470,6 +474,7 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
   const launcher = useOpeningPractice();
   const [exportOpen, setExportOpen] = useState(false);
   const [gapsOpen, setGapsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const repertoire = areas.openings.repertoires[repertoireId];
   const locationHash = useLocation({ select: (location) => location.hash });
   const scrollRef = useOpeningScrollRestoration(
@@ -512,6 +517,15 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
           repertoire={repertoire}
           openings={areas.openings}
           documentDir={documentDir}
+        />
+        <RepertoireMoveSearchModal
+          repertoire={repertoire}
+          opened={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onOpenHit={(variant, path) => {
+            setSearchOpen(false);
+            void launcher.analyzeVariantAt(repertoire, variant, path);
+          }}
         />
         <BrowserError error={launcher.error} onClose={launcher.clearError} />
         <Group justify="space-between" align="flex-start">
@@ -571,6 +585,7 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
               onTrain={() => void launcher.practiceRepertoire(repertoire)}
               onContinuous={() => void launcher.continuousRepertoire(repertoire)}
             />
+            <SectionHelp section="openings" />
           </Group>
         </Group>
 
@@ -584,6 +599,22 @@ export function OpeningRepertoirePage({ repertoireId }: { repertoireId: string }
                   total: completion.total,
                 })}
               </Text>
+              <Tooltip
+                label={t(
+                  "MoveSearch.ButtonTip",
+                  "Find a move in every section, trained or not, at any point.",
+                )}
+              >
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="gray"
+                  leftSection={<IconSearch size={14} />}
+                  onClick={() => setSearchOpen(true)}
+                >
+                  {t("MoveSearch.Button", "Search a move")}
+                </Button>
+              </Tooltip>
               <Tooltip
                 label={t(
                   "Gaps.ButtonTip",

@@ -32,6 +32,8 @@ import {
   activeTabAtom,
   nativeBarAtom,
   reuseEmptyAnalysisTabAtom,
+  showSidebarAtom,
+  showTabBarAtom,
   startScreenAtom,
   sidebarExpandedAtom,
   tabsAtom,
@@ -151,8 +153,36 @@ function RootLayout() {
   const [keyMap] = useAtom(keyMapAtom);
   useReleaseFocusAfterClick();
 
+  const [showSidebar, setShowSidebar] = useAtom(showSidebarAtom);
+  const [showTabBar, setShowTabBar] = useAtom(showTabBarAtom);
+  // Hiding a bar says how to bring it back, so nobody is left without the navigation.
+  const announceHidden = useCallback(
+    (title: string, keys: string) =>
+      notifications.show({
+        title,
+        message: t("Layout.HiddenHint", "Press {{keys}} to show it again.", {
+          keys: keys.replace(/\w/g, (c) => c.toUpperCase()),
+        }),
+      }),
+    [t],
+  );
+  const toggleSidebar = useCallback(() => {
+    if (showSidebar) {
+      announceHidden(t("Layout.SidebarHidden", "Sidebar hidden"), keyMap.TOGGLE_SIDEBAR.keys);
+    }
+    setShowSidebar(!showSidebar);
+  }, [announceHidden, keyMap, setShowSidebar, showSidebar, t]);
+  const toggleTabBar = useCallback(() => {
+    if (showTabBar) {
+      announceHidden(t("Layout.TabBarHidden", "Tab bar hidden"), keyMap.TOGGLE_TAB_BAR.keys);
+    }
+    setShowTabBar(!showTabBar);
+  }, [announceHidden, keyMap, setShowTabBar, showTabBar, t]);
+
   useHotkeys(keyMap.NEW_TAB.keys, createNewTab);
   useHotkeys(keyMap.OPEN_FILE.keys, openNewFile);
+  useHotkeys(keyMap.TOGGLE_SIDEBAR.keys, toggleSidebar, { enableOnFormTags: true });
+  useHotkeys(keyMap.TOGGLE_TAB_BAR.keys, toggleTabBar, { enableOnFormTags: true });
   const [opened, setOpened] = useState(false);
 
   const isMacOS = platform() === "macos";
@@ -252,6 +282,18 @@ function RootLayout() {
         label: t("Menu.View"),
         options: [
           {
+            label: t("Menu.View.ToggleSidebar", "Show or hide the sidebar"),
+            id: "toggle_sidebar",
+            shortcut: keyMap.TOGGLE_SIDEBAR.keys,
+            action: toggleSidebar,
+          },
+          {
+            label: t("Menu.View.ToggleTabBar", "Show or hide the tab bar"),
+            id: "toggle_tabbar",
+            shortcut: keyMap.TOGGLE_TAB_BAR.keys,
+            action: toggleTabBar,
+          },
+          {
             label: t("Menu.View.Reload"),
             id: "reload",
             shortcut: "Ctrl+R",
@@ -310,7 +352,17 @@ function RootLayout() {
         ],
       },
     ];
-  }, [createNewTab, isMacOS, keyMap, openNewFile, openSettings, t, toggleFullscreen]);
+  }, [
+    createNewTab,
+    isMacOS,
+    keyMap,
+    openNewFile,
+    openSettings,
+    t,
+    toggleFullscreen,
+    toggleSidebar,
+    toggleTabBar,
+  ]);
 
   const { data: menu } = useSWRImmutable(["menu", menuActions], () => createMenu(menuActions));
 
@@ -358,6 +410,7 @@ function RootLayout() {
       navbar={{
         width: sidebarExpanded ? "11rem" : "3rem",
         breakpoint: 0,
+        collapsed: { desktop: !showSidebar, mobile: !showSidebar },
       }}
       header={
         isNative ||
@@ -382,9 +435,11 @@ function RootLayout() {
             <TopBar menuActions={menuActions} />
           </AppShell.Header>
         )}
-      <AppShell.Navbar>
-        <SideBar />
-      </AppShell.Navbar>
+      {showSidebar && (
+        <AppShell.Navbar>
+          <SideBar />
+        </AppShell.Navbar>
+      )}
       <AppShell.Main>
         {pathname === "/" || isTrainingPath(pathname) ? (
           <WorkspaceTabs>

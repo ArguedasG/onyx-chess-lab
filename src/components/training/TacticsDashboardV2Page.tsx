@@ -5,6 +5,7 @@ import {
   Alert,
   Autocomplete,
   Badge,
+  Box,
   Button,
   Card,
   Code,
@@ -43,6 +44,7 @@ import {
   IconPencil,
   IconPlayerPlay,
   IconPuzzle,
+  IconRepeat,
   IconSettings,
   IconTrash,
   IconUnlink,
@@ -81,6 +83,7 @@ import CourseSetsPicker, { type CoursePickerMode } from "./tactics/CourseSetsPic
 import {
   addSetsToTacticsCourse,
   addTacticsFileSet,
+  buildTacticsCourseQueue,
   deleteTacticsCourse,
   deleteTacticsSet,
   getTacticsCompletedIndexes,
@@ -107,6 +110,7 @@ import {
 } from "@/utils/tacticsTraining";
 import { createTab } from "@/utils/tabs";
 import { defaultTree } from "@/utils/treeReducer";
+import SectionHelp from "@/components/common/SectionHelp";
 
 const defaultConfig: TacticsSet["config"] = {
   acceptanceThresholdCp: 30,
@@ -204,6 +208,7 @@ export default function TacticsDashboardV2Page() {
   const [courseRename, setCourseRename] = useState("");
   const [draftCourse, setDraftCourse] = useState("");
   const [mixCourseName, setMixCourseName] = useState<string | null>(null);
+  const [failedSetId, setFailedSetId] = useState<string | null>(null);
   const [pickerMode, setPickerMode] = useState<CoursePickerMode | null>(null);
   const [movingSetId, setMovingSetId] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState("");
@@ -233,6 +238,12 @@ export default function TacticsDashboardV2Page() {
   const mixCourse = mixCourseName
     ? (courses.find((course) => course.name === mixCourseName) ?? null)
     : null;
+  // Training one set's failed exercises reuses the folder session with that set alone.
+  const failedSet = failedSetId ? areas.tactics.sets[failedSetId] : undefined;
+  const failedCourse = useMemo(
+    () => (failedSet ? { name: failedSet.name, sets: [failedSet] } : null),
+    [failedSet],
+  );
   const nextCourseSet = activeCourse ? nextTacticsCourseSet(areas.tactics, activeCourse) : null;
   const movingSet = movingSetId ? areas.tactics.sets[movingSetId] : undefined;
   const activeCourseProgress = activeCourse
@@ -637,6 +648,8 @@ export default function TacticsDashboardV2Page() {
                     </ActionIcon>
                   </Menu.Target>
                   <Menu.Dropdown>
+                    <TrainFailedMenuItem set={set} onOpen={() => setFailedSetId(set.id)} />
+                    <Menu.Divider />
                     {inCourseView && place !== undefined && list && (
                       <>
                         <Menu.Item
@@ -824,6 +837,9 @@ export default function TacticsDashboardV2Page() {
               )}
             </Text>
           </div>
+          <Box ml="auto">
+            <SectionHelp section="tactics" />
+          </Box>
         </Group>
 
         {feedback && (
@@ -1281,6 +1297,11 @@ export default function TacticsDashboardV2Page() {
       </Modal>
 
       <CourseMixSession course={mixCourse} onClose={() => setMixCourseName(null)} />
+      <CourseMixSession
+        mode="failedSet"
+        course={failedCourse}
+        onClose={() => setFailedSetId(null)}
+      />
 
       <CourseSetsPicker
         mode={pickerMode}
@@ -1780,6 +1801,44 @@ function CourseMenu({ onAction }: { onAction: (kind: "rename" | "ungroup" | "del
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
+  );
+}
+
+/**
+ * "Train failed" in a set's menu, with how many exercises it would give. It is computed only
+ * while the menu is open (the dropdown mounts then), so the cards stay cheap to render.
+ */
+function TrainFailedMenuItem({ set, onOpen }: { set: TacticsSet; onOpen: () => void }) {
+  const { t: trainingT } = useTrainingTranslation();
+  const [areas] = useAtom(trainingAreasAtom);
+  const engineChecked = set.config.validationMode === "engine";
+  const count = useMemo(
+    () =>
+      engineChecked
+        ? 0
+        : buildTacticsCourseQueue(
+            areas.tactics,
+            { name: set.name, sets: [set] },
+            { source: "stillFailed", order: "course", size: 0 },
+          ).queue.length,
+    [areas.tactics, engineChecked, set],
+  );
+  return (
+    <Menu.Item
+      leftSection={<IconRepeat size={14} />}
+      disabled={count === 0}
+      onClick={onOpen}
+      title={
+        engineChecked
+          ? trainingT(
+              "Tactics.TrainFailed.EngineChecked",
+              "Sets checked by the engine are trained on their own.",
+            )
+          : undefined
+      }
+    >
+      {trainingT("Tactics.TrainFailed.Menu", "Train failed ({{n}})", { n: count })}
+    </Menu.Item>
   );
 }
 

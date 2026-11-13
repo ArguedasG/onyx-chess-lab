@@ -9,6 +9,7 @@ import {
     type RatingPar,
 } from "@/utils/ratingPar";
 import { getTimeControl } from "@/utils/timeControl";
+import { toPgnDate } from "@/utils/gameFilters";
 
 export const PLAYER_ANALYSIS_SCHEMA_VERSION = 3;
 
@@ -425,8 +426,13 @@ export function filtersPlayerAnalysisGame(
     const view = perspective(game);
     if (filters.color === "white" && !view.isWhite) return false;
     if (filters.color === "black" && view.isWhite) return false;
-    if (filters.startDate && (!game.game.date || game.game.date < filters.startDate)) return false;
-    if (filters.endDate && (!game.game.date || game.game.date > filters.endDate)) return false;
+    // Games carry PGN dates ("2024.05.01"); filters saved before 0.27 used "2024-05-01", and
+    // "." sorts after "-", so both are compared in PGN form.
+    const date = toPgnDate(game.game.date);
+    const startDate = toPgnDate(filters.startDate);
+    const endDate = toPgnDate(filters.endDate);
+    if (startDate && (!date || date < startDate)) return false;
+    if (endDate && (!date || date > endDate)) return false;
     if (filters.timeControl && (game.game.time_control || "unknown") !== filters.timeControl) {
         return false;
     }

@@ -1670,7 +1670,19 @@ export type PlayersTime = { white: number; black: number; winc: number; binc: nu
 export type PositionGame = { game: NormalizedGame; ply: number }
 export type PositionGameMetadata = { snapshotOffset: number; id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; date: string | null; result: string; event: string; ply: number; nextMove: string }
 export type PositionGameSort = "index" | "date" | "averageElo" | "whiteElo" | "blackElo"
-export type PositionQueryJs = { fen: string; type_: string }
+export type PositionQueryJs = { fen: string; type_: string; 
+/**
+ * Partial only: squares that must be empty ("e4").
+ */
+empty?: string[] | null; 
+/**
+ * Partial only: the side to move, "white" or "black".
+ */
+turn?: string | null; 
+/**
+ * Partial only: the board holds the drawn pieces and no other.
+ */
+exact_material?: boolean | null }
 export type PositionStats = { move: string; white: number; draw: number; black: number; unknown: number }
 export type PositionSummary = { token: string; fingerprint: string; fen: string; 
 /**

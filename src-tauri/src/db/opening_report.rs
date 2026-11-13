@@ -590,6 +590,7 @@ fn validate_options(snapshot: &Snapshot, options: &OpeningReportOptions) -> Resu
     query.position = Some(PositionQueryJs {
         fen: options.display_fen.clone(),
         type_: "exact".into(),
+        ..Default::default()
     });
     if canonical_query(query)? != snapshot.query {
         return Err(invalid("Opening report position changed"));
@@ -1402,6 +1403,7 @@ mod tests {
         GameQuery::new().position(PositionQueryJs {
             fen: fen.into(),
             type_: "exact".into(),
+            ..Default::default()
         })
     }
     fn options(fen: &str) -> OpeningReportOptions {

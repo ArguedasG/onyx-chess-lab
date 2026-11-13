@@ -48,6 +48,7 @@ import {
 } from "@/utils/books";
 import { createTab } from "@/utils/tabs";
 import classes from "./BooksPage.module.css";
+import SectionHelp from "@/components/common/SectionHelp";
 
 const progress = (book: Book) =>
   book.pages > 0 ? Math.min(100, Math.round((book.lastPage / book.pages) * 100)) : 0;
@@ -329,6 +330,7 @@ export default function BooksPage() {
             >
               {t("Books.Add")}
             </Button>
+            <SectionHelp section="books" />
           </Group>
         </Group>
         {error && (

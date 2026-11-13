@@ -33,7 +33,7 @@ import {
 } from "@/utils/trainingAreas";
 import { GuidedTacticsBoard } from "./TacticsBoards";
 
-type Source = "all" | "pending" | "mistakes";
+type Source = "all" | "pending" | "mistakes" | "stillFailed";
 type Order = "shuffle" | "course";
 type Phase = "setup" | "running" | "over";
 
@@ -41,18 +41,24 @@ type Phase = "setup" | "running" | "over";
  * Trains a whole course at once: its themes' exercises mixed (or in course order), filtered to the
  * pending ones or the ones failed before. Every answer counts in its own set's progress, as in a
  * guided session; Woodpecker cycles are left alone.
+ *
+ * `failedSet` trains a single set's exercises whose last attempt failed (the course holds that
+ * set only): solving one takes it off the list for the next session.
  */
 export default function CourseMixSession({
   course,
   onClose,
+  mode = "folder",
 }: {
   course: TacticsCourse | null;
   onClose: () => void;
+  mode?: "folder" | "failedSet";
 }) {
   const { t: trainingT } = useTrainingTranslation();
   const [areas, setAreas] = useAtom(trainingAreasAtom);
+  const failedSet = mode === "failedSet";
   const [phase, setPhase] = useState<Phase>("setup");
-  const [source, setSource] = useState<Source>("pending");
+  const [source, setSource] = useState<Source>(failedSet ? "stillFailed" : "pending");
   const [order, setOrder] = useState<Order>("shuffle");
   const [size, setSize] = useState("20");
   const [queue, setQueue] = useState<TacticsCourseQueueItem[]>([]);
@@ -185,9 +191,13 @@ export default function CourseMixSession({
         <Group gap="xs">
           <IconFolder size={18} />
           <Text fw={700}>
-            {trainingT("Tactics.CourseMix.Title", "Train the folder · {{name}}", {
-              name: course.name,
-            })}
+            {failedSet
+              ? trainingT("Tactics.TrainFailed.Title", "Train failed · {{name}}", {
+                  name: course.name,
+                })
+              : trainingT("Tactics.CourseMix.Title", "Train the folder · {{name}}", {
+                  name: course.name,
+                })}
           </Text>
         </Group>
       }
@@ -195,12 +205,17 @@ export default function CourseMixSession({
       {phase === "setup" && (
         <Stack maw={640} mx="auto" gap="lg" py="md">
           <Text c="dimmed" size="sm">
-            {trainingT(
-              "Tactics.CourseMix.Intro",
-              "Exercises from all the folder's sets in one session. Each answer counts in its own set's progress.",
-            )}
+            {failedSet
+              ? trainingT(
+                  "Tactics.TrainFailed.Intro",
+                  "The exercises of this set whose last attempt failed. Solve one and it leaves the list; fail it again and it stays for next time.",
+                )
+              : trainingT(
+                  "Tactics.CourseMix.Intro",
+                  "Exercises from all the folder's sets in one session. Each answer counts in its own set's progress.",
+                )}
           </Text>
-          <Stack gap={6}>
+          <Stack gap={6} display={failedSet ? "none" : undefined}>
             <Text size="sm" fw={500}>
               {trainingT("Tactics.CourseMix.Source", "Exercises")}
             </Text>
@@ -225,6 +240,13 @@ export default function CourseMixSession({
               })}
             </Text>
           </Stack>
+          {failedSet && (
+            <Text fw={600}>
+              {trainingT("Tactics.TrainFailed.Count", "{{n}} failed exercises to train", {
+                n: preview.queue.length.toLocaleString(),
+              })}
+            </Text>
+          )}
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <Select
               label={trainingT("Tactics.CourseMix.Size", "Session size")}
@@ -245,8 +267,24 @@ export default function CourseMixSession({
               onChange={(value) => value && setOrder(value as Order)}
               allowDeselect={false}
               data={[
-                { value: "shuffle", label: trainingT("Tactics.CourseMix.Shuffle", "Sets mixed") },
-                { value: "course", label: trainingT("Tactics.CourseMix.InOrder", "Folder order") },
+                failedSet
+                  ? {
+                      value: "shuffle",
+                      label: trainingT("Tactics.TrainFailed.Shuffle", "Shuffled"),
+                    }
+                  : {
+                      value: "shuffle",
+                      label: trainingT("Tactics.CourseMix.Shuffle", "Sets mixed"),
+                    },
+                failedSet
+                  ? {
+                      value: "course",
+                      label: trainingT("Tactics.TrainFailed.InOrder", "Set order"),
+                    }
+                  : {
+                      value: "course",
+                      label: trainingT("Tactics.CourseMix.InOrder", "Folder order"),
+                    },
               ]}
             />
           </SimpleGrid>
@@ -382,7 +420,9 @@ export default function CourseMixSession({
           </ThemeIcon>
           <Title order={3}>
             {queue.length === 0
-              ? trainingT("Tactics.CourseMix.Empty", "No exercises match this filter.")
+              ? failedSet
+                ? trainingT("Tactics.TrainFailed.Empty", "No failed exercises left in this set.")
+                : trainingT("Tactics.CourseMix.Empty", "No exercises match this filter.")
               : trainingT("Tactics.Rush.Over", "Session over")}
           </Title>
           <Group gap="xl">
@@ -408,7 +448,9 @@ export default function CourseMixSession({
               {trainingT("Tactics.CourseMix.NewSession", "New session")}
             </Button>
             <Button color="orange" onClick={onClose}>
-              {trainingT("Tactics.CourseMix.Close", "Back to the folder")}
+              {failedSet
+                ? trainingT("Tactics.TrainFailed.Close", "Back to the sets")
+                : trainingT("Tactics.CourseMix.Close", "Back to the folder")}
             </Button>
           </Group>
         </Stack>

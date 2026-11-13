@@ -17,6 +17,7 @@ import {
   Textarea,
   Title,
 } from "@mantine/core";
+import ConfirmModal from "@/components/common/ConfirmModal";
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import {
@@ -71,6 +72,7 @@ import { getGameName } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import StudyTrainingCopyModal from "./StudyTrainingCopyModal";
 import { parseStudyPgnText, StudyPgnImportError } from "@/utils/studyImport";
+import SectionHelp from "@/components/common/SectionHelp";
 
 type EditTarget =
   | { kind: "study"; id: string; name: string; description: string }
@@ -91,6 +93,7 @@ export default function StudiesPage() {
   const [newDescription, setNewDescription] = useState("");
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [trashOpened, setTrashOpened] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [historyChapter, setHistoryChapter] = useState<StudyChapter | null>(null);
   const [copyOpened, setCopyOpened] = useState(false);
   const [pasteOpened, setPasteOpened] = useState(false);
@@ -373,6 +376,23 @@ export default function StudiesPage() {
 
   return (
     <Container fluid h="100%" py="md">
+      <ConfirmModal
+        opened={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={t("Studies.DeleteStudyTitle", "Delete “{{name}}”?", {
+          name: deleteTarget?.name ?? "",
+        })}
+        description={t(
+          "Studies.DeleteStudyConfirm",
+          "Move this study and all its chapters to the trash?",
+        )}
+        note={t("Studies.DeleteStudyNote", "You can restore it from the trash.")}
+        onConfirm={() => {
+          const target = deleteTarget;
+          setDeleteTarget(null);
+          if (target) void mutate((current) => deleteStudy(current, target.id));
+        }}
+      />
       <Stack h="100%" gap="md">
         <Group justify="space-between">
           <div>
@@ -406,6 +426,7 @@ export default function StudiesPage() {
             <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpened(true)}>
               {t("Studies.Create", "New study")}
             </Button>
+            <SectionHelp section="studies" />
           </Group>
         </Group>
         {message && <Alert color={message.color}>{message.text}</Alert>}
@@ -485,19 +506,7 @@ export default function StudiesPage() {
                               <Menu.Item
                                 color="red"
                                 leftSection={<IconTrash size={14} />}
-                                onClick={async () => {
-                                  if (
-                                    await ask(
-                                      t(
-                                        "Studies.DeleteStudyConfirm",
-                                        "Move this study and all its chapters to the trash?",
-                                      ),
-                                      { kind: "warning" },
-                                    )
-                                  ) {
-                                    await mutate((current) => deleteStudy(current, id));
-                                  }
-                                }}
+                                onClick={() => setDeleteTarget({ id, name: study.name })}
                               >
                                 {t("Common.Delete", "Delete")}
                               </Menu.Item>

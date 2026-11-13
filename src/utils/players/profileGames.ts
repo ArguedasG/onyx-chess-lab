@@ -77,7 +77,7 @@ export function mergeProfileGames(groups: ReadonlyArray<readonly ProfileGame[]>)
     );
 }
 
-export type ProfilePeriod = "all" | "12m" | "3m";
+export type ProfilePeriod = "all" | "12m" | "3m" | "1m";
 
 export type ProfileFilters = {
     /** Time controls to keep, several at once (blitz and rapid…); empty keeps them all. */
@@ -98,7 +98,8 @@ export const DEFAULT_PROFILE_FILTERS: ProfileFilters = {
 function periodStart(period: ProfilePeriod, today: Date): string | null {
     if (period === "all") return null;
     const start = new Date(today);
-    start.setMonth(start.getMonth() - (period === "12m" ? 12 : 3));
+    const months = { "12m": 12, "3m": 3, "1m": 1 } as const;
+    start.setMonth(start.getMonth() - months[period]);
     return start.toISOString().slice(0, 10);
 }
 
