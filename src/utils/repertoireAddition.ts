@@ -1,6 +1,7 @@
 import { makeUci } from "chessops";
 import i18n from "i18next";
 import { commands } from "@/bindings";
+import { normalizeAnnotations } from "./annotation";
 import { getPGN, parsePGN } from "./chess";
 import {
     extractOpeningImportLines,
@@ -113,7 +114,7 @@ export function mergeRepertoireTree(target: TreeNode, source: TreeNode): TreeNod
         if (right.comment.trim() && !node.comment.includes(right.comment.trim())) {
             node.comment = [node.comment.trim(), right.comment.trim()].filter(Boolean).join("\n\n");
         }
-        node.annotations = [...new Set([...node.annotations, ...right.annotations])];
+        node.annotations = normalizeAnnotations([...node.annotations, ...right.annotations]);
         for (const shape of right.shapes) {
             if (!node.shapes.some((existing) => JSON.stringify(existing) === JSON.stringify(shape)))
                 node.shapes.push(structuredClone(shape));

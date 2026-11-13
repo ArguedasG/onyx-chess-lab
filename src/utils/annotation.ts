@@ -200,3 +200,23 @@ export function isBasicAnnotation(
 ): annotation is "!" | "!!" | "?" | "??" | "!?" | "?!" {
     return ["!", "!!", "?", "??", "!?", "?!"].includes(annotation);
 }
+
+/**
+ * The annotations a move can hold, as the editor allows them: no blanks or repeats and at most one
+ * per group (one move-quality glyph, one evaluation). Earlier entries win, so a merge keeps the
+ * target's glyph, and a PGN that repeats glyphs collapses to one instead of piling up on each save.
+ */
+export function normalizeAnnotations(annotations: readonly Annotation[]): Annotation[] {
+    const groups = new Set<string>();
+    const result: Annotation[] = [];
+    for (const annotation of annotations) {
+        const info = ANNOTATION_INFO[annotation];
+        if (!annotation || !info || result.includes(annotation)) continue;
+        if (info.group) {
+            if (groups.has(info.group)) continue;
+            groups.add(info.group);
+        }
+        result.push(annotation);
+    }
+    return result.sort((a, b) => ANNOTATION_INFO[a].nag - ANNOTATION_INFO[b].nag);
+}

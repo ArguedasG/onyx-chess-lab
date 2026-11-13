@@ -113,7 +113,7 @@ function EvalChart(props: EvalChartProps) {
       yield {
         name: `${Math.ceil(currentNode.node.halfMoves / 2)}.${
           pos?.turn === "black" ? "" : ".."
-        } ${currentNode.node.san}${currentNode.node.annotations}`,
+        } ${currentNode.node.san}${currentNode.node.annotations.join("")}`,
         cpText: getEvalText(currentNode.node, "cp"),
         wdlText: getEvalText(currentNode.node, "wdl"),
         yValue: yValue ?? "none",

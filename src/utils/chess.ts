@@ -14,7 +14,13 @@ import { INITIAL_FEN, makeFen, parseFen } from "chessops/fen";
 import { isPawns, parseComment } from "chessops/pgn";
 import { makeSan, parseSan } from "chessops/san";
 import { commands, type Outcome, type Score, type Token } from "@/bindings";
-import { addPieceSymbol, ANNOTATION_INFO, isBasicAnnotation, NAG_INFO } from "./annotation";
+import {
+    addPieceSymbol,
+    ANNOTATION_INFO,
+    isBasicAnnotation,
+    NAG_INFO,
+    normalizeAnnotations,
+} from "./annotation";
 import { parseSanOrUci, positionFromFen } from "./chessops";
 import { harmonicMean, isPrefix, mean } from "./misc";
 import { formatScore, getAccuracy, getCPLoss, INITIAL_SCORE } from "./score";
@@ -77,11 +83,13 @@ export function getMoveText(
         }
         moveText += tree.san;
         if (opt.glyphs) {
+            // One move-quality glyph goes right after the move; everything else as a NAG, so
+            // reading the PGN back yields the same annotations (no glued "!?!" or "!,?!").
+            const glyph = tree.annotations.find(isBasicAnnotation);
+            if (glyph) moveText += glyph;
             for (const annotation of tree.annotations) {
-                if (annotation === "") continue;
-                moveText += isBasicAnnotation(annotation)
-                    ? tree.annotations
-                    : ` $${ANNOTATION_INFO[annotation].nag}`;
+                if (annotation === "" || annotation === glyph) continue;
+                moveText += ` $${ANNOTATION_INFO[annotation].nag}`;
             }
         }
         moveText += " ";
@@ -472,10 +480,10 @@ function innerParsePGN(tokens: Token[], fen: string = INITIAL_FEN, halfMoves = 0
             }
         } else if (token.type === "ParenClose") {
         } else if (token.type === "Nag") {
-            root.annotations.push(NAG_INFO.get(token.value) || "");
-            root.annotations.sort((a, b) => {
-                return ANNOTATION_INFO[a].nag - ANNOTATION_INFO[b].nag;
-            });
+            const annotation = NAG_INFO.get(token.value);
+            // Normalizing here also repairs files saved with repeated glyphs ("Nf3!,?!!,?!").
+            if (annotation)
+                root.annotations = normalizeAnnotations([...root.annotations, annotation]);
         } else if (token.type === "San") {
             const [pos, error] = positionFromFen(root.fen);
             if (error) {

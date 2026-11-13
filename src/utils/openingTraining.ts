@@ -1,4 +1,5 @@
 import { commands, type BestMoves, type ScoreValue } from "@/bindings";
+import { normalizeAnnotations } from "@/utils/annotation";
 import { getPGN, parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { areaId, type OpeningRepertoire, type OpeningsState } from "@/utils/trainingAreas";
@@ -1162,7 +1163,7 @@ function mergeOpeningTreeInto(target: TreeNode, source: TreeNode): TreeNode {
         if (comment && !node.comment.includes(comment)) {
             node.comment = [node.comment.trim(), comment].filter(Boolean).join("\n\n");
         }
-        node.annotations = [...new Set([...node.annotations, ...right.annotations])];
+        node.annotations = normalizeAnnotations([...node.annotations, ...right.annotations]);
         for (const shape of right.shapes) {
             const serialized = JSON.stringify(shape);
             if (!node.shapes.some((existing) => JSON.stringify(existing) === serialized)) {
