@@ -1,5 +1,116 @@
 [
   {
+    "version": "0.27.0",
+    "notes": {
+      "en": {
+        "summary": "Maia 3 now installs with one click on macOS and Linux too, databases gain a piece pattern search, and every section has a “What can I do here?” guide. Books open on older Macs and broken database downloads are caught.",
+        "sections": [
+          {
+            "title": "Maia 3 on macOS and Linux",
+            "items": [
+              "The one-click installation of Maia 3, the engine behind the human-like bots, tournaments and twins, now works on macOS (Apple Silicon and Intel) and Linux x64, as on Windows: Engines → Recommended engines. Onyx downloads its own Python, PyTorch and the Maia3-5M model; no system Python is needed.",
+              "Apple Silicon Macs need macOS 14 (Sonoma) or newer, which PyTorch requires; older versions get a clear message. Intel Macs use PyTorch 2.2.2, the last release built for them, with a small compatibility module that Onyx adds. Linux gets the CPU-only PyTorch, so no CUDA libraries are downloaded (glibc 2.28 or newer).",
+              "So far this installation has only been validated on Windows; please report any problem on macOS or Linux."
+            ]
+          },
+          {
+            "title": "A guide in every section",
+            "items": [
+              "Tactics, Openings, Endgames, Books, Studies, Databases, Players and Tournaments have a “What can I do here?” button: what the section is for, what you can do in it and where to start."
+            ]
+          },
+          {
+            "title": "Databases",
+            "items": [
+              "Pattern search: draw only the pieces that matter, mark squares that must be empty, choose the side to move or “Only these pieces”, and find the games where that pattern appeared at any moment, whatever the rest of the board. The first pattern search prepares the base once (about two minutes and 2 GB for 10 million games); after that each pattern takes seconds.",
+              "Elo and date filters, including the player's and the opponent's Elo, are shared by the games list, the board's Database panel and Player Analysis, with a button to clear them.",
+              "The game header on the board has a new layout with event, site, round, ratings and opening, and clear placeholders when they are unknown.",
+              "With the tools zone folded, the analysis board no longer queries the reference database on every move."
+            ]
+          },
+          {
+            "title": "Training",
+            "items": [
+              "Openings: “Search a move” finds a move in every section of a repertoire, trained or not, at any point and in any variation, and opens the section at that move.",
+              "Tactics: “Train failed” in the ⋯ menu of a set trains only the exercises whose last attempt failed, shuffled or in set order. Solve one and it leaves the list.",
+              "Puzzle trainer: the bookmark button saves a finished Lichess puzzle into one of your sets."
+            ]
+          },
+          {
+            "title": "Interface",
+            "items": [
+              "Hide the sidebar with Ctrl+Shift+B and the tab bar with Ctrl+Shift+T (Cmd on macOS) to give the board more room; both can be changed in Settings → Keybinds.",
+              "Deleting a study names it and reminds you that it goes to the trash.",
+              "Players: a new “1 month” period."
+            ]
+          },
+          {
+            "title": "Fixes",
+            "items": [
+              "Books: PDFs failed to open on Macs with a Safari older than 17.4 (“Promise.withResolvers is not a function”). They open now, also on older macOS and Linux webviews.",
+              "A downloaded database that is not really one, for example a web page put in its place by a proxy or firewall, is rejected with the reason instead of being saved. A damaged database now says why at once, instead of “timed out waiting for connection” after 30 seconds, and can be deleted from its panel to download it again.",
+              "Human-like bots show their rating at the time control of the game (their catalogue Elo is a blitz level), on the board and in the bot history.",
+              "Player date filters saved before this version are compared correctly again."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Maia 3 se instala con un clic también en macOS y Linux, las bases de datos ganan una búsqueda por patrón de piezas y cada sección tiene una guía «¿Qué puedo hacer aquí?». Los libros abren en Macs antiguos y se detectan las descargas de bases dañadas.",
+        "sections": [
+          {
+            "title": "Maia 3 en macOS y Linux",
+            "items": [
+              "La instalación con un clic de Maia 3, el motor de los bots humanos, los torneos y los gemelos, ahora funciona en macOS (Apple Silicon e Intel) y Linux x64, como en Windows: Motores → Motores recomendados. Onyx descarga su propio Python, PyTorch y el modelo Maia3-5M; no hace falta tener Python en el sistema.",
+              "Los Mac con Apple Silicon necesitan macOS 14 (Sonoma) o más nuevo, como exige PyTorch; en versiones anteriores aparece un mensaje claro. Los Mac Intel usan PyTorch 2.2.2, la última versión publicada para ellos, con un pequeño módulo de compatibilidad que añade Onyx. En Linux se instala PyTorch solo para CPU, sin descargar las librerías de CUDA (glibc 2.28 o más nuevo).",
+              "Por ahora esta instalación solo se ha validado en Windows; avísanos de cualquier problema en macOS o Linux."
+            ]
+          },
+          {
+            "title": "Una guía en cada sección",
+            "items": [
+              "Táctica, Aperturas, Finales, Libros, Estudios, Bases de datos, Jugadores y Torneos tienen un botón «¿Qué puedo hacer aquí?»: para qué sirve la sección, qué se puede hacer en ella y por dónde empezar."
+            ]
+          },
+          {
+            "title": "Bases de datos",
+            "items": [
+              "Búsqueda por patrón: dibuja solo las piezas que importan, marca las casillas que deben estar vacías, elige el turno o «Solo estas piezas» y encuentra las partidas en las que ese patrón apareció en algún momento, sea cual sea el resto del tablero. La primera búsqueda por patrón prepara la base una sola vez (unos dos minutos y 2 GB para 10 millones de partidas); después cada patrón tarda segundos.",
+              "Los filtros de Elo y fechas, incluidos el Elo del jugador y el del rival, son los mismos en la lista de partidas, el panel Base de datos del tablero y el Análisis del jugador, con un botón para limpiarlos.",
+              "La cabecera de la partida en el tablero tiene un diseño nuevo con evento, lugar, ronda, Elo y apertura, y textos claros cuando no se conocen.",
+              "Con la zona de herramientas plegada, el tablero de análisis ya no consulta la base de referencia en cada jugada."
+            ]
+          },
+          {
+            "title": "Entrenamiento",
+            "items": [
+              "Aperturas: «Buscar una jugada» encuentra una jugada en todas las secciones de un repertorio, entrenadas o no, en cualquier momento y variante, y abre la sección en esa jugada.",
+              "Táctica: «Entrenar fallados», en el menú ⋯ de un set, entrena solo los ejercicios cuyo último intento falló, al azar o en el orden del set. Al resolver uno sale de la lista.",
+              "Entrenador de puzzles: el botón de marcador guarda un puzzle de Lichess ya terminado en uno de tus sets."
+            ]
+          },
+          {
+            "title": "Interfaz",
+            "items": [
+              "Oculta la barra lateral con Ctrl+Mayús+B y la barra de pestañas con Ctrl+Mayús+T (Cmd en macOS) para dar más espacio al tablero; ambos atajos se cambian en Configuración → Atajos de teclado.",
+              "Al borrar un estudio se muestra su nombre y se recuerda que va a la papelera.",
+              "Jugadores: nuevo periodo «1 mes»."
+            ]
+          },
+          {
+            "title": "Arreglos",
+            "items": [
+              "Libros: los PDF no abrían en Mac con un Safari anterior a 17.4 («Promise.withResolvers is not a function»). Ahora abren, también en los webviews antiguos de macOS y Linux.",
+              "Una base descargada que en realidad no es una base, por ejemplo una página web puesta en su lugar por un proxy o un cortafuegos, se rechaza con el motivo en vez de guardarse. Una base dañada ahora dice por qué al instante, en vez de «timed out waiting for connection» tras 30 segundos, y se puede eliminar desde su panel para descargarla otra vez.",
+              "Los bots humanos muestran su Elo en el ritmo de la partida (el Elo del catálogo es un nivel de blitz), en el tablero y en el historial de bots.",
+              "Los filtros de fecha de jugadores guardados antes de esta versión vuelven a compararse bien."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.26.1",
     "notes": {
       "en": {
