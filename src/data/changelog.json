@@ -1,5 +1,86 @@
 [
   {
+    "version": "0.27.2",
+    "notes": {
+      "en": {
+        "summary": "Course imports keep their chapters, the engine analysis of a player keeps running and saving in the background, and reviewing your mistakes shows the lines that explain them. Following the reports of a Mac user who tested everything.",
+        "sections": [
+          {
+            "title": "Importing courses",
+            "items": [
+              "Chapters that start from a position of the course (a [FEN] tag, common in course exports) are joined to the lines that reach that position instead of becoming one section each. A Jobava London course now imports as one section per chapter (28 instead of 37 mixed ones), and “One combined section” really gives one theory section.",
+              "Line titles that start with a move number (“3.Nc3/Nd2 - 5.Bc4 #1”) are no longer taken for chapter numbers, which split a whole chapter into one section per line.",
+              "“Typical Plans” chapters go to informative sections, like tactics and exercises, so they are not mixed with the lines you train.",
+              "In the import review, each section has a visible “Do not import this section” button."
+            ]
+          },
+          {
+            "title": "Player Analysis",
+            "items": [
+              "The engine analysis runs in the background: leaving the card or the tab no longer hides it. Coming back shows “X of N games analyzed” and Cancel works, and you cannot start a second analysis of the same card by mistake.",
+              "Progress is saved every minute, so closing the app loses at most the last minute of work; analyzed games are never repeated. Recalculate keeps the engine analysis.",
+              "Games chosen in the Games tab are shown clearly: only those games, a button with their number and no “×” that went back to the 10 most recent.",
+              "The filters have the same “All time / 12 months / 3 months / 1 month” shortcuts as the Games tab.",
+              "Scrolling the Engine tab no longer jumps back with large samples.",
+              "“Add all to My mistakes” in Training candidates adds every error of the analysis at once."
+            ]
+          },
+          {
+            "title": "Review my mistakes",
+            "items": [
+              "After each answer you see three lines with their evaluation: your move, the engine's best move and the game move with how it is punished. Click any move, or use the arrows, to play it out on the board.",
+              "The arrows are drawn only on the starting position, not on the position after your move."
+            ]
+          },
+          {
+            "title": "Players",
+            "items": [
+              "Players opens your own card instead of the first saved card, waiting for your accounts to load. “Open my card” in Accounts selects it, and if your account cards cannot be loaded you see why, with a Retry button."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Los cursos importados conservan sus capítulos, el análisis con motor de un jugador sigue y se guarda en segundo plano, y la revisión de tus errores muestra las líneas que los explican. A partir de los avisos de un usuario de Mac que lo probó todo.",
+        "sections": [
+          {
+            "title": "Importar cursos",
+            "items": [
+              "Los capítulos que empiezan en una posición del curso (una etiqueta [FEN], habitual en los cursos exportados) se unen a las líneas que llegan a esa posición en vez de quedar cada uno en su sección. Un curso de la Jobava London se importa ahora con una sección por capítulo (28 en vez de 37 mezcladas), y «Una sola sección combinada» da de verdad una sola sección de teoría.",
+              "Los títulos de línea que empiezan con un número de jugada («3.Nc3/Nd2 - 5.Bc4 #1») ya no se toman por números de capítulo, lo que partía un capítulo entero en una sección por línea.",
+              "Los capítulos de «Typical Plans» van a secciones informativas, como la táctica y los ejercicios, para no mezclarse con las líneas que entrenas.",
+              "En la revisión del import, cada sección tiene un botón visible «No importar esta sección»."
+            ]
+          },
+          {
+            "title": "Análisis de jugador",
+            "items": [
+              "El análisis con motor sigue en segundo plano: salir de la ficha o de la pestaña ya no lo oculta. Al volver se ve «X de N partidas analizadas» y Cancelar funciona, y no se puede lanzar por error un segundo análisis de la misma ficha.",
+              "El progreso se guarda cada minuto, así que cerrar la app pierde como mucho el último minuto; las partidas analizadas no se repiten. Recalcular conserva el análisis del motor.",
+              "Las partidas elegidas en la pestaña Partidas se muestran con claridad: solo esas partidas, un botón con su número y sin la «×» que volvía a las 10 más recientes.",
+              "Los filtros tienen los mismos atajos «Todo / 12 meses / 3 meses / 1 mes» que la pestaña Partidas.",
+              "El desplazamiento de la pestaña Motor ya no salta hacia atrás con muestras grandes.",
+              "«Añadir todos a Mis errores» en «Candidatas para entrenamiento» añade de una vez todos los errores del análisis."
+            ]
+          },
+          {
+            "title": "Repasar mis errores",
+            "items": [
+              "Después de cada respuesta ves tres líneas con su evaluación: tu jugada, la mejor del motor y la de la partida con cómo se castiga. Pulsa cualquier jugada, o usa las flechas, para recorrerla en el tablero.",
+              "Las flechas solo se dibujan en la posición inicial, no en la posición después de tu jugada."
+            ]
+          },
+          {
+            "title": "Jugadores",
+            "items": [
+              "Jugadores abre tu propia ficha en vez de la primera ficha guardada, esperando a que carguen tus cuentas. «Abrir mi ficha» en Cuentas la selecciona, y si las fichas de tus cuentas no se pueden cargar ves el motivo con un botón para reintentar."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.27.1",
     "notes": {
       "en": {
