@@ -22,6 +22,7 @@ import {
   type GameFilterValue,
   toPgnDate,
 } from "@/utils/gameFilters";
+import { type ProfilePeriod, periodStart } from "@/utils/players/profileGames";
 
 const ALL_FIELDS: GameFilterField[] = ["color", "elo", "dates", "result"];
 
@@ -99,14 +100,19 @@ export function EloRangeInput({
 }
 
 /** From and to, as PGN dates ("YYYY.MM.DD"); either can stay empty. */
+const DATE_PRESETS: ProfilePeriod[] = ["all", "12m", "3m", "1m"];
+
 export function DateRangeInput({
   start,
   end,
   onChange,
+  presets = false,
 }: {
   start: string | null;
   end: string | null;
   onChange: (start: string | null, end: string | null) => void;
+  /** Shortcuts for the last months, as in the Games tab of a player card. */
+  presets?: boolean;
 }) {
   const { t } = useTranslation();
   const toDate = (value: string | null) => {
@@ -114,9 +120,29 @@ export function DateRangeInput({
     return pgn ? dayjs(pgn, "YYYY.MM.DD").toDate() : null;
   };
   const toPgn = (value: Date | string | null) => (value ? dayjs(value).format("YYYY.MM.DD") : null);
+  const presetStart = (period: ProfilePeriod) => toPgn(periodStart(period, new Date()));
+  // The shortcut that matches the current range, if any; a hand-picked range matches none.
+  const activePreset =
+    end === null
+      ? DATE_PRESETS.find((period) => presetStart(period) === toPgnDate(start))
+      : undefined;
   return (
     <Stack gap={4}>
       <FieldLabel>{t("GameFilters.Dates", "Dates")}</FieldLabel>
+      {presets && (
+        <SegmentedControl
+          size="xs"
+          fullWidth
+          value={activePreset ?? ""}
+          onChange={(value) => onChange(presetStart(value as ProfilePeriod), null)}
+          data={[
+            { value: "all", label: t("Players.Filter.AllTime", "All time") },
+            { value: "12m", label: t("Players.Filter.Year", "12 months") },
+            { value: "3m", label: t("Players.Filter.Quarter", "3 months") },
+            { value: "1m", label: t("Players.Filter.Month", "1 month") },
+          ]}
+        />
+      )}
       <Group grow gap="xs" wrap="nowrap">
         <DateInput
           aria-label={t("Common.From")}

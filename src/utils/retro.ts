@@ -1,5 +1,6 @@
 import type { DrawShape } from "@lichess-org/chessground/draw";
 import { type Color, makeSquare, makeUci, parseUci } from "chessops";
+import { makeSan } from "chessops/san";
 import type { ScoreValue } from "@/bindings";
 import { positionFromFen } from "./chessops";
 import { type Engine, getBestMovesOnce, type LocalEngine } from "./engines";
@@ -19,7 +20,16 @@ import { getNodeAtPath, type TreeNode } from "./treeReducer";
  * mistake (?) and blunder (??) of one side and must find a better move, judged by the engine.
  */
 
-export type RetroBest = { uci: string; san: string; score: ScoreValue };
+/** Plies of an engine line kept to show and step through after the answer is revealed. */
+export const RETRO_LINE_PLIES = 10;
+
+export type RetroBest = {
+    uci: string;
+    san: string;
+    score: ScoreValue;
+    /** The engine's line from the position, starting with this move. */
+    line?: EngineLine;
+};
 
 export type RetroItem = {
     /** Path of the mistaken move; the exercise is played from its parent. */
@@ -114,24 +124,48 @@ export async function findRetroBest(engine: LocalEngine, fen: string): Promise<R
         15_000,
     );
     if (!line || line.uciMoves.length === 0) throw new Error("No best move");
-    return { uci: line.uciMoves[0], san: line.sanMoves[0], score: line.score.value };
+    return {
+        uci: line.uciMoves[0],
+        san: line.sanMoves[0],
+        score: line.score.value,
+        line: {
+            uci: line.uciMoves.slice(0, RETRO_LINE_PLIES),
+            san: line.sanMoves.slice(0, RETRO_LINE_PLIES),
+            score: line.score.value,
+        },
+    };
 }
 
 export async function judgeRetroMove(
     engine: LocalEngine,
     { fen, item, color, uci }: { fen: string; item: RetroItem; color: Color; uci: string },
-): Promise<{ correct: boolean; feedback: RetroFeedback | null; best: RetroBest }> {
+): Promise<{
+    correct: boolean;
+    feedback: RetroFeedback | null;
+    best: RetroBest;
+    /** The engine's line after the tried move, starting with it, to compare with the best one. */
+    line?: EngineLine;
+}> {
     const best = item.best ?? (await findRetroBest(engine, fen));
     if (uci === item.uci) return { correct: false, feedback: "same-move", best };
-    if (uci === best.uci) return { correct: true, feedback: null, best };
+    if (uci === best.uci) return { correct: true, feedback: null, best, line: best.line };
 
     const [pos] = positionFromFen(fen);
     const move = parseUci(uci);
     if (!pos || !move) return { correct: false, feedback: "worse", best };
+    const san = makeSan(pos, move);
     pos.play(move);
     let score: ScoreValue;
+    let continuation: { uci: string[]; san: string[] } = { uci: [], san: [] };
     if (pos.isCheckmate()) {
-        return { correct: true, feedback: null, best };
+        // Mate already on the board; shown as "#".
+        const mate: ScoreValue = { type: "mate", value: 0 };
+        return {
+            correct: true,
+            feedback: null,
+            best,
+            line: { uci: [uci], san: [san], score: mate },
+        };
     } else if (pos.isEnd()) {
         score = { type: "cp", value: 0 };
     } else {
@@ -143,9 +177,19 @@ export async function judgeRetroMove(
         );
         if (!line) throw new Error("No evaluation");
         score = line.score.value;
+        continuation = { uci: line.uciMoves, san: line.sanMoves };
     }
     const correct = retroAccepts(best.score, score, color);
-    return { correct, feedback: correct ? null : "worse", best };
+    return {
+        correct,
+        feedback: correct ? null : "worse",
+        best,
+        line: {
+            uci: [uci, ...continuation.uci].slice(0, RETRO_LINE_PLIES),
+            san: [san, ...continuation.san].slice(0, RETRO_LINE_PLIES),
+            score,
+        },
+    };
 }
 
 /** The opponent's best line after the mistake, used to explain what it allowed. */

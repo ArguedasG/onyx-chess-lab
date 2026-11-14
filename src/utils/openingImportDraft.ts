@@ -6,6 +6,8 @@ import {
     type OpeningPgnInspection,
     type OpeningPgnSample,
 } from "@/utils/openingTraining";
+import { positionKey } from "@/utils/openingImportGraft";
+import { sampleSectionFen } from "@/utils/openingImportGrouping";
 
 /**
  * Editable plan of how PGN records become repertoire sections. It starts from the automatic
@@ -79,7 +81,10 @@ export function canPlaceDraftRecord(
 ): boolean {
     const sample = sampleByIndex(inspection, recordIndex);
     if (!sample) return false;
-    return section.contentType === "reference" || sample.startingFen === section.startingFen;
+    return (
+        section.contentType === "reference" ||
+        positionKey(sampleSectionFen(sample)) === positionKey(section.startingFen)
+    );
 }
 
 function withoutRecord(draft: OpeningImportDraft, recordIndex: number): OpeningImportDraft {
@@ -130,7 +135,7 @@ export function moveDraftRecord(
         const section: OpeningImportDraftSection = {
             key: `custom:${draft.nextSectionId}`,
             name: target.name.trim() || sample.name,
-            startingFen: sample.startingFen,
+            startingFen: sampleSectionFen(sample),
             contentType: origin?.contentType ?? sample.contentType,
             recordIndexes: [recordIndex],
         };
@@ -237,7 +242,8 @@ export function mergeDraftSections(
         !source ||
         !target ||
         source === target ||
-        (target.contentType !== "reference" && source.startingFen !== target.startingFen)
+        (target.contentType !== "reference" &&
+            positionKey(source.startingFen) !== positionKey(target.startingFen))
     ) {
         return null;
     }

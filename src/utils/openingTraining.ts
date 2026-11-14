@@ -1,6 +1,6 @@
 import { commands, type BestMoves, type ScoreValue } from "@/bindings";
 import { normalizeAnnotations } from "@/utils/annotation";
-import { getPGN, parsePGN, uciNormalize } from "@/utils/chess";
+import { getPGN, getVariationLine, parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { areaId, type OpeningRepertoire, type OpeningsState } from "@/utils/trainingAreas";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import { getOpeningImportGroupPreviews, normalizedGroupKey } from "@/utils/openingImportGrouping";
+import { attachSectionFens, graftTree, positionKey } from "@/utils/openingImportGraft";
 import i18n from "i18next";
 import { makeUci, parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
@@ -61,6 +62,11 @@ export type OpeningPgnSample = {
     index: number;
     name: string;
     startingFen: string;
+    /**
+     * Start of the tree this record can join when it is not its own: a record that starts from a
+     * position reached in another record (a course `[FEN]` after a few moves) joins that tree.
+     */
+    sectionFen?: string;
     chapterName?: string;
     chessableGroupName?: string;
     eventName?: string;
@@ -584,7 +590,10 @@ function meaningfulHeader(value: string | undefined): string | undefined {
 }
 
 // "12) Slav", "3. QGA", "1.2) Intro" or "18 A) Kan"; the letter keeps sub-chapters apart.
-const CHAPTER_NUMBER = /^\s*\d+(?:\.\d+)*(?:\s*[A-Z](?=\s*[.)]))?\s*[.)]\s*/;
+// A chapter number ("3. Title", "3) Title", "1.2. Title"), never a move number ("3.Nc3 #1",
+// "3...e6"), which course exports put at the start of line titles.
+const CHAPTER_NUMBER =
+    /^\s*\d+(?:\.\d+)*(?:\s*[A-Z](?=\s*[.)]))?\s*(?:\)|\.(?![KQRBN][a-h1-8x]|[a-h][1-8x]|O-O|\.))\s*/;
 
 function chessableGroupName(headers: GameHeaders): string | undefined {
     const candidates = [meaningfulHeader(headers.white), meaningfulHeader(headers.black)];
@@ -976,6 +985,17 @@ export async function inspectOpeningPgn(
         }
     }
 
+    const sectionFens = attachSectionFens(parsedTrees.map((tree) => tree?.root ?? null));
+    for (const sample of samples) {
+        const sectionFen = sectionFens[sample.index];
+        if (
+            !sample.error &&
+            sectionFen &&
+            positionKey(sectionFen) !== positionKey(sample.startingFen)
+        )
+            sample.sectionFen = sectionFen;
+    }
+
     return { path, filename: filename(path), recordCount, samples, parsedTrees };
 }
 
@@ -992,6 +1012,8 @@ export async function prepareOpeningImport(
             : await parseOpeningRecords(
                   await readOpeningRecords(inspection.path, inspection.recordCount),
               );
+    // Every record's tree, to bridge a graft through the moves of another record.
+    const roots = trees.map((tree) => tree?.root ?? null);
     const parsedRecords: Array<ReturnType<typeof buildOpeningRecord>> = [];
     let skippedRecords = 0;
 
@@ -1063,26 +1085,76 @@ export async function prepareOpeningImport(
             continue;
         }
 
-        const first = entries[0];
-        const root = structuredClone(first.tree.root);
+        addTheorySection(entries, preview.name, preview.contentType, preview.startingFen);
+    }
+
+    /**
+     * One tree for the section. Records that start from a position inside it (a `[FEN]` after a
+     * few moves, as course exports do) are grafted there; any that cannot be attached get their
+     * own section instead of failing the import.
+     */
+    function addTheorySection(
+        entries: Array<ReturnType<typeof buildOpeningRecord>>,
+        baseName: string,
+        contentType: OpeningContentType,
+        sectionFen: string,
+        part = 1,
+    ) {
+        const name = part > 1 ? `${baseName} (${part})` : baseName;
+        const sectionKey = positionKey(sectionFen);
+        // A chapter whose records all start further on still gets the tree from its start: they
+        // are grafted into it, through the moves of the records that reach them.
+        const base = entries.find((entry) => positionKey(entry.tree.root.fen) === sectionKey);
+        const first = base ?? entries[0];
+        const root = base ? structuredClone(base.tree.root) : defaultTree(sectionFen).root;
         const selectedLineKeys = new Set<string>();
         const lineNames = new Map<string, string>();
         const importedLines = new Map<string, OpeningImportLine>();
-        for (const entry of entries) {
-            // `root` is already a private copy, so later records are merged into it in place.
-            if (entry !== first) mergeOpeningTreeInto(root, entry.tree.root);
+        const addLines = (entry: (typeof entries)[number], prefix: string[]) => {
             for (const line of entry.variant.lines) {
-                const key = lineKey(line.moves);
+                const moves = [...prefix, ...line.moves];
+                const key = lineKey(moves);
                 if (line.trainable) selectedLineKeys.add(key);
-                if (!importedLines.has(key)) importedLines.set(key, line);
+                if (!importedLines.has(key)) {
+                    importedLines.set(key, {
+                        ...line,
+                        fen: root.fen,
+                        moves,
+                        plyCount: moves.length,
+                    });
+                }
                 if (!lineNames.has(key)) {
                     lineNames.set(
                         key,
                         overrides.recordNames?.[entry.variant.sourceRecordIndex] ??
-                            lineName(entry.tree.headers, line.name, preview.name),
+                            lineName(entry.tree.headers, line.name, name),
                     );
                 }
             }
+        };
+        if (base) addLines(base, []);
+        // `root` is already a private copy, so later records are merged into it in place. A graft
+        // can need another graft first, so the remaining records are retried until none attach.
+        let pending = entries.filter((entry) => entry !== base);
+        while (pending.length > 0) {
+            const left: typeof pending = [];
+            for (const entry of pending) {
+                if (positionKey(entry.tree.root.fen) === positionKey(root.fen)) {
+                    mergeOpeningNodes(root, entry.tree.root);
+                    addLines(entry, []);
+                    continue;
+                }
+                const path = graftTree(root, entry.tree.root, roots, mergeOpeningNodes);
+                if (path) addLines(entry, getVariationLine(root, path));
+                else left.push(entry);
+            }
+            if (left.length === pending.length) break;
+            pending = left;
+        }
+        // Nothing reached the section start after all: build it from the first record instead.
+        if (!base && pending.length === entries.length) {
+            addTheorySection(entries, baseName, contentType, entries[0].tree.root.fen, part);
+            return;
         }
 
         const usedLineNames = new Map<string, number>();
@@ -1095,21 +1167,28 @@ export async function prepareOpeningImport(
                 ...line,
                 path: openingPathForMoves(root, line.moves) ?? line.path,
                 name: occurrence === 1 ? baseName : `${baseName} — ${line.name}`,
-                trainable: preview.contentType === "theory" && selectedLineKeys.has(key),
+                trainable: contentType === "theory" && selectedLineKeys.has(key),
             };
         });
         const stats = treeStats(root);
         const trainingRecordIndex = trainingRecords.length;
         const orientation =
             config.color === "both" ? (first.tree.headers.orientation ?? "white") : config.color;
+        // The section's start and length are its own: `getPGN` writes SetUp/FEN from the root.
+        const {
+            SetUp: _setUp,
+            FEN: _fen,
+            PlyCount: _plyCount,
+            ...otherHeaders
+        } = first.tree.headers.other ?? {};
         const headers: GameHeaders = {
             ...first.tree.headers,
-            event: preview.name,
+            event: name,
             orientation,
             other: {
-                ...first.tree.headers.other,
-                ChapterName: preview.name,
-                ChessLabContentType: preview.contentType,
+                ...otherHeaders,
+                ChapterName: name,
+                ChessLabContentType: contentType,
             },
         };
         trainingRecords.push(
@@ -1122,14 +1201,17 @@ export async function prepareOpeningImport(
             }),
         );
         variants.push({
-            name: preview.name,
+            name,
             sourceRecordIndex: first.variant.sourceRecordIndex,
             trainingRecordIndex,
-            contentType: preview.contentType,
+            contentType,
             commentCount: stats.commentCount,
             hasVariations: stats.hasVariations,
             lines,
         });
+        if (pending.length > 0 && pending.length < entries.length) {
+            addTheorySection(pending, baseName, contentType, pending[0].tree.root.fen, part + 1);
+        }
     }
 
     return {
@@ -1157,27 +1239,27 @@ function mergeOpeningTreeInto(target: TreeNode, source: TreeNode): TreeNode {
             ),
         );
     }
+    mergeOpeningNodes(target, source);
+    return target;
+}
 
-    function merge(node: TreeNode, right: TreeNode) {
-        const comment = right.comment.trim();
-        if (comment && !node.comment.includes(comment)) {
-            node.comment = [node.comment.trim(), comment].filter(Boolean).join("\n\n");
-        }
-        node.annotations = normalizeAnnotations([...node.annotations, ...right.annotations]);
-        for (const shape of right.shapes) {
-            const serialized = JSON.stringify(shape);
-            if (!node.shapes.some((existing) => JSON.stringify(existing) === serialized)) {
-                node.shapes.push(structuredClone(shape));
-            }
-        }
-        for (const child of right.children) {
-            const key = moveKey(child);
-            const existing = node.children.find((candidate) => moveKey(candidate) === key);
-            if (existing) merge(existing, child);
-            else node.children.push(structuredClone(child));
+/** Merges `right` into `node` in place (same position); new branches are cloned. */
+function mergeOpeningNodes(node: TreeNode, right: TreeNode) {
+    const comment = right.comment.trim();
+    if (comment && !node.comment.includes(comment)) {
+        node.comment = [node.comment.trim(), comment].filter(Boolean).join("\n\n");
+    }
+    node.annotations = normalizeAnnotations([...node.annotations, ...right.annotations]);
+    for (const shape of right.shapes) {
+        const serialized = JSON.stringify(shape);
+        if (!node.shapes.some((existing) => JSON.stringify(existing) === serialized)) {
+            node.shapes.push(structuredClone(shape));
         }
     }
-
-    merge(target, source);
-    return target;
+    for (const child of right.children) {
+        const key = moveKey(child);
+        const existing = node.children.find((candidate) => moveKey(candidate) === key);
+        if (existing) mergeOpeningNodes(existing, child);
+        else node.children.push(structuredClone(child));
+    }
 }

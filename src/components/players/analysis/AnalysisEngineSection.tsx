@@ -56,6 +56,8 @@ export type EngineControls = {
   sampleSize: number;
   engineLoading: boolean;
   engineProgress: number;
+  /** Games of the running analysis: done (analyzed or reused), total and skipped. */
+  engineCount: { done: number; total: number; skipped: number };
   run: () => void;
   cancel: () => void;
 };
@@ -80,7 +82,7 @@ export default function AnalysisEngineSection({
   setSelectedSetId: (value: string | null) => void;
   onAddCritical: (critical: PlayerAnalysisCriticalPosition) => void;
   /** Adds the position to the card's "My mistakes" queue (8.7), when the card has one. */
-  onAddToMistakes?: (critical: PlayerAnalysisCriticalPosition) => void;
+  onAddToMistakes?: (criticals: PlayerAnalysisCriticalPosition[]) => void;
 }) {
   const { t } = useTranslation();
   const {
@@ -103,58 +105,75 @@ export default function AnalysisEngineSection({
     sampleSize,
     engineLoading,
     engineProgress,
+    engineCount,
   } = controls;
 
   return (
     <Stack>
-      <Alert color="blue">
-        {t(
-          "PlayerAnalysis.EngineScope",
-          "The engine analyzes the newest games in the filtered sample. Results are cached by game, engine and limit, so an interrupted run can continue.",
-        )}
-      </Alert>
-      {explicitGames !== null && (
-        <Alert
-          color="teal"
-          withCloseButton
-          closeButtonLabel={t("Common.Clear", "Clear")}
-          onClose={clearExplicitGames}
-        >
-          {t(
-            "PlayerAnalysis.ExplicitGames",
-            "{{count}} games chosen in the Games tab will be analyzed. Close this notice to go back to the most recent games.",
-            { count: explicitGames },
-          )}
+      {explicitGames === null ? (
+        <>
+          <Alert color="blue">
+            {t(
+              "PlayerAnalysis.EngineScope",
+              "The engine analyzes the newest games in the filtered sample. Results are cached by game, engine and limit, so an interrupted run can continue.",
+            )}
+          </Alert>
+          <MultiSelect
+            label={t("PlayerAnalysis.EngineTimeControls", "Time controls to analyze")}
+            description={t(
+              "PlayerAnalysis.EngineTimeControlsDescription",
+              "Choose one or more rhythms. The most recent game limit is applied after combining them.",
+            )}
+            placeholder={t("PlayerAnalysis.SelectTimeControls", "Select at least one time control")}
+            searchable
+            clearable
+            hidePickedOptions
+            value={engineTimeControls}
+            data={engineTimeControlCounts.map(({ value, count }) => ({
+              value,
+              label: `${timeControlLabel(value, t)} (${count})`,
+            }))}
+            onChange={(values) => setEngineTimeControls(values as PlayerAnalysisTimeControl[])}
+          />
+          <Text size="xs" c="dimmed">
+            {t(
+              "PlayerAnalysis.EngineSampleScope",
+              "{{eligible}} eligible games; {{selected}} will be analyzed with the current limit.",
+              {
+                eligible: eligibleGames,
+                selected: analyzeAllGames ? eligibleGames : Math.min(engineGames, eligibleGames),
+              },
+            )}
+          </Text>
+        </>
+      ) : (
+        // Games chosen in the Games tab replace the time controls and the limit, so those
+        // controls are hidden instead of showing numbers that do not apply.
+        <Alert color={explicitGames > 0 ? "teal" : "yellow"}>
+          <Stack gap="xs" align="flex-start">
+            <Text size="sm">
+              {explicitGames > 0
+                ? t(
+                    "PlayerAnalysis.ExplicitGamesScope",
+                    "The {{count}} games chosen in the Games tab will be analyzed, whatever their time control. Results are cached by game, engine and limit, so an interrupted run can continue.",
+                    { count: explicitGames },
+                  )
+                : t(
+                    "PlayerAnalysis.ExplicitGamesOutsideFilters",
+                    "None of the games chosen in the Games tab is inside the current analysis filters. Widen the filters or go back to the most recent games.",
+                  )}
+            </Text>
+            <Button
+              size="xs"
+              variant="default"
+              disabled={engineLoading}
+              onClick={clearExplicitGames}
+            >
+              {t("PlayerAnalysis.UseRecentGames", "Analyze the most recent games instead")}
+            </Button>
+          </Stack>
         </Alert>
       )}
-      <MultiSelect
-        disabled={explicitGames !== null}
-        label={t("PlayerAnalysis.EngineTimeControls", "Time controls to analyze")}
-        description={t(
-          "PlayerAnalysis.EngineTimeControlsDescription",
-          "Choose one or more rhythms. The most recent game limit is applied after combining them.",
-        )}
-        placeholder={t("PlayerAnalysis.SelectTimeControls", "Select at least one time control")}
-        searchable
-        clearable
-        hidePickedOptions
-        value={engineTimeControls}
-        data={engineTimeControlCounts.map(({ value, count }) => ({
-          value,
-          label: `${timeControlLabel(value, t)} (${count})`,
-        }))}
-        onChange={(values) => setEngineTimeControls(values as PlayerAnalysisTimeControl[])}
-      />
-      <Text size="xs" c="dimmed">
-        {t(
-          "PlayerAnalysis.EngineSampleScope",
-          "{{eligible}} eligible games; {{selected}} will be analyzed with the current limit.",
-          {
-            eligible: eligibleGames,
-            selected: analyzeAllGames ? eligibleGames : Math.min(engineGames, eligibleGames),
-          },
-        )}
-      </Text>
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
         <Select
           label={t("PlayerAnalysis.Engine", "Engine")}
@@ -164,24 +183,28 @@ export default function AnalysisEngineSection({
           onChange={(value) => setEngineId(value ?? "")}
           placeholder={t("PlayerAnalysis.NoEngine", "Install a local reference engine")}
         />
-        <NumberInput
-          label={t("PlayerAnalysis.EngineGames", "Most recent games to analyze")}
-          min={1}
-          max={Math.max(1, eligibleGames)}
-          step={5}
-          value={engineGames}
-          disabled={analyzeAllGames || explicitGames !== null}
-          onChange={(value) => setEngineGames(typeof value === "number" ? value : 10)}
-        />
-        <Switch
-          mt="xl"
-          checked={analyzeAllGames}
-          disabled={sampleSize === 0 || explicitGames !== null}
-          label={t("PlayerAnalysis.EngineAllGames", "Analyze all filtered games ({{count}})", {
-            count: eligibleGames,
-          })}
-          onChange={(event) => setAnalyzeAllGames(event.currentTarget.checked)}
-        />
+        {explicitGames === null && (
+          <>
+            <NumberInput
+              label={t("PlayerAnalysis.EngineGames", "Most recent games to analyze")}
+              min={1}
+              max={Math.max(1, eligibleGames)}
+              step={5}
+              value={engineGames}
+              disabled={analyzeAllGames}
+              onChange={(value) => setEngineGames(typeof value === "number" ? value : 10)}
+            />
+            <Switch
+              mt="xl"
+              checked={analyzeAllGames}
+              disabled={sampleSize === 0}
+              label={t("PlayerAnalysis.EngineAllGames", "Analyze all filtered games ({{count}})", {
+                count: eligibleGames,
+              })}
+              onChange={(event) => setAnalyzeAllGames(event.currentTarget.checked)}
+            />
+          </>
+        )}
         <NumberInput
           label={t("PlayerAnalysis.EngineTime", "Milliseconds per position")}
           min={50}
@@ -197,13 +220,18 @@ export default function AnalysisEngineSection({
           disabled={
             !engineId ||
             loadedGames === 0 ||
+            explicitGames === 0 ||
             (explicitGames === null && (engineTimeControls.length === 0 || eligibleGames === 0)) ||
             engineLoading
           }
           loading={engineLoading}
           onClick={controls.run}
         >
-          {t("PlayerAnalysis.RunEngine", "Analyze sample")}
+          {explicitGames
+            ? t("PlayerAnalysis.RunExplicitGames", "Analyze {{count}} games", {
+                count: explicitGames,
+              })
+            : t("PlayerAnalysis.RunEngine", "Analyze sample")}
         </Button>
         <Button
           variant="default"
@@ -219,7 +247,22 @@ export default function AnalysisEngineSection({
           </Text>
         )}
       </Group>
-      {engineLoading && <Progress value={engineProgress} animated />}
+      {engineLoading && (
+        <Stack gap={4}>
+          <Progress value={engineProgress} animated />
+          <Text size="xs" c="dimmed">
+            {t(
+              "PlayerAnalysis.EngineRunCount",
+              "{{done}} of {{total}} games analyzed. Progress is saved every minute, and Cancel keeps every game already analyzed.",
+              { done: engineCount.done, total: engineCount.total },
+            )}
+            {engineCount.skipped > 0 &&
+              ` ${t("PlayerAnalysis.EngineRunSkipped", "{{count}} skipped.", {
+                count: engineCount.skipped,
+              })}`}
+          </Text>
+        </Stack>
+      )}
       {engine && (
         <>
           <Divider />
@@ -379,14 +422,23 @@ export default function AnalysisEngineSection({
           )}
           <Group justify="space-between" align="end">
             <Title order={5}>{t("PlayerAnalysis.Critical", "Training candidates")}</Title>
-            <Select
-              label={t("PlayerAnalysis.TargetSet", "Tactical set")}
-              placeholder={t("PlayerAnalysis.CreateSet", "Create “My tactical errors”")}
-              clearable
-              value={selectedSetId}
-              data={tacticsSets.map((set) => ({ value: set.id, label: set.name }))}
-              onChange={setSelectedSetId}
-            />
+            <Group gap="sm" align="end">
+              {onAddToMistakes && engine.criticalPositions.length > 0 && (
+                // Every error of the analysis, not only the rows shown; the queue skips the ones
+                // it already has or that were removed.
+                <Button variant="light" onClick={() => onAddToMistakes(engine.criticalPositions)}>
+                  {t("PlayerAnalysis.AddAllToMistakes", "Add all to My mistakes")}
+                </Button>
+              )}
+              <Select
+                label={t("PlayerAnalysis.TargetSet", "Tactical set")}
+                placeholder={t("PlayerAnalysis.CreateSet", "Create “My tactical errors”")}
+                clearable
+                value={selectedSetId}
+                data={tacticsSets.map((set) => ({ value: set.id, label: set.name }))}
+                onChange={setSelectedSetId}
+              />
+            </Group>
           </Group>
           <Table withTableBorder highlightOnHover>
             <Table.Thead>
@@ -424,7 +476,7 @@ export default function AnalysisEngineSection({
                           size="compact-xs"
                           variant="light"
                           disabled={critical.bestLine.length === 0}
-                          onClick={() => onAddToMistakes(critical)}
+                          onClick={() => onAddToMistakes([critical])}
                         >
                           {t("PlayerAnalysis.AddToMistakes", "To My mistakes")}
                         </Button>

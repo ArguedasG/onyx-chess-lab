@@ -25,10 +25,11 @@ import {
 } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import cx from "clsx";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
+import { sessionsAtom } from "@/state/atoms";
 import { playerAnalysisReturnTargetAtom } from "@/state/playerAnalysis";
 import {
   type PlayerCardKind,
@@ -94,6 +95,7 @@ export default function PlayersPage() {
   const { t } = useTranslation();
   const kinds = useKindLabels();
   const cards = usePlayerCards();
+  const sessions = useAtomValue(sessionsAtom);
   const [selection, setSelection] = useAtom(playerCardSelectionAtom);
   const [returnTarget, setReturnTarget] = useAtom(playerAnalysisReturnTargetAtom);
   const [query, setQuery] = useState("");
@@ -128,16 +130,28 @@ export default function PlayersPage() {
     }
   }, [allCards, cards.accountsLoading, returnTarget, setReturnTarget, setSelection]);
 
-  // Without a choice, the user's own card.
+  // Without a choice, the user's own card. Wait for the accounts: choosing while they load would
+  // open the first saved card (a rival, say) and keep it after the account card appears.
   useEffect(() => {
-    if (selection || returnTarget || allCards.length === 0) return;
-    const first = allCards[0];
+    if (selection || returnTarget || cards.accountsLoading || allCards.length === 0) return;
+    const first =
+      cards.accountCards[0] ??
+      cards.savedCards.find((saved) => saved.kind === "self") ??
+      allCards[0];
     setSelection(
       first.origin === "saved"
         ? { origin: "saved", id: first.savedId! }
         : { origin: "account", name: first.name },
     );
-  }, [allCards, returnTarget, selection, setSelection]);
+  }, [
+    allCards,
+    cards.accountCards,
+    cards.accountsLoading,
+    cards.savedCards,
+    returnTarget,
+    selection,
+    setSelection,
+  ]);
 
   const { resolve } = cards;
   const card = useMemo(() => resolve(selection), [resolve, selection]);
@@ -254,6 +268,35 @@ export default function PlayersPage() {
                     </UnstyledButton>
                   );
                 })}
+              </Stack>
+            )}
+            {sessions.length > 0 && cards.accountCards.length === 0 && (
+              // The account cards load from the account databases; say so instead of leaving
+              // "My accounts" out while they load or after a failure.
+              <Stack gap={4}>
+                <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+                  {t("Players.Group.Accounts", "My accounts")}
+                </Text>
+                {cards.accountsError ? (
+                  <Stack gap={6} align="flex-start">
+                    <Text size="sm" c="red">
+                      {t("Players.AccountsFailed", "Your account cards could not be loaded.")}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {String(cards.accountsError)}
+                    </Text>
+                    <Button size="xs" variant="light" onClick={() => void cards.reloadAccounts()}>
+                      {t("Common.Retry", "Retry")}
+                    </Button>
+                  </Stack>
+                ) : (
+                  <Group gap="xs">
+                    <Loader size={14} />
+                    <Text size="sm" c="dimmed">
+                      {t("Players.AccountsLoading", "Loading your account cards…")}
+                    </Text>
+                  </Group>
+                )}
               </Stack>
             )}
             {groups.map((group) => (

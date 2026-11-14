@@ -95,7 +95,8 @@ export const DEFAULT_PROFILE_FILTERS: ProfileFilters = {
     last: null,
 };
 
-function periodStart(period: ProfilePeriod, today: Date): string | null {
+/** First day (YYYY-MM-DD) of a period counted back from today; null for all time. */
+export function periodStart(period: ProfilePeriod, today: Date): string | null {
     if (period === "all") return null;
     const start = new Date(today);
     const months = { "12m": 12, "3m": 3, "1m": 1 } as const;

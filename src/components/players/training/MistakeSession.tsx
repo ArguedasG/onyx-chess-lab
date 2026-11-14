@@ -10,7 +10,6 @@ import {
 } from "@tabler/icons-react";
 import { type Color, makeUci, type NormalMove, parseSquare, parseUci } from "chessops";
 import { chessgroundDests } from "chessops/compat";
-import { makeFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
 import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
@@ -19,6 +18,7 @@ import { Chessground } from "@/chessground/Chessground";
 import { enginesAtom } from "@/state/atoms";
 import { positionFromFen } from "@/utils/chessops";
 import type { MistakeItem, MistakeResult } from "@/utils/mistakes/queue";
+import { buildReviewLines, positionAfter } from "@/utils/mistakes/reviewLines";
 import { type EngineLine, explainMistake, mistakeShapes } from "@/utils/moveExplanation";
 import {
   findRetroBest,
@@ -30,6 +30,7 @@ import {
 } from "@/utils/retro";
 import MistakeExplanation from "../../panels/analysis/MistakeExplanation";
 import { categoryName } from "./labels";
+import ReviewLinesPanel, { type ReviewLineView } from "./ReviewLinesPanel";
 
 type Phase = "find" | "evaluating" | "wrong" | "correct" | "solution";
 
@@ -65,6 +66,9 @@ export default function MistakeSession({
   const [attempt, setAttempt] = useState<{ uci: string; san: string } | null>(null);
   const [best, setBest] = useState<RetroBest | null>(null);
   const [refutation, setRefutation] = useState<EngineLine | null>(null);
+  // The engine's line after the student's accepted move, and the line shown on the board.
+  const [attemptLine, setAttemptLine] = useState<EngineLine | null>(null);
+  const [view, setView] = useState<ReviewLineView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<MistakeResult[]>([]);
   const item = items[index];
@@ -122,6 +126,9 @@ export default function MistakeSession({
       const verdict = await judgeRetroMove(engine, { fen: item.fen, item: retroItem, color, uci });
       setBest(verdict.best);
       if (verdict.correct) {
+        setAttemptLine(verdict.line ?? null);
+        // The board keeps the student's move, now as the first move of its line.
+        setView({ kind: uci === verdict.best.uci ? "best" : "attempt", ply: 1 });
         setPhase("correct");
         void reveal({ ...retroItem, best: verdict.best });
       } else {
@@ -141,6 +148,7 @@ export default function MistakeSession({
       const verdict = best ?? (await findRetroBest(engine, item.fen));
       setBest(verdict);
       setAttempt(null);
+      setView(null);
       setPhase("solution");
       void reveal({ ...retroItem, best: verdict });
     } catch (reason) {
@@ -161,18 +169,27 @@ export default function MistakeSession({
     setAttempt(null);
     setBest(null);
     setRefutation(null);
+    setAttemptLine(null);
+    setView(null);
     setError(null);
   }
 
-  const shownFen = useMemo(() => {
-    // After a correct move the board shows it; a wrong one is taken back so the student retries.
-    if (!item || !attempt || phase !== "correct") return item?.fen ?? "";
-    const [after] = positionFromFen(item.fen);
-    const move = parseUci(attempt.uci);
-    if (!after || !move || !after.isLegal(move)) return item.fen;
-    after.play(move);
-    return makeFen(after.toSetup());
-  }, [attempt, item, phase]);
+  // Once revealed, the lines explain the answer: the student's move, the engine's and the game's.
+  const lines =
+    item && retroItem && revealed
+      ? buildReviewLines({
+          played: { uci: item.playedMove, san: retroItem.san },
+          attempt: phase === "correct" ? attemptLine : null,
+          best,
+          refutation,
+        })
+      : [];
+  const viewLine = view ? lines.find((line) => line.kind === view.kind) : undefined;
+  // A wrong move is taken back so the student retries; a revealed line shows its position.
+  const shown =
+    item && viewLine && view
+      ? positionAfter(item.fen, viewLine.uci, view.ply)
+      : { fen: item?.fen ?? "", turn: color, lastMove: undefined };
 
   const solvedCount = results.filter((result) => result !== "failed").length;
 
@@ -250,9 +267,10 @@ export default function MistakeSession({
               }}
             >
               <Chessground
-                fen={shownFen}
+                fen={shown.fen}
                 orientation={color}
-                turnColor={phase === "correct" ? (color === "white" ? "black" : "white") : color}
+                turnColor={shown.turn}
+                lastMove={shown.lastMove}
                 movable={{
                   free: false,
                   color: phase === "find" || phase === "wrong" ? color : undefined,
@@ -262,7 +280,8 @@ export default function MistakeSession({
                 drawable={{
                   enabled: true,
                   visible: true,
-                  autoShapes: facts ? mistakeShapes(facts) : [],
+                  // The arrows belong to the starting position, not to a position of a line.
+                  autoShapes: facts && !viewLine ? mistakeShapes(facts) : [],
                 }}
               />
             </Box>
@@ -311,6 +330,9 @@ export default function MistakeSession({
                   </Text>
                 </Group>
                 {facts && <MistakeExplanation sentences={explainMistake(facts)} />}
+                {item && lines.length > 0 && (
+                  <ReviewLinesPanel fen={item.fen} lines={lines} view={view} onView={setView} />
+                )}
               </Stack>
             )}
             {error && <Alert color="red">{error}</Alert>}

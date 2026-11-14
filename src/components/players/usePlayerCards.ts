@@ -73,6 +73,7 @@ export function usePlayerCards() {
     const {
         data: accountPlayers,
         isLoading: accountsLoading,
+        error: accountsError,
         mutate: reloadAccounts,
     } = useAccountPlayers();
 
@@ -267,6 +268,7 @@ export function usePlayerCards() {
         accountCards,
         savedCards,
         accountsLoading,
+        accountsError: accountsError as unknown,
         reloadAccounts,
         resolve: resolveCard,
         markAliasesMigrated,

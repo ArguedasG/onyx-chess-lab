@@ -15,6 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
+import { useDebouncedCallback } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { IconChartDots, IconDownload, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useAtom } from "jotai";
@@ -31,6 +32,12 @@ import {
   type PlayerAnalysisSection,
   type StoredPlayerAnalysis,
 } from "@/state/playerAnalysis";
+import {
+  cancelPlayerEngineRun,
+  finishPlayerEngineRun,
+  playerEngineRunsAtom,
+  startPlayerEngineRun,
+} from "@/state/playerEngineRuns";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { getMainLine, parsePGN } from "@/utils/chess";
 import type { LocalEngine } from "@/utils/engines";
@@ -76,6 +83,10 @@ import PerspectiveModal from "./PerspectiveModal";
 import PlayerOpeningsTable from "./PlayerOpeningsTable";
 import PlayerVersionComparison from "./PlayerVersionComparison";
 
+/** A running engine analysis saves what it has every so many games or seconds, whichever first. */
+const ENGINE_SAVE_EVERY_GAMES = 25;
+const ENGINE_SAVE_EVERY_MS = 60_000;
+
 /**
  * Player Analysis of a player card: descriptive profile and engine analysis of a sample, local and
  * versioned. The card owns the sources (player records and manual aliases); `profileId` stays the
@@ -96,7 +107,8 @@ export default function PlayerAnalysisPanel({
   onOpenReference: (reference: PlayerAnalysisReference) => void;
   /** Games chosen in the Games tab to analyze with the engine instead of the newest ones. */
   explicitGameKeys?: string[] | null;
-  onAddToMistakes?: (critical: PlayerAnalysisCriticalPosition) => void;
+  /** Adds positions to the card's "My mistakes" queue (8.7), when the card has one. */
+  onAddToMistakes?: (criticals: PlayerAnalysisCriticalPosition[]) => void;
   onClearExplicitGames?: () => void;
 }) {
   const { t } = useTranslation();
@@ -108,7 +120,9 @@ export default function PlayerAnalysisPanel({
   const openingsViewport = useRef<HTMLDivElement>(null);
   const findingsViewport = useRef<HTMLDivElement>(null);
   const engineViewport = useRef<HTMLDivElement>(null);
-  const selectedScrollY = view.scrollY[view.section];
+  // Read when a section opens; restoring on every change fought the user's own scrolling.
+  const scrollYRef = useRef(view.scrollY);
+  scrollYRef.current = view.scrollY;
   const storedCandidate = state.profiles[profileId];
   const stored =
     storedCandidate?.schemaVersion === PLAYER_ANALYSIS_SCHEMA_VERSION ? storedCandidate : null;
@@ -125,19 +139,20 @@ export default function PlayerAnalysisPanel({
   const [engineTimeControls, setEngineTimeControls] = useState<PlayerAnalysisTimeControl[]>(
     () => stored?.engine?.timeControls ?? [...PLAYER_ANALYSIS_TIME_CONTROLS],
   );
-  const [engineLoading, setEngineLoading] = useState(false);
+  const [engineRuns, setEngineRuns] = useAtom(playerEngineRunsAtom);
+  const engineRun = engineRuns[profileId];
+  const engineLoading = engineRun !== undefined;
   const [versionSaving, setVersionSaving] = useState(false);
   const [libraryOpened, setLibraryOpened] = useState(false);
   const [comparisonDocument, setComparisonDocument] = useState<AnalysisArtifactDocument | null>(
     null,
   );
-  const [engineProgress, setEngineProgress] = useState(0);
+  const engineCount = engineRun ?? { done: 0, total: 0, skipped: 0 };
+  const engineProgress = engineCount.total ? (engineCount.done / engineCount.total) * 100 : 0;
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [pendingCritical, setPendingCritical] = useState<PlayerAnalysisCriticalPosition | null>(
     null,
   );
-  const cancelled = useRef(false);
-  const activeAnalysisIds = useRef<Set<string>>(new Set());
   const loadRequestId = useRef(0);
   const profileSnapshot = useRef({
     sources,
@@ -205,10 +220,12 @@ export default function PlayerAnalysisPanel({
       engine: engineViewport,
     };
     const viewport = viewports[view.section].current;
-    if (viewport) viewport.scrollTop = selectedScrollY;
-  }, [profileId, selectedScrollY, view.section]);
+    if (viewport) viewport.scrollTop = scrollYRef.current[view.section];
+  }, [profileId, view.section]);
 
-  const rememberScroll = useCallback(
+  // Remembered once scrolling pauses (and when the panel closes): saving it on every scroll event
+  // re-rendered the whole panel, which made large engine samples jump back while scrolling.
+  const rememberScroll = useDebouncedCallback(
     (section: PlayerAnalysisSection, y: number) => {
       setView((previous) =>
         previous.scrollY[section] === y
@@ -216,7 +233,7 @@ export default function PlayerAnalysisPanel({
           : { ...previous, scrollY: { ...previous.scrollY, [section]: y } },
       );
     },
-    [setView],
+    { delay: 200, flushOnUnmount: true },
   );
 
   const localEngines = useMemo(
@@ -309,14 +326,23 @@ export default function PlayerAnalysisPanel({
       cachePlayerGames(gamesCacheKey, unique);
       setGames(unique);
       const metadata = analyzePlayerGames(playerName, unique, sources, filters);
-      saveProfile({
+      // Recalculating the metadata keeps the engine analysis: its games are the cache the next
+      // engine run reuses, and they can take hours to compute.
+      setState((previous) => ({
+        ...previous,
         schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
-        profileId,
-        playerName,
-        updatedAt: metadata.generatedAt,
-        metadata,
-        engine: null,
-      });
+        profiles: {
+          ...previous.profiles,
+          [profileId]: {
+            schemaVersion: PLAYER_ANALYSIS_SCHEMA_VERSION,
+            profileId,
+            playerName,
+            updatedAt: metadata.generatedAt,
+            metadata,
+            engine: previous.profiles[profileId]?.engine ?? null,
+          },
+        },
+      }));
     } catch (error) {
       if (loadRequestId.current !== requestId) return;
       notifications.show({
@@ -327,7 +353,7 @@ export default function PlayerAnalysisPanel({
     } finally {
       if (loadRequestId.current === requestId) setLoading(false);
     }
-  }, [filters, gamesCacheKey, playerName, profileId, saveProfile, sources, t]);
+  }, [filters, gamesCacheKey, playerName, profileId, setState, sources, t]);
 
   // Games sent from the Games tab need the profile: it is generated once, then the engine view opens.
   const autoGenerated = useRef(false);
@@ -416,10 +442,96 @@ export default function PlayerAnalysisPanel({
     const analyzed = selected.flatMap((game) =>
       reusable.has(game.key) ? [reusable.get(game.key)!] : [],
     );
+    const profileGames = games;
+    // The run outlives this view: its progress and its cancellation live in app state, so leaving
+    // the card does not stop it and opening the card again shows it and can cancel it.
+    const control = startPlayerEngineRun(profileId);
+    if (!control) return;
     let skipped = 0;
-    cancelled.current = false;
-    setEngineLoading(true);
-    setEngineProgress(selected.length ? (analyzed.length / selected.length) * 100 : 0);
+    const reportProgress = () =>
+      setEngineRuns((runs) => ({
+        ...runs,
+        [profileId]: { done: analyzed.length, total: selected.length, skipped },
+      }));
+    reportProgress();
+
+    // Builds the engine result from the games analyzed so far and saves it. It runs during the
+    // analysis too, so closing the app loses at most the last minute of work, and the games
+    // already saved are reused by the next run.
+    const persist = () => {
+      const games = [...analyzed];
+      // Games chosen by hand join the saved sample instead of replacing it.
+      if (explicitGames && sameEngine) {
+        const chosen = new Set(games.map((game) => game.key));
+        games.push(...stored.engine!.games.filter((game) => !chosen.has(game.key)));
+      }
+      const included = new Set(games.map((game) => game.key));
+      const sample = explicitGames
+        ? [
+            ...selected,
+            ...profileGames.filter((game) => included.has(game.key) && !selected.includes(game)),
+          ]
+        : selected;
+      // Workers finish in any order; keep the games in their selection order.
+      const order = new Map(sample.map((item, index) => [item.key, index]));
+      games.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
+      const timeControls = explicitGames
+        ? [...new Set(sample.map((game) => getPlayerAnalysisTimeControl(game)))]
+        : engineTimeControls;
+      const eligiblePool = explicitGames ? sample : eligibleEngineGames;
+      const result = aggregateEngineAnalysis({
+        engine: {
+          name: engine.name,
+          path: engine.path,
+          args: engine.args ?? [],
+          options,
+          limit,
+        },
+        requestedGames: sample.length,
+        eligibleGames: eligiblePool.length,
+        timeControls,
+        timeControlBreakdown: timeControls.flatMap((value) => {
+          const eligibleGames = eligiblePool.filter(
+            (game) => getPlayerAnalysisTimeControl(game) === value,
+          ).length;
+          const selectedKeys = new Set(
+            sample
+              .filter((game) => getPlayerAnalysisTimeControl(game) === value)
+              .map((game) => game.key),
+          );
+          const analyzedGames = games.filter((game) => selectedKeys.has(game.key)).length;
+          return eligibleGames > 0 ? [{ value, eligibleGames, analyzedGames }] : [];
+        }),
+        skippedGames: skipped,
+        games,
+      });
+      // Onto the profile as it is now: a run that kept going in the background must not undo a
+      // later change to it, nor bring back a profile deleted meanwhile.
+      setState((previous) => {
+        const current = previous.profiles[profileId];
+        if (!current) return previous;
+        return {
+          ...previous,
+          profiles: {
+            ...previous.profiles,
+            [profileId]: { ...current, updatedAt: result.analyzedAt, engine: result },
+          },
+        };
+      });
+    };
+    let savedCount = analyzed.length;
+    let savedAt = Date.now();
+    const persistPeriodically = () => {
+      if (analyzed.length === savedCount) return;
+      if (
+        analyzed.length - savedCount < ENGINE_SAVE_EVERY_GAMES &&
+        Date.now() - savedAt < ENGINE_SAVE_EVERY_MS
+      )
+        return;
+      persist();
+      savedCount = analyzed.length;
+      savedAt = Date.now();
+    };
     try {
       // Several games at once, as many as the engine budget allows (see `get_engine_budget`).
       const budget = await commands.getEngineBudget();
@@ -427,7 +539,7 @@ export default function PlayerAnalysisPanel({
       let next = 0;
       const analyzeOne = async (item: (typeof selected)[number]) => {
         const analysisId = `player-analysis-${profileId}-${item.game.id}`;
-        activeAnalysisIds.current.add(analysisId);
+        control.analysisIds.add(analysisId);
         try {
           const gameResponse = unwrap(
             await commands.getGames(item.source.databasePath, {
@@ -477,19 +589,20 @@ export default function PlayerAnalysisPanel({
             }),
           );
         } catch (error) {
-          if (cancelled.current) return;
+          if (control.cancelled) return;
           skipped += 1;
           console.warn("Player analysis skipped a game", item.key, error);
         } finally {
-          activeAnalysisIds.current.delete(analysisId);
+          control.analysisIds.delete(analysisId);
         }
       };
       const worker = async () => {
-        while (!cancelled.current && next < pending.length) {
+        while (!control.cancelled && next < pending.length) {
           const item = pending[next];
           next += 1;
           await analyzeOne(item);
-          setEngineProgress((analyzed.length / selected.length) * 100);
+          reportProgress();
+          if (!control.cancelled) persistPeriodically();
         }
       };
       await Promise.all(
@@ -497,56 +610,15 @@ export default function PlayerAnalysisPanel({
           worker(),
         ),
       );
-      // Games chosen by hand join the saved sample instead of replacing it.
-      if (explicitGames && sameEngine) {
-        const chosen = new Set(analyzed.map((game) => game.key));
-        analyzed.push(...stored.engine!.games.filter((game) => !chosen.has(game.key)));
-      }
-      const included = new Set(analyzed.map((game) => game.key));
-      const sample = explicitGames
-        ? [
-            ...selected,
-            ...games.filter((game) => included.has(game.key) && !selected.includes(game)),
-          ]
-        : selected;
-      // Workers finish in any order; keep the games in their selection order.
-      const order = new Map(sample.map((item, index) => [item.key, index]));
-      analyzed.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
-      const timeControls = explicitGames
-        ? [...new Set(sample.map((game) => getPlayerAnalysisTimeControl(game)))]
-        : engineTimeControls;
-      const eligiblePool = explicitGames ? sample : eligibleEngineGames;
-      const result = aggregateEngineAnalysis({
-        engine: {
-          name: engine.name,
-          path: engine.path,
-          args: engine.args ?? [],
-          options,
-          limit,
-        },
-        requestedGames: sample.length,
-        eligibleGames: eligiblePool.length,
-        timeControls,
-        timeControlBreakdown: timeControls.flatMap((value) => {
-          const eligibleGames = eligiblePool.filter(
-            (game) => getPlayerAnalysisTimeControl(game) === value,
-          ).length;
-          const selectedKeys = new Set(
-            sample
-              .filter((game) => getPlayerAnalysisTimeControl(game) === value)
-              .map((game) => game.key),
-          );
-          const analyzedGames = analyzed.filter((game) => selectedKeys.has(game.key)).length;
-          return eligibleGames > 0 ? [{ value, eligibleGames, analyzedGames }] : [];
-        }),
-        skippedGames: skipped,
-        games: analyzed,
-      });
-      saveProfile({ ...stored, updatedAt: result.analyzedAt, engine: result });
-      if (explicitGames && !cancelled.current) onClearExplicitGames?.();
+      persist();
+      if (explicitGames && !control.cancelled) onClearExplicitGames?.();
     } finally {
-      activeAnalysisIds.current.clear();
-      setEngineLoading(false);
+      finishPlayerEngineRun(profileId, control);
+      setEngineRuns((runs) => {
+        const rest = { ...runs };
+        delete rest[profileId];
+        return rest;
+      });
     }
   }, [
     analyzeAllGames,
@@ -560,14 +632,14 @@ export default function PlayerAnalysisPanel({
     localEngines,
     onClearExplicitGames,
     profileId,
-    saveProfile,
+    setEngineRuns,
+    setState,
     stored,
   ]);
 
   const cancelEngine = useCallback(() => {
-    cancelled.current = true;
-    for (const id of activeAnalysisIds.current) void commands.cancelAnalysis(id);
-  }, []);
+    for (const id of cancelPlayerEngineRun(profileId)) void commands.cancelAnalysis(id);
+  }, [profileId]);
 
   const addCriticalToSet = useCallback(
     (critical: PlayerAnalysisCriticalPosition, perspective: PlayerAnalysisExercisePerspective) => {
@@ -767,6 +839,7 @@ export default function PlayerAnalysisPanel({
       <Paper withBorder p="sm">
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
           <DateRangeInput
+            presets
             start={filters.startDate}
             end={filters.endDate}
             onChange={(startDate, endDate) =>
@@ -883,6 +956,7 @@ export default function PlayerAnalysisPanel({
                 sampleSize: metadata.sampleSize,
                 engineLoading,
                 engineProgress,
+                engineCount,
                 run: () => void runEngineAnalysis(),
                 cancel: cancelEngine,
               }}

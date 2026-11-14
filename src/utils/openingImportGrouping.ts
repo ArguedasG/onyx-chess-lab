@@ -18,11 +18,18 @@ const STANDARD_START_FIELDS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk
 const QUICKSTARTER = /quick\s*-?\s*start(?:er)?/i;
 const PUZZLE_WORDS =
     /\b(?:puzzles?|quiz(?:zes)?|drills?|exercises?|ejercicios?|problems?|problemas?|tactics?|t[aá]cticas?)\b/i;
+// Explanations rather than lines to learn: a course's "Typical Plans" chapter.
+const PLAN_WORDS = /\b(?:typical\s+plans?|plans?|planes|ideas?|strateg(?:y|ies)|estrategias?)\b/i;
 // "Carlsen, Magnus" or "Carlsen, M." — a player, never a chapter title.
 const PERSON_NAME = /^[\p{L}'’. -]+,\s*[\p{L}'’. -]+$/u;
 
 export function isStandardStart(fen: string): boolean {
     return fen.trim().split(/\s+/).slice(0, 4).join(" ") === STANDARD_START_FIELDS;
+}
+
+/** Start of the tree a record joins (see `OpeningPgnSample.sectionFen`). */
+export function sampleSectionFen(sample: Pick<OpeningPgnSample, "startingFen" | "sectionFen">) {
+    return sample.sectionFen ?? sample.startingFen;
 }
 
 export function normalizedGroupKey(value: string): string {
@@ -45,24 +52,27 @@ function sampleLabels(sample: OpeningPgnSample): string[] {
 }
 
 /**
- * Records that start from a custom position and look like puzzles: their position is unique in
- * the file or a header says so. They cannot share a section with opening theory (a section is a
- * single tree), so the smart grouping puts them in informative sections, which keep one tree per
- * record.
+ * Records that start from a custom position and are not lines to learn: puzzles and plans (a
+ * header says so), or positions that cannot join any tree of the file. A record whose position is
+ * reached in another record joins that tree instead (see `sampleSectionFen`). Informative
+ * sections keep one tree per record, so they take any starting position.
  */
 export function getOpeningImportPuzzleIndexes(inspection: Pick<Inspection, "samples">): number[] {
     const valid = inspection.samples.filter((sample) => !sample.error);
     const fenCounts = new Map<string, number>();
     for (const sample of valid) {
-        fenCounts.set(sample.startingFen, (fenCounts.get(sample.startingFen) ?? 0) + 1);
+        const fen = sampleSectionFen(sample);
+        fenCounts.set(fen, (fenCounts.get(fen) ?? 0) + 1);
     }
+    const informative = (sample: OpeningPgnSample) =>
+        sampleLabels(sample).some((label) => PUZZLE_WORDS.test(label) || PLAN_WORDS.test(label));
     return valid
-        .filter(
-            (sample) =>
-                !isStandardStart(sample.startingFen) &&
-                (fenCounts.get(sample.startingFen) === 1 ||
-                    sampleLabels(sample).some((label) => PUZZLE_WORDS.test(label))),
-        )
+        .filter((sample) => {
+            if (isStandardStart(sample.startingFen)) return false;
+            const fen = sampleSectionFen(sample);
+            if (isStandardStart(fen)) return informative(sample);
+            return fenCounts.get(fen) === 1 || informative(sample);
+        })
         .map((sample) => sample.index);
 }
 
@@ -150,8 +160,22 @@ export function getOpeningImportGroupPreviews(
         const key = normalizedGroupKey(sample.eventName);
         eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
     }
-    const chapterLabels = mode === "smart" ? chapterLikeWhiteLabels(valid) : new Set<string>();
-    const loose = new Set(mode === "smart" ? getOpeningImportPuzzleIndexes(inspection) : []);
+    const chapterLabels = chapterLikeWhiteLabels(valid);
+    // "One section per record" keeps every record as it is; the other modes set puzzles and plans
+    // apart in informative sections.
+    const loose = new Set(mode === "records" ? [] : getOpeningImportPuzzleIndexes(inspection));
+    // A chapter of mostly puzzles or plans is informative as a whole, its introduction included,
+    // instead of leaving a one-record theory section beside it.
+    const chapterRecords = new Map<string, number[]>();
+    for (const sample of mode === "records" ? [] : valid) {
+        const chapter = smartSection(sample, chapterLabels, eventCounts)?.identity;
+        if (!chapter || chapter === "smart:model-games") continue;
+        chapterRecords.set(chapter, [...(chapterRecords.get(chapter) ?? []), sample.index]);
+    }
+    for (const indexes of chapterRecords.values()) {
+        const informative = indexes.filter((index) => loose.has(index)).length;
+        if (informative * 2 > indexes.length) for (const index of indexes) loose.add(index);
+    }
 
     const groups = new Map<string, OpeningImportGroupPreview>();
     for (const sample of valid) {
@@ -179,7 +203,7 @@ export function getOpeningImportGroupPreviews(
         const key =
             contentType === "reference"
                 ? `${contentType}|${identity}`
-                : `${contentType}|${sample.startingFen}|${identity}`;
+                : `${contentType}|${sampleSectionFen(sample)}|${identity}`;
         const existing = groups.get(key);
         if (existing) {
             existing.recordIndexes.push(sample.index);
@@ -189,7 +213,7 @@ export function getOpeningImportGroupPreviews(
             groups.set(key, {
                 key,
                 name,
-                startingFen: sample.startingFen,
+                startingFen: sampleSectionFen(sample),
                 recordIndexes: [sample.index],
                 lineCount: sample.lineCount,
                 commentCount: sample.commentCount,

@@ -31,6 +31,7 @@ import {
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { sampleSectionFen } from "@/utils/openingImportGrouping";
 import type { OpeningPgnInspection } from "@/utils/openingTraining";
 import {
   draftRecordName,
@@ -98,7 +99,8 @@ export default function OpeningImportEditor({
   function handleBeforeCapture(before: BeforeCapture) {
     if (!before.draggableId.startsWith(RECORD_PREFIX)) return;
     const recordIndex = Number(before.draggableId.slice(RECORD_PREFIX.length));
-    setDraggingFen(sampleFor(recordIndex)?.startingFen ?? null);
+    const sample = sampleFor(recordIndex);
+    setDraggingFen(sample ? sampleSectionFen(sample) : null);
   }
 
   function handleDragEnd(result: DropResult) {
@@ -296,9 +298,10 @@ export default function OpeningImportEditor({
         candidate.recordIndexes.length > 0,
     );
     // Theory and model games are a single tree: all their records must share the start.
-    const mixedStarts = section.recordIndexes.some(
-      (recordIndex) => sampleFor(recordIndex)?.startingFen !== section.startingFen,
-    );
+    const mixedStarts = section.recordIndexes.some((recordIndex) => {
+      const sample = sampleFor(recordIndex);
+      return !sample || sampleSectionFen(sample) !== section.startingFen;
+    });
     return (
       <Draggable
         key={section.key}
@@ -371,6 +374,21 @@ export default function OpeningImportEditor({
                   </Badge>
                 </Tooltip>
               )}
+              {/* Visible, not only in the menu: courses bring chapters people skip. */}
+              <Tooltip
+                label={t("OpeningImportEditor.ExcludeSection", "Do not import this section")}
+              >
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  color="gray"
+                  disabled={disabled}
+                  aria-label={t("OpeningImportEditor.ExcludeSection", "Do not import this section")}
+                  onClick={() => onChange(excludeDraftSection(draft, section.key))}
+                >
+                  <IconEyeOff size={16} />
+                </ActionIcon>
+              </Tooltip>
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target>
                   <ActionIcon size="sm" variant="subtle" color="gray" disabled={disabled}>
@@ -486,7 +504,7 @@ export default function OpeningImportEditor({
         <Text size="xs" c="dimmed" style={{ flex: 1 }}>
           {t(
             "OpeningImportEditor.Help",
-            "Drag lines between sections, rename sections and lines, or exclude what you do not want to import. Only records that share a starting position can go in the same section.",
+            "Drag lines between sections, rename sections and lines, or use the crossed-out eye to leave out a line or a whole section. A section can hold records that start further on in its own lines, as course chapters do.",
           )}
         </Text>
         <Group gap={4}>

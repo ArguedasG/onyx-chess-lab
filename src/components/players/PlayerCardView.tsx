@@ -594,18 +594,25 @@ export default function PlayerCardView({
               onClearExplicitGames={() => setExplicitGameKeys(null)}
               onAddToMistakes={
                 trainingOwner
-                  ? (critical) => {
+                  ? (criticals) => {
                       updateQueues((current) =>
                         withOwnerQueue(current, trainingOwner, (queue) => {
-                          const { queue: next, added } = addMistakes(queue, [critical]);
+                          const { queue: next, added } = addMistakes(queue, criticals);
+                          const single = criticals.length === 1;
                           notifications.show({
                             color: added ? "green" : "gray",
-                            message: added
-                              ? t("Mistakes.AddedOne", "Added to My mistakes.")
-                              : t(
-                                  "Mistakes.AlreadyThere",
-                                  "That position is already in the queue.",
-                                ),
+                            message: single
+                              ? added
+                                ? t("Mistakes.AddedOne", "Added to My mistakes.")
+                                : t(
+                                    "Mistakes.AlreadyThere",
+                                    "That position is already in the queue.",
+                                  )
+                              : added
+                                ? t("Mistakes.Added", "{{count}} errors added to the queue.", {
+                                    count: added,
+                                  })
+                                : t("Mistakes.NothingNew", "No new errors in this analysis."),
                           });
                           return next;
                         }),
