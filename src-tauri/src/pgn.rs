@@ -72,14 +72,14 @@ impl PgnParser {
 
         let mut line = String::new();
         loop {
-            let res = self.reader.read_line(&mut line);
-            if res.is_err() {
-                continue;
-            }
-            let bytes = res.unwrap();
+            let bytes = read_pgn_line(&mut self.reader, &mut line)?;
             skipped += bytes;
             if bytes == 0 {
                 break;
+            }
+            if !in_comment && is_neutral_line(&line) {
+                line.clear();
+                continue;
             }
             let is_header = !in_comment && line.starts_with('[');
             for c in line.chars() {
@@ -111,13 +111,17 @@ impl PgnParser {
         let mut in_comment = false;
         self.game.clear();
         loop {
-            let res = self.reader.read_line(&mut self.line);
-            if res.is_err() {
-                continue;
-            }
-            let bytes = res.unwrap();
+            let bytes = read_pgn_line(&mut self.reader, &mut self.line)?;
             if bytes == 0 {
                 break;
+            }
+            if !in_comment && is_neutral_line(&self.line) {
+                // Escape lines are not part of the game; blank lines are kept as they were.
+                if !self.line.starts_with('%') {
+                    self.game.push_str(&self.line);
+                }
+                self.line.clear();
+                continue;
             }
             let is_header = !in_comment && self.line.starts_with('[');
             for c in self.line.chars() {
@@ -138,6 +142,71 @@ impl PgnParser {
             self.line.clear();
         }
         Ok(self.game.clone())
+    }
+}
+
+/// Blank lines and "%" escape lines (PGN standard 6) neither start nor end a
+/// game, so a preamble such as "%BOOKTITLE" does not become an empty record.
+fn is_neutral_line(line: &str) -> bool {
+    line.starts_with('%') || line.trim().is_empty()
+}
+
+/// Reads one line ending in LF, CRLF or a lone CR (classic Mac files, as some
+/// publishers' PGNs still are) and appends it to `out` ending in "\n".
+/// Returns the raw bytes consumed so callers can seek back over the line.
+/// A line that is not valid UTF-8 is decoded as Windows-1252, the usual
+/// encoding of older PGN exports, instead of being dropped.
+fn read_pgn_line<R: BufRead>(reader: &mut R, out: &mut String) -> io::Result<usize> {
+    let mut raw: Vec<u8> = Vec::new();
+    let mut consumed = 0;
+    let mut ended = false;
+    while !ended {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            break;
+        }
+        let (used, end) = match available.iter().position(|&b| b == b'\n' || b == b'\r') {
+            Some(i) => {
+                raw.extend_from_slice(&available[..i]);
+                (i + 1, Some(available[i]))
+            }
+            None => {
+                raw.extend_from_slice(available);
+                (available.len(), None)
+            }
+        };
+        reader.consume(used);
+        consumed += used;
+        if let Some(terminator) = end {
+            ended = true;
+            if terminator == b'\r' {
+                let next = reader.fill_buf()?;
+                if next.first() == Some(&b'\n') {
+                    reader.consume(1);
+                    consumed += 1;
+                }
+            }
+        }
+    }
+    match std::str::from_utf8(&raw) {
+        Ok(text) => out.push_str(text),
+        Err(_) => out.extend(raw.iter().map(|&b| windows_1252_char(b))),
+    }
+    if ended {
+        out.push('\n');
+    }
+    Ok(consumed)
+}
+
+fn windows_1252_char(byte: u8) -> char {
+    const HIGH_CONTROL: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8D}', 'Ž',
+        '\u{8F}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9D}',
+        'ž', 'Ÿ',
+    ];
+    match byte {
+        0x80..=0x9F => HIGH_CONTROL[(byte - 0x80) as usize],
+        _ => byte as char,
     }
 }
 
@@ -324,6 +393,60 @@ mod tests {
             }
         }
         assert!(parser.read_game().unwrap().is_empty());
+    }
+
+    #[test]
+    fn reads_classic_mac_line_endings_and_latin1_text() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("mac.pgn");
+        let mut bytes = b"%BOOKTITLE = Test\r".to_vec();
+        for index in 0..3 {
+            bytes.extend_from_slice(
+                format!("[Event \"Game {index}\"]\r[Result \"*\"]\r\r{{Gr").as_bytes(),
+            );
+            bytes.push(0xFC); // ü in Latin-1, invalid UTF-8
+            bytes.extend_from_slice(b"nfeld}\r1. d4 Nf6 *\r\r");
+        }
+        std::fs::write(&file, bytes).unwrap();
+
+        let mut parser = PgnParser::new(File::open(&file).unwrap());
+        let mut count = 0;
+        while parser.skip_games(1).unwrap() > 0 {
+            count += 1;
+        }
+        assert_eq!(count, 3);
+
+        let mut parser = PgnParser::new(File::open(&file).unwrap());
+        for index in 0..3 {
+            let record = parser.read_game().unwrap();
+            assert!(
+                record.contains(&format!("[Event \"Game {index}\"]\n")),
+                "{record}"
+            );
+            assert!(record.contains("{Grünfeld}\n1. d4 Nf6 *"), "{record}");
+            assert!(!record.contains('\r'));
+        }
+        assert!(parser.read_game().unwrap().is_empty());
+    }
+
+    #[test]
+    fn crlf_files_keep_working_after_skipping_by_offset() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("crlf.pgn");
+        let text: String = (0..150).map(|i| game(i).replace('\n', "\r\n")).collect();
+        std::fs::write(&file, text).unwrap();
+        let mut parser = PgnParser::new(File::open(&file).unwrap());
+        let mut count = 0;
+        while parser.skip_games(1).unwrap() > 0 {
+            count += 1;
+        }
+        assert_eq!(count, 150);
+        let mut parser = PgnParser::new(File::open(&file).unwrap());
+        parser.skip_games(120).unwrap();
+        assert!(parser
+            .read_game()
+            .unwrap()
+            .starts_with("[Event \"Game 120\"]\n"));
     }
 
     #[test]

@@ -2,6 +2,7 @@ import i18n from "i18next";
 import { z } from "zod";
 import { getMainLine, parsePGN } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
+import { normalizePgnLineEndings } from "@/utils/pgnText";
 import { getGameName } from "@/utils/treeReducer";
 
 export const TRAINING_AREAS_SCHEMA_VERSION = 12;
@@ -856,7 +857,7 @@ function isFenLine(value: string): boolean {
 }
 
 function splitPgnRecords(raw: string): string[] {
-    const lines = raw.replace(/\r/g, "").split("\n");
+    const lines = normalizePgnLineEndings(raw).split("\n");
     const blocks: string[] = [];
     let current: string[] = [];
 
@@ -884,7 +885,7 @@ export async function parseTrainingRecords(
     if (!trimmed) throw new Error(i18n.t("Errors.FileEmpty", "The file is empty."));
 
     const nonEmptyLines = trimmed
-        .split(/\r?\n/)
+        .split(/\r\n?|\n/)
         .map((line) => line.trim())
         .filter(Boolean);
     if (nonEmptyLines.length > 0 && nonEmptyLines.every(isFenLine)) {

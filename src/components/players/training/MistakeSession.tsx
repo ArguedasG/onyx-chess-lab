@@ -48,11 +48,18 @@ function sanOf(fen: string, uci: string) {
  */
 export default function MistakeSession({
   items,
+  startIndex = 0,
+  startResults = [],
+  onProgress,
   onResult,
   onOpenGame,
   onClose,
 }: {
   items: MistakeItem[];
+  /** Where a session interrupted by "Open the game" resumes. */
+  startIndex?: number;
+  startResults?: MistakeResult[];
+  onProgress?: (index: number, results: MistakeResult[]) => void;
   onResult: (item: MistakeItem, result: MistakeResult) => void;
   onOpenGame: (item: MistakeItem) => void;
   onClose: () => void;
@@ -60,7 +67,7 @@ export default function MistakeSession({
   const { t } = useTranslation();
   const engines = useAtomValue(enginesAtom);
   const engine = useMemo(() => pickReferenceEngine(engines ?? []), [engines]);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(startIndex);
   const [phase, setPhase] = useState<Phase>("find");
   const [wrongTries, setWrongTries] = useState(0);
   const [attempt, setAttempt] = useState<{ uci: string; san: string } | null>(null);
@@ -70,7 +77,7 @@ export default function MistakeSession({
   const [attemptLine, setAttemptLine] = useState<EngineLine | null>(null);
   const [view, setView] = useState<ReviewLineView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<MistakeResult[]>([]);
+  const [results, setResults] = useState<MistakeResult[]>(startResults);
   const item = items[index];
   const done = index >= items.length;
 
@@ -162,8 +169,10 @@ export default function MistakeSession({
     const result: MistakeResult =
       phase === "solution" ? "failed" : wrongTries > 0 ? "hard" : "solved";
     onResult(item, result);
-    setResults((previous) => [...previous, result]);
-    setIndex((value) => value + 1);
+    const nextResults = [...results, result];
+    setResults(nextResults);
+    setIndex(index + 1);
+    onProgress?.(index + 1, nextResults);
     setPhase("find");
     setWrongTries(0);
     setAttempt(null);

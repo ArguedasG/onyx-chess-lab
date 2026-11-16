@@ -15,7 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import { IconArrowLeft, IconBook2, IconPlayerPlay, IconUpload } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { Link, useLoaderData, useNavigate } from "@tanstack/react-router";
@@ -59,7 +59,7 @@ export default function OpeningTrainingPage() {
     if (typeof selected !== "string") return;
 
     try {
-      const raw = await readTextFile(selected);
+      const raw = await readPgnTextFile(selected);
       const records = await parseTrainingRecords(raw);
       if (records.length === 0)
         throw new Error(

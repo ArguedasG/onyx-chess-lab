@@ -14,7 +14,7 @@ import {
   Title,
 } from "@mantine/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import { IconArrowLeft, IconPlayerPlay, IconPuzzle, IconUpload } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -65,7 +65,7 @@ export default function TacticsTrainingPage() {
     if (typeof selected !== "string") return;
 
     try {
-      const records = await parseTrainingRecords(await readTextFile(selected));
+      const records = await parseTrainingRecords(await readPgnTextFile(selected));
       const usable = records.filter((record) => record.hasExplicitFen);
       if (usable.length === 0) {
         throw new Error(

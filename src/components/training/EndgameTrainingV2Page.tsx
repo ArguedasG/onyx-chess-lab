@@ -14,7 +14,7 @@ import {
 import MaiaRequiredAlert from "@/components/common/MaiaRequiredAlert";
 import { Modal } from "@/components/common/Modal";
 import { resolveResource } from "@tauri-apps/api/path";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -131,7 +131,7 @@ export default function EndgameTrainingV2Page() {
     Promise.all(
       bundledEndgameFiles.map(async (file) => {
         const path = await resolveResource(`training/endgames/${file}`);
-        const records = await parseTrainingRecords(await readTextFile(path), {
+        const records = await parseTrainingRecords(await readPgnTextFile(path), {
           requireExplicitFen: true,
           skipInvalid: true,
         });
@@ -184,7 +184,7 @@ export default function EndgameTrainingV2Page() {
 
   async function readImport(path: string) {
     try {
-      const records = await parseTrainingRecords(await readTextFile(path), {
+      const records = await parseTrainingRecords(await readPgnTextFile(path), {
         requireExplicitFen: true,
         skipInvalid: true,
       });

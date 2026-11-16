@@ -17,7 +17,7 @@ import {
 } from "@mantine/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { resolveResource } from "@tauri-apps/api/path";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import {
   IconArrowLeft,
   IconChess,
@@ -138,7 +138,7 @@ export default function EndgameTrainingPage() {
     Promise.all(
       bundledEndgameFiles.map(async ({ file, name }) => {
         const path = await resolveResource(`training/endgames/${file}`);
-        const records = await parseTrainingRecords(await readTextFile(path), {
+        const records = await parseTrainingRecords(await readPgnTextFile(path), {
           requireExplicitFen: true,
           skipInvalid: true,
         });
@@ -185,7 +185,7 @@ export default function EndgameTrainingPage() {
     if (typeof selected !== "string") return;
 
     try {
-      const usable = await parseTrainingRecords(await readTextFile(selected), {
+      const usable = await parseTrainingRecords(await readPgnTextFile(selected), {
         requireExplicitFen: true,
         skipInvalid: true,
       });

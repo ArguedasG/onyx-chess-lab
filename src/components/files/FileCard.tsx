@@ -23,7 +23,7 @@ import {
   IconZoomCheck,
 } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -152,7 +152,7 @@ function FileCard({
 
   async function addToStudy() {
     try {
-      const chapters = await parseStudyPgnText(await readTextFile(selected.path));
+      const chapters = await parseStudyPgnText(await readPgnTextFile(selected.path));
       setStudyGames(
         chapters.map((chapter, index) => ({
           title: chapter.generatedTitle

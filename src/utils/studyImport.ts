@@ -1,4 +1,5 @@
 import { parsePGN } from "./chess";
+import { normalizePgnLineEndings } from "./pgnText";
 import { getGameName } from "./treeReducer";
 
 export const MAX_PASTED_PGN_CHARACTERS = 5_000_000;
@@ -23,7 +24,7 @@ export type ImportedStudyChapter = {
 };
 
 export function splitPgnTextRecords(raw: string): string[] {
-    const lines = raw.replace(/\r/g, "").split("\n");
+    const lines = normalizePgnLineEndings(raw).split("\n");
     const records: string[] = [];
     let current: string[] = [];
 

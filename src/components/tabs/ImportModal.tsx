@@ -14,7 +14,8 @@ import { Modal } from "@/components/common/Modal";
 import { useLoaderData } from "@tanstack/react-router";
 import { resolve, tempDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { readPgnTextFile } from "@/utils/pgnText";
 import { makeFen, parseFen } from "chessops/fen";
 import { useAtom, useStore } from "jotai";
 import { useState } from "react";
@@ -68,18 +69,21 @@ export default function ImportModal({
   const [save, setSave] = useState(false);
   const [filename, setFilename] = useState("");
   const [error, setError] = useState("");
+  const [importError, setImportError] = useState("");
   const { documentDir } = useLoaderData({ from: "/" });
   const store = useStore();
 
-  async function handleSubmit() {
-    setLoading(true);
+  async function submitImport(): Promise<boolean> {
     if (importType === "PGN") {
       if (file || pgn) {
         if (file) {
           let fileInfo: FileMetadata | undefined;
           const count = unwrap(await commands.countPgnGames(file));
-          const fileContent = await readTextFile(file);
-          const input = unwrap(await commands.readGames(file, 0, 0))[0];
+          const input = count > 0 ? unwrap(await commands.readGames(file, 0, 0))[0] : undefined;
+          if (!input) {
+            throw new Error(t("Import.NoGamesInFile", "No games were found in this PGN file."));
+          }
+          const fileContent = await readPgnTextFile(file);
           if (save) {
             const newFile = await createFile({
               filename,
@@ -89,8 +93,7 @@ export default function ImportModal({
             });
             if (newFile.isErr) {
               setError(newFile.error.message);
-              setLoading(false);
-              return;
+              return false;
             }
             fileInfo = newFile.value;
           } else {
@@ -139,15 +142,13 @@ export default function ImportModal({
       }
     } else if (importType === "Link") {
       if (!link) {
-        setLoading(false);
-        return;
+        return false;
       }
       let pgn = "";
       if (link.includes("chess.com")) {
         const res = await getChesscomGame(link);
         if (res === null) {
-          setLoading(false);
-          return;
+          return false;
         }
         pgn = res;
       } else if (link.includes("lichess")) {
@@ -156,8 +157,7 @@ export default function ImportModal({
           .split("/")
           .find((x) => x && !excludedPathParts.includes(x));
         if (!gameId) {
-          setLoading(false);
-          return;
+          return false;
         }
         pgn = await getLichessGame(gameId);
       }
@@ -178,8 +178,7 @@ export default function ImportModal({
       const res = parseFen(fen.trim());
       if (res.isErr) {
         setFenError(chessopsError(res.error));
-        setLoading(false);
-        return;
+        return false;
       }
       setFenError("");
       const parsedFen = makeFen(res.value);
@@ -197,8 +196,23 @@ export default function ImportModal({
         };
       });
     }
-    setLoading(false);
-    setOpenModal(false);
+    return true;
+  }
+
+  async function handleSubmit() {
+    setLoading(true);
+    setImportError("");
+    try {
+      if (await submitImport()) setOpenModal(false);
+    } catch (failure) {
+      setImportError(
+        failure instanceof Error
+          ? failure.message
+          : String(failure || t("Import.Failed", "The import failed.")),
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   const Input = match(importType)
@@ -344,6 +358,12 @@ export default function ImportModal({
       </Group>
 
       {Input}
+
+      {importError && (
+        <Text c="red" fz="sm" mt="sm">
+          {importError}
+        </Text>
+      )}
 
       <Button
         fullWidth

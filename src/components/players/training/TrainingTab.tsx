@@ -1,10 +1,11 @@
 import { Center, Loader, NavLink, Paper, ScrollArea, Stack, Text, Group } from "@mantine/core";
 import { IconDroplet, IconListCheck, IconPlaylistAdd, IconShieldHalf } from "@tabler/icons-react";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMistakeQueues } from "@/state/mistakeQueue";
+import { mistakeReviewFamily } from "@/state/mistakeReview";
 import {
   addMistakes,
   type MistakeFilter,
@@ -82,10 +83,7 @@ export default function TrainingTab({
 }) {
   const { t } = useTranslation();
   const [section, setSection] = useAtom(sectionAtom);
-  const [queueFilter, setQueueFilter] = useState<{ filter: MistakeFilter; version: number }>({
-    filter: {},
-    version: 0,
-  });
+  const setReview = useSetAtom(mistakeReviewFamily(owner));
   const [practice, setPractice] = useState<{ kind: "conversion" | "defense"; version: number }>({
     kind: "conversion",
     version: 0,
@@ -95,7 +93,8 @@ export default function TrainingTab({
   const criticals = useMemo(() => filteredCriticals(engine, games), [engine, games]);
 
   const reviewQueue = (filter: MistakeFilter) => {
-    setQueueFilter((previous) => ({ filter, version: previous.version + 1 }));
+    // A new filter from Priorities or Leaks replaces the list; a session in progress is left as is.
+    setReview((previous) => ({ ...previous, filter, page: 1 }));
     setSection("queue");
   };
   const openSource = (item: MistakeItem) => {
@@ -151,13 +150,12 @@ export default function TrainingTab({
             </Center>
           ) : (
             <MistakeQueueSection
-              key={queueFilter.version}
+              owner={owner}
               queue={queue}
               onChange={(change) => update((current) => withOwnerQueue(current, owner, change))}
               criticals={criticals}
               name={name}
               isSelf={isSelf}
-              initialFilter={queueFilter.filter}
               onOpenSource={openSource}
             />
           )

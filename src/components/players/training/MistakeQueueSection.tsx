@@ -26,8 +26,10 @@ import {
 } from "@tabler/icons-react";
 import { ask, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
-import { useMemo, useState } from "react";
+import { useAtom } from "jotai";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { mistakeReviewFamily } from "@/state/mistakeReview";
 import type { LeakCategory } from "@/utils/mistakes/leaks";
 import {
   addMistakes,
@@ -65,24 +67,34 @@ export default function MistakeQueueSection({
   queue,
   onChange,
   criticals,
+  owner,
   name,
   isSelf,
-  initialFilter,
   onOpenSource,
 }: {
   queue: MistakeQueue;
   onChange: (change: (queue: MistakeQueue) => MistakeQueue) => void;
   /** Errors of the current engine analysis, within the card filters. */
   criticals: PlayerAnalysisCriticalPosition[];
+  /** Owner of the queue: the review state (filter, page, session) is kept per owner. */
+  owner: string;
   name: string;
   isSelf: boolean;
-  initialFilter?: MistakeFilter;
   onOpenSource: (item: MistakeItem) => void;
 }) {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<MistakeFilter>(initialFilter ?? {});
-  const [session, setSession] = useState<MistakeItem[] | null>(null);
-  const [page, setPage] = useState(1);
+  // Kept outside the component: opening a game leaves this page, and coming back must find the
+  // same list and the session where it was.
+  const [review, setReview] = useAtom(mistakeReviewFamily(owner));
+  const { filter, page, session } = review;
+  const setFilter = (change: (previous: MistakeFilter) => MistakeFilter) =>
+    setReview((previous) => ({ ...previous, filter: change(previous.filter), page: 1 }));
+  const setPage = (value: number) => setReview((previous) => ({ ...previous, page: value }));
+  const setSession = (items: MistakeItem[] | null) =>
+    setReview((previous) => ({
+      ...previous,
+      session: items ? { items, index: 0, results: [] } : null,
+    }));
   const summary = useMemo(() => summarizeQueue(queue), [queue]);
   const pending = useMemo(() => addMistakes(queue, criticals).added, [criticals, queue]);
   const filtered = useMemo(
@@ -122,7 +134,16 @@ export default function MistakeQueueSection({
     <Stack gap="md">
       {session && (
         <MistakeSession
-          items={session}
+          items={session.items}
+          startIndex={session.index}
+          startResults={session.results}
+          onProgress={(index, results) =>
+            setReview((previous) =>
+              previous.session
+                ? { ...previous, session: { ...previous.session, index, results } }
+                : previous,
+            )
+          }
           onResult={(item, result) =>
             onChange((current) => {
               const stored = current.items[item.id];
@@ -287,7 +308,6 @@ export default function MistakeQueueSection({
                   ...previous,
                   phase: value === "all" ? undefined : (value as MistakeItem["phase"]),
                 }));
-                setPage(1);
               }}
               data={[
                 {
@@ -313,7 +333,6 @@ export default function MistakeQueueSection({
                   ...previous,
                   category: (value as LeakCategory | null) ?? undefined,
                 }));
-                setPage(1);
               }}
               data={summary.byCategory.map((row) => ({
                 value: row.category,
