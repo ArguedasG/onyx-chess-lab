@@ -1,5 +1,48 @@
 [
   {
+    "version": "0.27.3",
+    "notes": {
+      "en": {
+        "summary": "PGN files saved in the old Mac format import correctly, a failed import no longer leaves the button loading, and Review my mistakes picks up where you left off after opening a game.",
+        "sections": [
+          {
+            "title": "PGN import",
+            "items": [
+              "Some PGN files, often older exports from chess publishers, use classic Mac line endings (no line feeds) and a non-UTF-8 text encoding. Onyx read the whole file as a single invalid line, found no games and failed with “invalid args `pgn` for command `lex_pgn`”. These files now import with all their games, and accents such as the “ü” of Grünfeld are kept.",
+              "Lines that start with “%” before the first game (such as “%BOOKTITLE”) are ignored, as the PGN standard says, instead of becoming an empty first game.",
+              "If an import from a file fails, the Import window shows the reason and the button can be used again, without restarting Onyx. A file with no games says so."
+            ]
+          },
+          {
+            "title": "Review my mistakes",
+            "items": [
+              "Opening a game from a review session no longer loses the session. When you return with the back arrow of the game tab, the session reopens on the same mistake, with its counter, and keeps the filter you came from (for example, hanging pieces from Priorities). Opening a game from the list brings you back to the same filtered list and page."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Los PGN guardados con el formato antiguo de Mac se importan bien, una importación fallida ya no deja el botón cargando, y Repasar mis errores sigue donde lo dejaste después de abrir una partida.",
+        "sections": [
+          {
+            "title": "Importar PGN",
+            "items": [
+              "Algunos archivos PGN, a menudo exportaciones antiguas de editoriales de ajedrez, usan los saltos de línea del Mac clásico (sin saltos de línea LF) y una codificación de texto que no es UTF-8. Onyx leía el archivo entero como una sola línea no válida, no encontraba partidas y fallaba con «invalid args `pgn` for command `lex_pgn`». Ahora se importan con todas sus partidas y se conservan los acentos, como la «ü» de Grünfeld.",
+              "Las líneas que empiezan con «%» antes de la primera partida (como «%BOOKTITLE») se ignoran, como indica el estándar PGN, en vez de convertirse en una primera partida vacía.",
+              "Si falla la importación de un archivo, la ventana de Importar muestra el motivo y el botón se puede volver a usar sin reiniciar Onyx. Un archivo sin partidas lo indica."
+            ]
+          },
+          {
+            "title": "Repasar mis errores",
+            "items": [
+              "Abrir una partida desde una sesión de repaso ya no pierde la sesión. Al volver con la flecha de la pestaña de la partida, la sesión se reabre en el mismo error, con su contador, y conserva el filtro desde el que llegaste (por ejemplo, piezas colgadas desde Prioridades). Abrir una partida desde la lista te devuelve a la misma lista filtrada y la misma página."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.27.2",
     "notes": {
       "en": {
