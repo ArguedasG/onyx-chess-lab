@@ -7,6 +7,7 @@ import {
     type RushSettings,
 } from "@/utils/puzzleSession";
 import type { ContinuousColor, ContinuousSession } from "@/utils/openingContinuous";
+import type { DrawShape } from "@lichess-org/chessground/draw";
 import type { MantineColor } from "@mantine/core";
 import { resolve } from "@tauri-apps/api/path";
 import { exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -636,6 +637,25 @@ export const currentRivalBookAtom = tabValue(rivalBookFamily);
 
 export const dbTabFamily = atomFamily((_tab: string) => atom("stats"));
 export const currentDbTabAtom = tabValue(dbTabFamily);
+
+/** Preferences of the database panel's Plans view, shared by every tab. */
+export type PlansPreferences = {
+    window: number;
+    minShare: number;
+    hideCaptures: boolean;
+    showOnBoard: boolean;
+};
+export const plansPreferencesAtom = atomWithStorage<PlansPreferences>("database-plans", {
+    window: 4,
+    minShare: 0.2,
+    hideCaptures: false,
+    showOnBoard: true,
+});
+/** The side whose plans a tab shows; null follows the side to move. */
+export const plansSideFamily = atomFamily((_tab: string) => atom<"white" | "black" | null>(null));
+/** Arrows the Plans view draws on its tab's board while it is open. */
+export const plansShapesFamily = atomFamily((_tab: string) => atom<DrawShape[]>([]));
+export const currentPlansShapesAtom = tabValue(plansShapesFamily);
 
 export const openingReportReopenFamily = atomFamily((_tab: string) => atom(0));
 export const openingReportCacheFamily = atomFamily((_tab: string) =>

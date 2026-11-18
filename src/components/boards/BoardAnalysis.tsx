@@ -36,6 +36,7 @@ import {
   currentAnalysisTabAtom,
   currentPracticeTabAtom,
   currentReportModalOpenAtom,
+  currentPlansShapesAtom,
   currentTabAtom,
   currentTabSelectedAtom,
   showEngineStripAtom,
@@ -312,6 +313,7 @@ function BoardAnalysis() {
   // Engine lines would give away repertoire answers, and mean nothing while editing a position.
   // The Engines tab shows the same strip in the panel, so the board gets the room back.
   const showEngineStrip = useAtomValue(showEngineStripAtom);
+  const plansShapes = useAtomValue(currentPlansShapesAtom);
   const [showAnnotationBar, setShowAnnotationBar] = useAtom(annotationToolbarAtom);
   const engineStrip = useMemo(
     () =>
@@ -484,6 +486,7 @@ function BoardAnalysis() {
           boardRef={boardRef}
           selectedPiece={selectedPiece}
           fitWidth={bookLayout}
+          overlayShapes={plansShapes}
           footer={
             bookLayout ? (
               <Stack gap={6}>

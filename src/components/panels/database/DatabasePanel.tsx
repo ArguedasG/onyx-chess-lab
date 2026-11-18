@@ -3,27 +3,27 @@ import {
   Alert,
   Badge,
   Button,
-  Collapse,
   Group,
+  Menu,
   ScrollArea,
   SegmentedControl,
   Select,
   Stack,
   Text,
   Tooltip,
-  UnstyledButton,
 } from "@mantine/core";
 import {
+  IconCheck,
+  IconChess,
+  IconChessKnight,
   IconChevronDown,
   IconFilter,
   IconGridPattern,
   IconRefresh,
-  IconSwitchVertical,
   IconX,
 } from "@tabler/icons-react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useAtom, useAtomValue } from "jotai";
-import { atomWithStorage } from "jotai/utils";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr/immutable";
@@ -65,11 +65,13 @@ import GamesTable from "./GamesTable";
 import NoDatabaseWarning, { LichessLoginRequired } from "./NoDatabaseWarning";
 import OpeningsTable from "./OpeningsTable";
 import PatternSearchModal from "./PatternSearchModal";
+import PlansPanel from "./PlansPanel";
 import OpeningReportPanel from "./OpeningReportPanel";
 import RemoteOpeningReportPanel from "./RemoteOpeningReportPanel";
 import ReferenceGamePreview, { type ReferencePreview } from "./ReferenceGamePreview";
 import RivalExplorer from "./RivalExplorer";
 import classes from "./DatabasePanel.module.css";
+import { filterSummary } from "./filterSummary";
 import LichessOptionsPanel from "./options/LichessOptionsPanel";
 import LocalOptionsPanel from "./options/LocalOptionsPanel";
 import MasterOptionsPanel from "./options/MastersOptionsPanel";
@@ -114,17 +116,6 @@ export type PatternOptions = {
   /** The board holds the drawn pieces and no other (kings always count as there). */
   exactMaterial: boolean;
 };
-
-/** Which explorer sections are folded (true = folded), and which one goes on top. */
-const databaseSectionsAtom = atomWithStorage<{
-  reference: boolean;
-  games: boolean;
-  gamesFirst?: boolean;
-}>("database-panel-sections", {
-  reference: false,
-  games: false,
-  gamesFirst: false,
-});
 
 function sortOpenings(openings: Opening[]) {
   return openings.sort(
@@ -300,11 +291,21 @@ function DatabasePanel() {
     0,
   );
 
-  // "stats", "games" and "options" were tabs; they all live in the explorer view now.
-  const view = tabType === "report" ? "report" : "explorer";
   const reportDisabled = dbType.type === "local" && dbType.options.type !== "exact";
+  // A drawn pattern has no table of moves: what it finds are games.
   const showReference = !(dbType.type === "local" && dbType.options.type === "partial");
-  const [sections, setSections] = useAtom(databaseSectionsAtom);
+  // The moves table is stored as "stats", its old tab name ("options" was a tab too, long gone).
+  // Plans read whole games of a local query (Lichess gives no games per position).
+  // A pawn structure counts too (pieces by destination); a drawn pattern does not.
+  const plansDisabled = dbType.type !== "local" || dbType.options.type === "partial";
+  const view: "moves" | "games" | "plans" | "report" =
+    tabType === "report" && !reportDisabled
+      ? "report"
+      : tabType === "plans" && !plansDisabled
+        ? "plans"
+        : tabType === "games" || !showReference
+          ? "games"
+          : "moves";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [patternOpen, setPatternOpen] = useState(false);
   const patternActive = source === "local" && localOptions.type === "partial";
@@ -314,15 +315,6 @@ function DatabasePanel() {
   useEffect(() => {
     setPreview(null);
   }, [debouncedFen, db, referenceDatabase]);
-
-  // Arriving for games (a player from the report, "see games", or back from a game opened from
-  // the list) puts them first: the reference folds for this tab until the user reopens it.
-  const [focusGames, setFocusGames] = useState(false);
-  useEffect(() => {
-    if (tabType !== "games") return;
-    setSections((current) => ({ ...current, games: false }));
-    setFocusGames(true);
-  }, [tabType, setSections]);
 
   const sourceControl = (
     <SegmentedControl
@@ -338,9 +330,55 @@ function DatabasePanel() {
     />
   );
 
+  const followBoard = () =>
+    setLocalOptions((q) => ({ ...q, type: "exact", fen: debouncedFen, pattern: null }));
+  const searchMode = localOptions.type;
+  const searchModes = [
+    {
+      mode: "exact",
+      icon: <IconChessKnight size={14} />,
+      label: t("Board.Database.SearchBy.Position", "Board position"),
+      description: t(
+        "Board.Database.SearchBy.PositionDesc",
+        "Games that reached the position on the board.",
+      ),
+      onClick: followBoard,
+    },
+    {
+      mode: "pawns",
+      icon: <IconChess size={14} />,
+      label: t("Board.Database.Local.PawnStructure", "Pawn structure"),
+      description: t(
+        "Board.Database.Local.PawnStructure.Desc",
+        "Find games that reached the same pawn structure, wherever the other pieces are.",
+      ),
+      onClick: () => {
+        setLocalOptions((q) => ({ ...q, type: "pawns", fen: debouncedFen, pattern: null }));
+        if (tabType === "report") setTabType("games");
+      },
+    },
+    {
+      mode: "partial",
+      icon: <IconGridPattern size={14} />,
+      label: t("PatternSearch.Button", "Pattern"),
+      description: t(
+        "PatternSearch.ButtonTip",
+        "Find games where some pieces stood on some squares, whatever the rest of the board.",
+      ),
+      onClick: () => setPatternOpen(true),
+    },
+  ] as const;
+  const currentSearch = searchModes.find((item) => item.mode === searchMode) ?? searchModes[0];
+
+  const summary = filterSummary(
+    source,
+    { local: localOptions, lichess: lichessOptions, masters: masterOptions, weak: weakFilter },
+    t,
+  );
+
   const toolbar = (
     <>
-      <Group gap={6} wrap="wrap" mb={4}>
+      <Group gap={6} wrap="wrap" mb={6}>
         {sourceControl}
         {source === "local" && (
           <Select
@@ -352,45 +390,74 @@ function DatabasePanel() {
             }}
             placeholder={t("Board.Database.ChooseReference")}
             size="xs"
-            w={180}
+            w={170}
             allowDeselect={false}
           />
         )}
         {source === "local" && (
+          <Menu position="bottom-start" shadow="md" width={280}>
+            <Menu.Target>
+              <Button
+                size="compact-xs"
+                variant={searchMode === "exact" ? "default" : "light"}
+                leftSection={currentSearch.icon}
+                rightSection={<IconChevronDown size={12} />}
+                title={t("Board.Database.SearchBy", "Search by")}
+              >
+                {currentSearch.label}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>{t("Board.Database.SearchBy", "Search by")}</Menu.Label>
+              {searchModes.map((item) => (
+                <Menu.Item
+                  key={item.mode}
+                  leftSection={item.icon}
+                  rightSection={item.mode === searchMode ? <IconCheck size={14} /> : null}
+                  onClick={item.onClick}
+                >
+                  <Text size="sm">{item.label}</Text>
+                  <Text size="xs" c="dimmed">
+                    {item.description}
+                  </Text>
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        )}
+        <Tooltip label={summary.join(" · ")} disabled={summary.length === 0} multiline maw={300}>
           <Button
             size="compact-xs"
-            variant={localOptions.type === "pawns" ? "filled" : "default"}
-            title={t(
-              "Board.Database.Local.PawnStructure.Desc",
-              "Find games that reached the same pawn structure, wherever the other pieces are.",
-            )}
-            onClick={() => {
-              const pawns = localOptions.type !== "pawns";
-              setLocalOptions((q) => ({
-                ...q,
-                type: pawns ? "pawns" : "exact",
-                fen: debouncedFen,
-              }));
-              if (pawns && tabType === "report") setTabType("games");
-            }}
+            variant={filtersOpen || summary.length > 0 ? "light" : "default"}
+            leftSection={<IconFilter size={13} />}
+            maw={260}
+            styles={{ inner: { minWidth: 0 }, label: { minWidth: 0, overflow: "hidden" } }}
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
           >
-            {t("Board.Database.Local.PawnStructure", "Pawn structure")}
+            {/* The label stays a centred flex box; only this span truncates. */}
+            <span className={classes.ellipsis}>
+              {summary.length > 0 ? summary.join(" · ") : t("Board.Database.Filters", "Filters")}
+            </span>
           </Button>
-        )}
-        {source === "local" && (
-          <Button
-            size="compact-xs"
-            variant={patternActive ? "filled" : "default"}
-            leftSection={<IconGridPattern size={13} />}
-            title={t(
-              "PatternSearch.ButtonTip",
-              "Find games where some pieces stood on some squares, whatever the rest of the board.",
-            )}
-            onClick={() => setPatternOpen(true)}
-          >
-            {t("PatternSearch.Button", "Pattern")}
-          </Button>
-        )}
+        </Tooltip>
+      </Group>
+      <Group gap={6} wrap="nowrap" mb={4}>
+        <SegmentedControl
+          size="xs"
+          value={view}
+          onChange={(value) => setTabType(value === "moves" ? "stats" : value)}
+          data={[
+            {
+              label: t("Board.Database.Moves", "Moves"),
+              value: "moves",
+              disabled: !showReference,
+            },
+            { label: t("Board.Database.Games"), value: "games" },
+            { label: t("Board.Database.Plans", "Plans"), value: "plans", disabled: plansDisabled },
+            { label: t("OpeningReport.Tab"), value: "report", disabled: reportDisabled },
+          ]}
+        />
         {patternActive && (
           <Tooltip
             label={t(
@@ -403,19 +470,13 @@ function DatabasePanel() {
             <Badge
               size="sm"
               variant="light"
+              style={{ flexShrink: 0 }}
               rightSection={
                 <IconX
                   size={11}
                   style={{ cursor: "pointer" }}
                   aria-label={t("PatternSearch.Close", "Back to the board position")}
-                  onClick={() =>
-                    setLocalOptions((q) => ({
-                      ...q,
-                      type: "exact",
-                      fen: debouncedFen,
-                      pattern: null,
-                    }))
-                  }
+                  onClick={followBoard}
                 />
               }
             >
@@ -423,38 +484,12 @@ function DatabasePanel() {
             </Badge>
           </Tooltip>
         )}
-        <Button
-          size="compact-xs"
-          variant={filtersOpen ? "light" : "default"}
-          leftSection={<IconFilter size={13} />}
-          onClick={() => setFiltersOpen((open) => !open)}
-        >
-          {t("Board.Database.Filters", "Filters")}
-        </Button>
-        {source === "local" && activeWeakFilter(weakFilter) && (
-          <Tooltip
-            multiline
-            w={260}
-            label={t(
-              "Board.Database.Weak.Active.Desc",
-              "Games between two weak players are left out of this query. Change it in Filters.",
-            )}
-          >
-            <Badge
-              size="sm"
-              variant="light"
-              color="orange"
-              style={{ cursor: "pointer" }}
-              onClick={() => setFiltersOpen(true)}
-            >
-              {weakFilter.below != null
-                ? t("Board.Database.Weak.Active", "Without weak games (< {{elo}})", {
-                    elo: weakFilter.below,
-                  })
-                : t("Board.Database.Weak.ActiveUnrated", "Without unrated games")}
-            </Badge>
-          </Tooltip>
-        )}
+        <div style={{ flex: 1 }} />
+        <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+          {t("Board.Database.Matches", {
+            matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
+          })}
+        </Text>
         {source === "local" && (
           <Tooltip label={t("Board.Database.Refresh")}>
             <ActionIcon
@@ -470,21 +505,6 @@ function DatabasePanel() {
             </ActionIcon>
           </Tooltip>
         )}
-        <div style={{ flex: 1 }} />
-        <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-          {t("Board.Database.Matches", {
-            matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
-          })}
-        </Text>
-        <SegmentedControl
-          size="xs"
-          value={view}
-          onChange={(value) => setTabType(value === "report" ? "report" : "stats")}
-          data={[
-            { label: t("Board.Database.Explorer", "Explorer"), value: "explorer" },
-            { label: t("OpeningReport.Tab"), value: "report", disabled: reportDisabled },
-          ]}
-        />
       </Group>
       <PatternSearchModal
         opened={patternOpen}
@@ -522,15 +542,16 @@ function DatabasePanel() {
           )}
         </Text>
       )}
-      <Collapse in={filtersOpen}>
-        <ScrollArea.Autosize mah="40vh" offsetScrollbars className={classes.filters}>
+      {/* Sized by the panel, not the window: a short panel scrolls the filters to their end. */}
+      {filtersOpen && (
+        <ScrollArea.Autosize mah="60%" offsetScrollbars className={classes.filters}>
           {match(source)
             .with("local", () => <LocalOptionsPanel boardFen={debouncedFen} />)
             .with("lch_all", () => <LichessOptionsPanel />)
             .with("lch_master", () => <MasterOptionsPanel />)
             .exhaustive()}
         </ScrollArea.Autosize>
-      </Collapse>
+      )}
     </>
   );
 
@@ -564,12 +585,6 @@ function DatabasePanel() {
         onSelect={setPreview}
       />
     );
-
-  const referenceOpen = showReference && !sections.reference && !focusGames;
-  const gamesOpen = !sections.games;
-  const gamesFirst = !!sections.gamesFirst;
-  const swapSections = () =>
-    setSections((current) => ({ ...current, gamesFirst: !current.gamesFirst }));
 
   if (rivalActive)
     return (
@@ -623,105 +638,39 @@ function DatabasePanel() {
             </Text>
           )}
         </ScrollArea>
+      ) : view === "plans" ? (
+        dbType.type === "local" && openingData?.snapshot ? (
+          <PlansPanel
+            key={tabId}
+            snapshot={openingData.snapshot}
+            owner={tabId ?? ""}
+            fen={dbType.options.fen}
+            onExpired={() => {
+              void mutate();
+            }}
+          />
+        ) : (
+          <Text p="sm" c="dimmed">
+            {t("OpeningReport.WaitForQuery")}
+          </Text>
+        )
+      ) : view === "moves" ? (
+        <div className={classes.view}>
+          <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
+        </div>
       ) : (
-        <div className={classes.sections}>
-          {showReference && (
-            <PanelSection
-              title={t("Board.Database.Reference", "Reference")}
-              collapsed={!referenceOpen}
-              onToggle={() => {
-                if (focusGames) {
-                  setFocusGames(false);
-                  setSections((current) => ({ ...current, reference: false }));
-                } else {
-                  setSections((current) => ({ ...current, reference: !current.reference }));
-                }
-              }}
-              flex={!referenceOpen ? "0 0 auto" : gamesOpen ? "0 0 42%" : "1 1 0"}
-              order={gamesFirst ? 1 : 0}
-              onSwap={swapSections}
-              swapLabel={
-                gamesFirst
-                  ? t("Board.Database.MoveUp", "Move up")
-                  : t("Board.Database.MoveDown", "Move down")
-              }
-            >
-              <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
-            </PanelSection>
+        <div className={classes.view}>
+          <div className={classes.gamesTable}>{gamesTable}</div>
+          {preview && (
+            <ReferenceGamePreview
+              preview={preview}
+              currentFen={debouncedFen}
+              onClose={() => setPreview(null)}
+            />
           )}
-          <PanelSection
-            title={t("Board.Database.Games")}
-            collapsed={!gamesOpen}
-            onToggle={() => setSections((current) => ({ ...current, games: !current.games }))}
-            flex={gamesOpen ? "1 1 0" : "0 0 auto"}
-            order={gamesFirst ? 0 : 1}
-            onSwap={showReference ? swapSections : undefined}
-            swapLabel={
-              gamesFirst
-                ? t("Board.Database.MoveDown", "Move down")
-                : t("Board.Database.MoveUp", "Move up")
-            }
-          >
-            <div className={classes.gamesTable}>{gamesTable}</div>
-            {preview && (
-              <ReferenceGamePreview
-                preview={preview}
-                currentFen={debouncedFen}
-                onClose={() => setPreview(null)}
-              />
-            )}
-          </PanelSection>
         </div>
       )}
     </Stack>
-  );
-}
-
-/** A collapsible block of the explorer, separated by its header instead of a border. */
-function PanelSection({
-  title,
-  collapsed,
-  onToggle,
-  flex,
-  order,
-  onSwap,
-  swapLabel,
-  children,
-}: {
-  title: string;
-  collapsed: boolean;
-  onToggle: () => void;
-  flex: string;
-  order: number;
-  onSwap?: () => void;
-  swapLabel: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className={classes.section} style={{ flex, order }}>
-      <div className={classes.sectionHeaderRow}>
-        <UnstyledButton
-          className={classes.sectionHeader}
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-        >
-          <IconChevronDown
-            size={14}
-            className={classes.chevron}
-            style={{ transform: collapsed ? "rotate(-90deg)" : undefined }}
-          />
-          {title}
-        </UnstyledButton>
-        {onSwap && (
-          <Tooltip label={swapLabel}>
-            <ActionIcon size="xs" variant="subtle" color="gray" onClick={onSwap}>
-              <IconSwitchVertical size={13} />
-            </ActionIcon>
-          </Tooltip>
-        )}
-      </div>
-      {!collapsed && <div className={classes.sectionBody}>{children}</div>}
-    </section>
   );
 }
 

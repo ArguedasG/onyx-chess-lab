@@ -8,6 +8,7 @@ mod player_games;
 mod player_search;
 mod player_style;
 mod player_tree;
+mod position_plans;
 mod position_query;
 mod position_tree;
 mod quality;
@@ -21,6 +22,7 @@ pub use pawn_structures::detect_pawn_structures;
 pub use player_games::get_player_games;
 pub use player_style::measure_player_style;
 pub use player_tree::get_player_tree;
+pub use position_plans::position_plans;
 pub use position_query::{
     get_position_game, get_position_games, query_position, PositionQueryCache,
 };

@@ -2,6 +2,7 @@
 //! theory and move orders use an explicitly ranked, bounded cohort (as in classical reports).
 use super::{
     encoding::{decode_move, iter_mainline_move_bytes},
+    position_plans::{ReportPlans, ReportPlansBuilder},
     position_query::{
         canonical_query, open_index, preempt_background_searches, read_page, snapshot_for,
         MatchRecord, PositionGameMetadata, PositionSummary, Snapshot,
@@ -375,6 +376,8 @@ pub struct OpeningReport {
     pub unknown_elo_games: u32,
     /// Sparse cells for the most played continuations (see `MAX_BREAKDOWN_MOVES`).
     pub move_breakdown: Vec<ReportMoveCell>,
+    /// Typical plans of both sides (version 6). Saved reports from before have none.
+    pub plans: Option<ReportPlans>,
     pub most_played_players: Vec<ReportPlayer>,
     pub strongest_players: Vec<ReportPlayer>,
     pub player_count: u32,
@@ -491,7 +494,7 @@ fn model_game_score(
     )
 }
 
-fn chess_from_fen(fen: Option<&str>) -> Result<Chess, Error> {
+pub(super) fn chess_from_fen(fen: Option<&str>) -> Result<Chess, Error> {
     let setup = fen
         .map(|s| s.parse::<Fen>())
         .transpose()?
@@ -757,6 +760,7 @@ fn build_report(
     let mut filtered_openings: BTreeMap<String, ReportResults> = BTreeMap::new();
     let mut breakdown: HashMap<(String, Option<u32>, Option<u32>), CellAggregate> = HashMap::new();
     let mut matching_games = 0_u32;
+    let mut plans = ReportPlansBuilder::new(snapshot.summary.total);
     let connection = rusqlite::Connection::open_with_flags(
         &snapshot.database,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -807,6 +811,7 @@ fn build_report(
                 .entry((continuation, year, band))
                 .or_default()
                 .add(&entry);
+            plans.add(offset + i as u32, &entry, &record, year, band)?;
             statistics.add(&entry);
             if entry.white_id != 0 {
                 players
@@ -1238,7 +1243,7 @@ fn build_report(
     let report_event = metadata_filter(&options.event).map(str::to_string);
     let report_time_control = metadata_filter(&options.time_control).map(str::to_string);
     Ok(OpeningReport {
-        version: 5,
+        version: 6,
         generated_at: chrono::Utc::now().to_rfc3339(),
         database_name: snapshot
             .database
@@ -1278,6 +1283,7 @@ fn build_report(
             .collect(),
         unknown_elo_games,
         move_breakdown,
+        plans: Some(plans.finish()),
         most_played_players,
         strongest_players,
         player_count,
@@ -1686,5 +1692,41 @@ mod tests {
             started.elapsed().as_secs_f64() * 1000.0
         );
         drop(state);
+    }
+
+    #[test]
+    fn reports_plans_of_both_sides_by_year_and_band() {
+        let (_dir, path, state) = fixture();
+        let fen = Fen::default().to_string();
+        let report = run(&path, &state, query(&fen), options(&fen));
+        let plans = report.plans.unwrap();
+        assert_eq!(plans.scanned, 4);
+        let white: Vec<String> = plans
+            .moves
+            .iter()
+            .filter(|m| m.white)
+            .map(|m| format!("{}{}-{}", m.piece, m.from, m.to))
+            .collect();
+        assert_eq!(white, ["Ng1-f3", "Pd2-d4", "Pc2-c4", "Pe2-e4", "Bf1-c4"]);
+        let nf3 = plans
+            .moves
+            .iter()
+            .position(|m| m.white && m.to == "f3")
+            .unwrap() as u32;
+        let games = |id: Option<u32>, white: bool| {
+            plans
+                .cells
+                .iter()
+                .filter(|cell| cell.white == white && cell.plan_move == id)
+                .map(|cell| cell.games)
+                .sum::<u32>()
+        };
+        // The cells of a move add up to its games; the side's own cells to every game.
+        assert_eq!(games(Some(nf3), true), 4);
+        assert_eq!((games(None, true), games(None, false)), (4, 4));
+        assert!(plans
+            .cells
+            .iter()
+            .any(|cell| cell.plan_move == Some(nf3) && cell.year == Some(2022) && cell.games == 1));
     }
 }

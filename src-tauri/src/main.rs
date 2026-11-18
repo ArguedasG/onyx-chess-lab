@@ -43,7 +43,9 @@ use std::sync::{Arc, Mutex};
 use bot_league::BotLeagueManager;
 use chess::{BestMovesPayload, EngineErrorPayload, EngineProcess};
 use dashmap::DashMap;
-use db::{generate_opening_report, get_position_game, get_position_games, query_position};
+use db::{
+    generate_opening_report, get_position_game, get_position_games, position_plans, query_position,
+};
 use db::{ActivePositionSearches, DatabaseProgress, GameQuery, PositionSearchCache};
 use derivative::Derivative;
 use game::GameManager;
@@ -242,6 +244,7 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             search_position,
             query_position,
             generate_opening_report,
+            position_plans,
             get_position_games,
             get_position_game,
             cancel_position_search,

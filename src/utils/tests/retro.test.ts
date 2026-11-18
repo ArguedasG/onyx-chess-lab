@@ -71,8 +71,8 @@ describe("retroAccepts", () => {
         expect(retroAccepts({ type: "cp", value: -300 }, { type: "cp", value: 50 }, "black")).toBe(
             false,
         );
-        expect(retroAccepts({ type: "cp", value: -300 }, { type: "cp", value: -320 }, "black")).toBe(
-            true,
-        );
+        expect(
+            retroAccepts({ type: "cp", value: -300 }, { type: "cp", value: -320 }, "black"),
+        ).toBe(true);
     });
 });

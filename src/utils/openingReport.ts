@@ -4,6 +4,8 @@ import { ChildNode, defaultGame, makePgn, type Node, type PgnNodeData } from "ch
 import { parseSan } from "chessops/san";
 import type { TFunction } from "i18next";
 import type { OpeningReport, ReportResults } from "@/bindings";
+import { planMoveName } from "@/components/panels/database/plans";
+import { reportPlans } from "./openingReportPlans";
 
 export function reportGames(results: ReportResults) {
     return results.white + results.draw + results.black + results.unknown;
@@ -145,6 +147,11 @@ export function openingReportHtml(report: OpeningReport, t: TFunction) {
     const escape = escapeReportHtml;
     // Historical library snapshots predate this additive section.
     const modelGames = report.modelGames ?? [];
+    // Unfiltered, like the rest of the export; reports before version 6 have no plans.
+    const planSides = reportPlans(report, { band: null, from: null, to: null });
+    const plansHtml = planSides
+        ? `<h2>${escape(t("OpeningReport.Plans", "Typical plans"))}</h2><p>${escape(t("OpeningReport.PlansScope", "What each side plays within its next {{window}} moves, in any order · {{scope}}", { window: report.plans!.window, scope: t("OpeningReport.AllYears", "all years") }))}</p>${planSides.map((side) => `<h3>${escape(side.white ? t("Common.White") : t("Common.Black"))} · ${escape(t("OpeningReport.PlansGames", "{{games}} games", { games: side.games.toLocaleString() }))}</h3><table><thead><tr><th>#</th><th>${escape(t("OpeningReport.PlanMove", "Move"))}</th><th>${escape(t("OpeningReport.PlanShare", "Share of games"))}</th><th>${escape(t("OpeningReport.PlanDelta", "vs Elo"))}</th></tr></thead><tbody>${side.rows.map((row) => `<tr><td>${Math.round(row.move.typicalMove)}.</td><td>${escape(planMoveName(row.move, row.capture))}</td><td>${Math.round(row.share * 100)}%</td><td>${row.delta == null ? "—" : `${row.delta > 0 ? "+" : ""}${Math.round(row.delta)}`}</td></tr>`).join("")}</tbody></table>`).join("")}`
+        : "";
     const label = (key: string) => escape(t(`OpeningReport.${key}`));
     const count = reportGames;
     const score = (results: ReportResults) => {
@@ -214,6 +221,7 @@ body{font:15px system-ui,sans-serif;background:#f5f5f2;color:#232826;margin:0}ma
 <h2>${label("Overview")}</h2><p>${label("Matching")}: <strong>${report.position.total}</strong> / ${report.databaseGames}<br>${label("WhiteScore")}: ${score(report.statistics.results)} · ${label("Outcomes")}: ${outcomes(report.statistics.results)}<br>${label("AverageElo")}: ${report.statistics.averageWhiteElo?.toFixed(0) ?? "—"} / ${report.statistics.averageBlackElo?.toFixed(0) ?? "—"}</p><small>${label("Denominators")}</small>
 ${report.position.skippedGames ? `<aside>${escape(t("Board.Database.SkippedGames", { count: report.position.skippedGames }))}</aside>` : ""}
 <h2>${label("Continuations")}</h2><table><thead><tr><th>${label("Move")}</th><th>${label("Games")}</th><th>${label("WhiteScore")}</th><th>${label("Outcomes")}</th></tr></thead><tbody>${head.map((row) => `<tr><td>${escape(row.move)}</td><td>${count(row.results)}</td><td>${score(row.results)}</td><td>${outcomes(row.results)}</td></tr>`).join("")}</tbody></table>
+${plansHtml}
 <h2>${label("History")}</h2><table><thead><tr><th>${label("Year")}</th><th>${label("Games")}</th><th>${label("WhiteScore")}</th></tr></thead><tbody>${report.years.map((row) => `<tr><td>${row.year}</td><td>${count(row.results)}</td><td>${score(row.results)}</td></tr>`).join("")}</tbody></table><p>${label("UnknownYear")}: ${report.unknownYearGames}</p>
 <h2>${label("EloBands")}</h2><p>${escape(t("OpeningReport.EloBandsScope", { unknown: report.unknownEloGames }))}</p><table><thead><tr><th>${label("EloBand")}</th><th>${label("Games")}</th><th>${label("Frequency")}</th><th>${label("WhiteScore")}</th><th>${label("ResultRates")}</th><th>${label("Outcomes")}</th></tr></thead><tbody>${report.eloBands.map((band) => `<tr><td>${band.maxElo >= 32767 ? `${band.minElo}+` : `${band.minElo}–${band.maxElo}`}</td><td>${count(band.results)}</td><td>${report.position.total ? ((count(band.results) / report.position.total) * 100).toFixed(1) : "0"}%</td><td>${score(band.results)}</td><td>${resultRates(band.results)}</td><td>${outcomes(band.results)}</td></tr>`).join("")}</tbody></table>
 <h2>${label("FrequentPlayers")}</h2><p>${escape(t("OpeningReport.PlayersScope", { count: report.playerCount }))}</p>${playerTable(report.mostPlayedPlayers)}

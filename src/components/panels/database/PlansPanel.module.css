@@ -1,0 +1,71 @@
+.panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 14px 18px 28px minmax(0, 1fr) 64px 80px 40px 44px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.row:hover,
+.row[data-hovered] {
+  background: var(--mantine-color-default-hover);
+}
+
+.chevron {
+  color: var(--mantine-color-dimmed);
+  transition: transform 150ms ease;
+}
+
+.step {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.step[data-in-plan] {
+  border-radius: 50%;
+  color: var(--mantine-color-white);
+  background: var(--mantine-color-blue-filled);
+  line-height: 18px;
+  height: 18px;
+}
+
+.moveNumber {
+  text-align: right;
+}
+
+.name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mantine-color-default-border);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--mantine-color-blue-filled);
+}
+
+.detail {
+  padding: 2px 4px 6px 40px;
+}

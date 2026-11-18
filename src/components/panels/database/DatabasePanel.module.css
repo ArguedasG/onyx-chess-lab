@@ -1,47 +1,4 @@
-.sections {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.sectionHeaderRow {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.sectionHeader {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  font-size: var(--mantine-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--mantine-color-dimmed);
-  flex-shrink: 0;
-}
-
-.sectionHeader:hover {
-  color: var(--mantine-color-text);
-}
-
-.chevron {
-  transition: transform 150ms ease;
-}
-
-.sectionBody {
+.view {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -54,7 +11,14 @@
   min-height: 0;
 }
 
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .filters {
+  flex-shrink: 0;
   margin-bottom: 6px;
   padding: 8px 0;
   border-top: 1px solid var(--mantine-color-default-border);

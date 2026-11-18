@@ -37,7 +37,9 @@ import {
   trendSeries,
   type ReportCellFilter,
 } from "@/utils/openingReportFilters";
+import { reportPlans } from "@/utils/openingReportPlans";
 import ReportFiltersBar, { bandLabel } from "./report/ReportFiltersBar";
+import { ReportPlansTables } from "./report/ReportPlans";
 import { EloBandsTable, MovesTable, PlayersList } from "./report/ReportTables";
 import ResultBar from "./report/ResultBar";
 import TrendCharts from "./report/TrendCharts";
@@ -96,6 +98,7 @@ export default function OpeningReportView({
     [report, filter.band, moverIsWhite],
   );
   const games = reportGames(total);
+  const plans = useMemo(() => reportPlans(report, filter), [report, filter]);
   const scope = [
     filter.band === null
       ? t("OpeningReport.AllRatings", "all rating classes")
@@ -259,6 +262,31 @@ export default function OpeningReportView({
           </Stack>
         </Grid.Col>
       </Grid>
+
+      <div>
+        <div className={classes.sectionTitle}>{t("OpeningReport.Plans", "Typical plans")}</div>
+        <div className={classes.caption} style={{ marginBottom: 8 }}>
+          {plans
+            ? [
+                t(
+                  "OpeningReport.PlansScope",
+                  "What each side plays within its next {{window}} moves, in any order · {{scope}}",
+                  { window: report.plans!.window, scope },
+                ),
+                report.plans!.scanned < report.position.total &&
+                  t("OpeningReport.PlansSample", "even sample of {{scanned}} games", {
+                    scanned: count(report.plans!.scanned),
+                  }),
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : t(
+                "OpeningReport.PlansNeedNewReport",
+                "Generate the report again to see typical plans.",
+              )}
+        </div>
+        {plans && <ReportPlansTables sides={plans} />}
+      </div>
 
       <Accordion multiple defaultValue={["theory"]} variant="separated" radius="md">
         <Accordion.Item value="theory">

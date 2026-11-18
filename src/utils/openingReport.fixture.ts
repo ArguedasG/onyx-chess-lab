@@ -89,6 +89,7 @@ export function openingReportFixture(): OpeningReport {
             { minElo: 2400, maxElo: 2599, results },
         ],
         unknownEloGames: 0,
+        plans: null,
         moveBreakdown: [
             {
                 move: "Nf3",

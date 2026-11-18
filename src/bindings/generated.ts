@@ -529,6 +529,14 @@ async generateOpeningReport(token: string, options: OpeningReportOptions, tabId:
     else return { status: "error", error: e  as any };
 }
 },
+async positionPlans(token: string, options: PositionPlansOptions, tabId: string) : Promise<Result<PositionPlans, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("position_plans", { token, options, tabId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getPositionGames(token: string, offset: number, limit: number, sort: PositionGameSort, direction: SortDirection, tabId: string) : Promise<Result<PositionGameMetadata[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_position_games", { token, offset, limit, sort, direction, tabId }) };
@@ -1429,7 +1437,11 @@ export type OpeningReport = { version: number; generatedAt: string; databaseName
 /**
  * Sparse cells for the most played continuations (see `MAX_BREAKDOWN_MOVES`).
  */
-moveBreakdown: ReportMoveCell[]; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; modelGames: ReportModelGame[]; modelGameCount: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
+moveBreakdown: ReportMoveCell[]; 
+/**
+ * Typical plans of both sides (version 6). Saved reports from before have none.
+ */
+plans: ReportPlans | null; mostPlayedPlayers: ReportPlayer[]; strongestPlayers: ReportPlayer[]; playerCount: number; cohort: ReportStatistics; excludedTheoryGames: number; theory: ReportLine[]; theoryLineCount: number; displayedTheoryGames: number; modelGames: ReportModelGame[]; modelGameCount: number; moveOrders: ReportMoveOrder[]; moveOrderCount: number; transpositions: ReportTransposition[]; transpositionCount: number; elapsedMs: number; cacheHit: boolean }
 export type OpeningReportOptions = { depth: number; theoryGames: number; maxLines: number; displayFen: string; event?: string | null; timeControl?: string | null }
 export type OutOpening = { name: string; fen: string }
 export type Outcome = "1-0" | "0-1" | "1/2-1/2" | "*"
@@ -1560,6 +1572,43 @@ ply: number }
  * A structure on a board and who owns it, without the ply of a game.
  */
 export type PawnStructureOnBoard = { structure: PawnStructure; ownerWhite: boolean }
+export type PlanMove = { 
+/**
+ * "N", "B", "R", "Q", "K" or "P".
+ */
+piece: string; from: string; 
+/**
+ * For a castle, the king's destination.
+ */
+to: string; 
+/**
+ * "O-O" or "O-O-O".
+ */
+castle: string | null; promotion: string | null; games: number; 
+/**
+ * Games where the move captured something.
+ */
+captures: number; 
+/**
+ * Mean full-move number at which it was played.
+ */
+typicalMove: number; 
+/**
+ * Games with both ratings and a known result: the base of the two means below.
+ */
+ratedGames: number; 
+/**
+ * Mean score of the side in those games.
+ */
+score: number; 
+/**
+ * Mean score the ratings predicted for the side in those games.
+ */
+expected: number; 
+/**
+ * Games that also contain each returned move, in the same order (its own entry = games).
+ */
+together: number[] }
 export type Player = { id: number; name: string | null; elo: number | null }
 export type PlayerConfig = { type: "human"; name: string } | { type: "engine"; name: string; path: string; version?: string; presetCategory?: PlayerPresetCategory; targetElo?: number | null; seed?: number | null; args?: string[]; options?: EngineOption[]; openingRepertoire?: OpeningRepertoireConfig | null; humanTiming?: HumanTimingConfig | null; tablebaseDefense?: boolean | null; botPlay?: BotPlayConfig | null; go: GoMode | null }
 export type PlayerGameRow = { id: number; 
@@ -1670,6 +1719,28 @@ export type PlayersTime = { white: number; black: number; winc: number; binc: nu
 export type PositionGame = { game: NormalizedGame; ply: number }
 export type PositionGameMetadata = { snapshotOffset: number; id: number; white: string; black: string; whiteElo: number | null; blackElo: number | null; date: string | null; result: string; event: string; ply: number; nextMove: string }
 export type PositionGameSort = "index" | "date" | "averageElo" | "whiteElo" | "blackElo"
+export type PositionPlans = { 
+/**
+ * Games of the snapshot.
+ */
+total: number; 
+/**
+ * Games read: all of them, or an even sample of a broad position.
+ */
+scanned: number; 
+/**
+ * Games read in which the side moved at least once: the base of every share.
+ */
+games: number; ratedGames: number; score: number; expected: number; moves: PlanMove[]; elapsedMs: number }
+export type PositionPlansOptions = { 
+/**
+ * The side whose moves are counted.
+ */
+white: boolean; 
+/**
+ * How many of that side's moves are read after the position.
+ */
+window: number }
 export type PositionQueryJs = { fen: string; type_: string; 
 /**
  * Partial only: squares that must be empty ("e4").
@@ -1827,6 +1898,34 @@ expectedWhite: number;
  */
 scoreWhite: number }
 export type ReportMoveOrder = { startFen: string; moves: string[]; statistics: ReportStatistics; exampleOffset: number }
+/**
+ * One move (or, without `plan_move`, the side itself) for one year and mean-Elo band, so the
+ * report's rating and period filters also apply to its plans.
+ */
+export type ReportPlanCell = { 
+/**
+ * Index into `ReportPlans::moves`; None for the side's games (the base of every share).
+ */
+planMove: number | null; white: boolean; year: number | null; 
+/**
+ * Index into the report's `elo_bands`.
+ */
+band: number | null; games: number; captures: number; 
+/**
+ * Games with both ratings and a known result, and the side's score and expected score
+ * summed over them.
+ */
+ratedGames: number; score: number; expected: number }
+export type ReportPlanMove = { white: boolean; piece: string; from: string; to: string; castle: string | null; promotion: string | null; 
+/**
+ * Games of the sample with the move, before any filter.
+ */
+games: number; typicalMove: number }
+export type ReportPlans = { window: number; 
+/**
+ * Matching games read: all of them, or an even sample.
+ */
+scanned: number; moves: ReportPlanMove[]; cells: ReportPlanCell[] }
 export type ReportPlayer = { id: number; name: string; games: number; whiteGames: number; blackGames: number; wins: number; draws: number; losses: number; unknown: number; averageElo: number | null; peakElo: number | null; 
 /**
  * First and last year the player reached the position (dated games only).
