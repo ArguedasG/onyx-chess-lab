@@ -16,7 +16,7 @@ use shakmaty::{fen::Fen, ByColor, EnPassantMode, Position};
 use specta::Type;
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BinaryHeap, VecDeque},
+    collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
     fs::File,
     io::{BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -25,7 +25,9 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 
-const RECORD_BYTES: usize = 24;
+/// One match on disk: game id, index offset, ply and next move (an index into the snapshot's
+/// table of next moves). 12 bytes keep a whole 22-million-game database in one snapshot.
+const RECORD_BYTES: usize = 12;
 const SCAN_BATCH: usize = 65536;
 const ORDER_BATCH: u32 = 4096;
 const MAX_SNAPSHOT_BYTES: u64 = 256 * 1024 * 1024;
@@ -153,6 +155,8 @@ pub(super) struct Snapshot {
     pub(super) query: GameQuery,
     pub(super) summary: PositionSummary,
     matches: Mutex<File>,
+    /// The distinct next moves, which records point to by index.
+    next_moves: Vec<String>,
     pub(super) report: Mutex<Option<super::opening_report::OpeningReport>>,
     order: Mutex<Option<PositionGameOrder>>,
 }
@@ -181,7 +185,7 @@ impl Snapshot {
         file.read_exact(&mut bytes)?;
         Ok(bytes
             .chunks_exact(RECORD_BYTES)
-            .map(|record| MatchRecord::decode(record.try_into().unwrap()))
+            .map(|record| MatchRecord::decode(record.try_into().unwrap(), &self.next_moves))
             .collect())
     }
 }
@@ -222,24 +226,49 @@ pub(super) struct MatchRecord {
     pub(super) index_offset: u32,
     pub(super) next_move: String,
 }
+/// Next moves of a scan, numbered as they first appear so that a record stores two bytes.
+#[derive(Default)]
+struct NextMoves {
+    ids: HashMap<String, u16>,
+    table: Vec<String>,
+}
+
+impl NextMoves {
+    /// None once 65,536 different moves exist (far beyond any real search); such a match is
+    /// counted in the statistics but not listed.
+    fn id(&mut self, san: &str) -> Option<u16> {
+        if let Some(id) = self.ids.get(san) {
+            return Some(*id);
+        }
+        let id = u16::try_from(self.table.len()).ok()?;
+        self.ids.insert(san.to_string(), id);
+        self.table.push(san.to_string());
+        Some(id)
+    }
+}
+
 impl MatchRecord {
-    fn encode(&self) -> [u8; RECORD_BYTES] {
+    /// None when the ply does not fit two bytes, which no legal game reaches (the 75-move rule
+    /// ends any game well before 65,536 plies).
+    fn encode(&self, next_move: u16) -> Option<[u8; RECORD_BYTES]> {
+        let ply = u16::try_from(self.ply).ok()?;
         let mut bytes = [0; RECORD_BYTES];
         bytes[..4].copy_from_slice(&self.id.to_le_bytes());
-        bytes[4..8].copy_from_slice(&self.ply.to_le_bytes());
-        bytes[8..12].copy_from_slice(&self.index_offset.to_le_bytes());
-        let san = self.next_move.as_bytes();
-        // SAN in standard chess/Chess960 fits in twelve bytes. Snapshots are session-local.
-        bytes[12..12 + san.len()].copy_from_slice(san);
-        bytes
+        bytes[4..8].copy_from_slice(&self.index_offset.to_le_bytes());
+        bytes[8..10].copy_from_slice(&ply.to_le_bytes());
+        bytes[10..12].copy_from_slice(&next_move.to_le_bytes());
+        Some(bytes)
     }
-    fn decode(bytes: [u8; RECORD_BYTES]) -> Self {
-        let end = bytes[12..].iter().position(|b| *b == 0).unwrap_or(12);
+    fn decode(bytes: [u8; RECORD_BYTES], next_moves: &[String]) -> Self {
+        let next_move = u16::from_le_bytes(bytes[10..12].try_into().unwrap());
         Self {
             id: i32::from_le_bytes(bytes[..4].try_into().unwrap()),
-            ply: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
-            index_offset: u32::from_le_bytes(bytes[8..12].try_into().unwrap()),
-            next_move: String::from_utf8_lossy(&bytes[12..12 + end]).into_owned(),
+            index_offset: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
+            ply: u16::from_le_bytes(bytes[8..10].try_into().unwrap()) as u32,
+            next_move: next_moves
+                .get(next_move as usize)
+                .cloned()
+                .unwrap_or_default(),
         }
     }
 }
@@ -369,6 +398,7 @@ fn scan(
     let mut total = 0u32;
     let mut skipped = 0u32;
     let mut unlisted = 0u32;
+    let mut next_moves = NextMoves::default();
     for offset in (0..index.len()).step_by(SCAN_BATCH) {
         if cancelled() {
             return Err(Error::SearchCancelled);
@@ -441,11 +471,15 @@ fn scan(
             };
             // Past the limit the list stops growing (no more temporary disk), but the move
             // statistics still count every match.
-            if (total as u64 + 1) * RECORD_BYTES as u64 > MAX_SNAPSHOT_BYTES {
-                unlisted += 1;
-            } else {
-                output.write_all(&record.encode())?;
-                total += 1;
+            let encoded = next_moves
+                .id(&record.next_move)
+                .and_then(|next_move| record.encode(next_move));
+            match encoded {
+                Some(bytes) if (total as u64 + 1) * RECORD_BYTES as u64 <= MAX_SNAPSHOT_BYTES => {
+                    output.write_all(&bytes)?;
+                    total += 1;
+                }
+                _ => unlisted += 1,
             }
             let counts = openings
                 .entry(record.next_move.clone())
@@ -482,6 +516,7 @@ fn scan(
         },
         query,
         matches: Mutex::new(file),
+        next_moves: next_moves.table,
         report: Mutex::new(None),
         order: Mutex::new(None),
     };
@@ -1113,6 +1148,36 @@ pub(super) mod tests {
             ..Default::default()
         })
     }
+    #[test]
+    fn records_keep_every_field_in_twelve_bytes() {
+        let mut moves = NextMoves::default();
+        let record = MatchRecord {
+            id: 123_456_789,
+            ply: 1234,
+            index_offset: 4_000_000_000,
+            next_move: "exd8=Q#".into(),
+        };
+        let id = moves.id(&record.next_move).unwrap();
+        assert_eq!(moves.id("Nf3"), Some(id + 1));
+        assert_eq!(moves.id("exd8=Q#"), Some(id));
+        let decoded = MatchRecord::decode(record.encode(id).unwrap(), &moves.table);
+        assert_eq!(
+            (
+                decoded.id,
+                decoded.ply,
+                decoded.index_offset,
+                decoded.next_move.as_str()
+            ),
+            (123_456_789, 1234, 4_000_000_000, "exd8=Q#")
+        );
+        // No legal game is this long; such a match would be counted but not listed.
+        let long = MatchRecord {
+            ply: 70_000,
+            ..record
+        };
+        assert!(long.encode(id).is_none());
+    }
+
     pub(in crate::db) fn snapshot(path: &Path, state: &AppState, query: GameQuery) -> Snapshot {
         let index = open_index(path, state, &|| false, &|_| {}).unwrap();
         scan(
@@ -1147,7 +1212,7 @@ pub(super) mod tests {
         assert!(game.game.moves.contains("e5"));
         let json = serde_json::to_value(&page).unwrap();
         assert!(json[0].get("moves").is_none());
-        assert_eq!(result.bytes(), 650 * 24);
+        assert_eq!(result.bytes(), 650 * RECORD_BYTES as u64);
     }
 
     #[test]

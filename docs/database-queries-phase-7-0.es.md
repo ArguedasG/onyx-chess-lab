@@ -9,7 +9,8 @@ preparación. No incluye todavía Opening Reports ni Player Analysis.
 Actualización posterior: el informe local se implementó en 7.1; véase
 `opening-reports-phase-7-1.es.md`. Las mediciones de este documento corresponden al cierre de 7.0.
 Para reutilizar el índice sin buscar cada ID, el registro temporal de 24 bytes ahora incluye su
-ordinal: ID (4), ply (4), ordinal (4) y SAN (12). Sigue siendo temporal de sesión; no requiere
+ordinal: ID (4), ply (4), ordinal (4) y SAN (12). Desde el 2026-11-18 ocupa 12 bytes (véase
+«Mantenimiento»). Sigue siendo temporal de sesión; no requiere
 migración de bases ni del índice `.ecsi`.
 
 ## Resultado
@@ -199,6 +200,14 @@ validación manual del producto; los pendientes nuevos se gestionan como manteni
   posición inicial de bases de más de ~11 M partidas. Ahora la lista deja de crecer (sin más disco
   temporal), las estadísticas de jugadas siguen contando todas las partidas y el panel indica
   cuántas quedaron fuera de la lista y del informe (`unlistedGames` en `PositionSummary`).
+- **Registro compacto (2026-11-18).** Cada coincidencia ocupa **12 bytes** en lugar de 24: ID (4),
+  ordinal (4), ply (2) y la jugada siguiente como número (2) de una tabla de jugadas distintas que
+  guarda el snapshot. Con los mismos 256 MiB caben **22.369.621** partidas, así que la posición
+  inicial de bases como la Mega 2027 (~12,6 M) ya no deja partidas fuera de la lista ni del informe.
+  Se conservan todos los datos y la comprobación del ID contra el índice. Dos bytes de ply bastan
+  para cualquier partida legal (la regla de los 75 movimientos la termina mucho antes de 65.536
+  plies); si una coincidencia no cupiera, o una búsqueda superara 65.536 jugadas siguientes
+  distintas, se contaría en las estadísticas y en `unlistedGames`, como el tope de disco.
 - **Excluir partidas entre jugadores débiles** (Filtros del panel, preferencia común a todas las
   pestañas; desactivado por defecto). Una partida queda fuera solo si **los dos** jugadores son
   débiles: sin rating, o con su **mejor rating conocido en toda la base** por debajo de 1000–1800.

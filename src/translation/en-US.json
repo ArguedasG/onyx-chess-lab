@@ -4833,6 +4833,19 @@
     "Plans.ByDestination": "Pawn structure: the pieces stand differently in each game, so a piece move counts by the square it goes to.",
     "OpeningReport.PlansSample": "even sample of {{scanned}} games",
     "OpeningReport.PlansNeedNewReport": "Generate the report again to see typical plans.",
-    "OpeningReport.NoPlans": "No move reaches 10% of these games."
+    "OpeningReport.NoPlans": "No move reaches 10% of these games.",
+    "PlayerAnalysis.More": "More actions",
+    "PlayerAnalysis.DisableProfile": "Turn off Player Analysis",
+    "PlayerAnalysis.OpponentEloAny": "Opponent Elo: any",
+    "PlayerAnalysis.EngineSummaryChosen": "{{count}} games chosen in Games",
+    "PlayerAnalysis.EngineSummaryRecent": "{{selected}} of {{eligible}} games ({{rhythms}})",
+    "PlayerAnalysis.EngineSummaryTime": "{{ms}} ms per position",
+    "PlayerAnalysis.EngineSettings": "Settings",
+    "PlayerAnalysis.EngineGamesShort": "Recent games",
+    "PlayerAnalysis.EngineAllGamesShort": "All ({{count}})",
+    "PlayerAnalysis.EngineTimeShort": "ms per position",
+    "PlayerAnalysis.EngineHideSettings": "Hide settings",
+    "PlayerAnalysis.EngineCacheShort": "The newest games are analyzed first; finished games are kept, so an interrupted run continues.",
+    "PlayerAnalysis.EnginePending": "Not run"
   }
 }

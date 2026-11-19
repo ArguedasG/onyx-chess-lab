@@ -315,7 +315,10 @@ pub(super) fn build_plans(
                 .get_entry_ref(record.index_offset as usize)
                 .filter(|entry| entry.id == record.id)
                 .ok_or_else(|| invalid("Position query expired"))?;
-            let [white, black] = moves_after(&entry, record, window, by_destination)?;
+            // A game whose moves cannot be read is left out instead of failing every plan.
+            let Ok([white, black]) = moves_after(&entry, record, window, by_destination) else {
+                continue;
+            };
             let found = if side == Color::White { white } else { black };
             if found.is_empty() {
                 continue;
@@ -522,7 +525,10 @@ impl ReportPlansBuilder {
             return Ok(());
         }
         self.scanned += 1;
-        let found = moves_after(entry, record, REPORT_PLAN_WINDOW, false)?;
+        // A game whose moves cannot be read is left out of the plans, as it is of the theory.
+        let Ok(found) = moves_after(entry, record, REPORT_PLAN_WINDOW, false) else {
+            return Ok(());
+        };
         for (index, moves) in found.into_iter().enumerate() {
             if moves.is_empty() {
                 continue;

@@ -4833,6 +4833,19 @@
     "Plans.ByDestination": "Estructura de peones: las piezas están en sitios distintos en cada partida, así que un movimiento de pieza cuenta por la casilla a la que va.",
     "OpeningReport.PlansSample": "muestra uniforme de {{scanned}} partidas",
     "OpeningReport.PlansNeedNewReport": "Genera el informe de nuevo para ver los planes típicos.",
-    "OpeningReport.NoPlans": "Ningún movimiento llega al 10 % de estas partidas."
+    "OpeningReport.NoPlans": "Ningún movimiento llega al 10 % de estas partidas.",
+    "PlayerAnalysis.More": "Más acciones",
+    "PlayerAnalysis.DisableProfile": "Desactivar el análisis del jugador",
+    "PlayerAnalysis.OpponentEloAny": "Elo rival: cualquiera",
+    "PlayerAnalysis.EngineSummaryChosen": "{{count}} partidas elegidas en Partidas",
+    "PlayerAnalysis.EngineSummaryRecent": "{{selected}} de {{eligible}} partidas ({{rhythms}})",
+    "PlayerAnalysis.EngineSummaryTime": "{{ms}} ms por posición",
+    "PlayerAnalysis.EngineSettings": "Ajustes",
+    "PlayerAnalysis.EngineGamesShort": "Partidas recientes",
+    "PlayerAnalysis.EngineAllGamesShort": "Todas ({{count}})",
+    "PlayerAnalysis.EngineTimeShort": "ms por posición",
+    "PlayerAnalysis.EngineHideSettings": "Ocultar ajustes",
+    "PlayerAnalysis.EngineCacheShort": "Se analizan primero las más recientes; las ya analizadas se conservan, así que una ejecución interrumpida continúa.",
+    "PlayerAnalysis.EnginePending": "Sin analizar"
   }
 }

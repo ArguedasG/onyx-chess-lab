@@ -1,30 +1,40 @@
 import {
+  ActionIcon,
   Alert,
+  Badge,
   Button,
   Group,
   Menu,
-  Paper,
   Progress,
   ScrollArea,
-  Select,
-  SimpleGrid,
   Stack,
-  Switch,
   Tabs,
   Text,
-  Title,
+  Tooltip,
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconChartDots, IconDownload, IconRefresh, IconTrash } from "@tabler/icons-react";
+import {
+  IconAlignBoxLeftMiddle,
+  IconBooks,
+  IconBulb,
+  IconCpu,
+  IconChartDots,
+  IconDeviceFloppy,
+  IconDots,
+  IconDownload,
+  IconPower,
+  IconRefresh,
+  IconSitemap,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AnalysisArtifactDocument, EngineOption, GoMode } from "@/bindings";
 import { commands } from "@/bindings";
 import AnalysisLibraryModal from "@/components/analysis/AnalysisLibraryModal";
-import { ColorFilterInput, DateRangeInput, EloRangeInput } from "@/components/common/GameFilters";
 import { enginesAtom } from "@/state/atoms";
 import {
   playerAnalysisAtom,
@@ -71,6 +81,7 @@ import {
 import { treeIteratorMainLine } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 import AnalysisEngineSection from "./AnalysisEngineSection";
+import AnalysisFiltersBar from "./AnalysisFiltersBar";
 import AnalysisFindingsSection from "./AnalysisFindingsSection";
 import AnalysisSummarySection from "./AnalysisSummarySection";
 import {
@@ -771,120 +782,139 @@ export default function PlayerAnalysisPanel({
         setPendingCritical={setPendingCritical}
         addCriticalToSet={addCriticalToSet}
       />
-      <Group justify="space-between" align="flex-start">
-        <div>
-          <Title order={4}>{t("PlayerAnalysis.Title", "Player Analysis")}</Title>
-          <Text size="xs" c="dimmed">
-            {t(
-              "PlayerAnalysis.Scope",
-              "Local, versioned analysis. Every conclusion keeps its sample and evidence games.",
-            )}
-          </Text>
-        </div>
-        <Group gap="xs">
-          <Button size="xs" variant="subtle" onClick={() => setLibraryOpened(true)}>
-            {t("AnalysisLibrary.Title", "Analysis library")}
-          </Button>
-          <Switch
-            checked={state.enabled}
-            label={t("PlayerAnalysis.LocalProfile", "Local profile")}
-            onChange={(event) =>
-              setState((previous) => ({ ...previous, enabled: event.currentTarget.checked }))
-            }
-          />
-          <Button
-            size="xs"
-            variant="default"
-            color="red"
-            leftSection={<IconTrash size={14} />}
-            disabled={!stored || loading || engineLoading}
-            onClick={() => {
-              playerGamesCache.delete(gamesCacheKey);
-              setState((previous) => {
-                const profiles = { ...previous.profiles };
-                delete profiles[profileId];
-                return { ...previous, profiles };
-              });
-            }}
-          >
-            {t("PlayerAnalysis.Delete", "Delete profile")}
-          </Button>
-          {stored && (
-            <Button
-              size="xs"
+      {/* Same shape as the filter bar of the other card tabs: filters, then the actions. */}
+      <Group gap="sm" pt="xs" wrap="wrap">
+        <AnalysisFiltersBar filters={filters} setFilters={setFilters} timeControls={timeControls} />
+        <div style={{ flex: 1 }} />
+        <Button
+          size="xs"
+          leftSection={stored ? <IconRefresh size={14} /> : <IconChartDots size={14} />}
+          loading={loading}
+          disabled={sources.length === 0 || engineLoading}
+          onClick={generate}
+        >
+          {stored
+            ? t("PlayerAnalysis.Recalculate", "Recalculate")
+            : t("PlayerAnalysis.Generate", "Generate analysis")}
+        </Button>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <ActionIcon
+              size="lg"
               variant="default"
-              loading={versionSaving}
-              disabled={loading || engineLoading}
+              aria-label={t("PlayerAnalysis.More", "More actions")}
+            >
+              <IconDots size={16} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconBooks size={14} />} onClick={() => setLibraryOpened(true)}>
+              {t("AnalysisLibrary.Title", "Analysis library")}
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconDeviceFloppy size={14} />}
+              disabled={!stored || versionSaving || loading || engineLoading}
               onClick={() => void saveVersion()}
             >
               {t("PlayerAnalysis.SaveVersion", "Save version")}
-            </Button>
-          )}
-          {stored && (
-            <Menu position="bottom-end" withinPortal>
-              <Menu.Target>
-                <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}>
-                  {t("PlayerAnalysis.Export", "Export")}
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item onClick={() => void exportProfile("json")}>JSON</Menu.Item>
-                <Menu.Item onClick={() => void exportProfile("html")}>HTML</Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          )}
-        </Group>
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconDownload size={14} />}
+              disabled={!stored}
+              onClick={() => void exportProfile("json")}
+            >
+              {t("PlayerAnalysis.Export", "Export")} · JSON
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconDownload size={14} />}
+              disabled={!stored}
+              onClick={() => void exportProfile("html")}
+            >
+              {t("PlayerAnalysis.Export", "Export")} · HTML
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<IconPower size={14} />}
+              onClick={() => setState((previous) => ({ ...previous, enabled: false }))}
+            >
+              {t("PlayerAnalysis.DisableProfile", "Turn off Player Analysis")}
+            </Menu.Item>
+            <Menu.Item
+              color="red"
+              leftSection={<IconTrash size={14} />}
+              disabled={!stored || loading || engineLoading}
+              onClick={() => {
+                playerGamesCache.delete(gamesCacheKey);
+                setState((previous) => {
+                  const profiles = { ...previous.profiles };
+                  delete profiles[profileId];
+                  return { ...previous, profiles };
+                });
+              }}
+            >
+              {t("PlayerAnalysis.Delete", "Delete profile")}
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
       </Group>
+      {loading && <Progress value={loadingProgress} animated />}
 
-      <Paper withBorder p="sm">
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-          <DateRangeInput
-            presets
-            start={filters.startDate}
-            end={filters.endDate}
-            onChange={(startDate, endDate) =>
-              setFilters((previous) => ({ ...previous, startDate, endDate }))
+      <Group gap="sm" wrap="wrap">
+        {metadata && (
+          // Pills: sections of the analysis, apart from the filters (segmented) and the card
+          // tabs (underlined). The engine is marked until it has run, since other parts need it.
+          <Tabs
+            variant="pills"
+            value={view.section}
+            onChange={(value) =>
+              value &&
+              setView((previous) => ({
+                ...previous,
+                section: value as PlayerAnalysisSection,
+              }))
             }
-          />
-          <ColorFilterInput
-            label={t("PlayerAnalysis.Color", "Color")}
-            value={filters.color}
-            onChange={(color) => setFilters((previous) => ({ ...previous, color }))}
-          />
-          <EloRangeInput
-            label={t("GameFilters.OpponentElo", "Opponent Elo")}
-            min={filters.opponentEloMin}
-            max={filters.opponentEloMax}
-            onChange={(opponentEloMin, opponentEloMax) =>
-              setFilters((previous) => ({ ...previous, opponentEloMin, opponentEloMax }))
-            }
-          />
-          <Select
-            clearable
-            label={t("PlayerAnalysis.TimeControl", "Time control")}
-            value={filters.timeControl}
-            data={timeControls}
-            onChange={(value) => setFilters((previous) => ({ ...previous, timeControl: value }))}
-          />
-        </SimpleGrid>
-        <Group mt="sm">
-          <Button
-            leftSection={stored ? <IconRefresh size={16} /> : <IconChartDots size={16} />}
-            loading={loading}
-            disabled={sources.length === 0 || engineLoading}
-            onClick={generate}
           >
-            {stored
-              ? t("PlayerAnalysis.Recalculate", "Recalculate")
-              : t("PlayerAnalysis.Generate", "Generate analysis")}
-          </Button>
+            <Tabs.List>
+              <Tabs.Tab value="summary" leftSection={<IconAlignBoxLeftMiddle size={15} />}>
+                {t("PlayerAnalysis.Summary", "Summary")}
+              </Tabs.Tab>
+              <Tabs.Tab value="openings" leftSection={<IconSitemap size={15} />}>
+                {t("PlayerAnalysis.Openings", "Openings")}
+              </Tabs.Tab>
+              <Tabs.Tab value="findings" leftSection={<IconBulb size={15} />}>
+                {t("PlayerAnalysis.Findings", "Findings")}
+              </Tabs.Tab>
+              <Tabs.Tab
+                value="engine"
+                leftSection={<IconCpu size={15} />}
+                rightSection={
+                  stored?.engine ? undefined : (
+                    <Badge size="xs" color="orange" variant="light">
+                      {t("PlayerAnalysis.EnginePending", "Not run")}
+                    </Badge>
+                  )
+                }
+              >
+                {t("PlayerAnalysis.Engine", "Engine")}
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs>
+        )}
+        <div style={{ flex: 1 }} />
+        <Tooltip
+          multiline
+          w={300}
+          label={t(
+            "PlayerAnalysis.Scope",
+            "Local, versioned analysis. Every conclusion keeps its sample and evidence games.",
+          )}
+        >
           <Text size="xs" c="dimmed">
             {sources.length} {t("PlayerAnalysis.Sources", "local source(s)")}
             {metadata && ` · ${new Date(metadata.generatedAt).toLocaleString()}`}
           </Text>
-        </Group>
-        {loading && <Progress mt="sm" value={loadingProgress} animated />}
-      </Paper>
+        </Tooltip>
+      </Group>
 
       {!metadata ? (
         <Alert color="blue">
@@ -906,13 +936,6 @@ export default function PlayerAnalysisPanel({
           flex={1}
           style={{ overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}
         >
-          <Tabs.List>
-            <Tabs.Tab value="summary">{t("PlayerAnalysis.Summary", "Summary")}</Tabs.Tab>
-            <Tabs.Tab value="openings">{t("PlayerAnalysis.Openings", "Openings")}</Tabs.Tab>
-            <Tabs.Tab value="findings">{t("PlayerAnalysis.Findings", "Findings")}</Tabs.Tab>
-            <Tabs.Tab value="engine">{t("PlayerAnalysis.Engine", "Engine")}</Tabs.Tab>
-          </Tabs.List>
-
           {scrollPanel(
             "summary",
             summaryViewport,
