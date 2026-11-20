@@ -1,5 +1,58 @@
 [
   {
+    "version": "0.28.1",
+    "notes": {
+      "en": {
+        "summary": "Download lists without duplicated bases, no more “no such table: puzzles” error, and the flip-board button moved to the move bar.",
+        "sections": [
+          {
+            "title": "Download lists",
+            "items": [
+              "The puzzle and game database lists showed some bases twice: the second copy was a new DuckDB version from the En Croissant catalog (for example, Lichess Puzzles 2026 as 1.09 GB and as 309.51 MB). Onyx cannot read that format, so it failed after downloading. Only the bases Onyx can open are listed now, each once."
+            ]
+          },
+          {
+            "title": "Puzzles",
+            "items": [
+              "Other database files in the puzzles folder (a games database, for example) no longer show the error “no such table: puzzles”; they are skipped.",
+              "After changing the puzzles folder or deleting the selected database, Onyx no longer opens the old path or leaves an empty file there. It follows the database to the new folder when a file of the same name is there, or selects the only one."
+            ]
+          },
+          {
+            "title": "Flip board",
+            "items": [
+              "The flip-board button is now at the left end of the move bar, in analysis and in games against the engine. Its tooltip shows the shortcut (F by default)."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Listas de descarga sin bases repetidas, adiós al error «no such table: puzzles» y el botón de girar el tablero ahora en la barra de jugadas.",
+        "sections": [
+          {
+            "title": "Listas de descarga",
+            "items": [
+              "Las listas de bases de puzzles y de partidas mostraban algunas bases dos veces: la segunda copia era una versión nueva en DuckDB del catálogo de En Croissant (por ejemplo, Lichess Puzzles 2026 con 1,09 GB y con 309,51 MB). Onyx no lee ese formato, así que fallaba después de descargarse. Ahora solo se listan las bases que Onyx puede abrir, una vez cada una."
+            ]
+          },
+          {
+            "title": "Puzzles",
+            "items": [
+              "Otros archivos de base de datos en la carpeta de puzzles (por ejemplo, una base de partidas) ya no muestran el error «no such table: puzzles»; se omiten.",
+              "Después de cambiar la carpeta de puzzles o borrar la base seleccionada, Onyx ya no abre la ruta antigua ni deja ahí un archivo vacío. Sigue la base a la carpeta nueva si hay un archivo con el mismo nombre, o elige la única que haya."
+            ]
+          },
+          {
+            "title": "Girar el tablero",
+            "items": [
+              "El botón de girar el tablero está ahora en el extremo izquierdo de la barra de jugadas, en el análisis y en las partidas contra el motor. Su ayuda muestra el atajo (F por defecto)."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.28.0",
     "notes": {
       "en": {
