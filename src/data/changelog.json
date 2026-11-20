@@ -1,5 +1,90 @@
 [
   {
+    "version": "0.28.0",
+    "notes": {
+      "en": {
+        "summary": "New Plans view with the typical moves of each side, a cleaner database panel, very large databases searched in full with statistics that fill in as the search runs, and a more compact Player Analysis.",
+        "sections": [
+          {
+            "title": "Plans",
+            "items": [
+              "New Plans view in the database panel: what one side usually plays within its next few moves, in any order, counted once per game. For example, after 1.e4 e5 2.Nc3 Nc6 3.Bc4 Nf6, White plays d3, f4, Nf3 and castles. Choose the side, how many moves to read (3 to 8) and the least share of games (10 to 50%).",
+              "The typical plan is drawn on the board as numbered arrows, in the order it is usually played: frequent moves that are played together and do not clash (the same knight cannot go to both f3 and e2). Hovering a move highlights its arrow, and expanding it shows what it is usually played with.",
+              "Each move shows how its games scored against what the ratings predicted, compared with the whole position, once there are at least 30 rated games. It is a correlation, not a cause.",
+              "Plans also work with a pawn-structure search. Pieces stand elsewhere in each game, so a piece move counts by the square it goes to (N→f3) and is drawn as a numbered circle.",
+              "The opening report has a new Typical plans section with a table for each side. It follows the report's rating class and period filters and is included in the HTML export. Reports saved before this version need to be generated again to show it.",
+              "Very broad positions are read from an even sample of 100,000 games, and the view says so. With a 12-million-game database the start position takes about one second."
+            ]
+          },
+          {
+            "title": "Database panel",
+            "items": [
+              "The panel shows one view at a time: Moves, Games, Plans or Report. The move table and the game list are no longer stacked.",
+              "The toolbar is shorter. A Search by menu groups the board position, pawn structure and pattern searches, and the Filters button summarises the active filters (for example Blitz, Rapid · 1600–2000) instead of a separate badge for each.",
+              "With a short panel, the filters can be scrolled to their end, so the buttons at the bottom of the local filters are always reachable."
+            ]
+          },
+          {
+            "title": "Large databases",
+            "items": [
+              "A search keeps up to 22.4 million games instead of 11.2 million. At the start position of a 12-million-game database such as the Mega Database, the game list and the opening report now include every game, among them the most recent ones that were left out before.",
+              "Long searches fill in the Moves view as they run: the number of games found and the move table update a few times per second until the full result arrives."
+            ]
+          },
+          {
+            "title": "Player Analysis",
+            "items": [
+              "The filters fit in one line, with the same look as the other tabs of a player card. A hand-picked date range and the opponent Elo open from their own buttons.",
+              "Analysis library, Save version, Export, turning the analysis off and Delete profile are in a ⋯ menu next to Recalculate.",
+              "Summary, Openings, Findings and Engine are tabs of their own, and Engine is marked Not run until the engine has analysed the games, since other parts depend on it.",
+              "The engine settings fit in one row and, once there are results, fold into a single summary line with Settings and Analyze buttons, so the results come first."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Nueva vista Planes con lo que suele jugar cada bando, un panel de base de datos más limpio, búsqueda completa en bases muy grandes con estadísticas que se llenan mientras busca, y un Análisis del jugador más compacto.",
+        "sections": [
+          {
+            "title": "Planes",
+            "items": [
+              "Nueva vista Planes en el panel de base de datos: lo que suele jugar un bando en sus próximas jugadas, en cualquier orden, contado una vez por partida. Por ejemplo, tras 1.e4 e5 2.Nc3 Nc6 3.Bc4 Nf6, las blancas juegan d3, f4, Nf3 y enrocan. Eliges el bando, cuántas jugadas leer (de 3 a 8) y el porcentaje mínimo de partidas (del 10 al 50 %).",
+              "El plan típico se dibuja en el tablero con flechas numeradas, en el orden en que suele jugarse: movimientos frecuentes que se juegan juntos y no chocan entre sí (el mismo caballo no puede ir a f3 y a e2). Al pasar el ratón por un movimiento se resalta su flecha, y al desplegarlo se ve con qué suele jugarse.",
+              "Cada movimiento muestra cómo puntuaron sus partidas frente a lo que predecían los ratings, comparado con toda la posición, cuando hay al menos 30 partidas con rating. Es una correlación, no una causa.",
+              "Los planes también funcionan con la búsqueda por estructura de peones. Las piezas están en otro sitio en cada partida, así que un movimiento de pieza cuenta por la casilla a la que va (N→f3) y se dibuja como un círculo numerado.",
+              "El informe de aperturas tiene una sección nueva, Planes típicos, con una tabla por bando. Sigue los filtros de franja de rating y periodo del informe y se incluye en la exportación HTML. Los informes guardados antes de esta versión hay que generarlos de nuevo para verla.",
+              "Las posiciones muy amplias se leen sobre una muestra uniforme de 100 000 partidas, y la vista lo indica. Con una base de 12 millones de partidas, la posición inicial tarda alrededor de un segundo."
+            ]
+          },
+          {
+            "title": "Panel de base de datos",
+            "items": [
+              "El panel muestra una vista a la vez: Jugadas, Partidas, Planes o Informe. La tabla de jugadas y la lista de partidas ya no se apilan.",
+              "La barra de herramientas es más corta. Un menú Buscar por agrupa la búsqueda por posición del tablero, por estructura de peones y por patrón, y el botón Filtros resume los filtros activos (por ejemplo Blitz, Rapid · 1600–2000) en lugar de una etiqueta aparte para cada uno.",
+              "Con el panel bajo, los filtros se pueden desplazar hasta el final, así que los botones del final de los filtros locales siempre quedan a mano."
+            ]
+          },
+          {
+            "title": "Bases grandes",
+            "items": [
+              "Una búsqueda guarda hasta 22,4 millones de partidas en lugar de 11,2 millones. En la posición inicial de una base de 12 millones de partidas, como la Mega Database, la lista de partidas y el informe de aperturas ya incluyen todas, entre ellas las más recientes, que antes quedaban fuera.",
+              "Las búsquedas largas van llenando la vista Jugadas mientras buscan: el número de partidas encontradas y la tabla de jugadas se actualizan varias veces por segundo hasta que llega el resultado completo."
+            ]
+          },
+          {
+            "title": "Análisis del jugador",
+            "items": [
+              "Los filtros caben en una línea, con el mismo aspecto que las demás pestañas de la ficha. Un rango de fechas a mano y el Elo del rival se abren desde sus propios botones.",
+              "Biblioteca de análisis, Guardar versión, Exportar, desactivar el análisis y Eliminar perfil están en un menú ⋯ junto a Recalcular.",
+              "Resumen, Aperturas, Hallazgos y Motor son pestañas propias, y Motor muestra Sin analizar hasta que el motor haya analizado las partidas, porque otras partes dependen de él.",
+              "Los ajustes del motor caben en una fila y, cuando ya hay resultados, se pliegan en una sola línea de resumen con los botones Ajustes y Analizar, para que los resultados queden primero."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.27.3",
     "notes": {
       "en": {
