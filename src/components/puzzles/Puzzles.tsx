@@ -65,7 +65,12 @@ import {
   type PuzzleMode,
   type RushState,
 } from "@/utils/puzzleSession";
-import { type Completion, getPuzzleDatabases, type Puzzle } from "@/utils/puzzles";
+import {
+  type Completion,
+  getPuzzleDatabases,
+  type Puzzle,
+  reconcileSelectedPuzzleDb,
+} from "@/utils/puzzles";
 import { PROVISIONAL_DEVIATION, ratingBandFor, updateTacticsRating } from "@/utils/tacticsRating";
 import { addTacticsReviewItem, recordBest, withRating } from "@/utils/tacticsReview";
 import { createTab } from "@/utils/tabs";
@@ -110,6 +115,7 @@ function Puzzles({ id }: { id: string }) {
   useEffect(() => {
     getPuzzleDatabases().then((databases) => {
       setPuzzleDbs(databases);
+      setSelectedDb((selected) => reconcileSelectedPuzzleDb(selected, databases));
     });
   }, []);
 

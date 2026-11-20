@@ -1,6 +1,7 @@
 {
   "translation": {
     "Board.Controls.End": "End of the game",
+    "Board.Controls.Flip": "Flip board",
     "Board.Controls.Next": "Next move",
     "Board.Controls.NextVariation": "Next variation",
     "Board.Controls.Previous": "Previous move",

@@ -6,6 +6,7 @@ import {
   IconChevronsRight,
   IconArrowBarToDown,
   IconArrowBarToUp,
+  IconSwitchVertical,
 } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
 import { useMoveDeletionLocked } from "@/hooks/useMoveDeletionLocked";
@@ -38,8 +39,11 @@ function MoveControls({
   hints = false,
   compact = false,
   showCurrent = false,
+  flip = false,
 }: {
   readOnly?: boolean;
+  /** Adds the flip-board button at the left end, where it never moves (variations come and go on the right). */
+  flip?: boolean;
   hints?: boolean;
   /** A thin strip (under the board beside a book) instead of the full-size buttons. */
   compact?: boolean;
@@ -69,6 +73,16 @@ function MoveControls({
   const previousBranching = useStore(store, (s) => s.previousBranching);
   const variations = useStore(store, (s) => hasVariations(s.root));
 
+  const flipBoard = () => {
+    // Read at click time: subscribing to the headers would re-render the bar on every edit.
+    const { headers, root, setHeaders } = store.getState();
+    setHeaders({
+      ...headers,
+      fen: root.fen,
+      orientation: headers.orientation === "black" ? "white" : "black",
+    });
+  };
+
   const keyMap = useAtomValue(keyMapAtom);
   useHotkeys(keyMap.PREVIOUS_MOVE.keys, previous);
   useHotkeys(keyMap.NEXT_MOVE.keys, next);
@@ -85,6 +99,25 @@ function MoveControls({
 
   const controls = (
     <Group gap="xs" wrap="nowrap">
+      {flip && (
+        <>
+          {/* The F key itself is handled by the board, which also works without this bar. */}
+          <ShortcutTooltip
+            label={t("Board.Controls.Flip", "Flip board")}
+            keys={keyMap.SWAP_ORIENTATION.keys}
+          >
+            <ActionIcon
+              variant="default"
+              size={compact ? "md" : "lg"}
+              onClick={flipBoard}
+              aria-label={t("Board.Controls.Flip", "Flip board")}
+            >
+              <IconSwitchVertical size={compact ? 16 : 18} />
+            </ActionIcon>
+          </ShortcutTooltip>
+          <Divider orientation="vertical" />
+        </>
+      )}
       <Group grow gap="xs" style={{ flex: 1 }}>
         <ShortcutTooltip
           label={t("Board.Controls.Start", "Start of the game")}

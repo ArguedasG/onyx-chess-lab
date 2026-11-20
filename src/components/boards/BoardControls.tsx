@@ -8,7 +8,6 @@ import {
   IconEditOff,
   IconEraser,
   IconFlask,
-  IconSwitchVertical,
   IconPlayerPlay,
   IconZoomCheck,
   IconDots,
@@ -76,9 +75,6 @@ function BoardControls({
   const { documentDir } = useLoaderData({ from: "/" });
 
   const store = useContext(TreeStateContext)!;
-  const headers = useStore(store, (s) => s.headers);
-  const root = useStore(store, (s) => s.root);
-  const setHeaders = useStore(store, (s) => s.setHeaders);
   const clearShapes = useStore(store, (s) => s.clearShapes);
 
   const keyMap = useAtomValue(keyMapAtom);
@@ -175,14 +171,6 @@ function BoardControls({
       notifications.show({ color: "red", message: String(error) });
     }
   }
-
-  const orientation = headers.orientation || "white";
-  const toggleOrientation = () =>
-    setHeaders({
-      ...headers,
-      fen: root.fen,
-      orientation: orientation === "black" ? "white" : "black",
-    });
 
   async function changeTabType() {
     if (currentTab?.type === "analysis") {
@@ -445,16 +433,6 @@ function BoardControls({
           </ActionIcon>
         </Tooltip>
       )}
-      <Tooltip
-        position="right"
-        label={t("Board.Action.FlipBoard", {
-          key: keyMap.SWAP_ORIENTATION.keys,
-        })}
-      >
-        <ActionIcon onClick={() => toggleOrientation()}>
-          <IconSwitchVertical size="1.2rem" />
-        </ActionIcon>
-      </Tooltip>
     </Stack>
   );
 }

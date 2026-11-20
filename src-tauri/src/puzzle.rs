@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs::remove_file,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
 };
 
@@ -16,10 +16,38 @@ use crate::{
     error::Error,
 };
 
+fn puzzle_db_error(message: String) -> Error {
+    Error::from(std::io::Error::other(message))
+}
+
+fn file_label(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
 /// Opens a puzzle database; a failure is reported to the UI instead of panicking.
+///
+/// SQLite creates a missing or empty file as a new, empty database, which then fails with "no such
+/// table: puzzles" and leaves a stray file behind. Those cases are reported as what they are.
 fn open_puzzle_db(file: &str) -> Result<diesel::SqliteConnection, Error> {
-    diesel::SqliteConnection::establish(file)
-        .map_err(|error| Error::from(std::io::Error::other(error.to_string())))
+    let path = Path::new(file);
+    if !path.is_file() {
+        return Err(puzzle_db_error(format!(
+            "The puzzle database {} no longer exists.",
+            file_label(path)
+        )));
+    }
+    if path.metadata()?.len() == 0 {
+        return Err(puzzle_db_error(format!(
+            "{} is empty, not a puzzle database.",
+            file_label(path)
+        )));
+    }
+    if let Some(problem) = crate::fs::sqlite_file_problem(path)? {
+        return Err(puzzle_db_error(problem));
+    }
+    diesel::SqliteConnection::establish(file).map_err(|error| puzzle_db_error(error.to_string()))
 }
 
 /// What a puzzle must satisfy. Themes combine with "any" (a mix) or "all" (every theme at once);
@@ -410,11 +438,24 @@ pub struct PuzzleDatabaseInfo {
 #[tauri::command]
 #[specta::specta]
 pub async fn get_puzzle_db_info(file: PathBuf) -> Result<PuzzleDatabaseInfo, Error> {
-    let path = file;
+    puzzle_db_info(file)
+}
 
+fn puzzle_db_info(path: PathBuf) -> Result<PuzzleDatabaseInfo, Error> {
     let mut db = open_puzzle_db(&path.to_string_lossy())?;
 
-    let puzzle_count = puzzles::table.count().get_result::<i64>(&mut db)? as i32;
+    // A games database (or any other SQLite file) in the puzzles folder has no puzzles table.
+    let puzzle_count = puzzles::table
+        .count()
+        .get_result::<i64>(&mut db)
+        .map_err(|error| match error {
+            diesel::result::Error::DatabaseError(_, ref info)
+                if info.message().contains("no such table") =>
+            {
+                puzzle_db_error(format!("{} is not a puzzle database.", file_label(&path)))
+            }
+            error => Error::from(error),
+        })? as i32;
 
     let storage_size = path.metadata()?.len();
     let filename = path.file_name().expect("get filename").to_string_lossy();
@@ -462,6 +503,38 @@ pub async fn get_themes_for_puzzle(file: String, puzzle_id: i32) -> Result<Vec<S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opening_a_missing_puzzle_database_does_not_create_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("Lichess Puzzles 2026.db3");
+        let error = open_puzzle_db(&missing.to_string_lossy()).err().unwrap();
+        assert!(error.to_string().contains("no longer exists"), "{error}");
+        assert!(!missing.exists());
+    }
+
+    #[test]
+    fn files_that_are_not_puzzle_databases_say_so() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let empty = dir.path().join("empty.db3");
+        std::fs::write(&empty, b"").unwrap();
+        let error = puzzle_db_info(empty).err().unwrap();
+        assert!(error.to_string().contains("empty.db3 is empty"), "{error}");
+
+        let games = dir.path().join("games.db3");
+        rusqlite::Connection::open(&games)
+            .unwrap()
+            .execute_batch("CREATE TABLE Games (ID INTEGER PRIMARY KEY);")
+            .unwrap();
+        let error = puzzle_db_info(games).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("games.db3 is not a puzzle database"),
+            "{error}"
+        );
+    }
 
     fn puzzle(rating: i32, popularity: i32, plays: i32, moves: &str, fen: &str) -> Puzzle {
         Puzzle {

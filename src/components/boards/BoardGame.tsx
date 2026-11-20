@@ -2788,7 +2788,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                 />
               }
             />
-            <MoveControls />
+            <MoveControls flip />
           </Stack>
         )}
       </Portal>

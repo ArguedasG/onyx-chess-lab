@@ -490,7 +490,7 @@ function BoardAnalysis() {
           footer={
             bookLayout ? (
               <Stack gap={6}>
-                <MoveControls hints compact />
+                <MoveControls hints compact flip />
                 {engineStrip}
               </Stack>
             ) : (
@@ -713,7 +713,7 @@ function BoardAnalysis() {
       {/* Navigation lives under both panels, so folding the notation never hides it. */}
       {!bookLayout && (
         <Portal target={`#${PANEL_FOOTER_ID}`}>
-          <MoveControls hints compact showCurrent />
+          <MoveControls hints compact showCurrent flip />
         </Portal>
       )}
     </>
