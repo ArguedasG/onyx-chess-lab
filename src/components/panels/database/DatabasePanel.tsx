@@ -72,6 +72,7 @@ import ReferenceGamePreview, { type ReferencePreview } from "./ReferenceGamePrev
 import RivalExplorer from "./RivalExplorer";
 import classes from "./DatabasePanel.module.css";
 import { filterSummary } from "./filterSummary";
+import { useSearchPartial } from "./useSearchPartial";
 import LichessOptionsPanel from "./options/LichessOptionsPanel";
 import LocalOptionsPanel from "./options/LocalOptionsPanel";
 import MasterOptionsPanel from "./options/MastersOptionsPanel";
@@ -286,6 +287,8 @@ function DatabasePanel() {
     }
   }, [transientError, queryKey, mutate]);
   const isLoading = initialLoading || isValidating || transientError;
+  // A long local search fills the panel as it goes instead of waiting for the end.
+  const partial = useSearchPartial(tabId ?? null, queryKey, isLoading && source === "local");
   const grandTotal = openingData?.openings?.reduce(
     (acc, curr) => acc + curr.black + curr.white + curr.draw + (curr.unknown ?? 0),
     0,
@@ -486,9 +489,13 @@ function DatabasePanel() {
         )}
         <div style={{ flex: 1 }} />
         <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-          {t("Board.Database.Matches", {
-            matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
-          })}
+          {partial
+            ? t("Board.Database.MatchesSoFar", "{{matches}} matches so far…", {
+                matches: formatNumber(partial.matches),
+              })
+            : t("Board.Database.Matches", {
+                matches: formatNumber(Math.max(grandTotal || 0, openingData?.games.length || 0)),
+              })}
         </Text>
         {source === "local" && (
           <Tooltip label={t("Board.Database.Refresh")}>
@@ -656,7 +663,11 @@ function DatabasePanel() {
         )
       ) : view === "moves" ? (
         <div className={classes.view}>
-          <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
+          {partial ? (
+            <OpeningsTable openings={partial.openings} loading={false} />
+          ) : (
+            <OpeningsTable openings={openingData?.openings || []} loading={isLoading} />
+          )}
         </div>
       ) : (
         <div className={classes.view}>

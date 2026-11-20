@@ -4846,6 +4846,7 @@
     "PlayerAnalysis.EngineTimeShort": "ms por posición",
     "PlayerAnalysis.EngineHideSettings": "Ocultar ajustes",
     "PlayerAnalysis.EngineCacheShort": "Se analizan primero las más recientes; las ya analizadas se conservan, así que una ejecución interrumpida continúa.",
-    "PlayerAnalysis.EnginePending": "Sin analizar"
+    "PlayerAnalysis.EnginePending": "Sin analizar",
+    "Board.Database.MatchesSoFar": "{{matches}} partidas hasta ahora…"
   }
 }

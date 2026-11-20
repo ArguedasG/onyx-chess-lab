@@ -208,6 +208,13 @@ validación manual del producto; los pendientes nuevos se gestionan como manteni
   para cualquier partida legal (la regla de los 75 movimientos la termina mucho antes de 65.536
   plies); si una coincidencia no cupiera, o una búsqueda superara 65.536 jugadas siguientes
   distintas, se contaría en las estadísticas y en `unlistedGames`, como el tope de disco.
+- **Estadísticas en vivo (2026-11-19).** Como mucho cada 250 ms, la búsqueda envía el evento
+  `search_partial` con las partidas encontradas hasta ese momento y sus 40 jugadas más frecuentes.
+  El panel las muestra en Jugadas («N partidas hasta ahora…») hasta que llega el resultado
+  completo. Las búsquedas de menos de 250 ms no envían nada y se ven como antes. Una búsqueda
+  sustituida (el usuario ya movió) no puede mostrarse: el panel solo acepta actualizaciones de
+  peticiones más nuevas que cualquiera vista antes del cambio de posición. Referencia del autor
+  con su Mega 2027, solo 1.e4: Onyx 8 s, ChessBase 26 11,6 s.
 - **Excluir partidas entre jugadores débiles** (Filtros del panel, preferencia común a todas las
   pestañas; desactivado por defecto). Una partida queda fuera solo si **los dos** jugadores son
   débiles: sin rating, o con su **mejor rating conocido en toda la base** por debajo de 1000–1800.

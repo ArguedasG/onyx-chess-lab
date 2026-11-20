@@ -375,6 +375,18 @@ fn matches_filters(entry: &SearchGameEntryRef<'_>, query: &GameQuery) -> bool {
     }
 }
 
+/// How often a scan shares its running statistics, so a long search fills the panel as it goes.
+const PARTIAL_EVERY: Duration = Duration::from_millis(250);
+/// Most played moves sent with each partial update; the final summary has them all.
+const PARTIAL_MOVES: usize = 40;
+
+/// A step of a scan: games read so far and, at most every `PARTIAL_EVERY`, the matches found
+/// so far with their most played next moves.
+pub(super) struct ScanProgress {
+    pub(super) processed: usize,
+    pub(super) partial: Option<(u32, Vec<PositionStats>)>,
+}
+
 fn scan(
     database: PathBuf,
     query: GameQuery,
@@ -382,9 +394,10 @@ fn scan(
     index: &MmapSearchIndex,
     patterns: Option<&super::pattern_index::PatternIndex>,
     cancelled: &(impl Fn() -> bool + Sync),
-    progress: &impl Fn(usize),
+    progress: &impl Fn(ScanProgress),
 ) -> Result<Snapshot, Error> {
     let started = Instant::now();
+    let mut last_partial = Instant::now();
     if index.len() > u32::MAX as usize {
         return Err(invalid("Position index exceeds supported game count"));
     }
@@ -497,7 +510,19 @@ fn scan(
                 _ => counts.unknown += 1,
             }
         }
-        progress((offset + SCAN_BATCH).min(index.len()));
+        let partial = (last_partial.elapsed() >= PARTIAL_EVERY).then(|| {
+            last_partial = Instant::now();
+            let mut moves: Vec<PositionStats> = openings.values().cloned().collect();
+            moves.sort_by_key(|stats| {
+                std::cmp::Reverse(stats.white + stats.draw + stats.black + stats.unknown)
+            });
+            moves.truncate(PARTIAL_MOVES);
+            (total + unlisted, moves)
+        });
+        progress(ScanProgress {
+            processed: (offset + SCAN_BATCH).min(index.len()),
+            partial,
+        });
     }
     output.flush()?;
     let file = output.into_inner().map_err(|e| e.into_error())?;
@@ -628,8 +653,11 @@ pub async fn query_position(
             None
         };
         let flag = request.cancellation.clone(); let scan_app = app.clone(); let scan_tab = tab_id.clone();
-        let snapshot = tauri::async_runtime::spawn_blocking(move || scan(file, query, revision, &index, patterns.as_deref(), &|| flag.cancelled.load(Ordering::Acquire), &|processed| {
-            let _ = scan_app.emit("search_progress", serde_json::json!({"id":scan_tab,"requestId":sequence,"progress":processed as f64 / index.len().max(1) as f64 *100.0,"finished":false,"stage":"scan"}));
+        let snapshot = tauri::async_runtime::spawn_blocking(move || scan(file, query, revision, &index, patterns.as_deref(), &|| flag.cancelled.load(Ordering::Acquire), &|step: ScanProgress| {
+            let _ = scan_app.emit("search_progress", serde_json::json!({"id":scan_tab,"requestId":sequence,"progress":step.processed as f64 / index.len().max(1) as f64 *100.0,"finished":false,"stage":"scan"}));
+            if let Some((matches, openings)) = step.partial {
+                let _ = scan_app.emit("search_partial", serde_json::json!({"id":scan_tab,"requestId":sequence,"matches":matches,"openings":openings}));
+            }
         })).await.map_err(|e| invalid(&e.to_string()))??;
         request.ensure_active("position-publication")?;
         let summary = snapshot.summary.clone();
