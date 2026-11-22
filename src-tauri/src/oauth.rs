@@ -17,7 +17,7 @@ use crate::{error::Error, AppState};
 const AUTH_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 fn create_client(redirect_url: RedirectUrl) -> Result<BasicClient, Error> {
-    let client_id = ClientId::new("org.encroissant.app".to_string());
+    let client_id = ClientId::new("io.github.arguedasg.onyxchesslab".to_string());
     let auth_url = AuthUrl::new("https://lichess.org/oauth".to_string())
         .map_err(|error| Error::OAuth(error.to_string()))?;
     let token_url = TokenUrl::new("https://lichess.org/api/token".to_string())

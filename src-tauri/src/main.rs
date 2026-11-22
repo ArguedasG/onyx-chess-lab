@@ -23,6 +23,7 @@ mod game;
 mod style_lab;
 
 mod fs;
+mod identifier_migration;
 mod lexer;
 mod lichess_cloud;
 mod managed_engine;
@@ -317,7 +318,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             diagram::learn_board_reading,
             diagram::book_memory_size,
             diagram::forget_book_memory,
-            books::book_fingerprint
+            books::book_fingerprint,
+            identifier_migration::get_pending_identifier_migration,
+            identifier_migration::complete_identifier_migration
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,
@@ -345,6 +348,10 @@ fn export_frontend_bindings() {
 }
 
 fn main() {
+    // Migrate legacy Onyx data directories before Tauri creates logs, window state,
+    // or opens the WebView user data directory.
+    identifier_migration::migrate_legacy_identifier_if_needed();
+
     // Starts the clock of the startup measurement.
     let _ = *engine_budget::PROCESS_STARTED;
     let specta_builder = bindings_builder();

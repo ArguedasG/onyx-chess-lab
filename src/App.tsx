@@ -62,6 +62,7 @@ import WhatsNewModal from "@/components/WhatsNewModal";
 import ErrorComponent from "@/components/ErrorComponent";
 import LanguageChoiceModal from "@/components/LanguageChoiceModal";
 import { EngineSetupModal } from "@/components/engines/RecommendedEngines";
+import { engineSetupOpenAtom, maiaNeedsRepairAtom } from "@/hooks/useRecommendedEngines";
 import { finishLichessLogin } from "@/utils/lichess/login";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
@@ -166,6 +167,17 @@ function useAppStartup() {
       }
 
       await preloadReferenceDb(store);
+
+      try {
+        const enginesDir = await getEnginesDir();
+        const maiaStatus = await commands.getManagedMaiaStatus(enginesDir);
+        if (maiaStatus.status === "ok" && maiaStatus.data.needsRepair) {
+          store.set(maiaNeedsRepairAtom, true);
+          store.set(engineSetupOpenAtom, "maia");
+        }
+      } catch (error) {
+        warn(`Could not check managed Maia status on startup: ${error}`);
+      }
 
       return detach;
     };

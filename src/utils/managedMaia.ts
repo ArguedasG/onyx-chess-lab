@@ -43,6 +43,12 @@ export function managedMaiaToLocalEngine(
     };
 }
 
+const MANAGED_MAIA_PATH_PATTERN =
+    /[\\/]managed[\\/]maia3[\\/]\.venv[\\/](scripts|bin)[\\/]maia3-5m(\.exe)?$/i;
+
 export function isManagedMaia(engine: LocalEngine): boolean {
-    return engine.managed?.provider === "onyx" && engine.managed.kind === "maia3";
+    if (engine.managed?.provider === "onyx" && engine.managed.kind === "maia3") {
+        return true;
+    }
+    return MANAGED_MAIA_PATH_PATTERN.test(engine.path);
 }

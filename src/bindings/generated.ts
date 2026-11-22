@@ -1124,6 +1124,22 @@ async bookFingerprint(path: string) : Promise<Result<BookFingerprint, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getPendingIdentifierMigration() : Promise<Result<IdentifierPathMigration | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_pending_identifier_migration") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async completeIdentifierMigration() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("complete_identifier_migration") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1407,6 +1423,7 @@ export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: nu
  * scaled from blitz.
  */
 fixedRhythm?: boolean }
+export type IdentifierPathMigration = { oldDataDir: string; newDataDir: string }
 export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
 export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
 export type ManifestHardware = { operatingSystem: string; architecture: string; logicalCpus: bigint }

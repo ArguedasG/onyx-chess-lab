@@ -13,7 +13,7 @@ import {
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconBrain, IconDatabase, IconShieldCheck, IconTrophy } from "@tabler/icons-react";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -22,8 +22,10 @@ import {
   type ManagedMaiaStatus,
   type Result,
 } from "@/bindings";
+import { maiaNeedsRepairAtom } from "@/hooks/useRecommendedEngines";
 import { enginesAtom } from "@/state/atoms";
 import { getEnginesDir } from "@/utils/directories";
+import { withManagedMaia } from "@/utils/engineSetup";
 import { type LocalEngine } from "@/utils/engines";
 import {
   isManagedMaia,
@@ -61,6 +63,7 @@ const DEFAULT_INSTALLATION: Pick<
 export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
   const { t } = useTranslation();
   const [allEngines, setEngines] = useAtom(enginesAtom);
+  const setMaiaNeedsRepair = useSetAtom(maiaNeedsRepairAtom);
   const [status, setStatus] = useState<ManagedMaiaStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [inProgress, setInProgress] = useState(false);
@@ -77,7 +80,9 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
     setLoading(true);
     try {
       const enginesDir = await getEnginesDir();
-      setStatus(resultValue(await commands.getManagedMaiaStatus(enginesDir)));
+      const nextStatus = resultValue(await commands.getManagedMaiaStatus(enginesDir));
+      setStatus(nextStatus);
+      setMaiaNeedsRepair(nextStatus.needsRepair);
     } catch (error) {
       notifications.show({
         color: "red",
@@ -87,7 +92,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [setMaiaNeedsRepair, t]);
 
   useEffect(() => {
     if (opened) void refreshStatus();
@@ -102,7 +107,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
           (engine): engine is LocalEngine => engine.type === "local" && isManagedMaia(engine),
         );
         const registered = managedMaiaToLocalEngine(installed, config.options, existing?.id);
-        return [...engines.filter((engine) => engine !== existing), registered];
+        return withManagedMaia(engines, registered);
       });
     },
     [setEngines],
@@ -122,6 +127,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
       );
       await registerInstallation(result);
       setStatus({ installed: true, needsRepair: false, installation: result });
+      setMaiaNeedsRepair(false);
       notifications.show({
         color: "green",
         message: t("Engines.ManagedMaia.InstallSuccess"),
@@ -143,7 +149,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
       setCancelRequested(false);
       setInProgress(false);
     }
-  }, [ready, refreshStatus, registerInstallation, status, t]);
+  }, [ready, refreshStatus, registerInstallation, setMaiaNeedsRepair, status, t]);
 
   const uninstall = useCallback(async () => {
     try {
@@ -153,6 +159,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
         (await previous).filter((engine) => !(engine.type === "local" && isManagedMaia(engine))),
       );
       setStatus({ installed: false, needsRepair: false, installation: null });
+      setMaiaNeedsRepair(false);
       setConfirmUninstall(false);
       await commands.clearProgress(MANAGED_MAIA_PROGRESS_ID);
       notifications.show({ color: "green", message: t("Engines.ManagedMaia.UninstallSuccess") });
@@ -163,7 +170,7 @@ export default function ManagedMaiaCard({ opened }: { opened: boolean }) {
         message: String(error),
       });
     }
-  }, [setEngines, t]);
+  }, [setEngines, setMaiaNeedsRepair, t]);
 
   return (
     <>

@@ -31,6 +31,9 @@ const setupErrorAtom = atom<Record<RecommendedEngine, string | null>>({
     maia: null,
 });
 
+/** True when Onyx's managed Maia 3 installation exists on disk but needs repair (e.g. after migration). */
+export const maiaNeedsRepairAtom = atom<boolean>(false);
+
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
@@ -42,11 +45,12 @@ export function useRecommendedEngines() {
     const [engines, setEngines] = useAtom(enginesAtom);
     const [state, setState] = useAtom(setupStateAtom);
     const [errors, setErrors] = useAtom(setupErrorAtom);
+    const [maiaNeedsRepair, setMaiaNeedsRepair] = useAtom(maiaNeedsRepairAtom);
     const local = (engines ?? []).filter(
         (e): e is LocalEngine => e.type === "local" && Boolean(e.path),
     );
     const hasStockfish = local.some((e) => /stockfish/i.test(e.name) && !isMaiaEngine(e));
-    const hasMaia = local.some((e) => isMaiaEngine(e));
+    const hasMaia = local.some((e) => isMaiaEngine(e)) && !maiaNeedsRepair;
     // Elsewhere (for example Linux on ARM) Maia is set up by hand.
     const maiaAvailable = supportsManagedMaia(os);
 
@@ -86,6 +90,7 @@ export function useRecommendedEngines() {
             );
             const { engine } = await installManagedMaiaEngine(existing?.id);
             setEngines(async (prev) => withManagedMaia(await prev, engine));
+            setMaiaNeedsRepair(false);
             setStep("maia", "idle");
         } catch (error) {
             await commands.clearProgress(MANAGED_MAIA_PROGRESS_ID);
@@ -97,18 +102,29 @@ export function useRecommendedEngines() {
                     : { color: "red", title: t("Engines.ManagedMaia.InstallFailed"), message },
             );
         }
-    }, [engines, setEngines, setStep, t]);
+    }, [engines, setEngines, setMaiaNeedsRepair, setStep, t]);
 
     /** Installs what is missing: Stockfish first (one minute), then Maia (several minutes). */
     const installMissing = useCallback(async () => {
         if (!hasStockfish && state.stockfish !== "installing") await installStockfish();
-        if (maiaAvailable && !hasMaia && state.maia !== "installing") await installMaia();
-    }, [hasMaia, hasStockfish, installMaia, installStockfish, maiaAvailable, state]);
+        if (maiaAvailable && (!hasMaia || maiaNeedsRepair) && state.maia !== "installing") {
+            await installMaia();
+        }
+    }, [
+        hasMaia,
+        hasStockfish,
+        installMaia,
+        installStockfish,
+        maiaAvailable,
+        maiaNeedsRepair,
+        state,
+    ]);
 
     return {
         os,
         hasStockfish,
         hasMaia,
+        maiaNeedsRepair,
         maiaAvailable,
         state,
         errors,
@@ -133,11 +149,12 @@ export function useOpenEngineSetup() {
 /** Whether Stockfish and (where Onyx can install it) Maia 3 are both installed. */
 export function useRecommendedEnginesReady() {
     const engines = useAtomValue(enginesAtom);
+    const maiaNeedsRepair = useAtomValue(maiaNeedsRepairAtom);
     const { os } = usePlatform();
     const local = (engines ?? []).filter(
         (e): e is LocalEngine => e.type === "local" && Boolean(e.path),
     );
     const hasStockfish = local.some((e) => /stockfish/i.test(e.name) && !isMaiaEngine(e));
-    const hasMaia = local.some((e) => isMaiaEngine(e));
+    const hasMaia = local.some((e) => isMaiaEngine(e)) && !maiaNeedsRepair;
     return hasStockfish && (!supportsManagedMaia(os) || hasMaia);
 }

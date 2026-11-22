@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Box,
   Button,
   Center,
@@ -25,6 +26,7 @@ import {
 import { Modal } from "@/components/common/Modal";
 import { useToggle } from "@mantine/hooks";
 import {
+  IconAlertTriangle,
   IconCloud,
   IconCopy,
   IconCpu,
@@ -36,12 +38,13 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { platform } from "@tauri-apps/plugin-os";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWRImmutable from "swr/immutable";
 import { match, P } from "ts-pattern";
 import { commands } from "@/bindings";
+import { maiaNeedsRepairAtom, useOpenEngineSetup } from "@/hooks/useRecommendedEngines";
 import { Route } from "@/routes/engines";
 import { enginesAtom } from "@/state/atoms";
 import {
@@ -65,6 +68,8 @@ export default function EnginesPage() {
   const { t } = useTranslation();
 
   const [engines, setEngines] = useAtom(enginesAtom);
+  const maiaNeedsRepair = useAtomValue(maiaNeedsRepairAtom);
+  const openEngineSetup = useOpenEngineSetup();
   const enginesList = useMemo(() => engines ?? [], [engines]);
   const { selected, add } = Route.useSearch();
   const [opened, setOpened] = useState(Boolean(add));
@@ -106,6 +111,27 @@ export default function EnginesPage() {
         <Title>{t("Engines.Title")}</Title>
         <OpenFolderButton base="Engines" folder="engines" />
       </Group>
+      {maiaNeedsRepair && (
+        <Alert
+          mx="md"
+          color="yellow"
+          variant="light"
+          icon={<IconAlertTriangle size={18} />}
+          title={t("Engines.ManagedMaia.NeedsRepair")}
+        >
+          <Group justify="space-between" align="center" gap="sm" wrap="wrap">
+            <Text size="sm">{t("Engines.ManagedMaia.NeedsRepairBanner")}</Text>
+            <Button
+              size="xs"
+              color="yellow"
+              variant="filled"
+              onClick={() => openEngineSetup("maia")}
+            >
+              {t("EngineSetup.RepairMaia")}
+            </Button>
+          </Group>
+        </Alert>
+      )}
       <Group grow flex={1} style={{ overflow: "hidden" }} align="start" px="md" pb="md">
         <Paper withBorder style={{ borderWidth: 2 }} h="100%">
           <Stack gap={0} h="100%" style={{ overflow: "hidden" }}>

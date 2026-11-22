@@ -1,77 +1,56 @@
-# Contributing
+# Contributing to Onyx Chess Lab
 
-When it comes to open source, there are different ways you can contribute, all
-of which are valuable. Here's few guidelines that should help you as you prepare
-your contribution.
-
-## Table of Contents
-
-- [Initial Steps](#initial-steps)
-- [Development](#development)
-  - [Commands](#commands)
-- [Submitting a Pull Request](#submitting-a-pull-request)
-- [Extra Notes](#extra-notes)
+Thank you for your interest in contributing to **Onyx Chess Lab**! Contributions of all kinds — bug
+reports, translations, documentation, tests, and code — are welcome.
 
 ## Initial Steps
 
-Before you start working on a contribution, please check the issues page. It's possible someone else is already working on something similar, or perhaps there is a reason that feature isn't implemented. The maintainers will point you in the right direction.
-
-> If you still have questions, please check [the Discord](https://discord.gg/tdYzfDbSSW)
+Before starting work on a change, please check the
+[existing issues](https://github.com/ArguedasG/onyx-chess-lab/issues) to see whether someone is
+already discussing or working on the same topic.
 
 ## Development
 
-The following steps will get you setup to contribute changes to this repo:
+1. Fork the repository on GitHub.
+2. Clone your fork:
 
-- Fork the repo
-- Clone your forked repository: `git clone git@github.com:{your_username}/en-croissant.git`
-- Enter the en-croissant directory: `cd en-croissant`
-- Create a new branch off the `master` branch: `git checkout -b your-feature-name`
-- Install dependencies `pnpm i`
-- Open the code in your preferred IDE and contribute your changes
+   ```bash
+   git clone https://github.com/<your-username>/onyx-chess-lab.git
+   cd onyx-chess-lab
+   ```
 
-> It is recommended take a look at the [Commands](#commands) and [Extra Notes](#extra-notes) sections before starting.
+3. Create a branch from `main`:
 
-### Commands
+   ```bash
+   git checkout -b your-feature-name
+   ```
 
-`pnpm i`
+4. Install dependencies:
 
-- Installs all dependencies
+   ```bash
+   pnpm install
+   ```
 
-`pnpm dev`
+### Useful Commands
 
-- Starts the app in development mode to see changes in real time
-
-`pnpm test`
-
-- Runs all tests, generating a report
-
-`pnpm format`
-
-- Formats the project according to the project guidelines
-
-`pnpm lint:fix`
-
-- Lints the project according to the project guidelines
-
-`pnpm i18n:extract`
-
-- Extracts all translation keys from the code and updates the translation files in [src/translation](./src/translation/)
-
-`pnpm build`
-
-- Builds the entire app from source. The built app can be found at [src-tauri/target/release](./src-tauri/target/release/)
+- `pnpm dev` — starts the desktop application in development mode.
+- `pnpm test` — runs the frontend test suite (Vitest).
+- `pnpm lint` — runs TypeScript type-checking and `oxlint`.
+- `pnpm format` — formats the TypeScript/React codebase with `oxfmt`.
+- `pnpm lint:ci` — runs the full CI check (type-check, format check, lint, i18n audit, and update/identity isolation audit).
+- `pnpm i18n:extract` — updates translation keys in [src/translation](./src/translation/).
+- `pnpm build` — builds the desktop application through Tauri.
+- `cargo test --manifest-path src-tauri/Cargo.toml` — runs the Rust backend test suite.
 
 ## Submitting a Pull Request
 
-- Implement your contributions (see the [Development](#development) section for more information)
-- Before submitting a PR, first build the app using `pnpm build` and check every feature you've contributed to.
-- Format and lint your code using `pnpm format` followed by `pnpm lint:fix`. If you added or changed any translation keys, run `pnpm i18n:extract` to update the translation files.
-- Go to [the comparison page](https://github.com/franciscoBSalgueiro/en-croissant/compare) and select the branch you just pushed in the `compare:` dropdown
-- Submit the new PR. The maintainers will follow up ASAP.
+1. Make sure `pnpm test`, `pnpm lint:ci`, and `cargo test --manifest-path src-tauri/Cargo.toml` pass.
+2. Open a Pull Request against `main` on
+   [ArguedasG/onyx-chess-lab](https://github.com/ArguedasG/onyx-chess-lab/pulls) with a clear
+   summary of the change and how you tested it.
 
-## Extra Notes
+## Architecture Notes
 
-The app uses the Rust language for interacting with the filesystem, chess engines and databases, and React with Vite (using TypeScript, of course) for displaying the GUI.
-
-- The Rust code can be found in [src-tauri/src](./src-tauri/src/)
-- The React code can be found in [src](./src/)
+- Rust + Tauri backend: [src-tauri/src](./src-tauri/src/) (filesystem, SQLite/mmap databases, UCI engines, managed Maia 3, ONNX diagram recognizer).
+- React + TypeScript frontend: [src](./src/).
+- Project status and decisions: [PROJECT_ROADMAP.md](./PROJECT_ROADMAP.md).

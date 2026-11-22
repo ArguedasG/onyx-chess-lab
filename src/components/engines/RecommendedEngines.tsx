@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Anchor,
   Badge,
   Box,
@@ -13,7 +14,15 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
-import { IconBrain, IconCheck, IconCpu, IconDownload, IconPlus, IconX } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconBrain,
+  IconCheck,
+  IconCpu,
+  IconDownload,
+  IconPlus,
+  IconX,
+} from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ReactNode } from "react";
@@ -35,6 +44,7 @@ function EngineRow({
   name,
   description,
   installed,
+  needsRepair = false,
   installing,
   failed,
   error,
@@ -45,6 +55,7 @@ function EngineRow({
   name: string;
   description: string;
   installed: boolean;
+  needsRepair?: boolean;
   installing: boolean;
   failed: boolean;
   /** Why the last attempt failed. */
@@ -57,7 +68,12 @@ function EngineRow({
   return (
     <Paper withBorder radius="md" p="sm">
       <Group wrap="nowrap" align="flex-start" gap="sm">
-        <ThemeIcon size={36} radius="md" variant="light" color={installed ? "teal" : "gray"}>
+        <ThemeIcon
+          size={36}
+          radius="md"
+          variant="light"
+          color={installed ? "teal" : needsRepair ? "yellow" : "gray"}
+        >
           {icon}
         </ThemeIcon>
         <Box flex={1} miw={0}>
@@ -85,6 +101,10 @@ function EngineRow({
             ) : failed ? (
               <Badge color="red" variant="light">
                 {t("EngineSetup.Failed")}
+              </Badge>
+            ) : needsRepair ? (
+              <Badge color="yellow" variant="light">
+                {t("Engines.ManagedMaia.NeedsRepair")}
               </Badge>
             ) : (
               <Badge color="gray" variant="light">
@@ -115,16 +135,19 @@ export function RecommendedEngines({ focus }: { focus?: RecommendedEngine }) {
   const { t } = useTranslation();
   const setup = useRecommendedEngines();
   const showMaia = setup.maiaAvailable;
-  const missing = [!setup.hasStockfish && "stockfish", showMaia && !setup.hasMaia && "maia"].filter(
-    Boolean,
-  ) as RecommendedEngine[];
+  const missing = [
+    !setup.hasStockfish && "stockfish",
+    showMaia && (!setup.hasMaia || setup.maiaNeedsRepair) && "maia",
+  ].filter(Boolean) as RecommendedEngine[];
 
   const buttonLabel =
     missing.length === 2
       ? t("EngineSetup.InstallBoth")
       : missing[0] === "stockfish"
         ? t("EngineSetup.InstallStockfish")
-        : t("EngineSetup.InstallMaia");
+        : setup.maiaNeedsRepair
+          ? t("EngineSetup.RepairMaia")
+          : t("EngineSetup.InstallMaia");
 
   const stockfishRow = (
     <EngineRow
@@ -146,6 +169,7 @@ export function RecommendedEngines({ focus }: { focus?: RecommendedEngine }) {
       name="Maia 3"
       description={t("EngineSetup.MaiaDesc")}
       installed={setup.hasMaia}
+      needsRepair={setup.maiaNeedsRepair}
       installing={setup.state.maia === "installing"}
       failed={setup.state.maia === "error"}
       error={setup.errors.maia}
@@ -156,6 +180,11 @@ export function RecommendedEngines({ focus }: { focus?: RecommendedEngine }) {
 
   return (
     <Stack gap="sm">
+      {showMaia && setup.maiaNeedsRepair && setup.state.maia !== "installing" && (
+        <Alert color="yellow" variant="light" icon={<IconAlertTriangle size={16} />}>
+          <Text size="xs">{t("EngineSetup.RepairMaiaNotice")}</Text>
+        </Alert>
+      )}
       {focus === "maia" ? [maiaRow, stockfishRow] : [stockfishRow, maiaRow]}
       {missing.length > 0 ? (
         <>

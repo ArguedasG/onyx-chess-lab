@@ -8,6 +8,7 @@ const files = [
   "src-tauri/Cargo.toml",
   "src-tauri/capabilities/main.json",
   "src-tauri/src/main.rs",
+  "src-tauri/src/oauth.rs",
   "src-tauri/tauri.conf.json",
   ".github/workflows/release.yml",
 ];
@@ -15,6 +16,7 @@ const files = [
 const forbidden = [
   ["En Croissant's update endpoint", "encroissant.org/updates"],
   ["En Croissant's GitHub release endpoint", "franciscoBSalgueiro/en-croissant/releases"],
+  ["En Croissant's bundle identifier", "org.encroissant.app"],
 ];
 
 const required = [
@@ -45,6 +47,14 @@ for (const [file, pattern, description] of required) {
 }
 
 const config = JSON.parse(contents.find(([file]) => file === "src-tauri/tauri.conf.json")[1]);
+if (config.identifier !== "io.github.arguedasg.onyxchesslab") {
+  violations.push(
+    "src-tauri/tauri.conf.json must use the Onyx identifier (io.github.arguedasg.onyxchesslab)",
+  );
+}
+if (config.bundle?.publisher === "Francisco Salgueiro") {
+  violations.push("src-tauri/tauri.conf.json must not retain En Croissant's publisher metadata");
+}
 if (config.bundle?.createUpdaterArtifacts !== true) {
   violations.push("src-tauri/tauri.conf.json must create signed updater artifacts");
 }

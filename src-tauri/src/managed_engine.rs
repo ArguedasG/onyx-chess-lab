@@ -476,13 +476,18 @@ pub async fn install_managed_maia(
                 let result =
                     finalize_managed_maia(&id, &root, platform, &app, &state, &cancel).await;
                 state.managed_install_cancel_flags.remove(&id);
-                return match result {
+                match result {
                     Ok(installation) => {
                         update_progress(&state.progress_state, &app, id, 100.0, true)?;
-                        Ok(installation)
+                        return Ok(installation);
                     }
-                    Err(error) => Err(error),
-                };
+                    Err(error) if cancel.load(Ordering::SeqCst) => return Err(error),
+                    Err(error) => {
+                        warn!(
+                            "Could not resume existing Maia assets ({error}); performing a clean reinstall"
+                        );
+                    }
+                }
             }
 
             quarantine_for_cleanup(&root).await?;

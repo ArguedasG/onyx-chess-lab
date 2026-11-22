@@ -34,6 +34,7 @@ import {
   SYSTEM_LANGUAGE_DETECTOR,
   systemLanguageDetector,
 } from "./utils/language";
+import { runPendingIdentifierMigration } from "./utils/identifierMigration";
 
 // Must run before i18next caches its first detected language.
 prepareLanguageChoice(browserStorage());
@@ -80,10 +81,14 @@ const root = createRoot(container!);
 
 // Training data is read from disk before rendering so no component can start from empty defaults
 // and overwrite it. Pending writes are flushed before the window closes.
-// Both files are read before the first render: their stores serve values synchronously.
-void Promise.allSettled([preloadTrainingAreas(), preloadPlayerAnalysis()]).finally(() => {
+// Any migrated identifier paths in localStorage are rewritten before atoms read them.
+async function boot() {
+  await runPendingIdentifierMigration();
+  await Promise.allSettled([preloadTrainingAreas(), preloadPlayerAnalysis()]);
   void getCurrentWindow().onCloseRequested(() =>
     Promise.all([trainingAreasStorage.flush(), playerAnalysisStorage.flush()]).then(() => {}),
   );
   root.render(<App />);
-});
+}
+
+void boot();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedMaiaInstallation, UciOptionConfig } from "@/bindings";
+import { withManagedMaia } from "./engineSetup";
 import { isManagedMaia, managedMaiaToLocalEngine, supportsManagedMaia } from "./managedMaia";
 
 const installation: ManagedMaiaInstallation = {
@@ -55,6 +56,34 @@ describe("managed Maia registration", () => {
                 args: [],
             }),
         ).toBe(false);
+    });
+
+    it("recognizes legacy managed Maia entries without metadata and collapses duplicates", () => {
+        const legacyManaged = {
+            type: "local" as const,
+            id: "legacy-managed",
+            name: "Maia 3 5M",
+            version: "0.1.0",
+            path: "C:\\Users\\me\\AppData\\Roaming\\io.github.arguedasg.onyxchesslab\\engines\\managed\\maia3\\.venv\\Scripts\\maia3-5m.exe",
+            args: [],
+        };
+        const manualMaia = {
+            type: "local" as const,
+            id: "manual-maia",
+            name: "Maia3",
+            version: "",
+            path: "C:\\Users\\me\\AppData\\Local\\ChessLab\\maia3\\.venv\\Scripts\\maia3-5m.exe",
+            args: [],
+        };
+        const fresh = managedMaiaToLocalEngine(installation, [], legacyManaged.id);
+
+        expect(isManagedMaia(legacyManaged)).toBe(true);
+        expect(isManagedMaia(manualMaia)).toBe(false);
+
+        const next = withManagedMaia([manualMaia, legacyManaged, { ...fresh, id: "dup" }], fresh);
+        expect(next).toHaveLength(2);
+        expect(next[0].id).toBe("manual-maia");
+        expect(next[1].id).toBe("legacy-managed");
     });
 });
 

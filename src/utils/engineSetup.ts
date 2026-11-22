@@ -96,10 +96,9 @@ export async function installManagedMaiaEngine(
     };
 }
 
-/** Replaces the registered managed Maia, if any, with `engine`. */
+/** Replaces any registered managed Maia entries with `engine` (collapsing duplicates). */
 export function withManagedMaia(engines: Engine[], engine: LocalEngine): Engine[] {
-    const existing = engines.find((e): e is LocalEngine => e.type === "local" && isManagedMaia(e));
-    return [...engines.filter((e) => e !== existing), engine];
+    return [...engines.filter((e) => !(e.type === "local" && isManagedMaia(e))), engine];
 }
 
 /** The local Stockfish (or other reference engine) the bots and analysis use, if installed. */

@@ -2,7 +2,7 @@
 
 > Documento operativo y fuente vigente de verdad del proyecto.
 >
-> Última actualización: 2026-11-05.
+> Última actualización: 2026-11-21.
 
 ## 1. Cómo utilizar este documento
 
@@ -113,11 +113,14 @@ su gravedad lo justifica.
 - confirmar mediante uso independiente una instalación administrada limpia de Maia 3 en Windows sin
   Python ni Git preinstalados; el flujo se considera disponible, pero todavía no se presenta como
   validado externamente;
-- decidir en Fase 10 cómo migrar de forma segura el identificador heredado `org.encroissant.app` y el
-  campo de publisher sin ocultar ni perder datos de instalaciones existentes; no deben cambiarse de
-  manera aislada;
-- terminar la limpieza pública de `CONTRIBUTING.md`, plantillas de issues y otros textos heredados de
-  En Croissant;
+- ~~decidir en Fase 10 cómo migrar de forma segura el identificador heredado `org.encroissant.app` y el
+  campo de publisher~~ — **resuelto el 2026-11-21**: identificador migrado a
+  `io.github.arguedasg.onyxchesslab`, publisher a `Gabriel Arguedas`, OAuth a
+  `io.github.arguedasg.onyxchesslab`, migración automática al arranque implementada y verificada en
+  tests; falta validación manual en actualización real `0.28.1 → 0.29.0`;
+- ~~terminar la limpieza pública de `CONTRIBUTING.md`, plantillas de issues y otros textos heredados de
+  En Croissant~~ — **resuelto el 2026-11-21** (`CONTRIBUTING.md`, `bug.yml`, eliminado `FUNDING.yml`
+  heredado y dependencia sin uso `posthog-js`);
 - completar la internacionalización de textos fijos: los errores y nombres generados de aperturas,
   estudios, táctica, finales e importación ya usan i18n; quedan mensajes técnicos en inglés de
   bases, Lichess, Player Analysis y exportaciones HTML;
@@ -1013,6 +1016,22 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 
 - El código continúa bajo GPLv3 y conserva atribución a En Croissant.
 - Recursos, modelos y contenido requieren procedencia y licencia revisadas antes de redistribuirse.
+- Identificador canónico de la app: `io.github.arguedasg.onyxchesslab` (estándar reverse-DNS de
+  GitHub, gratuito y permanente, independiente de renovaciones de dominio); `publisher`:
+  `Gabriel Arguedas`.
+- Estrategia de web y dominio: empezar gratis en Cloudflare Pages (`onyx-chess-lab.pages.dev`) o
+  GitHub Pages, manteniendo siempre las URLs internas de la app (actualizador, catálogo) ligadas a
+  GitHub / Cloudflare Pages / R2 para no depender de un dominio pago. Si Onyx gana tracción, se puede
+  comprar `onyxchesslab.org` y conectarlo en minutos como dominio personalizado con redirección 301
+  sin tocar el `identifier` ni migrar instalaciones existentes.
+- Firma de código (presupuesto \$0): para Windows se aplicará a **SignPath Foundation** (certificado
+  OV gratuito para proyectos GPLv3) cuando la web esté en línea; para macOS se mantiene firma ad-hoc
+  (`-`) con instrucciones claras de `xattr -cr` (descartado pagar \$99/año a Apple).
+- Bases de datos y pipeline mensual: desacoplar el catálogo JSON hacia host propio y construir un
+  pipeline mensual en GitHub Actions que convierta, valide (checksums + calidad), comprima con
+  `zstd` (`.db3.zst`) y publique en **Cloudflare R2** (10 GB gratis, egress ilimitado; con Hugging
+  Face Datasets como alternativa sin tarjeta). Antes de alojar LumbrasGigaBase convertida, confirmar
+  atribución con su autor (CC BY-NC 4.0).
 - El canal Windows x64 utiliza artefactos y firma propios de Onyx.
 - macOS y Linux no se presentan como soportados hasta completar la Fase 10.
 - Las bases convertidas que Onyx ofrezca alojadas respetan la licencia de su fuente (atribución,
@@ -1028,8 +1047,6 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - ¿Qué tamaño de lote por defecto y qué criterio de “aprendida” resultan cómodos en el modo
   Aprender? Se ajustarán con el uso real.
 - ¿Qué ventanas y tamaños de muestra se usarán para comparaciones temporales?
-- ¿Qué estrategia de migración conservará los datos existentes al sustituir el bundle identifier
-  heredado y los metadatos de publisher?
 - ¿Qué pregunta medible se convertirá en el caso de estudio reproducible de MLOps?
 - En Fase 10: ¿se alojan las bases convertidas (Hugging Face Datasets recomendado) o el catálogo
   propio solo enlaza la página oficial de LumbrasGigaBase? Antes, escribir al autor de Lumbras.
@@ -1044,6 +1061,31 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-21 — Etapa 1: identidad propia (`io.github.arguedasg.onyxchesslab`), migración automática y limpieza pública
+
+- **Identificador y metadatos**: `tauri.conf.json` pasa de `org.encroissant.app` /
+  `Francisco Salgueiro` a `io.github.arguedasg.onyxchesslab` / `Gabriel Arguedas`; `Cargo.toml`
+  añade a `Gabriel Arguedas` manteniendo atribución a `Francisco Salgueiro`; `oauth.rs` usa
+  `io.github.arguedasg.onyxchesslab` como `client_id` PKCE en Lichess.
+- **Migración automática y segura al arranque**: `src-tauri/src/identifier_migration.rs` corre en
+  `main()` antes de inicializar Tauri/WebView; solo actúa si `org.encroissant.app` contiene
+  marcadores exclusivos de Onyx (jamás toca instalaciones puras de En Croissant), mueve
+  atómicamente los datos y el almacenamiento WebView, reescribe rutas absolutas en JSON de datos y
+  deja `localStorage` listo para reescritura en `src/utils/identifierMigration.ts` antes del primer
+  render. En Windows, `src-tauri/windows/nsis-hooks.nsh` migra también la clave de publisher en el
+  registro antes de `PageReinstall` para que desinstalar o actualizar desde 0.28.x respete la
+  carpeta instalada y no falle. Si existía Maia 3 gestionada, limpia el `.venv` con rutas viejas,
+  detecta `needsRepair` al arrancar abriendo directamente el diálogo de reparación en 1 clic (con
+  aviso persistente en Motores si se pospone), y colapsa cualquier duplicado heredado de Maia 3.
+- **Carpeta de documentos**: `src/utils/directories.ts` deja de reutilizar `Documentos/EnCroissant`
+  en instalaciones nuevas; instalaciones existentes conservan su `document-dir` guardado.
+- **Limpieza pública**: actualizados `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/bug.yml` y
+  `scripts/audit-update-isolation.mjs`; eliminados `.github/FUNDING.yml` (apuntaba a En Croissant) y
+  la dependencia sin uso `posthog-js`.
+- **Plan estratégico registrado**: dominio opcional solo para web (`onyx-chess-lab.pages.dev` primero,
+  `onyxchesslab.org` opcional con 301 si despega), SignPath Foundation para firma gratuita en
+  Windows, y Cloudflare R2 + compresión `zstd` + GitHub Actions para el pipeline mensual de bases.
 
 ### 2026-11-05 — Release 0.25.1
 
