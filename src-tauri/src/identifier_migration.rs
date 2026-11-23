@@ -213,7 +213,11 @@ fn windows_en_croissant_installs() -> Vec<PathBuf> {
 /// Whether En Croissant used the legacy folder too: it is installed, or its log sits next to
 /// Onyx's in the shared log folder (Onyx's own logs, rotated ones included, start with its name).
 fn shared_with_en_croissant(layout: &MigrationLayout) -> bool {
-    if layout.en_croissant_installs.iter().any(|path| path.exists()) {
+    if layout
+        .en_croissant_installs
+        .iter()
+        .any(|path| path.exists())
+    {
         return true;
     }
     let Ok(entries) = fs::read_dir(&layout.legacy_log_dir) else {
@@ -261,11 +265,7 @@ fn remove_if_empty_dir(path: &Path) -> std::io::Result<()> {
 }
 
 fn run_migration(layout: &MigrationLayout) -> std::io::Result<bool> {
-    if layout
-        .new_data_dir
-        .join(MIGRATION_STATE_FILENAME)
-        .is_file()
-    {
+    if layout.new_data_dir.join(MIGRATION_STATE_FILENAME).is_file() {
         return Ok(false);
     }
     if layout.new_data_dir.exists() && dir_has_entries(&layout.new_data_dir) {
@@ -283,8 +283,7 @@ fn run_migration(layout: &MigrationLayout) -> std::io::Result<bool> {
     // Move local WebView/log directory first (Windows) so a locked WebView2 instance aborts
     // cleanly before moving app_data_dir. If moving app_data_dir fails afterwards, roll back.
     let mut moved_local_dir = false;
-    if let (Some(legacy_local), Some(new_local)) =
-        (&layout.legacy_local_dir, &layout.new_local_dir)
+    if let (Some(legacy_local), Some(new_local)) = (&layout.legacy_local_dir, &layout.new_local_dir)
     {
         if legacy_local.is_dir() && !dir_has_entries(new_local) {
             remove_if_empty_dir(new_local)?;
@@ -375,10 +374,7 @@ fn run_migration(layout: &MigrationLayout) -> std::io::Result<bool> {
         shared_with_en_croissant,
         en_croissant_notice_shown: false,
     };
-    write_json_atomic(
-        &layout.new_data_dir.join(MIGRATION_STATE_FILENAME),
-        &state,
-    )?;
+    write_json_atomic(&layout.new_data_dir.join(MIGRATION_STATE_FILENAME), &state)?;
 
     Ok(true)
 }
@@ -441,9 +437,7 @@ fn rewrite_json_value(
 }
 
 fn normalize_for_match(path: &str, case_insensitive: bool) -> String {
-    let normalized = path
-        .trim_end_matches(['/', '\\'])
-        .replace('\\', "/");
+    let normalized = path.trim_end_matches(['/', '\\']).replace('\\', "/");
     if case_insensitive {
         normalized.to_lowercase()
     } else {
@@ -486,13 +480,12 @@ fn rewrite_path_prefix(
         return None;
     }
 
-    let replacement_prefix = if value[..matched_end].contains('/')
-        && !value[..matched_end].contains('\\')
-    {
-        trimmed_new.replace('\\', "/")
-    } else {
-        trimmed_new.to_string()
-    };
+    let replacement_prefix =
+        if value[..matched_end].contains('/') && !value[..matched_end].contains('\\') {
+            trimmed_new.replace('\\', "/")
+        } else {
+            trimmed_new.to_string()
+        };
 
     Some(format!("{replacement_prefix}{suffix}"))
 }
@@ -542,13 +535,15 @@ fn read_migration_state(app: &AppHandle) -> Result<Option<(PathBuf, MigrationSta
 #[tauri::command]
 #[specta::specta]
 pub fn get_identifier_migration(app: AppHandle) -> Result<Option<IdentifierMigrationInfo>, Error> {
-    Ok(read_migration_state(&app)?.map(|(_, state)| IdentifierMigrationInfo {
-        old_data_dir: state.old_data_dir,
-        new_data_dir: state.new_data_dir,
-        local_storage_pending: !state.local_storage_migrated,
-        en_croissant_notice_pending: state.shared_with_en_croissant
-            && !state.en_croissant_notice_shown,
-    }))
+    Ok(
+        read_migration_state(&app)?.map(|(_, state)| IdentifierMigrationInfo {
+            old_data_dir: state.old_data_dir,
+            new_data_dir: state.new_data_dir,
+            local_storage_pending: !state.local_storage_migrated,
+            en_croissant_notice_pending: state.shared_with_en_croissant
+                && !state.en_croissant_notice_shown,
+        }),
+    )
 }
 
 #[tauri::command]
@@ -590,7 +585,10 @@ mod tests {
             legacy_local_dir: Some(local.join(LEGACY_IDENTIFIER)),
             new_local_dir: Some(local.join(CURRENT_IDENTIFIER)),
             legacy_log_dir: local.join(LEGACY_IDENTIFIER).join("logs"),
-            extra_dirs: vec![(extra.join(LEGACY_IDENTIFIER), extra.join(CURRENT_IDENTIFIER))],
+            extra_dirs: vec![(
+                extra.join(LEGACY_IDENTIFIER),
+                extra.join(CURRENT_IDENTIFIER),
+            )],
             case_insensitive_paths: true,
             en_croissant_installs: vec![root.join("programs").join("En Croissant")],
         }
@@ -608,7 +606,11 @@ mod tests {
         fs::write(layout.legacy_data_dir.join("training-areas-v1.json"), "{}").unwrap();
         fs::create_dir_all(&layout.legacy_log_dir).unwrap();
         fs::write(layout.legacy_log_dir.join("onyx-chess-lab.log"), "").unwrap();
-        fs::write(layout.legacy_log_dir.join("onyx-chess-lab_2026-11-01.log"), "").unwrap();
+        fs::write(
+            layout.legacy_log_dir.join("onyx-chess-lab_2026-11-01.log"),
+            "",
+        )
+        .unwrap();
     }
 
     #[test]
@@ -683,7 +685,11 @@ mod tests {
         fs::create_dir_all(&layout.legacy_data_dir).unwrap();
         fs::write(layout.legacy_data_dir.join("training-areas-v1.json"), "{}").unwrap();
         fs::create_dir_all(&layout.new_data_dir).unwrap();
-        fs::write(layout.new_data_dir.join("training-areas-v1.json"), "{\"new\":true}").unwrap();
+        fs::write(
+            layout.new_data_dir.join("training-areas-v1.json"),
+            "{\"new\":true}",
+        )
+        .unwrap();
 
         assert!(!run_migration(&layout).unwrap());
         assert!(layout.legacy_data_dir.exists());
@@ -697,8 +703,12 @@ mod tests {
     fn migrates_onyx_installation_rewrites_paths_and_clears_stale_maia_venv() {
         let temp = tempdir().unwrap();
         let layout = test_layout(temp.path());
-        fs::create_dir_all(layout.legacy_data_dir.join("engines/managed/maia3/.venv/Scripts"))
-            .unwrap();
+        fs::create_dir_all(
+            layout
+                .legacy_data_dir
+                .join("engines/managed/maia3/.venv/Scripts"),
+        )
+        .unwrap();
         fs::create_dir_all(layout.legacy_data_dir.join("secrets")).unwrap();
         fs::create_dir_all(layout.legacy_local_dir.as_ref().unwrap().join("EBWebView")).unwrap();
         fs::create_dir_all(&layout.legacy_log_dir).unwrap();
@@ -745,7 +755,9 @@ mod tests {
         )
         .unwrap();
         fs::write(
-            layout.legacy_data_dir.join("secrets/lichess-tokens.v1.json"),
+            layout
+                .legacy_data_dir
+                .join("secrets/lichess-tokens.v1.json"),
             "{}",
         )
         .unwrap();
@@ -838,7 +850,9 @@ mod tests {
                 true
             )
             .as_deref(),
-            Some(r"C:\Users\Gabriel\AppData\Roaming\io.github.arguedasg.onyxchesslab\db\gigabase.db3")
+            Some(
+                r"C:\Users\Gabriel\AppData\Roaming\io.github.arguedasg.onyxchesslab\db\gigabase.db3"
+            )
         );
         assert_eq!(
             rewrite_path_prefix(
