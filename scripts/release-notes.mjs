@@ -33,16 +33,16 @@ const file = (suffix) => `\`Onyx.Chess.Lab_${version}_${suffix}\``;
 lines.push(
   "## Downloads / Descargas",
   "",
-  "| Platform / Plataforma | File / Archivo | Status / Estado |",
+  "| Platform / Plataforma | File / Archivo | Updates / Actualizaciones |",
   "|---|---|---|",
-  `| Windows x64 | ${file("x64-setup.exe")} | Validated · in-app updates / Validada · actualizaciones desde la app |`,
-  `| macOS Apple Silicon | ${file("aarch64.dmg")} | Untested preview / Vista previa sin probar |`,
-  `| macOS Intel | ${file("x64.dmg")} | Untested preview / Vista previa sin probar |`,
-  `| Linux x64 | ${file("amd64.AppImage")} / \`.deb\` | Untested preview / Vista previa sin probar |`,
+  `| Windows x64 | ${file("x64-setup.exe")} | Signed, in-app / Firmadas, desde la app |`,
+  `| macOS Apple Silicon | ${file("aarch64.dmg")} | In-app notice, manual download / Aviso en la app, descarga manual |`,
+  `| macOS Intel | ${file("x64.dmg")} | In-app notice, manual download / Aviso en la app, descarga manual |`,
+  `| Linux x64 | ${file("amd64.AppImage")} / \`.deb\` | In-app notice, manual download / Aviso en la app, descarga manual |`,
   "",
-  "Signed Onyx Chess Lab update: Windows users receive it through the built-in updater. On macOS and Linux, download and install new versions manually; the macOS build is not signed by Apple, see the [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) for how to open it. Your repertoires, studies, books, training progress, databases, analyses and settings are preserved.",
+  "Signed Onyx Chess Lab update: Windows users receive it through the built-in updater. On macOS and Linux, Onyx tells you when a new version is out, and you download and install it manually; the macOS build is not signed by Apple, see the [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) for how to open it. Your repertoires, studies, books, training progress, databases, analyses and settings are preserved.",
   "",
-  "Actualización firmada de Onyx Chess Lab: en Windows llega por el actualizador integrado. En macOS y Linux, descarga e instala las versiones nuevas a mano; la versión de macOS no está firmada por Apple, consulta el [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) para abrirla. Tus repertorios, estudios, libros, progreso de entrenamiento, bases, análisis y ajustes se conservan.",
+  "Actualización firmada de Onyx Chess Lab: en Windows llega por el actualizador integrado. En macOS y Linux, Onyx te avisa cuando hay una versión nueva y la descargas e instalas a mano; la versión de macOS no está firmada por Apple, consulta el [README](https://github.com/ArguedasG/onyx-chess-lab#opening-the-app-on-macos) para abrirla. Tus repertorios, estudios, libros, progreso de entrenamiento, bases, análisis y ajustes se conservan.",
 );
 if (entry.notes.es) {
   // The app reads the Spanish notes from here (RELEASE_NOTES_ES_MARKER), not from the visible copy.

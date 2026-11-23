@@ -1,5 +1,102 @@
 [
   {
+    "version": "0.29.0",
+    "notes": {
+      "en": {
+        "summary": "Onyx gets its own identity, separate from En Croissant: your data moves to Onyx's own folder by itself, macOS and Linux get update notices, and tactics adds blind mode and PGN comments for visualisation courses.",
+        "sections": [
+          {
+            "title": "Your data moves to Onyx's own folder",
+            "items": [
+              "Onyx now has its own app identifier and publisher (Gabriel Arguedas) instead of En Croissant's. The first time you open 0.29, your databases, puzzles, engines, repertoires, training progress, Player Analysis profiles and settings move to the new folder by itself; saved paths are updated and nothing is deleted.",
+              "On Windows, the installer moves its own registry entry too, so updating and uninstalling keep working and your installation folder is kept.",
+              "New installations create Documents/Onyx Chess Lab; existing ones keep their documents folder."
+            ]
+          },
+          {
+            "title": "If you also use En Croissant",
+            "items": [
+              "Until now both apps shared one data folder. It now moves to Onyx, so En Croissant will start empty. Onyx tells you once when it finds the folder was shared; nothing is deleted."
+            ]
+          },
+          {
+            "title": "Maia 3",
+            "items": [
+              "Maia 3 has to be rebuilt after the move. The first time you open 0.29, Recommended engines opens with a Repair Maia 3 button (one click); if you close it, a notice stays at the top of Engines."
+            ]
+          },
+          {
+            "title": "Updates on macOS and Linux",
+            "items": [
+              "Onyx now checks for new versions on macOS and Linux and shows the notes with a button to the download page. Windows keeps its signed automatic updates. The notice works from 0.29 onwards, so this update is still downloaded by hand there."
+            ]
+          },
+          {
+            "title": "Tactics",
+            "items": [
+              "Blind now works in exercises where you move first: the board stays frozen while you play the whole line from memory, with the opponent's replies written below and as an arrow. This is how visualisation courses work. It also works in Storm, Streak and Countdown.",
+              "New option to show the PGN comments: the opening comment and those of the moves already played, never those ahead; the rest appears when the exercise is over.",
+              "Records without moves, such as a course's introduction, no longer count as exercises when a PGN is imported. Import older sets again to drop them.",
+              "Review set shows the whole puzzle list as soon as it opens. It used to appear empty the first time and, in long sets, draw only the first rows."
+            ]
+          },
+          {
+            "title": "Other changes",
+            "items": [
+              "Removed an analytics library inherited from En Croissant that Onyx never used."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Onyx tiene identidad propia, separada de En Croissant: tus datos pasan solos a su carpeta, macOS y Linux reciben avisos de actualización y la táctica suma el modo a ciegas y los comentarios del PGN para cursos de visualización.",
+        "sections": [
+          {
+            "title": "Tus datos pasan a la carpeta propia de Onyx",
+            "items": [
+              "Onyx tiene ahora su propio identificador de aplicación y su propio editor (Gabriel Arguedas) en lugar de los de En Croissant. La primera vez que abres la 0.29, tus bases, puzzles, motores, repertorios, progreso de entrenamiento, perfiles de Análisis de jugadores y ajustes pasan solos a la carpeta nueva; las rutas guardadas se actualizan y no se borra nada.",
+              "En Windows, el instalador también traslada su entrada del registro, así que actualizar y desinstalar siguen funcionando y se conserva tu carpeta de instalación.",
+              "Las instalaciones nuevas crean Documentos/Onyx Chess Lab; las existentes conservan su carpeta de documentos."
+            ]
+          },
+          {
+            "title": "Si también usas En Croissant",
+            "items": [
+              "Hasta ahora las dos apps compartían una carpeta de datos. Esa carpeta pasa a Onyx, así que En Croissant empezará vacío. Onyx te avisa una sola vez si detecta que la carpeta era compartida; no se borra nada."
+            ]
+          },
+          {
+            "title": "Maia 3",
+            "items": [
+              "Hay que reconstruir Maia 3 después del cambio. La primera vez que abres la 0.29 se abre Motores recomendados con un botón Reparar Maia 3 (un clic); si lo cierras, queda un aviso arriba en Motores."
+            ]
+          },
+          {
+            "title": "Actualizaciones en macOS y Linux",
+            "items": [
+              "Onyx ahora busca versiones nuevas en macOS y Linux y muestra las notas con un botón a la página de descarga. Windows conserva sus actualizaciones automáticas firmadas. El aviso funciona a partir de la 0.29, así que esta actualización todavía se descarga a mano en esos sistemas."
+            ]
+          },
+          {
+            "title": "Táctica",
+            "items": [
+              "A ciegas funciona ahora en ejercicios donde mueves tú primero: el tablero se queda congelado mientras juegas toda la línea de memoria, con las respuestas del rival escritas debajo y como flecha. Así funcionan los cursos de visualización. También funciona en Tormenta, Racha y Contrarreloj.",
+              "Nueva opción para mostrar los comentarios del PGN: el comentario inicial y los de las jugadas ya hechas, nunca los de las que faltan; el resto aparece al terminar el ejercicio.",
+              "Los registros sin jugadas, como la introducción de un curso, ya no cuentan como ejercicios al importar un PGN. Importa de nuevo los sets antiguos para quitarlos.",
+              "Revisar set muestra la lista completa de puzzles desde que se abre. Antes aparecía vacía la primera vez y, en sets largos, solo dibujaba las primeras filas."
+            ]
+          },
+          {
+            "title": "Otros cambios",
+            "items": [
+              "Se quitó una biblioteca de analítica heredada de En Croissant que Onyx nunca usó."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.28.1",
     "notes": {
       "en": {
