@@ -1,7 +1,10 @@
 import { Button, Group, Progress, ScrollArea, Stack, Text } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
+import { getVersion } from "@tauri-apps/api/app";
+import { fetch } from "@tauri-apps/plugin-http";
 import { info, warn } from "@tauri-apps/plugin-log";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { platform } from "@tauri-apps/plugin-os";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -9,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import {
   APP_UPDATE_CHECK_EVENT,
   EMPTY_UPDATE_PROGRESS,
+  GITHUB_LATEST_RELEASE_API_URL,
+  type ManualUpdateInfo,
+  parseManualReleaseUpdate,
   reduceUpdateProgress,
   type AppUpdateProgress,
 } from "@/utils/appUpdater";
@@ -17,6 +23,7 @@ import { playerAnalysisStorage } from "@/state/playerAnalysis";
 import { trainingAreasStorage } from "@/state/trainingAreas";
 import { releaseNotesForLanguage } from "@/utils/changelog";
 import { formatBytes } from "@/utils/format";
+import { apiHeaders } from "@/utils/http";
 
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
@@ -27,6 +34,7 @@ export default function AppUpdater() {
   const activeUpdate = useRef<Update | null>(null);
   const installingRef = useRef(false);
   const [update, setUpdate] = useState<Update | null>(null);
+  const [manualUpdate, setManualUpdate] = useState<ManualUpdateInfo | null>(null);
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<AppUpdateProgress>(EMPTY_UPDATE_PROGRESS);
 
@@ -35,6 +43,7 @@ export default function AppUpdater() {
     const current = activeUpdate.current;
     activeUpdate.current = null;
     setUpdate(null);
+    setManualUpdate(null);
     setProgress(EMPTY_UPDATE_PROGRESS);
     if (current) void current.close();
   }, []);
@@ -42,21 +51,34 @@ export default function AppUpdater() {
   const checkForUpdate = useCallback(
     async (manual: boolean) => {
       if (checking.current) return;
-      if (platform() !== "windows") {
-        if (manual) {
-          notifications.show({
-            color: "yellow",
-            message: t(
-              "Updater.WindowsOnly",
-              "Automatic updates are currently available only on Windows x64.",
-            ),
-          });
-        }
-        return;
-      }
-
       checking.current = true;
       try {
+        if (platform() !== "windows") {
+          const currentVersion = await getVersion();
+          const response = await fetch(GITHUB_LATEST_RELEASE_API_URL, {
+            method: "GET",
+            headers: apiHeaders({ Accept: "application/vnd.github+json" }),
+            connectTimeout: UPDATE_CHECK_TIMEOUT_MS,
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          }
+          const payload: unknown = await response.json();
+          const nextManual = parseManualReleaseUpdate(payload, currentVersion);
+          if (!nextManual) {
+            if (manual) {
+              notifications.show({
+                color: "green",
+                message: t("Updater.UpToDate", "Onyx Chess Lab is up to date."),
+              });
+            }
+            return;
+          }
+          setManualUpdate(nextManual);
+          info(`Onyx update available: ${currentVersion} -> ${nextManual.version}`);
+          return;
+        }
+
         const next = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
         if (!next) {
           if (manual) {
@@ -136,6 +158,21 @@ export default function AppUpdater() {
     }
   }, [t, update]);
 
+  const openManualDownload = useCallback(async () => {
+    if (!manualUpdate) return;
+    try {
+      await openUrl(manualUpdate.downloadUrl);
+      closeUpdate();
+    } catch (error) {
+      warn(`Could not open Onyx release page: ${String(error)}`);
+      notifications.show({
+        color: "red",
+        title: t("Updater.CheckFailed", "Could not check for updates"),
+        message: String(error),
+      });
+    }
+  }, [closeUpdate, manualUpdate, t]);
+
   const progressValue = progress.total
     ? Math.min(100, (progress.downloaded / progress.total) * 100)
     : 100;
@@ -148,32 +185,41 @@ export default function AppUpdater() {
       ? formatBytes(progress.downloaded)
       : t("Updater.PreparingDownload", "Preparing download…");
 
+  const activeVersion = update?.version ?? manualUpdate?.version ?? "";
+  const activeBody = update?.body ?? manualUpdate?.body ?? "";
+  const isManual = Boolean(manualUpdate && !update);
+
   return (
     <Modal
       centered
       size="xl"
-      opened={Boolean(update)}
+      opened={Boolean(update || manualUpdate)}
       onClose={closeUpdate}
       closeOnClickOutside={!installing}
       closeOnEscape={!installing}
       withCloseButton={!installing}
       title={t("Updater.Available", "Onyx Chess Lab {{version}} is available", {
-        version: update?.version ?? "",
+        version: activeVersion,
       })}
     >
       <Stack gap="md">
         <Text size="sm">
-          {t(
-            "Updater.Confirmation",
-            "Do you want to download and install this Onyx Chess Lab update?",
-          )}
+          {isManual
+            ? t(
+                "Updater.ManualConfirmation",
+                "A newer version of Onyx Chess Lab is available on GitHub Releases.",
+              )
+            : t(
+                "Updater.Confirmation",
+                "Do you want to download and install this Onyx Chess Lab update?",
+              )}
         </Text>
-        {update?.body && (
+        {activeBody && (
           <ScrollArea.Autosize mah="40vh" type="auto">
-            <ReleaseNotesView notes={releaseNotesForLanguage(update.body, i18n.language)} />
+            <ReleaseNotesView notes={releaseNotesForLanguage(activeBody, i18n.language)} />
           </ScrollArea.Autosize>
         )}
-        {installing && (
+        {!isManual && installing && (
           <Stack gap={4}>
             <Progress
               value={progressValue}
@@ -186,18 +232,29 @@ export default function AppUpdater() {
           </Stack>
         )}
         <Text size="xs" c="dimmed">
-          {t(
-            "Updater.RestartNotice",
-            "The installer will close Onyx Chess Lab and reopen it after the update.",
-          )}
+          {isManual
+            ? t(
+                "Updater.ManualNotice",
+                "On macOS and Linux, download the new installer from GitHub Releases to update.",
+              )
+            : t(
+                "Updater.RestartNotice",
+                "The installer will close Onyx Chess Lab and reopen it after the update.",
+              )}
         </Text>
         <Group justify="flex-end">
           <Button variant="default" onClick={closeUpdate} disabled={installing}>
             {t("Common.Cancel", "Cancel")}
           </Button>
-          <Button onClick={() => void installUpdate()} loading={installing}>
-            {t("Updater.InstallNow", "Install now")}
-          </Button>
+          {isManual ? (
+            <Button onClick={() => void openManualDownload()}>
+              {t("Updater.DownloadUpdate", "Download update")}
+            </Button>
+          ) : (
+            <Button onClick={() => void installUpdate()} loading={installing}>
+              {t("Updater.InstallNow", "Install now")}
+            </Button>
+          )}
         </Group>
       </Stack>
     </Modal>

@@ -307,6 +307,7 @@ impl PositionQuery {
         }))
     }
 
+    #[cfg(test)]
     pub fn partial_from_fen(fen: &str) -> Result<PositionQuery, Error> {
         Self::pattern_from_fen(fen, &[], None, false)
     }

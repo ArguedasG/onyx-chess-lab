@@ -1125,9 +1125,12 @@ async bookFingerprint(path: string) : Promise<Result<BookFingerprint, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getPendingIdentifierMigration() : Promise<Result<IdentifierPathMigration | null, string>> {
+/**
+ * The finished migration, if this installation was migrated; `None` for a fresh installation.
+ */
+async getIdentifierMigration() : Promise<Result<IdentifierMigrationInfo | null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_pending_identifier_migration") };
+    return { status: "ok", data: await TAURI_INVOKE("get_identifier_migration") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1136,6 +1139,14 @@ async getPendingIdentifierMigration() : Promise<Result<IdentifierPathMigration |
 async completeIdentifierMigration() : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("complete_identifier_migration") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async acknowledgeEnCroissantNotice() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("acknowledge_en_croissant_notice") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1423,7 +1434,19 @@ export type HumanTimingConfig = { minThinkTimeMs: number; averageThinkTimeMs: nu
  * scaled from blitz.
  */
 fixedRhythm?: boolean }
-export type IdentifierPathMigration = { oldDataDir: string; newDataDir: string }
+/**
+ * What the frontend needs to know about a finished data-directory migration. It stays available
+ * after the localStorage rewrite: ids hashed from database paths keep using the old prefix.
+ */
+export type IdentifierMigrationInfo = { oldDataDir: string; newDataDir: string; 
+/**
+ * The localStorage paths still point to the old directory.
+ */
+localStoragePending: boolean; 
+/**
+ * The moved directory was shared with En Croissant and the user has not been told yet.
+ */
+enCroissantNoticePending: boolean }
 export type ManagedMaiaInstallation = { name: string; version: string; path: string; args: string[]; elo: number; installedSizeMb: number; requiredFreeSpaceMb: number; sourceUrl: string; sourceRevision: string; modelUrl: string; modelRevision: string; modelSha256: string; license: string; pythonVersion: string; uvVersion: string }
 export type ManagedMaiaStatus = { installed: boolean; needsRepair: boolean; installation: ManagedMaiaInstallation | null }
 export type ManifestHardware = { operatingSystem: string; architecture: string; logicalCpus: bigint }

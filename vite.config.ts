@@ -88,6 +88,7 @@ export default defineConfig({
     },
     test: {
         environment: "jsdom",
+        exclude: ["**/node_modules/**", "**/.claude/**", "**/dist/**", "**/src-tauri/**"],
     },
     define: {
         "import.meta.env.VITE_PLATFORM": JSON.stringify(os.platform()),

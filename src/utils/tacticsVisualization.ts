@@ -7,9 +7,9 @@ import { positionFromFen } from "@/utils/chessops";
 import { positionKey } from "@/utils/repertoireGenerator/positions";
 
 /**
- * Blind visualization (I-38): an earlier position and the moves played since. Available when the
- * exercise knows what led to it: the opponent's first move of a puzzle, or the game an exercise
- * of Player Analysis comes from.
+ * Blind visualization (I-38): an earlier position and the moves played since. The earlier position
+ * is the one before the opponent's first move of a puzzle, some moves back in the game an exercise
+ * of Player Analysis comes from, or the exercise's own position when the student moves first.
  */
 export type BlindView = { fen: string; hiddenSans: string[] };
 
@@ -23,6 +23,22 @@ export function blindFromOpponentMove(
     const move = parseUci(firstMove);
     if (!position || !move || !position.isLegal(move)) return null;
     return { fen, hiddenSans: [makeSan(position, move)] };
+}
+
+/**
+ * Blind view of a puzzle or PGN exercise. When the opponent moves first, that move is the one to
+ * visualize. When the student moves first, the picture is the exercise's own position and every
+ * move of the line is played out of sight: visualization courses ("play these moves, then find
+ * the tactic") work this way.
+ */
+export function blindForExercise(
+    fen: string,
+    startingActor: "student" | "opponent",
+    firstMove: string | undefined,
+): BlindView | null {
+    if (startingActor === "opponent") return blindFromOpponentMove(fen, firstMove);
+    const [position] = positionFromFen(fen);
+    return position ? { fen, hiddenSans: [] } : null;
 }
 
 /**

@@ -2,7 +2,18 @@ import { parseSan } from "chessops/san";
 import { describe, expect, it } from "vitest";
 import { uciNormalize } from "./chess";
 import { positionFromFen } from "./chessops";
-import { courseThemeTitle, planTacticsCourseFiles, solutionLinesWith } from "./tacticsTraining";
+import { parseUci } from "chessops";
+import { playUci } from "./repertoireGenerator/positions";
+import {
+    courseThemeTitle,
+    extractTacticsComments,
+    pgnRecordHasMoves,
+    pgnRecordIndex,
+    planTacticsCourseFiles,
+    solutionLinesWith,
+    visibleTacticsComments,
+} from "./tacticsTraining";
+import { createNode, defaultTree, type TreeNode } from "./treeReducer";
 
 const FEN = "r3k2r/pppq1ppp/2n1bn2/3pp3/3PP3/2N1BN2/PPPQ1PPP/R3K2R w KQkq - 0 1";
 
@@ -78,5 +89,104 @@ describe("course folders", () => {
     it("suggests every file when none is numbered", () => {
         const plan = planTacticsCourseFiles([file("Pins.pgn"), file("Forks.pgn")]);
         expect(plan.every((entry) => entry.suggested)).toBe(true);
+    });
+});
+
+describe("records without moves", () => {
+    const intro = `[Event "?"]
+[White "How to Train with this Course"]
+[Black "How to Train with this Course"]
+[Result "*"]
+
+{ How to Train with this Course. Week 1: 1 move ahead (10 exercises). [%cal Ge2e4] } *`;
+    const puzzle = `[Event "?"]
+[FEN "3r2k1/p3b1pp/bp2pp2/8/P2P4/2RNPPP1/1B5P/6K1 b - - 0 1"]
+[SetUp "1"]
+
+{ Visualise the moves 1... Rc8 2. Kf2, then find the best continuation. } 1...
+Rc8 2. Kf2 Rxc3 3. Bxc3 Bxd3 { CORRECT! Well done. } *`;
+
+    it("tells exercises from records that only hold text", () => {
+        expect(pgnRecordHasMoves(intro)).toBe(false);
+        expect(pgnRecordHasMoves(puzzle)).toBe(true);
+        expect(pgnRecordHasMoves('[Event "x"]\n\n1. e4 *')).toBe(true);
+        expect(pgnRecordHasMoves('[Event "x"]\n\n1. O-O-O *')).toBe(true);
+        expect(pgnRecordHasMoves('[Event "x"]\n\n{ only a comment with e4 } (1. d4) 1-0')).toBe(
+            false,
+        );
+    });
+
+    it("maps exercises to the records of the file around the skipped ones", () => {
+        expect(pgnRecordIndex(0)).toBe(0);
+        expect(pgnRecordIndex(5, [])).toBe(5);
+        expect(pgnRecordIndex(0, [0])).toBe(1);
+        expect(pgnRecordIndex(3, [0])).toBe(4);
+        expect(pgnRecordIndex(2, [0, 3, 10])).toBe(4);
+        expect(pgnRecordIndex(3, [0, 3, 10])).toBe(5);
+        expect(pgnRecordIndex(8, [0, 3, 10])).toBe(11);
+    });
+});
+
+describe("PGN comments in tactics", () => {
+    const fen = "3r2k1/p3b1pp/bp2pp2/8/P2P4/2RNPPP1/1B5P/6K1 b - - 0 1";
+
+    /** A tree with one line from `fen`, each move with the given comment. */
+    function lineTree(moves: Array<[string, string]>, start = ""): TreeNode {
+        const tree = defaultTree(fen);
+        tree.root.comment = start;
+        let node = tree.root;
+        for (const [uci, comment] of moves) {
+            const played = playUci(node.fen, uci)!;
+            const child = createNode({
+                move: parseUci(uci)!,
+                san: played.san,
+                fen: played.fen,
+                halfMoves: node.halfMoves + 1,
+            });
+            child.comment = comment;
+            node.children.push(child);
+            node = child;
+        }
+        return tree.root;
+    }
+
+    const line = ["d8c8", "g1f2", "c8c3", "b2c3", "a6d3"];
+    const root = lineTree(
+        [
+            ["d8c8", ""],
+            ["g1f2", ""],
+            ["c8c3", "The key capture. [%csl Rc3]"],
+            ["b2c3", ""],
+            ["a6d3", "CORRECT! Well done."],
+        ],
+        "Visualise the moves 1... Rc8 2. Kf2, then find the best continuation.",
+    );
+
+    it("reads the opening comment and each move's comment without embedded commands", () => {
+        const comments = extractTacticsComments(root);
+        expect(comments.start).toBe(
+            "Visualise the moves 1... Rc8 2. Kf2, then find the best continuation.",
+        );
+        expect(comments.moves).toEqual({
+            "d8c8 g1f2 c8c3": "The key capture.",
+            "d8c8 g1f2 c8c3 b2c3 a6d3": "CORRECT! Well done.",
+        });
+    });
+
+    it("shows only the comments of moves already played until the exercise is over", () => {
+        const comments = extractTacticsComments(root);
+        expect(visibleTacticsComments(comments, [], [line], false)).toEqual([comments.start]);
+        expect(visibleTacticsComments(comments, line.slice(0, 2), [line], false)).toEqual([
+            comments.start,
+        ]);
+        expect(visibleTacticsComments(comments, line.slice(0, 3), [line], false)).toEqual([
+            comments.start,
+            "The key capture.",
+        ]);
+        expect(visibleTacticsComments(comments, line.slice(0, 1), [line], true)).toEqual([
+            comments.start,
+            "The key capture.",
+            "CORRECT! Well done.",
+        ]);
     });
 });

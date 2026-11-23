@@ -18,6 +18,7 @@ import {
   Progress,
   SegmentedControl,
   Select,
+  Paper,
   Stack,
   Switch,
   Text,
@@ -50,7 +51,7 @@ import { useTacticsReview } from "@/state/tacticsReview";
 import { trainingAreasAtom } from "@/state/trainingAreas";
 import { formatTime } from "@/utils/format";
 import { addTacticsReviewItem } from "@/utils/tacticsReview";
-import { blindFromGame, blindFromOpponentMove, type BlindView } from "@/utils/tacticsVisualization";
+import { blindForExercise, blindFromGame, type BlindView } from "@/utils/tacticsVisualization";
 import { Stopwatch } from "@/utils/stopwatch";
 import { launchTrainingPosition } from "@/utils/trainingLaunch";
 import {
@@ -67,7 +68,12 @@ import {
   type TacticsCycleSummary,
   type TacticsSet,
 } from "@/utils/trainingAreas";
-import { loadTacticsExercise, type TacticsLoadedExercise } from "@/utils/tacticsTraining";
+import {
+  hasTacticsComments,
+  loadTacticsExercise,
+  visibleTacticsComments,
+  type TacticsLoadedExercise,
+} from "@/utils/tacticsTraining";
 import {
   EngineTacticsBoard,
   GuidedTacticsBoard,
@@ -82,6 +88,7 @@ const tacticsVisualizationAtom = atomWithStorage<VisualizationMode>(
   "normal",
 );
 const tacticsBlindDepthAtom = atomWithStorage<number>("tactics-blind-depth", 2);
+const tacticsShowCommentsAtom = atomWithStorage<boolean>("tactics-show-pgn-comments", false);
 
 function fullQueue(total: number) {
   return Array.from({ length: total }, (_, index) => index);
@@ -167,6 +174,8 @@ export default function TacticsSessionV2Page() {
   const [visualMode, setVisualMode] = useAtom(tacticsVisualizationAtom);
   const [blindDepth, setBlindDepth] = useAtom(tacticsBlindDepthAtom);
   const [blindView, setBlindView] = useState<BlindView | null>(null);
+  const [showComments, setShowComments] = useAtom(tacticsShowCommentsAtom);
+  const [playedMoves, setPlayedMoves] = useState<string[]>([]);
   const [rushOpen, setRushOpen] = useState(false);
   const { update: updateReview } = useTacticsReview();
 
@@ -276,18 +285,20 @@ export default function TacticsSessionV2Page() {
     trainingT,
   ]);
 
-  // Blind needs what led to the position: the opponent's first move or the source game.
+  // Blind starts from the source game for exercises of Player Analysis (some moves back), and from
+  // the exercise itself otherwise (before the opponent's first move when the opponent starts).
   const playerAnalysisSource = exercise
     ? areas.tactics.exercises[exercise.id]?.source.playerAnalysis
     : undefined;
   useEffect(() => {
     setBlindView(null);
     if (!exercise || !set) return;
-    if (set.config.startingActor === "opponent") {
-      setBlindView(blindFromOpponentMove(exercise.fen, exercise.solutionLines[0]?.[0]));
+    if (set.config.startingActor === "opponent" || !playerAnalysisSource) {
+      setBlindView(
+        blindForExercise(exercise.fen, set.config.startingActor, exercise.solutionLines[0]?.[0]),
+      );
       return;
     }
-    if (!playerAnalysisSource) return;
     let cancelled = false;
     void commands
       .getGames(playerAnalysisSource.databasePath, {
@@ -307,6 +318,12 @@ export default function TacticsSessionV2Page() {
       cancelled = true;
     };
   }, [blindDepth, exercise, playerAnalysisSource, set]);
+
+  // The board remounts, with no moves played, for a new exercise, a new try or another view.
+  const blindReady = blindView !== null;
+  useEffect(() => {
+    setPlayedMoves([]);
+  }, [exercise?.id, activeIndex, boardAttempt, visualMode, blindReady]);
 
   const completedIndexes = isWoodpecker
     ? currentCycleCompletedIndexes
@@ -699,6 +716,16 @@ export default function TacticsSessionV2Page() {
   }
 
   const blindAvailable = blindView !== null;
+  const exerciseHasComments = hasTacticsComments(exercise?.comments);
+  // Comments of the moves already played; the rest of the line once the exercise is over.
+  const visibleComments = exercise
+    ? visibleTacticsComments(
+        exercise.comments,
+        playedMoves,
+        exercise.solutionLines,
+        result !== null || solutionOpen,
+      )
+    : [];
   const activeVisualization: TacticsVisualization =
     visualMode === "blind" && blindView
       ? { kind: "blind", fen: blindView.fen, hiddenSans: blindView.hiddenSans }
@@ -834,6 +861,7 @@ export default function TacticsSessionV2Page() {
                 )
               }
               onIncorrect={(move) => finishAttempt("incorrect", move, "")}
+              onProgress={setPlayedMoves}
             />
           ) : set.config.validationMode === "prepared" ? (
             <Alert color="yellow">
@@ -883,6 +911,28 @@ export default function TacticsSessionV2Page() {
             </Text>
           </div>
 
+          {exerciseHasComments && (
+            <Stack gap={6}>
+              <Switch
+                size="xs"
+                checked={showComments}
+                onChange={(event) => setShowComments(event.currentTarget.checked)}
+                label={trainingT("Tactics.Comments.Show", "Show PGN comments")}
+              />
+              {showComments && visibleComments.length > 0 && (
+                <Paper withBorder p="xs" mah={220} style={{ overflowY: "auto" }}>
+                  <Stack gap={6}>
+                    {visibleComments.map((text, index) => (
+                      <Text key={index} size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                        {text}
+                      </Text>
+                    ))}
+                  </Stack>
+                </Paper>
+              )}
+            </Stack>
+          )}
+
           {set.config.validationMode !== "engine" && (
             <Button
               variant="light"
@@ -914,8 +964,8 @@ export default function TacticsSessionV2Page() {
                       <Tooltip
                         disabled={blindAvailable}
                         label={trainingT(
-                          "Tactics.Visual.BlindUnavailable",
-                          "Blind needs to know what led to the position: puzzles that start with the opponent's move or exercises from your games.",
+                          "Tactics.Visual.BlindUnavailableExercise",
+                          "Blind is not available for this exercise: its first move cannot be played from the position.",
                         )}
                         multiline
                         w={260}

@@ -404,6 +404,7 @@ impl MmapSearchIndex {
     pub fn len(&self) -> usize {
         self.count
     }
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
@@ -422,6 +423,7 @@ impl MmapSearchIndex {
             .get(index - start)
             .map(SearchGameEntryRef::from)
     }
+    #[cfg(test)]
     pub fn iter(&self) -> impl Iterator<Item = SearchGameEntryRef<'_>> {
         self.blocks.iter().flat_map(|(range, _)| {
             self.block(range)

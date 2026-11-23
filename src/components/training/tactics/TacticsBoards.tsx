@@ -288,6 +288,7 @@ export function GuidedTacticsBoard({
   onUserMove,
   onCorrect,
   onIncorrect,
+  onProgress,
 }: {
   exercise: Pick<TacticsLoadedExercise, "fen" | "solutionLines">;
   startingActor: TacticsSet["config"]["startingActor"];
@@ -298,6 +299,8 @@ export function GuidedTacticsBoard({
   onUserMove: () => void;
   onCorrect: (lastMove: string) => void;
   onIncorrect: (move: string) => void;
+  /** The solution moves played so far (stored UCI), after each move of either side. */
+  onProgress?: (played: string[]) => void;
 }) {
   const initial = useMemo(() => {
     const tree = defaultTree(exercise.fen);
@@ -319,6 +322,7 @@ export function GuidedTacticsBoard({
         onUserMove={onUserMove}
         onCorrect={onCorrect}
         onIncorrect={onIncorrect}
+        onProgress={onProgress}
       />
     </TreeStateProvider>
   );
@@ -334,6 +338,7 @@ function GuidedTacticsBoardInner({
   onUserMove,
   onCorrect,
   onIncorrect,
+  onProgress,
 }: {
   lines: string[][];
   startingActor: TacticsSet["config"]["startingActor"];
@@ -344,6 +349,7 @@ function GuidedTacticsBoardInner({
   onUserMove: () => void;
   onCorrect: (lastMove: string) => void;
   onIncorrect: (move: string) => void;
+  onProgress?: (played: string[]) => void;
 }) {
   const store = useContext(TreeStateContext)!;
   const makeMove = useStore(store, (state) => state.makeMove);
@@ -363,6 +369,11 @@ function GuidedTacticsBoardInner({
   const blindBoardRef = useRef<HTMLDivElement>(null);
   const showFeedback = (uci: string, correct: boolean, persistent = false) =>
     setFeedback({ square: feedbackSquare(uci), correct, persistent, key: Date.now() });
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  const reportProgress = useCallback(() => {
+    onProgressRef.current?.(candidates.current[0]?.slice(0, ply.current) ?? []);
+  }, []);
 
   const playOpponent = useCallback(async () => {
     if (completed.current || disabled || opponentMoveInFlight.current) return;
@@ -384,6 +395,7 @@ function GuidedTacticsBoardInner({
       candidates.current = candidates.current.filter((line) => line[ply.current] === reply);
       makeMove({ payload: move, mainline: true, changeHeaders: false });
       ply.current += 1;
+      reportProgress();
       if (candidates.current.some((line) => line.length === ply.current)) {
         completed.current = true;
         onCorrect(reply);
@@ -392,7 +404,7 @@ function GuidedTacticsBoardInner({
       opponentMoveInFlight.current = false;
       setAutoMoving(false);
     }
-  }, [disabled, makeMove, onCorrect, variationSeed]);
+  }, [disabled, makeMove, onCorrect, reportProgress, variationSeed]);
 
   // Blind plays on the real position too, only out of sight: the opponent's first move is made
   // as usual and announced over the frozen picture.
@@ -443,6 +455,7 @@ function GuidedTacticsBoardInner({
     }
     candidates.current = matching;
     ply.current += 1;
+    reportProgress();
     if (matching.some((line) => line.length === ply.current)) {
       completed.current = true;
       showFeedback(uci, true, true);

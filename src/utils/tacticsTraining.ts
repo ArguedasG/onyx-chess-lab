@@ -14,6 +14,15 @@ import type {
 import type { TreeNode } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
 
+/**
+ * Comments of a PGN exercise: the one before the first move and the one after each move, keyed by
+ * the moves that lead to it (stored UCI, as in `solutionLines`, joined by spaces).
+ */
+export type TacticsPgnComments = {
+    start: string;
+    moves: Record<string, string>;
+};
+
 export type TacticsLoadedExercise = {
     id: string;
     recordIndex: number;
@@ -22,6 +31,7 @@ export type TacticsLoadedExercise = {
     solutionLines: string[][];
     hasVariations: boolean;
     sourcePgn: string;
+    comments?: TacticsPgnComments;
 };
 
 export type TacticsPgnSample = {
@@ -36,7 +46,10 @@ export type TacticsPgnSample = {
 export type TacticsPgnInspection = {
     path: string;
     filename: string;
+    /** Exercises: the records with moves (see `skippedRecords`). */
     recordCount: number;
+    /** Records without moves, such as a course introduction; they are not exercises. */
+    skippedRecords: number[];
     samples: TacticsPgnSample[];
 };
 
@@ -111,6 +124,63 @@ export function extractTacticsSolutionLines(
     return lines;
 }
 
+/** Comment text without embedded commands such as `[%cal ...]` or `[%clk ...]`. */
+function commentText(comment: string): string {
+    return comment
+        .replace(/\[%[^\]]*\]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+export function extractTacticsComments(root: TreeNode): TacticsPgnComments {
+    const moves: Record<string, string> = {};
+    function visit(node: TreeNode, prefix: string[]) {
+        const [position] = positionFromFen(node.fen);
+        if (!position) return;
+        for (const child of node.children) {
+            if (!child.move) continue;
+            const path = [...prefix, uciNormalize(position.clone(), child.move)];
+            const text = commentText(child.comment);
+            if (text) moves[path.join(" ")] = text;
+            visit(child, path);
+        }
+    }
+    visit(root, []);
+    return { start: commentText(root.comment), moves };
+}
+
+export function hasTacticsComments(comments: TacticsPgnComments | undefined): boolean {
+    return !!comments && (comments.start !== "" || Object.keys(comments.moves).length > 0);
+}
+
+/**
+ * The comments the student may read: the opening one and those of the moves already played, never
+ * those ahead, which often give the solution away. Once the exercise is over, the rest of the line
+ * (the one followed so far, or the first one) is shown too.
+ */
+export function visibleTacticsComments(
+    comments: TacticsPgnComments | undefined,
+    played: readonly string[],
+    solutionLines: readonly string[][],
+    finished: boolean,
+): string[] {
+    if (!comments) return [];
+    let path: readonly string[] = played;
+    if (finished) {
+        const line =
+            solutionLines.find((candidate) =>
+                played.every((move, index) => candidate[index] === move),
+            ) ?? solutionLines[0];
+        if (line && line.length > played.length) path = line;
+    }
+    const texts = comments.start ? [comments.start] : [];
+    for (let ply = 1; ply <= path.length; ply += 1) {
+        const text = comments.moves[path.slice(0, ply).join(" ")];
+        if (text) texts.push(text);
+    }
+    return texts;
+}
+
 export async function parseTacticsPgnRecord(
     raw: string,
     recordIndex: number,
@@ -134,6 +204,7 @@ export async function parseTacticsPgnRecord(
         ),
         hasVariations: treeHasVariations(tree.root),
         sourcePgn: raw,
+        comments: extractTacticsComments(tree.root),
     };
 }
 
@@ -142,7 +213,9 @@ export type TacticsCourseFile = {
     filename: string;
     /** Theme name: the file name without its extension or leading number ("01. Pin" → "Pin"). */
     title: string;
+    /** Exercises: the records with moves (see `skippedRecords`). */
     recordCount: number;
+    skippedRecords?: number[];
     /** Suggested for import: has exercises and, when the folder numbers its themes, is numbered. */
     suggested: boolean;
     error?: string;
@@ -162,7 +235,13 @@ export function courseThemeTitle(filename: string): string {
  * suggested: the others are usually the complete book or another course.
  */
 export function planTacticsCourseFiles(
-    files: { path: string; filename: string; recordCount: number; error?: string }[],
+    files: {
+        path: string;
+        filename: string;
+        recordCount: number;
+        skippedRecords?: number[];
+        error?: string;
+    }[],
 ): TacticsCourseFile[] {
     const sorted = [...files].sort((a, b) =>
         a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" }),
@@ -189,10 +268,13 @@ export async function scanTacticsCourseFolder(
         pgns.map(async (entry) => {
             const path = await join(directory, entry.name);
             try {
+                const records = unwrap(await commands.countPgnGames(path));
+                const skippedRecords = await findRecordsWithoutMoves(path, records);
                 return {
                     path,
                     filename: entry.name,
-                    recordCount: unwrap(await commands.countPgnGames(path)),
+                    recordCount: records - skippedRecords.length,
+                    skippedRecords,
                 };
             } catch (error) {
                 return {
@@ -208,14 +290,75 @@ export async function scanTacticsCourseFolder(
     return { name, files: planTacticsCourseFiles(files) };
 }
 
+/** Header tags, comments and variations removed: what is left of a record's moves. */
+function movetextOf(raw: string): string {
+    let text = raw
+        .replace(/^\s*\[[^\]\n]*\]\s*$/gm, " ")
+        .replace(/\{[^}]*\}/g, " ")
+        .replace(/;[^\n]*/g, " ");
+    // Nested variations: remove the innermost ones until none are left.
+    let previous = "";
+    while (previous !== text) {
+        previous = text;
+        text = text.replace(/\([^()]*\)/g, " ");
+    }
+    return text;
+}
+
+const SAN_MOVE =
+    /(^|[\s.])(O-O(-O)?|[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h](x[a-h])?[1-8](=?[QRBN])?)[+#]?/;
+
+/**
+ * Whether a PGN record has any move. Records without moves are not exercises: courses exported
+ * from Chessable, for example, open with a record that only holds the introduction text.
+ */
+export function pgnRecordHasMoves(raw: string): boolean {
+    return SAN_MOVE.test(movetextOf(raw));
+}
+
+const MOVE_SCAN_CHUNK = 1000;
+
+/** Indexes of the records of a PGN file that have no moves, read in chunks. */
+export async function findRecordsWithoutMoves(
+    path: string,
+    recordCount: number,
+): Promise<number[]> {
+    const skipped: number[] = [];
+    for (let start = 0; start < recordCount; start += MOVE_SCAN_CHUNK) {
+        const end = Math.min(recordCount, start + MOVE_SCAN_CHUNK) - 1;
+        const records = unwrap(await commands.readGames(path, start, end));
+        records.forEach((raw, offset) => {
+            if (!pgnRecordHasMoves(raw)) skipped.push(start + offset);
+        });
+    }
+    return skipped;
+}
+
+/**
+ * Record of the file that holds exercise `exerciseIndex`, skipping the records without moves.
+ * `skipped` is sorted; without it exercises and records are the same.
+ */
+export function pgnRecordIndex(exerciseIndex: number, skipped: readonly number[] = []): number {
+    let record = exerciseIndex;
+    for (const index of skipped) {
+        if (index <= record) record += 1;
+        else break;
+    }
+    return record;
+}
+
 export async function inspectTacticsPgn(
     path: string,
     config: Pick<TacticsSet["config"], "startingActor" | "variationPolicy">,
     sampleSize = 12,
 ): Promise<TacticsPgnInspection> {
-    const recordCount = unwrap(await commands.countPgnGames(path));
-    const end = Math.min(recordCount, sampleSize) - 1;
-    const records = end >= 0 ? unwrap(await commands.readGames(path, 0, end)) : [];
+    const totalRecords = unwrap(await commands.countPgnGames(path));
+    const skippedRecords = await findRecordsWithoutMoves(path, totalRecords);
+    const recordCount = totalRecords - skippedRecords.length;
+    const skipped = new Set(skippedRecords);
+    const end = Math.min(totalRecords, sampleSize + skippedRecords.length) - 1;
+    const raws = end >= 0 ? unwrap(await commands.readGames(path, 0, end)) : [];
+    const records = raws.filter((_, index) => !skipped.has(index)).slice(0, sampleSize);
     const samples = await Promise.all(
         records.map(async (raw, index): Promise<TacticsPgnSample> => {
             try {
@@ -243,7 +386,7 @@ export async function inspectTacticsPgn(
         }),
     );
 
-    return { path, filename: filename(path), recordCount, samples };
+    return { path, filename: filename(path), recordCount, skippedRecords, samples };
 }
 
 export async function loadTacticsFileExercise(
@@ -253,7 +396,9 @@ export async function loadTacticsFileExercise(
     if (set.source?.kind !== "pgnFile") {
         throw new Error(i18n.t("Errors.SetNotLinkedToPgn", "The set is not linked to a PGN file."));
     }
-    const records = unwrap(await commands.readGames(set.source.path, recordIndex, recordIndex));
+    // `recordIndex` counts exercises; the file may also hold records without moves.
+    const fileIndex = pgnRecordIndex(recordIndex, set.source.skippedRecords);
+    const records = unwrap(await commands.readGames(set.source.path, fileIndex, fileIndex));
     if (!records[0]) {
         throw new Error(
             i18n.t("Errors.ExerciseReadFailed", "Could not read exercise {{number}}.", {

@@ -15,10 +15,10 @@ Onyx Chess Lab is an open-source desktop application for studying chess, trainin
 and running reproducible experiments with engines and human-like bots. It is a fork of
 [En Croissant](https://github.com/franciscoBSalgueiro/en-croissant) and is distributed under GPLv3.
 
-The project is currently an **early public alpha/beta**. The repository and GitHub releases are
-public, while active testing is still being carried out with a small group of users. Windows x64 is
-the currently validated distribution target; Linux and macOS builds are published as **untested
-previews**.
+The project is currently an **early public beta**. The repository and GitHub releases are public,
+with active testing across **Windows x64**, **macOS (Apple Silicon and Intel)** and **Linux x64**.
+Windows x64 includes signed in-app auto-updates; macOS and Linux notify you inside the app when a
+new version is available and link to the release installer.
 
 ## Highlights
 
@@ -51,20 +51,20 @@ The current status, limitations and implementation order are documented in
 All builds are published through
 [GitHub Releases](https://github.com/ArguedasG/onyx-chess-lab/releases).
 
-| Platform                          | File                                 | Status           |
-| --------------------------------- | ------------------------------------ | ---------------- |
-| Windows x64                       | `Onyx.Chess.Lab_X.Y.Z_x64-setup.exe` | Validated        |
-| macOS Apple Silicon (M1 or newer) | `Onyx.Chess.Lab_X.Y.Z_aarch64.dmg`   | Untested preview |
-| macOS Intel                       | `Onyx.Chess.Lab_X.Y.Z_x64.dmg`       | Untested preview |
-| Linux x64                         | `.AppImage` (recommended) or `.deb`  | Untested preview |
+| Platform                          | File                                 | Updates            |
+| --------------------------------- | ------------------------------------ | ------------------ |
+| Windows x64                       | `Onyx.Chess.Lab_X.Y.Z_x64-setup.exe` | Signed in-app      |
+| macOS Apple Silicon (M1 or newer) | `Onyx.Chess.Lab_X.Y.Z_aarch64.dmg`   | In-app alert + DMG |
+| macOS Intel                       | `Onyx.Chess.Lab_X.Y.Z_x64.dmg`       | In-app alert + DMG |
+| Linux x64                         | `.AppImage` (recommended) or `.deb`  | In-app alert + pkg |
 
-> [!WARNING]
-> The Linux and macOS builds are generated automatically but have **not been tested yet**. They may
-> fail to start or have features that do not work. Please report any problem through
+> [!NOTE]
+> Windows x64 is the primary release channel with signed in-app updates. macOS (Apple Silicon and
+> Intel) and Linux x64 builds have been tested in real usage, though new versions must be
+> downloaded manually from the releases page (Onyx will notify you inside the app when an update is
+> available). Please report any platform-specific issue through
 > [GitHub Issues](https://github.com/ArguedasG/onyx-chess-lab/issues), mentioning your system and
-> version. The guided installation of Maia 3 is new on macOS and Linux and has only been validated
-> on Windows so far. In-app updates are available only on Windows x64; on other systems, new
-> versions must be downloaded from the releases page.
+> version.
 
 ### Opening the app on macOS
 
@@ -82,8 +82,8 @@ time they are opened. This is expected and does not mean the file is damaged.
 3. Open the app from **Applications**. If macOS still refuses, go to **System Settings → Privacy &
    Security**, scroll down and click **Open Anyway**, then confirm.
 
-In-app updates are not available on macOS yet. To update, download the new `.dmg`, replace the app in
-**Applications** and repeat these steps.
+Onyx will notify you inside the app when a new version is available. To update on macOS, download
+the new `.dmg`, replace the app in **Applications** and repeat the quarantine command above.
 
 ### Running on Linux
 
@@ -93,8 +93,8 @@ In-app updates are not available on macOS yet. To update, download the new `.dmg
 - **.deb** (Debian, Ubuntu and derivatives): install it with
   `sudo apt install ./Onyx.Chess.Lab_*_amd64.deb`.
 
-In-app updates are not available on Linux yet; new versions must be downloaded and installed
-manually with either format.
+Onyx will notify you inside the app when a new version is available; download and install the new
+`.AppImage` or `.deb` from the releases page.
 
 ### Installing engines by hand
 

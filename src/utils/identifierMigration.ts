@@ -131,12 +131,44 @@ export function rewriteMigratedStorage(
     return updated;
 }
 
+export type MigratedDataDirs = { oldDataDir: string; newDataDir: string };
+
+let migratedDataDirs: MigratedDataDirs | null = null;
+let enCroissantNoticePending = false;
+
+/** Set at startup from the migration state; exported for tests. */
+export function setMigratedDataDirs(dirs: MigratedDataDirs | null) {
+    migratedDataDirs = dirs;
+}
+
+/**
+ * The path as it was named before the identifier migration. Ids hashed from database paths
+ * (Player Analysis profiles) were computed with the old folder; hashing this form keeps them
+ * valid after the move, and new ids stay consistent with them. Unchanged without a migration.
+ */
+export function toLegacyDataPath(path: string): string {
+    if (!migratedDataDirs) return path;
+    return (
+        rewritePathPrefix(path, migratedDataDirs.newDataDir, migratedDataDirs.oldDataDir) ?? path
+    );
+}
+
+/** Whether to tell the user, once, that the folder shared with En Croissant moved to Onyx. */
+export function takeEnCroissantNoticePending(): boolean {
+    const pending = enCroissantNoticePending;
+    enCroissantNoticePending = false;
+    return pending;
+}
+
 export async function runPendingIdentifierMigration(): Promise<void> {
     try {
-        const result = await commands.getPendingIdentifierMigration();
+        const result = await commands.getIdentifierMigration();
         if (result.status !== "ok" || !result.data) return;
 
-        const { oldDataDir, newDataDir } = result.data;
+        const { oldDataDir, newDataDir, localStoragePending } = result.data;
+        setMigratedDataDirs({ oldDataDir, newDataDir });
+        enCroissantNoticePending = result.data.enCroissantNoticePending;
+        if (!localStoragePending) return;
         if (typeof window !== "undefined") {
             rewriteMigratedStorage(window.localStorage, oldDataDir, newDataDir);
         }

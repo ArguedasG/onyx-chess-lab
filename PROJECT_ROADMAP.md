@@ -1019,18 +1019,23 @@ modelos existentes no puedan responder y por datos con procedencia y licencia ut
 - Identificador canónico de la app: `io.github.arguedasg.onyxchesslab` (estándar reverse-DNS de
   GitHub, gratuito y permanente, independiente de renovaciones de dominio); `publisher`:
   `Gabriel Arguedas`.
-- Estrategia de web y dominio: empezar gratis en Cloudflare Pages (`onyx-chess-lab.pages.dev`) o
-  GitHub Pages, manteniendo siempre las URLs internas de la app (actualizador, catálogo) ligadas a
-  GitHub / Cloudflare Pages / R2 para no depender de un dominio pago. Si Onyx gana tracción, se puede
-  comprar `onyxchesslab.org` y conectarlo en minutos como dominio personalizado con redirección 301
-  sin tocar el `identifier` ni migrar instalaciones existentes.
+- Estrategia de web y dominio: empezar gratis en **GitHub Pages**
+  (`arguedasg.github.io/onyx-chess-lab`), sin cuentas nuevas ni tarjeta, manteniendo las URLs
+  internas de la app (actualizador, catálogo) independientes de un dominio pago. La web alojará
+  también la política de firma pública exigida por SignPath. Si Onyx gana tracción, se puede comprar
+  `onyxchesslab.org` y conectarlo en minutos con redirección 301 sin tocar el `identifier` ni migrar
+  instalaciones existentes.
 - Firma de código (presupuesto \$0): para Windows se aplicará a **SignPath Foundation** (certificado
-  OV gratuito para proyectos GPLv3) cuando la web esté en línea; para macOS se mantiene firma ad-hoc
-  (`-`) con instrucciones claras de `xattr -cr` (descartado pagar \$99/año a Apple).
-- Bases de datos y pipeline mensual: desacoplar el catálogo JSON hacia host propio y construir un
-  pipeline mensual en GitHub Actions que convierta, valide (checksums + calidad), comprima con
-  `zstd` (`.db3.zst`) y publique en **Cloudflare R2** (10 GB gratis, egress ilimitado; con Hugging
-  Face Datasets como alternativa sin tarjeta). Antes de alojar LumbrasGigaBase convertida, confirmar
+  OV gratuito para proyectos GPLv3) cuando la web y su política de firma estén en línea; para macOS
+  se mantiene firma ad-hoc (`-`) con instrucciones claras de `xattr -cr` (descartado pagar \$99/año
+  a Apple).
+- Bases de datos y pipeline mensual: desacoplar el catálogo JSON hacia host propio (manteniendo el
+  respaldo incluido en la app) y construir un pipeline mensual en GitHub Actions que convierta,
+  valide (conteos, calidad, SHA-256), comprima con `zstd` (`.db3.zst`) y publique mediante un paso
+  desacoplado hacia **GitHub Releases en un repo dedicado de datos** (p. ej. `onyx-chess-data`,
+  para no pisar `releases/latest` del actualizador). Cuando se compre dominio propio, añadir
+  **Cloudflare R2** (S3-compatible, 10 GB gratis, egress ilimitado) como espejo (ya que `r2.dev` es
+  solo desarrollo y tiene rate-limits). Antes de alojar LumbrasGigaBase convertida, confirmar
   atribución con su autor (CC BY-NC 4.0).
 - El canal Windows x64 utiliza artefactos y firma propios de Onyx.
 - macOS y Linux no se presentan como soportados hasta completar la Fase 10.
@@ -1061,6 +1066,20 @@ en la documentación de la fase.
 ---
 
 ## 12. Registro operativo breve
+
+### 2026-11-22 — Etapa 2: avisos de actualización multiplataforma y pulido técnico
+
+- **Avisos de actualización en macOS y Linux**: `src/components/AppUpdater.tsx` y
+  `src/utils/appUpdater.ts` ahora consultan el último release estable en GitHub Releases (con
+  permiso acotado en `src-tauri/capabilities/main.json`), muestran el diálogo con las notas en el
+  idioma del usuario y abren directamente la página de descarga; Windows conserva intacto el canal
+  firmado con `downloadAndInstall`.
+- **Estado de plataformas en documentación**: `README.md` y `.github/workflows/release.yml`
+  actualizados para reflejar las pruebas reales en macOS (Apple Silicon e Intel) y Linux x64.
+- **Limpieza técnica**: `vite.config.ts` excluye `.claude/**`, `dist/**` y `src-tauri/**` de
+  Vitest para que `pnpm test` no recoja worktrees auxiliares; marcados como `#[cfg(test)]` los
+  helpers solo de pruebas en `src-tauri/src/db/search.rs` y `search_index.rs` para compilar
+  release sin advertencias.
 
 ### 2026-11-21 — Etapa 1: identidad propia (`io.github.arguedasg.onyxchesslab`), migración automática y limpieza pública
 

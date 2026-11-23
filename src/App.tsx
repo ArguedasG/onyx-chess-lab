@@ -9,7 +9,7 @@ import {
   Textarea,
   TextInput,
 } from "@mantine/core";
-import { Notifications } from "@mantine/notifications";
+import { Notifications, notifications } from "@mantine/notifications";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { getMatches } from "@tauri-apps/plugin-cli";
 import { listen } from "@tauri-apps/api/event";
@@ -50,6 +50,8 @@ import "mantine-datatable/styles.css";
 import "@/styles/global.css";
 
 import { commands } from "./bindings";
+import i18n from "i18next";
+import { takeEnCroissantNoticePending } from "@/utils/identifierMigration";
 import { openFile } from "./utils/files";
 import { migrateAndHydrateLichessTokens, persistLichessToken } from "./utils/secureLichessTokens";
 
@@ -177,6 +179,18 @@ function useAppStartup() {
         }
       } catch (error) {
         warn(`Could not check managed Maia status on startup: ${error}`);
+      }
+
+      if (takeEnCroissantNoticePending()) {
+        notifications.show({
+          autoClose: false,
+          title: i18n.t("Migration.EnCroissant.Title", "Your shared data moved to Onyx"),
+          message: i18n.t(
+            "Migration.EnCroissant.Body",
+            "Onyx and En Croissant used to share one data folder. Onyx now has its own, so your databases, engines and settings moved with it, and En Croissant will start empty. Nothing was deleted.",
+          ),
+        });
+        void commands.acknowledgeEnCroissantNotice();
       }
 
       return detach;

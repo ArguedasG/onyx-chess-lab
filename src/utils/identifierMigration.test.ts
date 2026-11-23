@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { rewriteMigratedStorage, rewritePathPrefix } from "./identifierMigration";
+import { playerAnalysisProfileId } from "@/state/playerAnalysis";
+import {
+    rewriteMigratedStorage,
+    rewritePathPrefix,
+    setMigratedDataDirs,
+    toLegacyDataPath,
+} from "./identifierMigration";
 
 function memoryStorage(initial: Record<string, string>) {
     const data = new Map(Object.entries(initial));
@@ -96,5 +102,32 @@ describe("identifierMigration", () => {
         expect(
             rewritePathPrefix(`${oldUnix.toUpperCase()}/db/games.db3`, oldUnix, newUnix),
         ).toBeNull();
+    });
+
+    it("maps paths in the new data folder back to the old one only after a migration", () => {
+        setMigratedDataDirs(null);
+        expect(toLegacyDataPath(`${newWin}\\db\\games.db3`)).toBe(`${newWin}\\db\\games.db3`);
+
+        setMigratedDataDirs({ oldDataDir: oldWin, newDataDir: newWin });
+        expect(toLegacyDataPath(`${newWin}\\db\\games.db3`)).toBe(`${oldWin}\\db\\games.db3`);
+        expect(toLegacyDataPath(String.raw`D:\Chess\games.db3`)).toBe(
+            String.raw`D:\Chess\games.db3`,
+        );
+        setMigratedDataDirs(null);
+    });
+
+    it("keeps Player Analysis profile ids after the data folder moves", () => {
+        setMigratedDataDirs(null);
+        const before = playerAnalysisProfileId("Gabriel", [
+            { databasePath: `${oldWin}\\db\\lichess.db3`, playerId: 7 },
+        ]);
+
+        setMigratedDataDirs({ oldDataDir: oldWin, newDataDir: newWin });
+        const after = playerAnalysisProfileId("Gabriel", [
+            { databasePath: `${newWin}\\db\\lichess.db3`, playerId: 7 },
+        ]);
+        setMigratedDataDirs(null);
+
+        expect(after).toBe(before);
     });
 });

@@ -69,7 +69,10 @@ const tacticsSourceSchema = z.discriminatedUnion("kind", [
         kind: z.literal("pgnFile"),
         path: z.string(),
         filename: z.string(),
+        /** Exercises in the file: its records minus `skippedRecords`. */
         recordCount: z.number().int().nonnegative(),
+        /** Records without moves (a course introduction), sorted; they are not exercises. */
+        skippedRecords: z.array(z.number().int().nonnegative()).optional(),
     }),
     z.object({
         kind: z.literal("embedded"),
@@ -1086,6 +1089,7 @@ export function addTacticsFileSet(
         path: string;
         filename: string;
         recordCount: number;
+        skippedRecords?: number[];
         config: TacticsSet["config"];
         recommendedRating?: TacticsSet["recommendedRating"];
         course?: TacticsSet["course"];
@@ -1107,6 +1111,9 @@ export function addTacticsFileSet(
                     path: input.path,
                     filename: input.filename,
                     recordCount: input.recordCount,
+                    ...(input.skippedRecords?.length
+                        ? { skippedRecords: [...input.skippedRecords].sort((a, b) => a - b) }
+                        : {}),
                 },
                 origin: "user",
                 recommendedRating: input.recommendedRating ?? { min: null, max: null },

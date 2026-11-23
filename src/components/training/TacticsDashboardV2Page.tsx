@@ -33,7 +33,6 @@ import {
   IconChartBar,
   IconChevronLeft,
   IconChevronRight,
-  IconCheck,
   IconDatabase,
   IconDots,
   IconDownload,
@@ -55,7 +54,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { atom, useAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PuzzleDatabaseInfo } from "@/bindings";
 import Board from "@/components/boards/Board";
 import { TreeStateProvider } from "@/components/common/TreeStateContext";
@@ -77,6 +75,7 @@ import AddPuzzle from "../puzzles/AddPuzzle";
 import PuzzleSetBuilder from "./tactics/PuzzleSetBuilder";
 import TacticsProgressCards from "./tactics/TacticsProgressCards";
 import TacticsReviewSession from "./tactics/TacticsReviewSession";
+import TacticsReviewList from "./tactics/TacticsReviewList";
 import TacticsCourseImport, { type TacticsCourseScan } from "./tactics/TacticsCourseImport";
 import CourseMixSession from "./tactics/CourseMixSession";
 import CourseSetsPicker, { type CoursePickerMode } from "./tactics/CourseSetsPicker";
@@ -193,7 +192,6 @@ export default function TacticsDashboardV2Page() {
   const [reviewError, setReviewError] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewView, setReviewView] = useState<"list" | "detail">("list");
-  const reviewListViewportRef = useRef<HTMLDivElement>(null);
   const { state: tacticsReview, update: updateTacticsReview } = useTacticsReview();
   const [reviewSessionItems, setReviewSessionItems] = useState<TacticsReviewItem[] | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -274,13 +272,6 @@ export default function TacticsDashboardV2Page() {
     () => new Set(reviewCompletedIndexes),
     [reviewCompletedIndexes],
   );
-  const reviewListVirtualizer = useVirtualizer({
-    count: reviewSetId && reviewView === "list" ? reviewTotal : 0,
-    getScrollElement: () => reviewListViewportRef.current,
-    estimateSize: () => 44,
-    overscan: 10,
-  });
-
   useEffect(() => {
     void getPuzzleDatabases()
       .then(setPuzzleDbs)
@@ -392,6 +383,7 @@ export default function TacticsDashboardV2Page() {
         path: inspection.path,
         filename: inspection.filename,
         recordCount: inspection.recordCount,
+        skippedRecords: inspection.skippedRecords,
         config: draftConfig,
         recommendedRating,
       }),
@@ -494,6 +486,7 @@ export default function TacticsDashboardV2Page() {
             path: file.path,
             filename: file.filename,
             recordCount: file.recordCount,
+            skippedRecords: file.skippedRecords,
             config: draftConfig,
             course: { name: courseName, order: start + index },
           }),
@@ -1572,54 +1565,15 @@ export default function TacticsDashboardV2Page() {
                     "Select any record to open it on the board. Exploring other puzzles does not change your resume point.",
                   )}{" "}
                 </Text>
-                <ScrollArea h={520} viewportRef={reviewListViewportRef} type="auto">
-                  <div
-                    style={{
-                      height: reviewListVirtualizer.getTotalSize(),
-                      position: "relative",
-                    }}
-                  >
-                    {reviewListVirtualizer.getVirtualItems().map((virtualRow) => {
-                      const problemIndex = virtualRow.index;
-                      const exerciseId = reviewSet.exerciseIds[problemIndex];
-                      const embeddedExercise = exerciseId
-                        ? areas.tactics.exercises[exerciseId]
-                        : undefined;
-                      const completed = reviewCompletedSet.has(problemIndex);
-                      return (
-                        <Button
-                          key={problemIndex}
-                          variant={completed ? "light" : "default"}
-                          color={completed ? "teal" : "gray"}
-                          fullWidth
-                          justify="space-between"
-                          leftSection={
-                            completed ? <IconCheck size={16} /> : <Text>{problemIndex + 1}</Text>
-                          }
-                          rightSection={<IconPlayerPlay size={15} />}
-                          onClick={() => practiceReviewedProblem(problemIndex)}
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            height: 40,
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                        >
-                          <Text size="sm" truncate>
-                            {embeddedExercise?.title ||
-                              trainingT("Training.Copy.Puzzlev0.c9ca2375", "Puzzle {{v0}}", {
-                                v0: problemIndex + 1,
-                              })}
-                            {completed
-                              ? ` · ${trainingT("Training.CompletedLower", "completed")}`
-                              : ""}
-                          </Text>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
+                <TacticsReviewList
+                  total={reviewTotal}
+                  titleFor={(index) => {
+                    const exerciseId = reviewSet.exerciseIds[index];
+                    return exerciseId ? areas.tactics.exercises[exerciseId]?.title : undefined;
+                  }}
+                  completed={reviewCompletedSet}
+                  onOpen={practiceReviewedProblem}
+                />
               </Stack>
             ) : (
               <Stack>

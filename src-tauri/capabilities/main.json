@@ -50,6 +50,7 @@
             "allow": [
                 "https://www.encroissant.org/**",
                 "https://encroissant.org/**",
+                "https://api.github.com/repos/ArguedasG/onyx-chess-lab/releases/latest",
                 "https://api.chess.com/**",
                 "https://www.chess.com/**",
                 "https://lichess.org/**",

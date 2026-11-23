@@ -54,11 +54,17 @@ const JSON_FILES_TO_REWRITE: &[&str] = &[
     "studies/library.json",
 ];
 
+/// What the frontend needs to know about a finished data-directory migration. It stays available
+/// after the localStorage rewrite: ids hashed from database paths keep using the old prefix.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct IdentifierPathMigration {
+pub struct IdentifierMigrationInfo {
     pub old_data_dir: String,
     pub new_data_dir: String,
+    /// The localStorage paths still point to the old directory.
+    pub local_storage_pending: bool,
+    /// The moved directory was shared with En Croissant and the user has not been told yet.
+    pub en_croissant_notice_pending: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -69,6 +75,11 @@ struct MigrationState {
     old_data_dir: String,
     new_data_dir: String,
     local_storage_migrated: bool,
+    /// Until 0.28 Onyx and En Croissant used the same folder; moving it leaves En Croissant empty.
+    #[serde(default)]
+    shared_with_en_croissant: bool,
+    #[serde(default)]
+    en_croissant_notice_shown: bool,
 }
 
 #[derive(Debug)]
@@ -83,6 +94,8 @@ struct MigrationLayout {
     /// Best-effort auxiliary directories (e.g., macOS Logs/WebKit, Linux XDG config).
     extra_dirs: Vec<(PathBuf, PathBuf)>,
     case_insensitive_paths: bool,
+    /// Where an En Croissant installation would be; any that exists means the user has both apps.
+    en_croissant_installs: Vec<PathBuf>,
 }
 
 impl MigrationLayout {
@@ -113,6 +126,7 @@ impl MigrationLayout {
                 legacy_log_dir,
                 extra_dirs: Vec::new(),
                 case_insensitive_paths: true,
+                en_croissant_installs: windows_en_croissant_installs(),
             })
         }
 
@@ -137,6 +151,10 @@ impl MigrationLayout {
                     ),
                 ],
                 case_insensitive_paths: false,
+                en_croissant_installs: vec![
+                    PathBuf::from("/Applications/En Croissant.app"),
+                    home.join("Applications").join("En Croissant.app"),
+                ],
             })
         }
 
@@ -170,9 +188,41 @@ impl MigrationLayout {
                 legacy_log_dir,
                 extra_dirs,
                 case_insensitive_paths: false,
+                en_croissant_installs: vec![
+                    PathBuf::from("/usr/bin/en-croissant"),
+                    PathBuf::from("/usr/local/bin/en-croissant"),
+                    home.join(".local").join("bin").join("en-croissant"),
+                ],
             })
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_en_croissant_installs() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(base) = std::env::var_os(variable).map(PathBuf::from) {
+            candidates.push(base.join("En Croissant"));
+            candidates.push(base.join("en-croissant"));
+        }
+    }
+    candidates
+}
+
+/// Whether En Croissant used the legacy folder too: it is installed, or its log sits next to
+/// Onyx's in the shared log folder (Onyx's own logs, rotated ones included, start with its name).
+fn shared_with_en_croissant(layout: &MigrationLayout) -> bool {
+    if layout.en_croissant_installs.iter().any(|path| path.exists()) {
+        return true;
+    }
+    let Ok(entries) = fs::read_dir(&layout.legacy_log_dir) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        name.ends_with(".log") && !name.starts_with("onyx-chess-lab")
+    })
 }
 
 /// Runs once at process start, before Tauri initializes logging, window state, or the WebView.
@@ -227,6 +277,8 @@ fn run_migration(layout: &MigrationLayout) -> std::io::Result<bool> {
     if !is_onyx_installation(&layout.legacy_data_dir, &layout.legacy_log_dir) {
         return Ok(false);
     }
+    // Checked before anything moves: on macOS the log folder is one of the moved directories.
+    let shared_with_en_croissant = shared_with_en_croissant(layout);
 
     // Move local WebView/log directory first (Windows) so a locked WebView2 instance aborts
     // cleanly before moving app_data_dir. If moving app_data_dir fails afterwards, roll back.
@@ -320,6 +372,8 @@ fn run_migration(layout: &MigrationLayout) -> std::io::Result<bool> {
         old_data_dir: old_prefix,
         new_data_dir: new_prefix,
         local_storage_migrated: false,
+        shared_with_en_croissant,
+        en_croissant_notice_shown: false,
     };
     write_json_atomic(
         &layout.new_data_dir.join(MIGRATION_STATE_FILENAME),
@@ -475,40 +529,49 @@ fn migration_state_path(app: &AppHandle) -> Result<PathBuf, Error> {
     Ok(app.path().app_data_dir()?.join(MIGRATION_STATE_FILENAME))
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn get_pending_identifier_migration(
-    app: AppHandle,
-) -> Result<Option<IdentifierPathMigration>, Error> {
-    let path = migration_state_path(&app)?;
+fn read_migration_state(app: &AppHandle) -> Result<Option<(PathBuf, MigrationState)>, Error> {
+    let path = migration_state_path(app)?;
     if !path.is_file() {
         return Ok(None);
     }
-    let contents = fs::read_to_string(&path)?;
-    let state: MigrationState = serde_json::from_str(&contents)?;
-    if state.local_storage_migrated {
-        return Ok(None);
-    }
-    Ok(Some(IdentifierPathMigration {
+    let state: MigrationState = serde_json::from_str(&fs::read_to_string(&path)?)?;
+    Ok(Some((path, state)))
+}
+
+/// The finished migration, if this installation was migrated; `None` for a fresh installation.
+#[tauri::command]
+#[specta::specta]
+pub fn get_identifier_migration(app: AppHandle) -> Result<Option<IdentifierMigrationInfo>, Error> {
+    Ok(read_migration_state(&app)?.map(|(_, state)| IdentifierMigrationInfo {
         old_data_dir: state.old_data_dir,
         new_data_dir: state.new_data_dir,
+        local_storage_pending: !state.local_storage_migrated,
+        en_croissant_notice_pending: state.shared_with_en_croissant
+            && !state.en_croissant_notice_shown,
     }))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn complete_identifier_migration(app: AppHandle) -> Result<(), Error> {
-    let path = migration_state_path(&app)?;
-    if !path.is_file() {
-        return Ok(());
+    if let Some((path, mut state)) = read_migration_state(&app)? {
+        if !state.local_storage_migrated {
+            state.local_storage_migrated = true;
+            write_json_atomic(&path, &state)?;
+        }
     }
-    let contents = fs::read_to_string(&path)?;
-    let mut state: MigrationState = serde_json::from_str(&contents)?;
-    if state.local_storage_migrated {
-        return Ok(());
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn acknowledge_en_croissant_notice(app: AppHandle) -> Result<(), Error> {
+    if let Some((path, mut state)) = read_migration_state(&app)? {
+        if !state.en_croissant_notice_shown {
+            state.en_croissant_notice_shown = true;
+            write_json_atomic(&path, &state)?;
+        }
     }
-    state.local_storage_migrated = true;
-    write_json_atomic(&path, &state)?;
     Ok(())
 }
 
@@ -529,7 +592,62 @@ mod tests {
             legacy_log_dir: local.join(LEGACY_IDENTIFIER).join("logs"),
             extra_dirs: vec![(extra.join(LEGACY_IDENTIFIER), extra.join(CURRENT_IDENTIFIER))],
             case_insensitive_paths: true,
+            en_croissant_installs: vec![root.join("programs").join("En Croissant")],
         }
+    }
+
+    fn migrated_state(layout: &MigrationLayout) -> MigrationState {
+        serde_json::from_str(
+            &fs::read_to_string(layout.new_data_dir.join(MIGRATION_STATE_FILENAME)).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn onyx_only_installation(layout: &MigrationLayout) {
+        fs::create_dir_all(&layout.legacy_data_dir).unwrap();
+        fs::write(layout.legacy_data_dir.join("training-areas-v1.json"), "{}").unwrap();
+        fs::create_dir_all(&layout.legacy_log_dir).unwrap();
+        fs::write(layout.legacy_log_dir.join("onyx-chess-lab.log"), "").unwrap();
+        fs::write(layout.legacy_log_dir.join("onyx-chess-lab_2026-11-01.log"), "").unwrap();
+    }
+
+    #[test]
+    fn an_onyx_only_folder_is_not_marked_as_shared() {
+        let temp = tempdir().unwrap();
+        let layout = test_layout(temp.path());
+        onyx_only_installation(&layout);
+        assert!(run_migration(&layout).unwrap());
+        assert!(!migrated_state(&layout).shared_with_en_croissant);
+    }
+
+    #[test]
+    fn an_en_croissant_log_marks_the_folder_as_shared() {
+        let temp = tempdir().unwrap();
+        let layout = test_layout(temp.path());
+        onyx_only_installation(&layout);
+        fs::write(layout.legacy_log_dir.join("en-croissant.log"), "").unwrap();
+        assert!(run_migration(&layout).unwrap());
+        assert!(migrated_state(&layout).shared_with_en_croissant);
+    }
+
+    #[test]
+    fn an_installed_en_croissant_marks_the_folder_as_shared() {
+        let temp = tempdir().unwrap();
+        let layout = test_layout(temp.path());
+        onyx_only_installation(&layout);
+        fs::create_dir_all(&layout.en_croissant_installs[0]).unwrap();
+        assert!(run_migration(&layout).unwrap());
+        assert!(migrated_state(&layout).shared_with_en_croissant);
+    }
+
+    #[test]
+    fn states_written_before_the_notice_existed_still_load() {
+        let state: MigrationState = serde_json::from_str(
+            r#"{"fromIdentifier":"a","toIdentifier":"b","oldDataDir":"x","newDataDir":"y","localStorageMigrated":true}"#,
+        )
+        .unwrap();
+        assert!(!state.shared_with_en_croissant);
+        assert!(!state.en_croissant_notice_shown);
     }
 
     #[test]

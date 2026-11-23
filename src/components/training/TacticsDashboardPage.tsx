@@ -150,6 +150,7 @@ export default function TacticsDashboardPage() {
         path: inspection.path,
         filename: inspection.filename,
         recordCount: inspection.recordCount,
+        skippedRecords: inspection.skippedRecords,
         config: draftConfig,
       }),
     }));

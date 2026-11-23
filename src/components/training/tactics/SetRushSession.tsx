@@ -30,7 +30,7 @@ import {
   startRush,
 } from "@/utils/puzzleSession";
 import { loadTacticsExercise, type TacticsLoadedExercise } from "@/utils/tacticsTraining";
-import { blindFromOpponentMove } from "@/utils/tacticsVisualization";
+import { blindForExercise } from "@/utils/tacticsVisualization";
 import type { TacticsSet } from "@/utils/trainingAreas";
 import { GuidedTacticsBoard, type TacticsVisualization } from "./TacticsBoards";
 
@@ -102,7 +102,6 @@ export default function SetRushSession({
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const total = set.exerciseIds.length;
-  const blindAvailable = set.config.startingActor === "opponent";
   const canRun = set.config.validationMode !== "engine";
   const ratings = useMemo(
     () => set.exerciseIds.map((id) => ratingOf(areas.tactics.exercises[id]?.title)),
@@ -237,11 +236,15 @@ export default function SetRushSession({
   const visualization: TacticsVisualization = useMemo(() => {
     if (visual === "noPieces") return { kind: "noPieces" };
     if (visual === "blind" && exercise) {
-      const view = blindFromOpponentMove(exercise.fen, exercise.solutionLines[0]?.[0]);
+      const view = blindForExercise(
+        exercise.fen,
+        set.config.startingActor,
+        exercise.solutionLines[0]?.[0],
+      );
       if (view) return { kind: "blind", fen: view.fen, hiddenSans: view.hiddenSans };
     }
     return { kind: "normal" };
-  }, [exercise, visual]);
+  }, [exercise, set.config.startingActor, visual]);
 
   const formats: Array<{ value: RushFormat; label: string; icon: typeof IconBolt; desc: string }> =
     [
@@ -416,21 +419,9 @@ export default function SetRushSession({
               data={[
                 { value: "normal", label: trainingT("Tactics.Visual.Normal", "Normal") },
                 { value: "noPieces", label: trainingT("Tactics.Visual.NoPieces", "No pieces") },
-                {
-                  value: "blind",
-                  label: trainingT("Tactics.Visual.Blind", "Blind"),
-                  disabled: !blindAvailable,
-                },
+                { value: "blind", label: trainingT("Tactics.Visual.Blind", "Blind") },
               ]}
             />
-            {!blindAvailable && (
-              <Text size="xs" c="dimmed">
-                {trainingT(
-                  "Tactics.Rush.BlindOnlyPuzzles",
-                  "Blind needs exercises that start with the opponent's move, like Lichess puzzles.",
-                )}
-              </Text>
-            )}
           </Stack>
 
           <Button

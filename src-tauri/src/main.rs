@@ -319,8 +319,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             diagram::book_memory_size,
             diagram::forget_book_memory,
             books::book_fingerprint,
-            identifier_migration::get_pending_identifier_migration,
-            identifier_migration::complete_identifier_migration
+            identifier_migration::get_identifier_migration,
+            identifier_migration::complete_identifier_migration,
+            identifier_migration::acknowledge_en_croissant_notice
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,
