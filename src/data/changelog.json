@@ -1,5 +1,52 @@
 [
   {
+    "version": "0.29.1",
+    "notes": {
+      "en": {
+        "summary": "Changing a data folder in Settings now offers to move what's in it, so engines, databases and analysis keep working without reinstalling or importing anything again.",
+        "sections": [
+          {
+            "title": "Moving data folders",
+            "items": [
+              "When you choose a new folder for databases, engines, puzzles or files in Settings → Directories, Onyx shows what the current folder holds and asks whether to move it. Until now only the path changed: engines and databases had to be installed again, and games imported from Lichess seemed lost (they were still in the old folder).",
+              "Moving updates everything that points to those files: engines, the reference and puzzle databases, open tabs, sessions and Player Analysis profiles. Onyx then reloads and tells you what moved.",
+              "If the new folder already has a file with the same name, that file is kept and the old one stays where it was; Onyx lists them. Nothing is deleted until everything is in the new folder, and if something fails, everything goes back.",
+              "Use without moving keeps the old behaviour: your current data stays in the old folder.",
+              "After moving the engines folder, Maia 3 asks for its one-click Repair."
+            ]
+          },
+          {
+            "title": "Recovering data from an earlier folder change",
+            "items": [
+              "Select the old folder with Use without moving, check that your data is back, then select the new folder again and choose Move. On macOS, the default folder is ~/Library/Application Support/io.github.arguedasg.onyxchesslab (press Command + Shift + G in the folder picker to paste the path)."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Cambiar una carpeta de datos en Ajustes ahora ofrece mover lo que contiene, para que motores, bases y análisis sigan funcionando sin reinstalar ni volver a importar nada.",
+        "sections": [
+          {
+            "title": "Mover carpetas de datos",
+            "items": [
+              "Al elegir una carpeta nueva para bases, motores, puzzles o archivos en Ajustes → Directorios, Onyx muestra lo que hay en la carpeta actual y pregunta si moverlo. Hasta ahora solo cambiaba la ruta: había que volver a instalar motores y bases, y las partidas importadas de Lichess parecían perdidas (seguían en la carpeta anterior).",
+              "Al mover, se actualiza todo lo que apunta a esos archivos: motores, bases de referencia y de puzzles, pestañas abiertas, sesiones y perfiles de Análisis de jugadores. Después Onyx se recarga y te dice qué se movió.",
+              "Si la carpeta nueva ya tiene un archivo con el mismo nombre, se conserva ese y el antiguo se queda donde estaba; Onyx te los muestra. No se borra nada hasta que todo está en la carpeta nueva, y si algo falla, todo vuelve a su sitio.",
+              "Usar sin mover mantiene el comportamiento anterior: tus datos actuales se quedan en la carpeta anterior.",
+              "Después de mover la carpeta de motores, Maia 3 pide su reparación de un clic."
+            ]
+          },
+          {
+            "title": "Recuperar datos de un cambio de carpeta anterior",
+            "items": [
+              "Elige la carpeta antigua con Usar sin mover, comprueba que tus datos vuelven a aparecer y luego elige otra vez la carpeta nueva con Mover. En macOS, la carpeta por defecto es ~/Library/Application Support/io.github.arguedasg.onyxchesslab (pulsa Command + Shift + G en el selector de carpetas para pegar la ruta)."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.29.0",
     "notes": {
       "en": {
