@@ -28,6 +28,15 @@ function flush() {
     pendingWrites.clear();
 }
 
+/** Writes the pending values now, before something rewrites sessionStorage directly. */
+export function flushPendingSessionWrites() {
+    if (flushTimeout) {
+        clearTimeout(flushTimeout);
+        flushTimeout = null;
+    }
+    flush();
+}
+
 function scheduleFlush(delay: number) {
     if (flushTimeout) {
         clearTimeout(flushTimeout);

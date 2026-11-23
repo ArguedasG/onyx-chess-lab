@@ -95,13 +95,14 @@ export function rewriteMigratedStorage(
     storage: StorageLike | undefined,
     oldDataDir: string,
     newDataDir: string,
+    skipKeys: readonly string[] = [],
 ): number {
     if (!storage || !oldDataDir || !newDataDir) return 0;
     const caseInsensitive = isWindowsStylePath(oldDataDir);
     const keys: string[] = [];
     for (let i = 0; i < storage.length; i += 1) {
         const key = storage.key(i);
-        if (key !== null) keys.push(key);
+        if (key !== null && !skipKeys.includes(key)) keys.push(key);
     }
 
     let updated = 0;

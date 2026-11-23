@@ -5,7 +5,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage, createJSONStorage } from "jotai/utils";
 import { createFileBackedStorage } from "./fileBackedStorage";
 import { appDataFiles } from "./appDataFiles";
-import { toLegacyDataPath } from "@/utils/identifierMigration";
+import { toOriginalDataPath } from "@/utils/dataFolderMove";
 import {
     PLAYER_ANALYSIS_SCHEMA_VERSION,
     type PlayerEngineAnalysis,
@@ -95,10 +95,10 @@ export function playerAnalysisProfileId(
     playerName: string,
     sources: Array<{ databasePath: string; playerId: number }>,
 ): string {
-    // Paths under the data folder are hashed as they were named before the identifier
-    // migration, so profiles analysed before it stay attached to their cards.
+    // Paths are hashed as they were named before the identifier migration and any folder move,
+    // so profiles analysed before them stay attached to their cards.
     const sourceKey = sources
-        .map((source) => `${toLegacyDataPath(source.databasePath)}:${source.playerId}`)
+        .map((source) => `${toOriginalDataPath(source.databasePath)}:${source.playerId}`)
         .sort()
         .join("|");
     let hash = 2166136261;

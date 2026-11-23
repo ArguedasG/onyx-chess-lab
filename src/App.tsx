@@ -52,6 +52,7 @@ import "@/styles/global.css";
 import { commands } from "./bindings";
 import i18n from "i18next";
 import { takeEnCroissantNoticePending } from "@/utils/identifierMigration";
+import { type DataFolderMoveNotice, takeDataFolderMoveNotice } from "@/utils/dataFolderMove";
 import { openFile } from "./utils/files";
 import { migrateAndHydrateLichessTokens, persistLichessToken } from "./utils/secureLichessTokens";
 
@@ -132,6 +133,41 @@ const preloadReferenceDb = async (store: ReturnType<typeof getDefaultStore>) => 
   }
 };
 
+/** Tells the user, after the reload a folder move needs, what moved and what stayed behind. */
+function showDataFolderMoveNotice(notice: DataFolderMoveNotice) {
+  const lines = [
+    i18n.t("Settings.Directories.Move.Done", "Moved {{count}} items to {{folder}}.", {
+      count: notice.moved.length,
+      folder: notice.to,
+    }),
+  ];
+  if (notice.skipped.length > 0) {
+    lines.push(
+      i18n.t(
+        "Settings.Directories.Move.Skipped",
+        "Left in the old folder because the new one already had them: {{names}}",
+        { names: notice.skipped.join(", ") },
+      ),
+    );
+  }
+  if (notice.leftovers.length > 0) {
+    lines.push(
+      i18n.t(
+        "Settings.Directories.Move.Leftovers",
+        "Copied, but the old copy could not be deleted: {{names}}. You can delete it yourself.",
+        { names: notice.leftovers.join(", ") },
+      ),
+    );
+  }
+  const incomplete = notice.skipped.length > 0 || notice.leftovers.length > 0;
+  notifications.show({
+    color: incomplete ? "yellow" : "green",
+    title: i18n.t("Settings.Directories.Move.DoneTitle", "Folder moved"),
+    message: lines.join(" "),
+    autoClose: incomplete ? false : 8000,
+  });
+}
+
 function useAppStartup() {
   const initialized = useRef(false);
   const [, setTabs] = useAtom(tabsAtom);
@@ -191,6 +227,11 @@ function useAppStartup() {
           ),
         });
         void commands.acknowledgeEnCroissantNotice();
+      }
+
+      const moveNotice = takeDataFolderMoveNotice();
+      if (moveNotice) {
+        showDataFolderMoveNotice(moveNotice);
       }
 
       return detach;

@@ -232,6 +232,29 @@ fn clear_search_cache_for_db(state: &AppState, db_path: &Path) {
         .remove_database(&canonical);
 }
 
+/// Closes the pooled connections and drops the caches of every database inside `dir`, so its
+/// files can be moved. Operations already running keep their own connection until they finish.
+pub(crate) fn release_databases_in(state: &AppState, dir: &Path) {
+    let inside: Vec<String> = state
+        .connection_pool
+        .iter()
+        .map(|entry| entry.key().clone())
+        .filter(|key| Path::new(key).starts_with(dir))
+        .collect();
+    for key in inside {
+        state.connection_pool.remove(&key);
+        clear_search_cache_for_db(state, Path::new(&key));
+    }
+
+    let mut cache = state.db_cache.lock().unwrap();
+    if cache
+        .as_ref()
+        .is_some_and(|(cached_path, _)| cached_path.starts_with(dir))
+    {
+        *cache = None;
+    }
+}
+
 fn invalidate_search_index(state: &AppState, db_path: &Path) -> Result<(), Error> {
     clear_search_cache_for_db(state, db_path);
 

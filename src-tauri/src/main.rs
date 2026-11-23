@@ -13,6 +13,7 @@ mod bot_league;
 mod bot_strength;
 mod bot_style;
 mod chess;
+mod data_folder;
 mod db;
 mod diagram;
 mod engine;
@@ -321,7 +322,9 @@ fn bindings_builder() -> tauri_specta::Builder<tauri::Wry> {
             books::book_fingerprint,
             identifier_migration::get_identifier_migration,
             identifier_migration::complete_identifier_migration,
-            identifier_migration::acknowledge_en_croissant_notice
+            identifier_migration::acknowledge_en_croissant_notice,
+            data_folder::preview_data_folder_move,
+            data_folder::move_data_folder
         ))
         .events(tauri_specta::collect_events!(
             BestMovesPayload,

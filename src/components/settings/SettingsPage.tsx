@@ -26,7 +26,6 @@ import {
   IconVolume,
 } from "@tabler/icons-react";
 import { useLoaderData, useSearch } from "@tanstack/react-router";
-import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
 import { RESET } from "jotai/utils";
 import { useMemo, useRef, useState } from "react";
@@ -63,8 +62,8 @@ import {
   storedPuzzlesDirAtom,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
-import FileInput from "../common/FileInput";
 import AnalysisCacheSetting from "./AnalysisCacheSetting";
+import DataFolderInput from "./DataFolderInput";
 import BoardSelect from "./BoardSelect";
 import ColorControl from "./ColorControl";
 import FontSizeSlider from "./FontSizeSlider";
@@ -609,17 +608,7 @@ export default function Page() {
         description: t("Settings.Directories.Files.Desc"),
         keywords: ["files", "directory", "folder", "path"],
         render: () => (
-          <FileInput
-            onClick={async () => {
-              const selected = await open({
-                multiple: false,
-                directory: true,
-              });
-              if (!selected || typeof selected !== "string") return;
-              setFilesDirectory(selected);
-            }}
-            filename={filesDirectory || null}
-          />
+          <DataFolderInput kind="files" value={filesDirectory} onChange={setFilesDirectory} />
         ),
       },
       {
@@ -629,16 +618,10 @@ export default function Page() {
         description: t("Settings.Directories.Databases.Desc"),
         keywords: ["databases", "directory", "folder", "path"],
         render: () => (
-          <FileInput
-            onClick={async () => {
-              const selected = await open({
-                multiple: false,
-                directory: true,
-              });
-              if (!selected || typeof selected !== "string") return;
-              setDatabasesDirectory(selected);
-            }}
-            filename={databasesDirectory || null}
+          <DataFolderInput
+            kind="databases"
+            value={databasesDirectory}
+            onChange={setDatabasesDirectory}
           />
         ),
       },
@@ -649,17 +632,7 @@ export default function Page() {
         description: t("Settings.Directories.Engines.Desc"),
         keywords: ["engines", "directory", "folder", "path"],
         render: () => (
-          <FileInput
-            onClick={async () => {
-              const selected = await open({
-                multiple: false,
-                directory: true,
-              });
-              if (!selected || typeof selected !== "string") return;
-              setEnginesDirectory(selected);
-            }}
-            filename={enginesDirectory || null}
-          />
+          <DataFolderInput kind="engines" value={enginesDirectory} onChange={setEnginesDirectory} />
         ),
       },
       {
@@ -669,17 +642,7 @@ export default function Page() {
         description: t("Settings.Directories.Puzzles.Desc"),
         keywords: ["puzzles", "directory", "folder", "path"],
         render: () => (
-          <FileInput
-            onClick={async () => {
-              const selected = await open({
-                multiple: false,
-                directory: true,
-              });
-              if (!selected || typeof selected !== "string") return;
-              setPuzzlesDirectory(selected);
-            }}
-            filename={puzzlesDirectory || null}
-          />
+          <DataFolderInput kind="puzzles" value={puzzlesDirectory} onChange={setPuzzlesDirectory} />
         ),
       },
       {

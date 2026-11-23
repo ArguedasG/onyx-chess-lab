@@ -39,7 +39,7 @@ const ONYX_LOG_FILENAME: &str = "onyx-chess-lab.log";
 
 /// Active configuration and user-data JSON files inside `app_data_dir` that may store absolute
 /// paths pointing to the legacy data directory.
-const JSON_FILES_TO_REWRITE: &[&str] = &[
+pub(crate) const JSON_FILES_TO_REWRITE: &[&str] = &[
     "engines/engines.json",
     "training-areas-v1.json",
     "training-areas-v1.localstorage-backup.json",
@@ -397,7 +397,7 @@ fn rewrite_json_file_paths(
     Ok(true)
 }
 
-fn rewrite_json_value(
+pub(crate) fn rewrite_json_value(
     value: &mut Value,
     old_prefix: &str,
     new_prefix: &str,
@@ -490,7 +490,7 @@ fn rewrite_path_prefix(
     Some(format!("{replacement_prefix}{suffix}"))
 }
 
-fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
+pub(crate) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
     })?;

@@ -1151,6 +1151,29 @@ async acknowledgeEnCroissantNotice() : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * What a move would carry and what would stay, without touching anything.
+ */
+async previewDataFolderMove(from: string, to: string) : Promise<Result<DataFolderMovePreview, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("preview_data_folder_move", { from, to }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Moves the contents of a data folder to a new one and points every saved path at it. The
+ * frontend rewrites its own storage with the returned names and then saves the new folder.
+ */
+async moveDataFolder(kind: DataFolderKind, from: string, to: string) : Promise<Result<DataFolderMoveResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("move_data_folder", { kind, from, to }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1297,6 +1320,37 @@ simplification: number; elo: number; temperature: number; topP: number;
  */
 verifierPath: string | null; verifierArgs?: string[] }
 export type ClockUpdateEvent = { gameId: string; whiteTime: bigint | null; blackTime: bigint | null }
+export type DataFolderKind = "files" | "databases" | "engines" | "puzzles"
+export type DataFolderMovePreview = { 
+/**
+ * Files and folders directly inside the old folder that would move.
+ */
+entries: number; 
+/**
+ * Every file that would move, counting the ones inside folders.
+ */
+files: number; bytes: number; 
+/**
+ * Names that exist in both folders; they stay in the old folder.
+ */
+conflicts: string[]; 
+/**
+ * The new folder already has something in it.
+ */
+targetHasEntries: boolean }
+export type DataFolderMoveResult = { 
+/**
+ * Names of the entries now in the new folder.
+ */
+moved: string[]; 
+/**
+ * Names left in the old folder because the new one already had them.
+ */
+skipped: string[]; 
+/**
+ * Entries copied to another drive whose old copy could not be deleted.
+ */
+leftovers: string[] }
 export type DatabaseInfo = { title: string; description: string; player_count: number; event_count: number; game_count: number; storage_size: bigint; filename: string; indexed: boolean }
 export type DatabaseProgress = { id: string; progress: number }
 export type DatabaseQualityDetails = { games: number; 
