@@ -1,5 +1,60 @@
 [
   {
+    "version": "0.29.2",
+    "notes": {
+      "en": {
+        "summary": "Onyx now reads its download catalog from its own repository, Open board on an opening line goes straight to that line, and confirmations use Onyx's own dialog instead of the system's.",
+        "sections": [
+          {
+            "title": "Download catalog",
+            "items": [
+              "The lists of databases, puzzles and engines you can download now come from Onyx's own repository on GitHub instead of En Croissant's server. You see the same entries and files download from the same places as before.",
+              "A broken or outdated link can now be fixed in the repository, without waiting for a new version. Without a connection, Onyx still offers the copy that ships with the app."
+            ]
+          },
+          {
+            "title": "Openings",
+            "items": [
+              "Open board on a line of a repertoire section now opens the board at the end of that line instead of at the start of the section, so the line is easy to find. If the section was edited since, it stops at the furthest move of the line that remains."
+            ]
+          },
+          {
+            "title": "Confirmations",
+            "items": [
+              "Deleting a player card, a twin, a saved analysis or a training position, emptying the mistake queue, restoring a backup, replacing a file when exporting and clearing saved data now ask in an Onyx dialog, in your language and theme, instead of the operating system's window.",
+              "When the action deletes or replaces something, the confirm button is red and Cancel is the one selected, so pressing Enter by accident does nothing."
+            ]
+          }
+        ]
+      },
+      "es": {
+        "summary": "Onyx lee ahora su catálogo de descargas desde su propio repositorio, Abrir tablero en una línea de apertura lleva directo a esa línea y las confirmaciones usan un diálogo propio de Onyx en vez del del sistema.",
+        "sections": [
+          {
+            "title": "Catálogo de descargas",
+            "items": [
+              "Las listas de bases, puzzles y motores que puedes descargar vienen ahora del repositorio de Onyx en GitHub en vez del servidor de En Croissant. Ves las mismas entradas y los archivos se descargan de los mismos sitios que antes.",
+              "Un enlace roto o desactualizado ahora se puede corregir en el repositorio, sin esperar a una versión nueva. Sin conexión, Onyx sigue ofreciendo la copia que viene con la app."
+            ]
+          },
+          {
+            "title": "Aperturas",
+            "items": [
+              "Abrir tablero en una línea de una sección del repertorio abre ahora el tablero al final de esa línea en vez de al principio de la sección, así es fácil encontrarla. Si la sección se editó después, se detiene en la última jugada de la línea que sigue existiendo."
+            ]
+          },
+          {
+            "title": "Confirmaciones",
+            "items": [
+              "Eliminar una ficha de jugador, un gemelo, un análisis guardado o una posición de entrenamiento, vaciar la cola de errores, restaurar una copia de seguridad, reemplazar un archivo al exportar y borrar los datos guardados ahora se confirman en un diálogo de Onyx, en tu idioma y con el tema de la app, en vez de la ventana del sistema operativo.",
+              "Cuando la acción borra o reemplaza algo, el botón de confirmar es rojo y Cancelar queda seleccionado, así que pulsar Enter por accidente no hace nada."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "version": "0.29.1",
     "notes": {
       "en": {
