@@ -984,7 +984,7 @@ export function OpeningVariantPage({
                       <Group>
                         <Button
                           variant="default"
-                          onClick={() => void launcher.analyzeVariant(repertoire, variant)}
+                          onClick={() => void launcher.analyzeLine(repertoire, variant, line)}
                         >
                           {t("OpeningBrowser.OpenBoard", "Open board")}
                         </Button>

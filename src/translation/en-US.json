@@ -4873,6 +4873,17 @@
     "PlayerAnalysis.EngineHideSettings": "Hide settings",
     "PlayerAnalysis.EngineCacheShort": "The newest games are analyzed first; finished games are kept, so an interrupted run continues.",
     "PlayerAnalysis.EnginePending": "Not run",
-    "Board.Database.MatchesSoFar": "{{matches}} matches so far…"
+    "Board.Database.MatchesSoFar": "{{matches}} matches so far…",
+    "Pgn.OverwriteTitle": "Replace file",
+    "Common.Replace": "Replace",
+    "Menu.Help.ClearSavedData.Action": "Clear data",
+    "Studies.RestoreBackupTitle": "Restore backup",
+    "Studies.RestoreBackupAction": "Restore",
+    "Players.Delete.Title": "Delete card",
+    "ConfirmDialog.Continue": "Continue",
+    "AnalysisLibrary.DeleteTitle": "Delete analysis",
+    "Preparation.Twin.DeleteTitle": "Delete twin",
+    "Mistakes.ClearTitle": "Empty the queue",
+    "Mistakes.ClearAction": "Empty"
   }
 }

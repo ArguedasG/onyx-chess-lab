@@ -21,7 +21,7 @@ import {
 } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   IconArchive,
@@ -279,17 +279,16 @@ export default function TrainingPage() {
   }
 
   async function deleteItem(item: TrainingItem) {
-    const confirmed = await ask(
-      trainingT(
+    const confirmed = await confirmDialog({
+      title: trainingT("Training.Copy.Deleteposition.c3cad629", "Delete position"),
+      message: trainingT(
         "Training.Copy.Removev0fromthelibrary.00275163",
         "Remove “{{v0}}” from the library?",
         { v0: item.title },
       ),
-      {
-        title: trainingT("Training.Copy.Deleteposition.c3cad629", "Delete position"),
-        kind: "warning",
-      },
-    );
+      confirmLabel: trainingT("Common.Delete", "Delete"),
+      danger: true,
+    });
     if (!confirmed) return;
     setLibrary((previous) => removeTrainingItem(previous, item.id));
   }
@@ -318,17 +317,16 @@ export default function TrainingPage() {
 
     try {
       const imported = parseTrainingBackup(await readTextFile(selected));
-      const confirmed = await ask(
-        trainingT(
+      const confirmed = await confirmDialog({
+        title: trainingT("Training.Copy.Importbackup.214bdca3", "Import backup"),
+        message: trainingT(
           "Training.Copy.v0positionswillbereplaced.6dc6ae10",
           "{{v0}} positions will be replaced with {{v1}} from the backup.",
           { v0: Object.keys(library.items).length, v1: Object.keys(imported.items).length },
         ),
-        {
-          title: trainingT("Training.Copy.Importbackup.214bdca3", "Import backup"),
-          kind: "warning",
-        },
-      );
+        confirmLabel: trainingT("Common.Replace", "Replace"),
+        danger: true,
+      });
       if (!confirmed) return;
       setLibrary(imported);
       setActiveSessionId(null);

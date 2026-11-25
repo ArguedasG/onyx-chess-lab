@@ -1,6 +1,8 @@
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
+import i18n from "i18next";
 import type { StoredPlayerAnalysis } from "@/state/playerAnalysis";
+import { confirmDialog } from "@/utils/confirmDialog";
 
 const escapeHtml = (value: unknown) =>
     String(value ?? "").replace(
@@ -46,7 +48,14 @@ export async function savePlayerAnalysisExport(
         : `${selected}.${format}`;
     if (
         (await exists(destination)) &&
-        !(await ask(`Overwrite ${destination}?`, { kind: "warning" }))
+        !(await confirmDialog({
+            title: i18n.t("Pgn.OverwriteTitle", "Replace file"),
+            message: i18n.t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", {
+                path: destination,
+            }),
+            confirmLabel: i18n.t("Common.Replace", "Replace"),
+            danger: true,
+        }))
     )
         return false;
     const content =

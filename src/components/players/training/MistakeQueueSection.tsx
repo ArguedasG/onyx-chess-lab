@@ -24,7 +24,8 @@ import {
   IconPlaylistAdd,
   IconTrash,
 } from "@tabler/icons-react";
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAtom } from "jotai";
 import { useMemo } from "react";
@@ -188,13 +189,15 @@ export default function MistakeQueueSection({
                 leftSection={<IconTrash size={14} />}
                 onClick={async () => {
                   if (
-                    !(await ask(
-                      t(
+                    !(await confirmDialog({
+                      title: t("Mistakes.ClearTitle", "Empty the queue"),
+                      message: t(
                         "Mistakes.ClearConfirm",
                         "Empty the queue? Its progress is lost and these positions are not added again automatically.",
                       ),
-                      { kind: "warning" },
-                    ))
+                      confirmLabel: t("Mistakes.ClearAction", "Empty"),
+                      danger: true,
+                    }))
                   )
                     return;
                   onChange((current) => ({

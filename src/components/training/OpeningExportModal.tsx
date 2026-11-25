@@ -2,7 +2,8 @@ import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { resolve } from "@tauri-apps/api/path";
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { copyFile, exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAtomValue } from "jotai";
 import { useState } from "react";
@@ -69,12 +70,14 @@ export default function OpeningExportModal({
       }
       if (
         (await exists(outputPath)) &&
-        !(await ask(
-          t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", {
+        !(await confirmDialog({
+          title: t("Pgn.OverwriteTitle", "Replace file"),
+          message: t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", {
             path: outputPath,
           }),
-          { kind: "warning" },
-        ))
+          confirmLabel: t("Common.Replace", "Replace"),
+          danger: true,
+        }))
       ) {
         return;
       }

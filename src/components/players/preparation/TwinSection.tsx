@@ -14,7 +14,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import {
   IconChevronDown,
   IconDeviceFloppy,
@@ -184,14 +184,16 @@ export default function TwinSection({
 
   async function confirmDelete() {
     if (!twin) return;
-    const confirmed = await ask(
-      t(
+    const confirmed = await confirmDialog({
+      title: t("Preparation.Twin.DeleteTitle", "Delete twin"),
+      message: t(
         "Preparation.Twin.DeleteConfirm",
         "Delete «{{name}}» and its measurements? The player's games are not touched.",
         { name: twin.name },
       ),
-      { kind: "warning" },
-    );
+      confirmLabel: t("Common.Delete"),
+      danger: true,
+    });
     if (!confirmed) return;
     remove(twin.id);
     setSelectedId(null);

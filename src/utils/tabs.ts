@@ -1,5 +1,5 @@
 import { resolve, tempDir } from "@tauri-apps/api/path";
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import i18n from "i18next";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { type FileMetadata, fileMetadataSchema } from "@/components/files/file";
 import type { TreeStoreState } from "@/state/store/tree";
 import { getLatestSessionStorageValue } from "@/state/store/debouncedStorage";
 import { getPGN, parsePGN } from "./chess";
+import { confirmDialog } from "./confirmDialog";
 import { saveStudyChapterPgn } from "./studies";
 import { INITIAL_FEN } from "chessops/fen";
 import { type GameHeaders, getGameName } from "./treeReducer";
@@ -351,12 +352,14 @@ export async function saveToFile({
         }
         if (
             (await exists(destination)) &&
-            !(await ask(
-                i18n.t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", {
+            !(await confirmDialog({
+                title: i18n.t("Pgn.OverwriteTitle", "Replace file"),
+                message: i18n.t("Pgn.Overwrite", "Replace the entire existing file? {{path}}", {
                     path: destination,
                 }),
-                { kind: "warning" },
-            ))
+                confirmLabel: i18n.t("Common.Replace", "Replace"),
+                danger: true,
+            }))
         )
             return false;
         // Save As / Export contain only this game, never its neighbouring PGN records.

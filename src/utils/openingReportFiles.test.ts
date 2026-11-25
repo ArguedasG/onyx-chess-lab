@@ -1,4 +1,5 @@
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import { parsePgn } from "chessops/pgn";
 import i18n from "i18next";
@@ -7,7 +8,8 @@ import { commands } from "@/bindings";
 import { openingReportFixture } from "./openingReport.fixture";
 import { openingReferenceGamesPgn, saveOpeningReport } from "./openingReportFiles";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn(), ask: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn() }));
+vi.mock("@/utils/confirmDialog", () => ({ confirmDialog: vi.fn() }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ exists: vi.fn(), writeTextFile: vi.fn() }));
 vi.mock("@/bindings", () => ({ commands: { getPositionGame: vi.fn() } }));
 beforeEach(() => {
@@ -48,7 +50,7 @@ it("does not write after dialog cancellation, overwrite refusal, or an aborted d
     vi.mocked(save).mockResolvedValueOnce(null);
     expect(await saveOpeningReport("x", "pgn", "base.db3", i18n.t)).toBe(false);
     vi.mocked(exists).mockResolvedValue(true);
-    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(confirmDialog).mockResolvedValue(false);
     expect(await saveOpeningReport("x", "pgn", "base.db3", i18n.t)).toBe(false);
     const controller = new AbortController();
     vi.mocked(save).mockImplementationOnce(async () => {

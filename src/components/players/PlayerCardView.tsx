@@ -34,7 +34,7 @@ import {
   IconTrash,
   IconUsers,
 } from "@tabler/icons-react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -398,13 +398,15 @@ export default function PlayerCardView({
                         leftSection={<IconTrash size={14} />}
                         onClick={async () => {
                           if (
-                            await ask(
-                              t(
+                            await confirmDialog({
+                              title: t("Players.Delete.Title", "Delete card"),
+                              message: t(
                                 "Players.Delete.Confirm",
                                 "Delete this card? Its games stay in their databases and its Player Analysis profile is kept.",
                               ),
-                              { kind: "warning" },
-                            )
+                              confirmLabel: t("Common.Delete"),
+                              danger: true,
+                            })
                           )
                             actions.remove?.();
                         }}

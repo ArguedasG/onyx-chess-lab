@@ -212,6 +212,26 @@ function mergeOpeningBranch(targetRoot: TreeNode, sourceRoot: TreeNode, path: nu
     }
 }
 
+/**
+ * The path to the last move of `moves` that the tree still has: the line's end when the section
+ * was not edited, otherwise the furthest move of it that remains.
+ */
+export function openingPathTowardMoves(root: TreeNode, moves: string[]): number[] {
+    const path: number[] = [];
+    let node = root;
+    for (const uci of moves) {
+        const [position] = positionFromFen(node.fen);
+        if (!position) break;
+        const childIndex = node.children.findIndex(
+            (child) => child.move && uciNormalize(position.clone(), child.move) === uci,
+        );
+        if (childIndex < 0) break;
+        path.push(childIndex);
+        node = node.children[childIndex];
+    }
+    return path;
+}
+
 function openingPathForMoves(root: TreeNode, moves: string[]): number[] | null {
     const path: number[] = [];
     let node = root;

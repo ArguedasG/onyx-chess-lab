@@ -11,6 +11,8 @@ import {
     tabsAtom,
 } from "@/state/atoms";
 import { trainingAreasAtom } from "@/state/trainingAreas";
+import { commands } from "@/bindings";
+import { parsePGN } from "@/utils/chess";
 import { openFile } from "@/utils/files";
 import {
     getOpeningLearningSummary,
@@ -24,7 +26,9 @@ import {
     type ContinuousColor,
 } from "@/utils/openingContinuous";
 import { getDueOpeningLines } from "@/utils/openingReview";
+import { openingPathTowardMoves } from "@/utils/openingTraining";
 import type { OpeningLine, OpeningRepertoire, OpeningVariant } from "@/utils/trainingAreas";
+import { unwrap } from "@/utils/unwrap";
 
 /** `review` is a practice session limited to the lines whose spaced review is due. */
 type SessionMode = "practice" | "learn" | "review";
@@ -234,6 +238,31 @@ export function useOpeningPractice() {
             openVariant(repertoire, variant, "review"),
         analyzeVariant: (repertoire: OpeningRepertoire, variant: OpeningVariant) =>
             openVariant(repertoire, variant, "analysis"),
+        /**
+         * Opens a line's section for analysis at the line's last move, so the line is easy to find
+         * in the section's tree. The path is looked up by the line's moves in the section as it is
+         * now; if the section was edited since, it stops at the furthest move that remains.
+         */
+        analyzeLine: async (
+            repertoire: OpeningRepertoire,
+            variant: OpeningVariant,
+            line: OpeningLine,
+        ) => {
+            let position: number[] | undefined;
+            try {
+                const [pgn] = unwrap(
+                    await commands.readGames(
+                        repertoire.path,
+                        variant.trainingRecordIndex,
+                        variant.trainingRecordIndex,
+                    ),
+                );
+                if (pgn) position = openingPathTowardMoves((await parsePGN(pgn)).root, line.moves);
+            } catch {
+                // Without the path the section still opens, at its start.
+            }
+            return openVariant(repertoire, variant, "analysis", undefined, position);
+        },
         /** Opens a section for analysis at a move of it (a move search hit, say). */
         analyzeVariantAt: (
             repertoire: OpeningRepertoire,

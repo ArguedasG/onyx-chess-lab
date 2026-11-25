@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import { commands } from "@/bindings";
 import { createTreeStore } from "@/state/store/tree";
 import { saveToFile, type Tab } from "./tabs";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn(), ask: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn() }));
+vi.mock("@/utils/confirmDialog", () => ({ confirmDialog: vi.fn() }));
 vi.mock("i18next", () => ({ default: { t: (_key: string, fallback: string) => fallback } }));
 vi.mock("@tauri-apps/plugin-fs", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@tauri-apps/plugin-fs")>()),
@@ -136,7 +138,7 @@ describe("save before closing a tab", () => {
     it("keeps the source untouched and honours overwrite refusal", async () => {
         const args = fixture();
         vi.mocked(exists).mockResolvedValue(true);
-        vi.mocked(ask).mockResolvedValue(false);
+        vi.mocked(confirmDialog).mockResolvedValue(false);
         expect(await saveToFile({ ...args, mode: "export" })).toBe(false);
         expect(writeTextFile).not.toHaveBeenCalled();
     });

@@ -1,8 +1,9 @@
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import { makePgn, PgnParser, type Game, type PgnNodeData } from "chessops/pgn";
 import type { TFunction } from "i18next";
 import { commands, type OpeningReport } from "@/bindings";
+import { confirmDialog } from "@/utils/confirmDialog";
 
 const MAX_EXPORT_BYTES = 8 * 1024 * 1024;
 
@@ -32,7 +33,12 @@ export async function saveOpeningReport(
         throw new Error("Protected database path");
     if (
         (await exists(destination)) &&
-        !(await ask(t("OpeningReport.Overwrite", { path: destination }), { kind: "warning" }))
+        !(await confirmDialog({
+            title: t("Pgn.OverwriteTitle", "Replace file"),
+            message: t("OpeningReport.Overwrite", { path: destination }),
+            confirmLabel: t("Common.Replace", "Replace"),
+            danger: true,
+        }))
     )
         return false;
     signal?.throwIfAborted();

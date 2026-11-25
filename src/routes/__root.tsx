@@ -10,7 +10,7 @@ import { TauriEvent } from "@tauri-apps/api/event";
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from "@tauri-apps/api/menu";
 import { appLogDir, resolve } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
 import { exit } from "@tauri-apps/plugin-process";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
@@ -22,6 +22,8 @@ import useSWRImmutable from "swr/immutable";
 import { match } from "ts-pattern";
 import type { Dirs } from "@/App";
 import AboutModal from "@/components/About";
+import ConfirmDialogHost from "@/components/common/ConfirmDialogHost";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { WorkspaceTabs } from "@/components/tabs/BoardsPage";
@@ -321,8 +323,11 @@ function RootLayout() {
             label: t("Menu.Help.ClearSavedData"),
             id: "clear_saved_data",
             action: () => {
-              ask(t("Menu.Help.ClearSavedData.Confirm"), {
+              confirmDialog({
                 title: t("Menu.Help.ClearSavedData"),
+                message: t("Menu.Help.ClearSavedData.Confirm"),
+                confirmLabel: t("Menu.Help.ClearSavedData.Action", "Clear data"),
+                danger: true,
               }).then(async (res) => {
                 if (res) {
                   // Training data lives in a file now; move it aside so a reset stays recoverable.
@@ -428,6 +433,7 @@ function RootLayout() {
       }}
     >
       <AboutModal opened={opened} setOpened={setOpened} />
+      <ConfirmDialogHost />
       {!isNative &&
         (import.meta.env.VITE_PLATFORM === "win32" ||
           import.meta.env.VITE_PLATFORM === "linux") && (

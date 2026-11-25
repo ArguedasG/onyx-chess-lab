@@ -17,6 +17,7 @@ import {
     getOpeningImportGroupPreviews,
     getOpeningImportSuggestedExclusions,
     mergeImportedOpeningTrees,
+    openingPathTowardMoves,
     previewOpeningTrainingSync,
     type OpeningPgnSample,
 } from "./openingTraining";
@@ -159,6 +160,21 @@ describe("opening import grouping", () => {
             ["g1f3", "d7d5", "g2g3"],
         ]);
         expect(new Set(lines.map((line) => line.moves.at(-1)))).toEqual(new Set(["c7c6", "g8f6"]));
+    });
+
+    it("finds the path to a line's last move, or to the furthest move still in the section", () => {
+        const merged = mergeImportedOpeningTrees(
+            lineTree(["Nf3", "d5", "g3", "c6"]),
+            lineTree(["Nf3", "d5", "g3", "Nf6"]),
+        );
+        const [first, second] = extractOpeningImportLines(merged, "all");
+
+        expect(openingPathTowardMoves(merged, second.moves)).toEqual(second.path);
+        expect(openingPathTowardMoves(merged, first.moves)).toEqual(first.path);
+        // The section was edited after the import: the line now stops at g3.
+        expect(openingPathTowardMoves(merged, [...second.moves.slice(0, 3), "e7e5"])).toEqual(
+            second.path.slice(0, 3),
+        );
     });
 
     it("exports one portable PGN record per trainable line", () => {

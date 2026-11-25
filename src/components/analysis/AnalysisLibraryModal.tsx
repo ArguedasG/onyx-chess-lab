@@ -2,7 +2,8 @@ import { ActionIcon, Alert, Button, Group, Loader, Stack, Table, Text } from "@m
 import { Modal } from "@/components/common/Modal";
 import { notifications } from "@mantine/notifications";
 import { IconArrowsDiff, IconDownload, IconRestore, IconTrash } from "@tabler/icons-react";
-import { ask, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -75,12 +76,18 @@ export default function AnalysisLibraryModal({
 
   const deleteItem = async (item: AnalysisArtifactSummary) => {
     try {
-      const confirmed = await ask(
-        t("AnalysisLibrary.DeleteConfirm", "Delete {{title}} and all its saved versions?", {
-          title: item.title,
-        }),
-        { kind: "warning" },
-      );
+      const confirmed = await confirmDialog({
+        title: t("AnalysisLibrary.DeleteTitle", "Delete analysis"),
+        message: t(
+          "AnalysisLibrary.DeleteConfirm",
+          "Delete {{title}} and all its saved versions?",
+          {
+            title: item.title,
+          },
+        ),
+        confirmLabel: t("Common.Delete"),
+        danger: true,
+      });
       if (!confirmed) return;
       unwrap(await commands.deleteAnalysisArtifact(item.kind, item.id));
       await refresh();

@@ -37,7 +37,8 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useLoaderData, useNavigate } from "@tanstack/react-router";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { confirmDialog } from "@/utils/confirmDialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
@@ -349,13 +350,14 @@ export default function StudiesPage() {
     });
     if (typeof selected !== "string") return;
     const restored = parseStudyLibraryBackup(await readTextFile(selected));
-    const confirmed = await ask(
-      t(
+    const confirmed = await confirmDialog({
+      title: t("Studies.RestoreBackupTitle", "Restore backup"),
+      message: t(
         "Studies.RestoreBackupConfirm",
         "Replace the current study library with this backup? An automatic recovery copy of the current library will be retained.",
       ),
-      { kind: "warning" },
-    );
+      confirmLabel: t("Studies.RestoreBackupAction", "Restore"),
+    });
     if (!confirmed) return;
     await saveStudyLibrary(restored);
     setLibrary(restored);
