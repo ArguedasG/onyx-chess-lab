@@ -70,7 +70,7 @@ export async function findCatalogStockfish(os: Platform): Promise<CatalogEngine 
     const bmi2 = await commands.isBmi2Compatible();
     const engines = await loadEngineCatalog<
         CatalogEngine & { os: Platform; bmi2: boolean; downloadLink: string }
-    >(`?os=${os}&bmi2=${bmi2}`);
+    >();
     return (
         engines.find((e) => e.os === os && e.bmi2 === bmi2 && /^stockfish/i.test(e.name)) ?? null
     );

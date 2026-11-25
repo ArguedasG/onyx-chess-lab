@@ -22,9 +22,15 @@ export function apiHeaders(extra?: Record<string, string>): Record<string, strin
     };
 }
 
-const CATALOG_URL = "https://encroissant.org";
+/**
+ * Onyx's own catalog, the `catalog/` folder of this repository. Every installed copy carries this
+ * address, so it must never change; editing those files on `main` updates every installation.
+ */
+export const CATALOG_URL =
+    "https://raw.githubusercontent.com/ArguedasG/onyx-chess-lab/main/catalog";
 const CATALOG_ATTEMPTS = 3;
-const CATALOG_CACHE_PREFIX = "catalog-cache:";
+// v2: lists cached before Onyx had its own catalog came from En Croissant and are not reused.
+const CATALOG_CACHE_PREFIX = "catalog-cache-v2:";
 
 function readCachedCatalog<T>(path: string): T | null {
     try {
@@ -44,9 +50,8 @@ function writeCachedCatalog(path: string, data: unknown) {
 }
 
 /**
- * Fetch a download catalog (engines, databases, puzzles) from the En Croissant server. The server
- * sits behind Cloudflare and occasionally drops a request, so transient failures are retried and,
- * as a last resort, the last catalog received is returned.
+ * Fetch a download catalog (engines, databases, puzzles) from Onyx's catalog. Transient network
+ * failures are retried and, as a last resort, the last catalog received is returned.
  */
 export async function fetchCatalog<T>(path: string): Promise<T> {
     let lastError: unknown;

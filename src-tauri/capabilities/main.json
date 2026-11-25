@@ -48,6 +48,7 @@
         {
             "identifier": "http:default",
             "allow": [
+                "https://raw.githubusercontent.com/ArguedasG/onyx-chess-lab/main/catalog/**",
                 "https://www.encroissant.org/**",
                 "https://encroissant.org/**",
                 "https://api.github.com/repos/ArguedasG/onyx-chess-lab/releases/latest",

@@ -4,38 +4,28 @@ import bundledPuzzleDatabases from "@/data/catalog/puzzle_databases.json";
 import { fetchCatalog } from "./http";
 
 /**
- * Onyx's own download catalog. The files in `src/data/catalog` ship with the app: they mirror the
- * En Croissant catalog (bases and engines hosted by En Croissant or their authors) and can add
- * entries of Onyx's own. The live En Croissant catalog is still fetched and merged on top, so its
- * updates keep appearing; if its server is down or disappears, the bundled copy still lists every
- * download.
+ * Onyx's own download catalog. The live lists are the `catalog/` folder of this repository (see
+ * `CATALOG_URL`): whatever they list is what the app offers, so a link can be fixed, replaced or
+ * removed there without a release. The files in `src/data/catalog` ship with the app and are used
+ * only when the live lists cannot be reached (and nothing was received before) or list nothing
+ * usable. The files themselves are hosted by their authors or by En Croissant.
  */
 export type CatalogEntry = { downloadLink: string; path?: string };
 
-function entryKey(entry: CatalogEntry) {
-    return `${entry.downloadLink}|${entry.path ?? ""}`;
-}
-
-/** Live entries first, in their order, then bundled entries the live catalog does not have. */
-export function mergeCatalogs<T extends CatalogEntry>(
+/** The live catalog when it lists anything usable, otherwise the copy shipped with the app. */
+export function chooseCatalog<T extends CatalogEntry>(
     live: readonly T[] | null,
     bundled: readonly T[],
-) {
-    const merged = [...(live ?? [])];
-    const known = new Set(merged.map(entryKey));
-    for (const entry of bundled) {
-        if (!known.has(entryKey(entry))) {
-            known.add(entryKey(entry));
-            merged.push(entry);
-        }
-    }
-    return merged;
+    keep: (entry: T) => boolean = () => true,
+): T[] {
+    const usable = (live ?? []).filter(keep);
+    return usable.length > 0 ? usable : bundled.filter(keep);
 }
 
 /**
- * Onyx reads game and puzzle databases as SQLite (`.db3`). En Croissant's live catalog has moved
- * to DuckDB (`.duckdb`) files with the same content; offering them would show each base twice and
- * the second copy would fail after downloading, so those entries are left out.
+ * Onyx reads game and puzzle databases as SQLite (`.db3`). En Croissant's catalog has moved to
+ * DuckDB (`.duckdb`) files with the same content, which Onyx cannot open, so only `.db3` entries
+ * are offered, wherever a list comes from.
  */
 export function isReadableDatabase(entry: CatalogEntry) {
     const file = entry.downloadLink.split(/[?#]/)[0];
@@ -45,7 +35,7 @@ export function isReadableDatabase(entry: CatalogEntry) {
 async function loadCatalog<T extends CatalogEntry>(
     path: string,
     bundled: readonly T[],
-    keep: (entry: T) => boolean = () => true,
+    keep?: (entry: T) => boolean,
 ) {
     let live: T[] | null = null;
     try {
@@ -54,7 +44,7 @@ async function loadCatalog<T extends CatalogEntry>(
     } catch {
         // The bundled catalog is enough to offer every download.
     }
-    return mergeCatalogs(live, bundled).filter(keep);
+    return chooseCatalog(live, bundled, keep);
 }
 
 export function loadDatabaseCatalog<T extends CatalogEntry>() {
@@ -74,6 +64,6 @@ export function loadPuzzleDatabaseCatalog<T extends CatalogEntry>() {
 }
 
 /** The engine catalog lists every platform; callers keep the entries of theirs. */
-export function loadEngineCatalog<T extends CatalogEntry>(query: string) {
-    return loadCatalog<T>(`/engines.json${query}`, bundledEngines as unknown as T[]);
+export function loadEngineCatalog<T extends CatalogEntry>() {
+    return loadCatalog<T>("/engines.json", bundledEngines as unknown as T[]);
 }

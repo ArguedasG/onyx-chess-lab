@@ -120,7 +120,7 @@ export function useDefaultEngines(os: Platform | undefined, opened: boolean) {
             const bmi2: boolean = await commands.isBmi2Compatible();
             const engines = await loadEngineCatalog<
                 LocalEngine & { os: Platform; bmi2: boolean; downloadLink: string }
-            >(`?os=${os}&bmi2=${bmi2}`);
+            >();
             return engines.filter((e) => e.os === os && e.bmi2 === bmi2);
         },
         CATALOG_SWR_OPTIONS,
