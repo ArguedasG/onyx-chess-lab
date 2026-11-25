@@ -1,0 +1,150 @@
+---
+import { Image } from "astro:assets";
+import logo from "../assets/brand/onyx-logo.png";
+import { type Lang, otherLang, ui, url } from "../i18n/ui";
+
+interface Props {
+    lang: Lang;
+    /** Path of this page below the language folder, used for the language switch. */
+    path: string;
+}
+
+const { lang, path } = Astro.props;
+const t = ui[lang].nav;
+const other = otherLang(lang);
+const links = [
+    { href: url(`${lang}/#features`), label: t.features },
+    { href: url(`${lang}/start/introduction/`), label: t.docs },
+    { href: url(`${lang}/technical/architecture/`), label: t.technical },
+];
+---
+
+<header class="site-header">
+    <div class="wrap header-inner">
+        <a class="brand" href={url(`${lang}/`)}>
+            <Image src={logo} alt="" width={30} height={30} loading="eager" />
+            <span>Onyx Chess Lab</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+            {links.map((link) => <a href={link.href}>{link.label}</a>)}
+        </nav>
+        <div class="header-actions">
+            <a
+                class="icon-link"
+                href="https://github.com/ArguedasG/onyx-chess-lab"
+                aria-label="GitHub"
+                title="GitHub"
+            >
+                <svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true">
+                    <path
+                        fill="currentColor"
+                        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+                    ></path>
+                </svg>
+            </a>
+            <a
+                class="lang-switch"
+                href={url(`${other}/${path}`)}
+                hreflang={other}
+                lang={other}
+                title={t.switchTo}
+                data-lang-switch={other}
+            >
+                {t.switchToShort}
+            </a>
+            <a class="btn btn-primary btn-sm" href={url(`${lang}/download/`)}>{t.download}</a>
+        </div>
+    </div>
+</header>
+
+<script>
+    // Choosing a language by hand is remembered for the language-picking root page.
+    for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-lang-switch]")) {
+        link.addEventListener("click", () => {
+            try {
+                localStorage.setItem("onyx-lang", link.dataset.langSwitch ?? "");
+            } catch {
+                // Private browsing may block storage; the link still works.
+            }
+        });
+    }
+</script>
+
+<style>
+    .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgb(11 12 15 / 0.72);
+        backdrop-filter: saturate(1.4) blur(10px);
+        border-bottom: 1px solid var(--onyx-line);
+    }
+    .header-inner {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        height: 64px;
+    }
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 600;
+        font-size: 1.02rem;
+        letter-spacing: -0.01em;
+        color: var(--onyx-text);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .brand img {
+        display: block;
+    }
+    .nav {
+        display: flex;
+        gap: 1.6rem;
+    }
+    .nav a {
+        color: var(--onyx-text-2);
+        text-decoration: none;
+        font-size: 0.94rem;
+    }
+    .nav a:hover {
+        color: var(--onyx-text);
+    }
+    .header-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+    .icon-link,
+    .lang-switch {
+        color: var(--onyx-text-2);
+        text-decoration: none;
+        display: inline-flex;
+    }
+    .lang-switch {
+        font: 500 0.8rem var(--onyx-font-mono);
+        border: 1px solid var(--onyx-line-2);
+        border-radius: 4px;
+        padding: 0.2rem 0.4rem;
+    }
+    .icon-link svg {
+        flex: none;
+    }
+    .icon-link:hover,
+    .lang-switch:hover {
+        color: var(--onyx-text);
+        border-color: var(--onyx-text);
+    }
+    @media (max-width: 820px) {
+        .nav {
+            display: none;
+        }
+    }
+    @media (max-width: 480px) {
+        .icon-link {
+            display: none;
+        }
+    }
+</style>

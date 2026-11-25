@@ -1,0 +1,28 @@
+---
+/** Outline icons from Tabler Icons (MIT), stored as path data in icons.json. */
+import { type IconName, icons } from "./icons";
+
+interface Props {
+    name: IconName;
+    size?: number;
+    class?: string;
+}
+
+const { name, size = 20, class: className } = Astro.props;
+const paths = icons[name] ?? [];
+---
+
+<svg
+    class={className}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+>
+    {paths.map((d) => <path d={d} />)}
+</svg>

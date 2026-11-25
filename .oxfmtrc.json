@@ -6,6 +6,7 @@
     ".github/**/*",
     "ml/diagram-recognizer/models/**/*",
     "src/bindings/generated.ts",
-    "src/routeTree.gen.ts"
+    "src/routeTree.gen.ts",
+    "website/**/*"
   ]
 }

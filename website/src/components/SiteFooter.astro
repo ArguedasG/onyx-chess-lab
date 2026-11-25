@@ -1,0 +1,150 @@
+---
+import { Image } from "astro:assets";
+import logo from "../assets/brand/onyx-logo.png";
+import { type Lang, ui, url } from "../i18n/ui";
+import { RELEASES_URL } from "../lib/release";
+
+interface Props {
+    lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = ui[lang].footer;
+const l = t.links;
+const columns = [
+    {
+        title: t.product,
+        links: [
+            { href: url(`${lang}/download/`), label: l.download },
+            { href: url(`${lang}/#features`), label: l.features },
+            { href: RELEASES_URL, label: l.releases },
+        ],
+    },
+    {
+        title: t.docs,
+        links: [
+            { href: url(`${lang}/start/introduction/`), label: l.introduction },
+            { href: url(`${lang}/start/first-steps/`), label: l.firstSteps },
+            { href: url(`${lang}/install/windows/`), label: l.install },
+            { href: url(`${lang}/resources/free-resources/`), label: l.resources },
+        ],
+    },
+    {
+        title: t.project,
+        links: [
+            { href: url(`${lang}/technical/architecture/`), label: l.technical },
+            { href: url(`${lang}/project/privacy/`), label: l.privacy },
+            { href: url(`${lang}/project/signing-policy/`), label: l.signing },
+            { href: url(`${lang}/project/credits/`), label: l.credits },
+            { href: "https://github.com/ArguedasG/onyx-chess-lab", label: l.source },
+            { href: "https://github.com/ArguedasG/onyx-chess-lab/issues", label: l.issues },
+        ],
+    },
+];
+---
+
+<footer class="site-footer">
+    <div class="wrap footer-grid">
+        <div class="footer-brand">
+            <a class="brand" href={url(`${lang}/`)}>
+                <Image src={logo} alt="" width={28} height={28} />
+                <span>Onyx Chess Lab</span>
+            </a>
+            <p>{t.tagline}</p>
+        </div>
+        {
+            columns.map((column) => (
+                <div>
+                    <h2>{column.title}</h2>
+                    <ul>
+                        {column.links.map((link) => (
+                            <li>
+                                <a href={link.href}>{link.label}</a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))
+        }
+    </div>
+    <div class="wrap footer-legal">
+        <span>© 2026 Gabriel Arguedas. {t.license}</span>
+        <span>
+            {t.fork} <a href="https://github.com/franciscoBSalgueiro/en-croissant"
+                >En Croissant</a
+            >.
+        </span>
+    </div>
+</footer>
+
+<style>
+    .site-footer {
+        border-top: 1px solid var(--onyx-line);
+        background: var(--onyx-bg-2);
+        padding: 3.5rem 0 2rem;
+        font-size: 0.92rem;
+    }
+    .footer-grid {
+        display: grid;
+        grid-template-columns: 1.6fr repeat(3, 1fr);
+        gap: 2rem;
+    }
+    .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-weight: 600;
+        color: var(--onyx-text);
+        text-decoration: none;
+    }
+    .footer-brand p {
+        color: var(--onyx-text-2);
+        max-width: 18rem;
+        margin: 0.8rem 0 0;
+    }
+    h2 {
+        font: 600 0.78rem var(--onyx-font-sans);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--onyx-text-3);
+        margin: 0 0 0.9rem;
+    }
+    ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.55rem;
+    }
+    a {
+        color: var(--onyx-text-2);
+        text-decoration: none;
+    }
+    a:hover {
+        color: var(--onyx-text);
+    }
+    .footer-legal {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--onyx-line);
+        color: var(--onyx-text-3);
+        font-size: 0.85rem;
+    }
+    .footer-legal a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    @media (max-width: 820px) {
+        .footer-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .footer-brand {
+            grid-column: 1 / -1;
+        }
+    }
+</style>

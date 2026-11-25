@@ -1,0 +1,68 @@
+---
+/**
+ * The root page has no language of its own: it sends the visitor to /es/ or /en/. A language
+ * chosen before (stored when any page is read) wins; otherwise the browser's languages decide,
+ * and anything that is not Spanish gets English. Without JavaScript, both links are shown.
+ */
+import "../styles/fonts.css";
+import "../styles/site.css";
+import { url } from "../i18n/ui";
+
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const es = url("es/");
+const en = url("en/");
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Onyx Chess Lab</title>
+        <meta
+            name="description"
+            content="Free, open-source chess software: databases, engines and analysis, with training and preparation built in. Software de ajedrez libre y gratuito."
+        />
+        <link rel="alternate" hreflang="en" href={site + en} />
+        <link rel="alternate" hreflang="es" href={site + es} />
+        <link rel="alternate" hreflang="x-default" href={site + en} />
+        <link rel="icon" type="image/png" href={url("favicon.png")} />
+        <script is:inline define:vars={{ es, en }}>
+            (function () {
+                var saved = null;
+                try {
+                    saved = localStorage.getItem("onyx-lang");
+                } catch (e) {}
+                var lang = saved === "es" || saved === "en" ? saved : null;
+                if (!lang) {
+                    var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+                    lang = "en";
+                    for (var i = 0; i < langs.length; i++) {
+                        var code = String(langs[i]).toLowerCase().slice(0, 2);
+                        if (code === "es" || code === "en") {
+                            lang = code;
+                            break;
+                        }
+                    }
+                }
+                location.replace((lang === "es" ? es : en) + location.hash);
+            })();
+        </script>
+    </head>
+    <body>
+        <main class="pick">
+            <p>Onyx Chess Lab</p>
+            <a href={en} hreflang="en" lang="en">English</a>
+            <a href={es} hreflang="es" lang="es">Español</a>
+        </main>
+        <style>
+            .pick {
+                min-height: 100vh;
+                display: grid;
+                place-content: center;
+                gap: 0.75rem;
+                text-align: center;
+            }
+        </style>
+    </body>
+</html>

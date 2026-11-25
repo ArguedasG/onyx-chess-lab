@@ -1,0 +1,31 @@
+/*
+ * Design tokens shared by the landing pages and the documentation (Starlight).
+ * The colours are Onyx's own: the dark palette of its interface and its default blue accent,
+ * so the site and the screenshots read as one thing.
+ */
+:root {
+    --onyx-bg: #141517;
+    --onyx-bg-2: #17181b;
+    --onyx-surface: #1a1b1e;
+    --onyx-surface-2: #25262b;
+    --onyx-line: #2c2e33;
+    --onyx-line-2: #373a40;
+
+    --onyx-text: #f1f3f5;
+    --onyx-text-2: #a6a7ab;
+    --onyx-text-3: #6c6e74;
+
+    --onyx-accent: #4dabf7;
+    --onyx-accent-strong: #228be6;
+    --onyx-accent-soft: rgb(34 139 230 / 0.14);
+    --onyx-accent-line: rgb(77 171 247 / 0.45);
+    --onyx-good: #2f9e44;
+
+    --onyx-font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --onyx-font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+    --onyx-radius: 6px;
+    --onyx-radius-lg: 10px;
+    --onyx-max: 1200px;
+    --onyx-gutter: clamp(1.25rem, 4vw, 2.5rem);
+}

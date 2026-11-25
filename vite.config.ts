@@ -73,7 +73,7 @@ export default defineConfig({
               }
             : undefined,
         watch: {
-            ignored: ["**/src-tauri/**"],
+            ignored: ["**/src-tauri/**", "**/website/**"],
         },
     },
     build: {
@@ -88,7 +88,13 @@ export default defineConfig({
     },
     test: {
         environment: "jsdom",
-        exclude: ["**/node_modules/**", "**/.claude/**", "**/dist/**", "**/src-tauri/**"],
+        exclude: [
+            "**/node_modules/**",
+            "**/.claude/**",
+            "**/dist/**",
+            "**/src-tauri/**",
+            "**/website/**",
+        ],
     },
     define: {
         "import.meta.env.VITE_PLATFORM": JSON.stringify(os.platform()),

@@ -1,0 +1,82 @@
+---
+/**
+ * An app screenshot from src/assets/screenshots/<name>.(png|jpg|webp). While the file does not
+ * exist, development builds show a labelled placeholder so the layout can be judged; production
+ * builds render nothing (use `hasScreenshot` to adapt the layout).
+ */
+import { Image } from "astro:assets";
+import { findScreenshot } from "../lib/screenshots";
+
+interface Props {
+    name: string;
+    alt: string;
+    placeholder: string;
+    eager?: boolean;
+    sizes?: string;
+}
+
+const {
+    name,
+    alt,
+    placeholder,
+    eager = false,
+    sizes = "(max-width: 960px) 100vw, 640px",
+} = Astro.props;
+const image = await findScreenshot(name);
+const showPlaceholder = !image && import.meta.env.DEV;
+---
+
+{
+    (image || showPlaceholder) && (
+        <figure class="shot">
+            {image ? (
+                <Image
+                    src={image}
+                    alt={alt}
+                    widths={[640, 960, 1280, 1920, 2400]}
+                    sizes={sizes}
+                    loading={eager ? "eager" : "lazy"}
+                    fetchpriority={eager ? "high" : "auto"}
+                />
+            ) : (
+                <div class="shot-placeholder">
+                    <span>{placeholder}</span>
+                    <code>src/assets/screenshots/{name}.png</code>
+                </div>
+            )}
+        </figure>
+    )
+}
+
+<style>
+    .shot {
+        margin: 0;
+        overflow: hidden;
+        border-radius: var(--onyx-radius-lg);
+        border: 1px solid var(--onyx-line-2);
+        background: var(--onyx-surface);
+        box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.75);
+    }
+    .shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+    .shot-placeholder {
+        aspect-ratio: 16 / 10;
+        display: grid;
+        place-content: center;
+        gap: 0.5rem;
+        text-align: center;
+        padding: 2rem;
+        color: var(--onyx-text-3);
+        background:
+            repeating-linear-gradient(-45deg, transparent 0 14px, rgb(255 255 255 / 0.02) 14px 28px),
+            var(--onyx-surface);
+        font-size: 0.95rem;
+    }
+    .shot-placeholder code {
+        font-family: var(--onyx-font-mono);
+        font-size: 0.8rem;
+    }
+</style>

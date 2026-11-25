@@ -1,0 +1,57 @@
+---
+import "../styles/fonts.css";
+import "../styles/site.css";
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import { type Lang, otherLang, url } from "../i18n/ui";
+
+interface Props {
+    lang: Lang;
+    /** Path below the language folder ("" for the landing page). */
+    path: string;
+    title: string;
+    description: string;
+}
+
+const { lang, path, title, description } = Astro.props;
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const canonical = site + url(`${lang}/${path}`);
+const alternate = (l: Lang) => site + url(`${l}/${path}`);
+const ogImage = site + url("og-image.png");
+---
+
+<!doctype html>
+<html lang={lang}>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonical} />
+        <link rel="alternate" hreflang={lang} href={canonical} />
+        <link rel="alternate" hreflang={otherLang(lang)} href={alternate(otherLang(lang))} />
+        <link rel="alternate" hreflang="x-default" href={alternate("en")} />
+        <link rel="icon" type="image/png" href={url("favicon.png")} />
+        <link rel="apple-touch-icon" href={url("apple-touch-icon.png")} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:locale" content={lang === "es" ? "es_ES" : "en_US"} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="theme-color" content="#0b0c0f" />
+        <script is:inline define:vars={{ lang }}>
+            try {
+                localStorage.setItem("onyx-lang", lang);
+            } catch (e) {}
+        </script>
+    </head>
+    <body>
+        <SiteHeader lang={lang} path={path} />
+        <main>
+            <slot />
+        </main>
+        <SiteFooter lang={lang} />
+    </body>
+</html>

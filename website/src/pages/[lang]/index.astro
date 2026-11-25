@@ -1,0 +1,599 @@
+---
+import DownloadButton from "../../components/DownloadButton.astro";
+import Icon from "../../components/Icon.astro";
+import Screenshot from "../../components/Screenshot.astro";
+import { landing } from "../../i18n/landing";
+import { LANGS, type Lang, ui, url } from "../../i18n/ui";
+import SiteLayout from "../../layouts/SiteLayout.astro";
+import { getLatestRelease, RELEASES_URL } from "../../lib/release";
+import { hasScreenshot } from "../../lib/screenshots";
+
+export function getStaticPaths() {
+    return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = landing[lang];
+const meta = ui[lang].meta;
+const release = await getLatestRelease();
+const has = {
+    database: await hasScreenshot("database"),
+    training: await hasScreenshot("training"),
+    preparation: await hasScreenshot("preparation"),
+    books: await hasScreenshot("books"),
+};
+const github = "https://github.com/ArguedasG/onyx-chess-lab";
+---
+
+<SiteLayout lang={lang} path="" title={meta.title} description={meta.description}>
+    <section class="hero">
+        <div class="wrap hero-grid">
+            <div class="hero-copy">
+                <h1 class="display hero-title">{t.hero.title}</h1>
+                <p class="lead hero-lead">{t.hero.lead}</p>
+                <div class="hero-actions">
+                    <DownloadButton lang={lang} />
+                    <a class="btn btn-ghost" href={github}>{t.hero.github}</a>
+                </div>
+                <ul class="pgn mono" aria-label="Onyx Chess Lab">
+                    {
+                        release && (
+                            <li>
+                                <a href={release.url} title={t.hero.notes}>
+                                    [<span class="pgn-tag">Version</span> <span class="pgn-value">"{release.version}"</span>]
+                                </a>
+                            </li>
+                        )
+                    }
+                    <li>
+                        [<span class="pgn-tag">Platforms</span> <span class="pgn-value">"Windows, macOS, Linux"</span>]
+                    </li>
+                    <li>
+                        <a href={url(`${lang}/project/credits/`)}>
+                            [<span class="pgn-tag">License</span> <span class="pgn-value">"GPL-3.0"</span>]
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="hero-shot">
+                <Screenshot
+                    name="analysis"
+                    alt={t.screenshots.analysis}
+                    placeholder={t.screenshots.analysis}
+                    eager
+                    sizes="(max-width: 960px) 100vw, 60vw"
+                />
+            </div>
+        </div>
+    </section>
+
+    <section class="facts" aria-label="Onyx">
+        <div class="wrap facts-grid">
+            {
+                t.facts.map((fact) => (
+                    <div class="fact">
+                        <span class="fact-value">{fact.value}</span>
+                        <span class="fact-label">{fact.label}</span>
+                    </div>
+                ))
+            }
+        </div>
+    </section>
+
+    <section class="section" id="features">
+        <div class="wrap">
+            <div class:list={["split", !has.database && "no-shot"]}>
+                <div class="split-text">
+                    <span class="kicker"><span class="move">1.</span>{t.essentials.kicker}</span>
+                    <h2 class="h2">{t.essentials.title}</h2>
+                    <p class="lead">{t.essentials.text}</p>
+                    <a class="arrow-link" href={url(`${lang}/guides/databases/`)}>
+                        {t.essentials.link}
+                        <Icon name="arrow-right" size={16} />
+                    </a>
+                </div>
+                <Screenshot name="database" alt={t.screenshots.database} placeholder={t.screenshots.database} />
+            </div>
+            <ul class="ruled ruled-3">
+                {
+                    t.essentials.items.map((item) => (
+                        <li>
+                            <h3>
+                                <Icon name={item.icon} size={18} class="ruled-icon" />
+                                {item.title}
+                            </h3>
+                            <p>{item.text}</p>
+                        </li>
+                    ))
+                }
+            </ul>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <span class="kicker"><span class="move">2.</span>{t.training.kicker}</span>
+                <h2 class="h2">{t.training.title}</h2>
+                <p class="lead">{t.training.text}</p>
+            </div>
+            <ol class="flow">
+                {
+                    t.training.steps.map((step, i) => (
+                        <li>
+                            <span class="flow-n mono">{i + 1}.</span>
+                            <h3>{step.title}</h3>
+                            <p>{step.text}</p>
+                        </li>
+                    ))
+                }
+            </ol>
+            <div class:list={["split", "split-training", !has.training && "no-shot"]}>
+                <div class="split-text">
+                    <ul class="accent-list">
+                        {
+                            t.training.items.map((item) => (
+                                <li>
+                                    <h3>{item.title}</h3>
+                                    <p>{item.text}</p>
+                                </li>
+                            ))
+                        }
+                    </ul>
+                    <a class="arrow-link" href={url(`${lang}/guides/training/`)}>
+                        {t.training.link}
+                        <Icon name="arrow-right" size={16} />
+                    </a>
+                </div>
+                <Screenshot name="training" alt={t.screenshots.training} placeholder={t.screenshots.training} />
+            </div>
+        </div>
+    </section>
+
+    <section class="section advanced">
+        <div class="wrap">
+            <div class="section-head">
+                <span class="kicker"><span class="move">3.</span>{t.advanced.kicker}</span>
+                <h2 class="h2">{t.advanced.title}</h2>
+                <p class="lead">{t.advanced.text}</p>
+            </div>
+            {
+                t.advanced.featured.map((feature, i) => (
+                    <div
+                        class:list={[
+                            "split",
+                            "split-feature",
+                            i % 2 === 1 && "reverse",
+                            !has[feature.shot as keyof typeof has] && "no-shot",
+                        ]}
+                    >
+                        <div class="split-text">
+                            <span class="tag mono">{feature.tag}</span>
+                            <h3 class="feature-title">{feature.title}</h3>
+                            <p class="lead">{feature.text}</p>
+                            <ul class="points">
+                                {feature.points.map((point) => (
+                                    <li>{point}</li>
+                                ))}
+                            </ul>
+                            <a class="arrow-link" href={url(`${lang}/${feature.link.path}`)}>
+                                {feature.link.label}
+                                <Icon name="arrow-right" size={16} />
+                            </a>
+                        </div>
+                        <Screenshot
+                            name={feature.shot}
+                            alt={t.screenshots[feature.shot]}
+                            placeholder={t.screenshots[feature.shot]}
+                        />
+                    </div>
+                ))
+            }
+            <ul class="index-list">
+                {
+                    t.advanced.items.map((item) => (
+                        <li>
+                            <span class="index-tag mono">{item.tag}</span>
+                            <h3>{item.title}</h3>
+                            <p>
+                                {item.text}
+                                {item.link && (
+                                    <a class="text-link index-link" href={url(`${lang}/${item.link.path}`)}>
+                                        {item.link.label}
+                                    </a>
+                                )}
+                            </p>
+                        </li>
+                    ))
+                }
+            </ul>
+        </div>
+    </section>
+
+    <section class="section principles-section">
+        <div class="wrap">
+            <div class="section-head">
+                <span class="kicker"><span class="move">4.</span>{t.principles.kicker}</span>
+                <h2 class="h2">{t.principles.title}</h2>
+            </div>
+            <ul class="ruled ruled-4">
+                {
+                    t.principles.items.map((item) => (
+                        <li>
+                            <h3>
+                                <Icon name={item.icon} size={18} class="ruled-icon" />
+                                {item.title}
+                            </h3>
+                            <p>{item.text}</p>
+                        </li>
+                    ))
+                }
+            </ul>
+        </div>
+    </section>
+
+    <section class="cta">
+        <div class="wrap cta-inner">
+            <div>
+                <h2 class="h2">{t.cta.title}</h2>
+                <p class="lead">{t.cta.text}</p>
+            </div>
+            <div class="cta-actions">
+                <DownloadButton lang={lang} />
+                <a class="btn btn-ghost" href={url(`${lang}/start/first-steps/`)}>{t.cta.guide}</a>
+            </div>
+        </div>
+    </section>
+</SiteLayout>
+
+<style>
+    /* Hero: text on the left, the app on the right running to the window's edge. */
+    .hero {
+        padding: clamp(3rem, 7vw, 5.5rem) 0 clamp(3.5rem, 7vw, 5.5rem);
+        overflow-x: clip;
+    }
+    .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: clamp(2.5rem, 5vw, 4rem);
+        align-items: center;
+    }
+    .hero-title {
+        font-size: clamp(2.6rem, 4.6vw, 3.9rem);
+    }
+    .hero-lead {
+        margin-top: 1.4rem;
+        max-width: 30rem;
+        font-size: clamp(1.08rem, 1.5vw, 1.2rem);
+    }
+    .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 2.25rem;
+    }
+    .pgn {
+        list-style: none;
+        padding: 0;
+        margin: 2.25rem 0 0;
+        display: grid;
+        gap: 0.3rem;
+        font-size: 0.82rem;
+        color: var(--onyx-text-3);
+    }
+    .pgn a {
+        color: inherit;
+        text-decoration: none;
+    }
+    .pgn a:hover .pgn-value {
+        color: var(--onyx-text);
+    }
+    .pgn-tag {
+        color: var(--onyx-accent);
+    }
+    .pgn-value {
+        color: var(--onyx-text-2);
+    }
+    /* The shot reaches a little past the text column on wide screens, but always shows whole. */
+    .hero-shot {
+        margin-right: calc(-1 * min(8rem, max(0px, (100vw - var(--onyx-max)) / 2)));
+    }
+
+    /* A faint board in the background, fading out from behind the screenshot. */
+    .hero {
+        position: relative;
+        isolation: isolate;
+    }
+    .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+            radial-gradient(55% 60% at 72% 8%, rgb(34 139 230 / 0.07), transparent 70%),
+            repeating-conic-gradient(rgb(255 255 255 / 0.022) 0 25%, transparent 0 50%) 0 0 / 112px 112px;
+        mask-image: radial-gradient(70% 85% at 70% 40%, #000 15%, transparent 75%);
+    }
+
+    /* Facts */
+    .facts {
+        border-top: 1px solid var(--onyx-line);
+        border-bottom: 1px solid var(--onyx-line);
+        background: var(--onyx-bg-2);
+    }
+    .facts-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .fact {
+        display: grid;
+        gap: 0.25rem;
+        padding: 1.6rem 1.5rem;
+        border-left: 1px solid var(--onyx-line);
+    }
+    .fact:first-child {
+        border-left: 0;
+        padding-left: 0;
+    }
+    .fact-value {
+        font-size: 1.45rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+    .fact-label {
+        font-size: 0.88rem;
+        color: var(--onyx-text-2);
+        line-height: 1.45;
+    }
+
+    /* Section kicker, numbered like moves */
+    .move {
+        color: var(--onyx-text-3);
+        margin-right: 0.15rem;
+    }
+
+    /* Split rows: text beside a screenshot */
+    .split {
+        display: grid;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        gap: clamp(2.5rem, 5vw, 4.5rem);
+        align-items: center;
+    }
+    .split.reverse {
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    }
+    .split.reverse .split-text {
+        order: 2;
+    }
+    .split.no-shot {
+        grid-template-columns: minmax(0, 44rem);
+    }
+    .split-text .lead {
+        margin-top: 1.1rem;
+    }
+    .split-text .arrow-link {
+        margin-top: 1.5rem;
+    }
+
+    h3 {
+        font-size: 1.02rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+    }
+
+    /* Ruled lists: a thin rule over each item */
+    .ruled {
+        list-style: none;
+        padding: 0;
+        margin: clamp(3rem, 6vw, 4.5rem) 0 0;
+        display: grid;
+        gap: 2.25rem 2.5rem;
+    }
+    .ruled-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .ruled-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .ruled li {
+        border-top: 1px solid var(--onyx-line-2);
+        padding-top: 1.15rem;
+    }
+    .ruled h3 {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+    .ruled :global(.ruled-icon) {
+        color: var(--onyx-accent);
+        flex: none;
+    }
+    .ruled p,
+    .flow p,
+    .accent-list p,
+    .index-list p {
+        margin: 0.45rem 0 0;
+        color: var(--onyx-text-2);
+        font-size: 0.95rem;
+        line-height: 1.55;
+    }
+    .index-link {
+        display: block;
+        margin-top: 0.4rem;
+    }
+
+    /* Training */
+    .flow {
+        list-style: none;
+        padding: 0;
+        margin: 3.25rem 0 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .flow li {
+        padding-right: 1.5rem;
+    }
+    .flow-n {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--onyx-text-3);
+        padding-bottom: 0.85rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid var(--onyx-line-2);
+    }
+    .flow li:first-child .flow-n {
+        color: var(--onyx-accent);
+        border-bottom-color: var(--onyx-accent-strong);
+    }
+    .flow h3 {
+        font-size: 1.2rem;
+    }
+    .split-training {
+        margin-top: clamp(3.5rem, 7vw, 5rem);
+    }
+    .accent-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 1.75rem;
+    }
+    .accent-list li {
+        padding-left: 1.1rem;
+        border-left: 2px solid var(--onyx-accent-strong);
+    }
+
+    /* Advanced */
+    .advanced {
+        background: var(--onyx-bg-2);
+        border-top: 1px solid var(--onyx-line);
+        border-bottom: 1px solid var(--onyx-line);
+    }
+    .split-feature {
+        margin-top: clamp(3.5rem, 7vw, 5.5rem);
+    }
+    .tag {
+        font-size: 0.8rem;
+        color: var(--onyx-accent);
+    }
+    .feature-title {
+        margin-top: 0.75rem;
+        font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+        letter-spacing: -0.025em;
+        line-height: 1.15;
+    }
+    .points {
+        list-style: none;
+        padding: 0;
+        margin: 1.5rem 0 0;
+        display: grid;
+        gap: 0.6rem;
+    }
+    .points li {
+        position: relative;
+        padding-left: 1.4rem;
+    }
+    .points li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.62em;
+        width: 0.6rem;
+        height: 2px;
+        background: var(--onyx-accent-strong);
+    }
+    .index-list {
+        list-style: none;
+        padding: 0;
+        margin: clamp(4rem, 8vw, 5.5rem) 0 0;
+    }
+    .index-list li {
+        display: grid;
+        grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 1.35fr);
+        gap: 1.5rem;
+        align-items: baseline;
+        padding: 1.5rem 0;
+        border-top: 1px solid var(--onyx-line-2);
+    }
+    .index-list li:last-child {
+        border-bottom: 1px solid var(--onyx-line-2);
+    }
+    .index-tag {
+        font-size: 0.78rem;
+        color: var(--onyx-text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .index-list h3 {
+        font-size: 1.2rem;
+        font-weight: 500;
+    }
+    .index-list p {
+        margin: 0;
+    }
+
+    /* Call to action */
+    .cta {
+        padding: clamp(4rem, 8vw, 6rem) 0;
+        border-top: 1px solid var(--onyx-line);
+    }
+    .cta-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2.5rem;
+        align-items: end;
+    }
+    .cta .lead {
+        margin-top: 1rem;
+        max-width: 38rem;
+    }
+    .cta-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    @media (max-width: 960px) {
+        .hero-grid,
+        .split,
+        .split.reverse,
+        .split.no-shot,
+        .cta-inner {
+            grid-template-columns: 1fr;
+        }
+        .split.reverse .split-text {
+            order: 0;
+        }
+        .ruled-3 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .flow,
+        .ruled-4,
+        .facts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .flow {
+            gap: 2rem 0;
+        }
+        .fact:nth-child(3) {
+            border-left: 0;
+            padding-left: 0;
+        }
+        .fact:nth-child(n + 3) {
+            border-top: 1px solid var(--onyx-line);
+        }
+        .index-list li {
+            grid-template-columns: 1fr;
+            gap: 0.4rem;
+        }
+    }
+    @media (max-width: 600px) {
+        .ruled-3,
+        .ruled-4,
+        .flow {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

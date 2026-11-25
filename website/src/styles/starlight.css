@@ -1,0 +1,63 @@
+@import "./tokens.css";
+
+/* Dark theme: the default, like Onyx itself. */
+:root {
+    --sl-font: var(--onyx-font-sans);
+    --sl-font-mono: var(--onyx-font-mono);
+    --sl-color-accent-low: #113a63;
+    --sl-color-accent: #4dabf7;
+    --sl-color-accent-high: #d0ebff;
+    --sl-color-white: #ffffff;
+    --sl-color-gray-1: #e9ecef;
+    --sl-color-gray-2: #c1c2c5;
+    --sl-color-gray-3: #909296;
+    --sl-color-gray-4: #5c5f66;
+    --sl-color-gray-5: #373a40;
+    --sl-color-gray-6: #1a1b1e;
+    --sl-color-black: #141517;
+    --sl-content-width: 46rem;
+}
+
+:root[data-theme="light"] {
+    --sl-color-accent-low: #dbeafe;
+    --sl-color-accent: #1c7ed6;
+    --sl-color-accent-high: #0f3b7a;
+    --sl-color-white: #111318;
+    --sl-color-gray-1: #23262d;
+    --sl-color-gray-2: #3b3f48;
+    --sl-color-gray-3: #646975;
+    --sl-color-gray-4: #9a9fa9;
+    --sl-color-gray-5: #d7dae0;
+    --sl-color-gray-6: #eef0f3;
+    --sl-color-gray-7: #f6f7f9;
+    --sl-color-black: #ffffff;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+h1#_top {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.sl-markdown-content kbd {
+    font-family: var(--onyx-font-mono);
+    font-size: 0.85em;
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--sl-color-gray-5);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+}
+
+.site-title {
+    color: var(--sl-color-white);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    gap: 0.6rem;
+}
+
+.site-title img {
+    height: 1.75rem;
+    width: auto;
+}

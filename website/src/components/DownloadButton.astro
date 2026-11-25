@@ -1,0 +1,54 @@
+---
+/**
+ * The main download button. It always opens the download page, which explains the first-launch
+ * warnings of each system before the file is saved; with JavaScript, the label names the
+ * visitor's system.
+ */
+import { landing } from "../i18n/landing";
+import { type Lang, url } from "../i18n/ui";
+
+interface Props {
+    lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = landing[lang].hero;
+---
+
+<a
+    class="btn btn-primary"
+    href={url(`${lang}/download/`)}
+    data-download-button
+    data-label-windows={t.downloadFor.windows}
+    data-label-mac={t.downloadFor.mac}
+    data-label-linux={t.downloadFor.linux}
+>
+    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+            d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+    </svg>
+    <span>{t.download}</span>
+</a>
+
+<script>
+    import { detectOs } from "../lib/detect-os";
+
+    const os = detectOs();
+    for (const button of document.querySelectorAll<HTMLAnchorElement>("[data-download-button]")) {
+        const label = button.querySelector("span");
+        const text =
+            os === "windows"
+                ? button.dataset.labelWindows
+                : os === "mac"
+                  ? button.dataset.labelMac
+                  : os === "linux"
+                    ? button.dataset.labelLinux
+                    : undefined;
+        if (label && text) label.textContent = text;
+    }
+</script>
