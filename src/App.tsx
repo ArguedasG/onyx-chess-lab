@@ -16,6 +16,7 @@ import { listen } from "@tauri-apps/api/event";
 import { attachConsole, info, warn } from "@tauri-apps/plugin-log";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { ContextMenuProvider } from "mantine-contextmenu";
+import PieceSetStyle from "@/components/common/PieceSetStyle";
 import { useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -388,7 +389,7 @@ export default function App() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <link rel="stylesheet" href={`/pieces/${pieceSet}.css`} />
+      <PieceSetStyle pieceSet={pieceSet} />
 
       <MantineProvider
         colorSchemeManager={colorSchemeManager}

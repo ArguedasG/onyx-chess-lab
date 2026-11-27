@@ -167,6 +167,8 @@ export default function TacticsSessionV2Page() {
   const [timersPaused, setTimersPaused] = useState(false);
   const pausedRef = useRef(false);
   const exerciseDone = useRef(false);
+  // Woodpecker: the cycle clock stops once a puzzle is solved and runs again with the next one.
+  const cycleWaiting = useRef(false);
   const [hintRequest, setHintRequest] = useState(0);
   const hintCounted = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -354,7 +356,7 @@ export default function TacticsSessionV2Page() {
     if (!pausedRef.current) return;
     attemptClock.current.resume();
     if (!exerciseDone.current) exerciseClock.current.resume();
-    if (!finishedSummary) cycleClock.current.resume();
+    if (!finishedSummary && !cycleWaiting.current) cycleClock.current.resume();
     setPaused(false);
   }
 
@@ -462,6 +464,10 @@ export default function TacticsSessionV2Page() {
 
     exerciseClock.current.pause();
     exerciseDone.current = true;
+    if (outcome === "correct") {
+      cycleClock.current.pause();
+      cycleWaiting.current = true;
+    }
     setResult(outcome);
     setMessage(feedback);
     persistAttempt(outcome, playedMove, timeMs, isWoodpecker ? activeCycleSnapshot() : undefined);
@@ -527,6 +533,10 @@ export default function TacticsSessionV2Page() {
     attemptClock.current.reset(0, true);
     exerciseDone.current = false;
     exerciseClock.current.resume();
+    if (cycleWaiting.current) {
+      cycleWaiting.current = false;
+      if (!pausedRef.current && !finishedSummary) cycleClock.current.resume();
+    }
     resumeTimers();
   }
 

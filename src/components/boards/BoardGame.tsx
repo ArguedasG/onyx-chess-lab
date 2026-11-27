@@ -2562,7 +2562,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                         leftSection={<IconArrowLeft />}
                         onClick={() => void handleReturnToEndgames()}
                       >
-                        Volver a la lista de finales
+                        {t("Endgame.BackToList", "Back to the endgame list")}
                       </Button>
                     </Stack>
                   </Stack>
@@ -2626,7 +2626,7 @@ function BoardGame({ generatorMode = false }: { generatorMode?: boolean }) {
                             leftSection={<IconArrowLeft />}
                             loading={isAborting}
                           >
-                            Volver a la lista de finales
+                            {t("Endgame.BackToList", "Back to the endgame list")}
                           </Button>
                         )}
                       {gameState === "playing" && (

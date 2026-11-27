@@ -50,6 +50,7 @@ import {
 import type { RetroState } from "@/utils/retro";
 import { getWinChance, normalizeScore } from "@/utils/score";
 import { genID, startTab, type Tab, tabSchema } from "@/utils/tabs";
+import type { CustomPieceSet } from "@/utils/customPieces";
 import type { TreeState } from "@/utils/treeReducer";
 import { getEnginesDir } from "../utils/directories";
 import type { Session } from "../utils/session";
@@ -279,6 +280,8 @@ export const lastStudyIdAtom = atomWithStorage<string | null>("last-study-id", n
 });
 
 export const pieceSetAtom = atomWithStorage<string>("piece-set", "maestro");
+/** Piece sets loaded from the user's own folders (their images live in app data, see customPieces). */
+export const customPieceSetsAtom = atomWithStorage<CustomPieceSet[]>("custom-piece-sets", []);
 export const boardImageAtom = atomWithStorage<string>("board-image", "gray.svg");
 export const primaryColorAtom = atomWithStorage<MantineColor>("mantine-primary-color", "blue");
 export const sessionsAtom = atomWithStorage<Session[]>("sessions", [], undefined, {

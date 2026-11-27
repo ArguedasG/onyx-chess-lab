@@ -43,6 +43,11 @@
   overflow-y: auto;
 }
 
+/* With long PGN comments the panel scrolls; its buttons and controls never get squeezed. */
+.side > * {
+  flex-shrink: 0;
+}
+
 .turnDot {
   width: 14px;
   height: 14px;
